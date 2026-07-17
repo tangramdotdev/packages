@@ -4,46 +4,46 @@ export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 
 export type ArgObject = {
 	/** Arguments to use at build time. */
-	args?: Array<string>;
+	args?: Array<string> | null;
 
 	/** The toolchain to use for any intermediate build processes. */
-	buildToolchain?: std.env.EnvObject;
+	buildToolchain?: std.env.EnvObject | null;
 
 	/** This is the equivalent of the CMD instruction in a dockerfile. */
-	cmd?: Array<string>;
+	cmd?: Array<string> | null;
 
 	/** This is the equivalent of the ENTRYPOINT field in a Dockerfile. If a binary is passed, it will be included at `/entrypoint` and used. If a string array is provided, it will be used instead. */
-	entrypoint?: std.wrap.Arg | Array<string>;
+	entrypoint?: std.wrap.Arg | Array<string> | null;
 
 	/** Env to include. If present, the entrypoint will be an env with these values set, and the command must be used to run a specific program. */
-	env?: std.env.Arg;
+	env?: std.env.Arg | null;
 
 	/** Ports to expose. */
-	expose?: Array<string>;
+	expose?: Array<string> | null;
 
 	/** The format for the container image, docker or OCI. Default: docker */
-	format?: ImageFormat;
+	format?: ImageFormat | null;
 
 	/** Labels to add to the container image metadata. */
-	labels?: Record<string, string>;
+	labels?: Record<string, string> | null;
 
 	/** The compression type to use for the image layers. Default: "zstd". */
 	layerCompression: LayerCompressionFormat;
 
 	/** Layers to include. */
-	layers?: Array<tg.Directory>;
+	layers?: Array<tg.Directory> | null;
 
 	/** The image should target a specific system. If not provided, will detect the host. */
-	system?: string;
+	system?: string | null;
 
 	/** Set user and group ID - this user will be set as the default user for the container */
-	user?: string;
+	user?: string | null;
 
 	/** Create additional users in the container without setting them as the default user. Each user can be specified as "username", "username:group", "username:group:uid:gid", or a UserSpec object. */
-	users?: Array<string | UserSpec>;
+	users?: Array<string | UserSpec> | null;
 
 	/** The WORKDIR field in a Dockerfile. Change to this directory to do work. */
-	workdir?: string;
+	workdir?: string | null;
 };
 
 export type UserSpec = {
@@ -152,7 +152,7 @@ export async function image(...args: std.Args<Arg>): Promise<tg.File> {
 			buildToolchain: "set",
 			cmd: "append",
 			entrypoint: "set",
-			env: (a, b) => std.env.arg(a, b, { utils: false }),
+			env: (a, b) => std.env.arg(a ?? null, b ?? null, { utils: false }),
 			expose: "append",
 			format: "set",
 			labels: "set",
@@ -180,7 +180,7 @@ export async function image(...args: std.Args<Arg>): Promise<tg.File> {
 		users,
 		workdir,
 	} = arg;
-	const env = await std.env.arg(envArg, { utils: false });
+	const env = await std.env.arg(envArg ?? null, { utils: false });
 
 	// Fill in defaults.
 	const system = std.triple.archAndOs(system_ ?? std.triple.host());
@@ -192,26 +192,29 @@ export async function image(...args: std.Args<Arg>): Promise<tg.File> {
 	let entrypointArtifact: tg.File | undefined = undefined;
 	let entrypointString: Array<string> | undefined = undefined;
 	let envApplied = false;
-	if (entrypoint_ !== undefined) {
+	if (entrypoint_ !== undefined && entrypoint_ !== null) {
 		if (Array.isArray(entrypoint_)) {
 			entrypointString = entrypoint_;
 		} else {
 			// Add the env to the entrypoint.
 			envApplied = true;
-			entrypointArtifact = await std.wrap(entrypoint_, { buildToolchain, env });
+			entrypointArtifact = await std.wrap(entrypoint_, {
+				buildToolchain: buildToolchain ?? null,
+				env,
+			});
 		}
 	}
 
 	// // Verify that the arguments supplied are correct.
 	tg.assert(
-		layers_.length > 0 || entrypointArtifact !== undefined,
+		(layers_ ?? []).length > 0 || entrypointArtifact !== undefined,
 		"Cannot create a container image without either a root filesystem or entrypoint.",
 	);
 
 	// Create the layers for the image.
 	// We will always have a rootfs and an entrypoint, we need to determine appropriate values based on the combined args.
 	const layers: Array<Layer> = [];
-	for (let layerDir of layers_) {
+	for (let layerDir of layers_ ?? []) {
 		layers.push(await layer(layerDir, layerCompression));
 	}
 	if (entrypointArtifact) {
@@ -231,7 +234,7 @@ export async function image(...args: std.Args<Arg>): Promise<tg.File> {
 		let envEntrypoint = await std.wrap(
 			await tg.build(std.buildGnuEnv).named("gnu env"),
 			{
-				buildToolchain,
+				buildToolchain: buildToolchain ?? null,
 				env,
 			},
 		);
@@ -247,13 +250,13 @@ export async function image(...args: std.Args<Arg>): Promise<tg.File> {
 	}
 
 	// Add user layers if users or user is specified
-	if (users !== undefined && users.length > 0) {
+	if (users !== undefined && users !== null && users.length > 0) {
 		const userLayer = await createUsersLayer(users);
 		layers.push(await layer(userLayer, layerCompression));
 	}
 
 	// Add user layer if user is specified (for backward compatibility and default user setting)
-	if (user !== undefined) {
+	if (user !== undefined && user !== null) {
 		const userLayer = await createUserLayer(user);
 		layers.push(await layer(userLayer, layerCompression));
 	}
@@ -269,21 +272,21 @@ export async function image(...args: std.Args<Arg>): Promise<tg.File> {
 		},
 		config: {
 			Entrypoint: entrypointString ?? [],
-			Cmd: cmd,
+			Cmd: cmd ?? [],
 		},
 	};
-	if (expose !== undefined) {
+	if (expose !== undefined && expose !== null) {
 		config.config!.ExposedPorts = Object.fromEntries(
 			expose.map((key) => [key, {}]),
 		);
 	}
-	if (user !== undefined) {
+	if (user !== undefined && user !== null) {
 		config.config!.User = user;
 	}
-	if (workdir !== undefined) {
+	if (workdir !== undefined && workdir !== null) {
 		config.config!.WorkingDir = workdir;
 	}
-	if (labels !== undefined) {
+	if (labels !== undefined && labels !== null) {
 		config.config!.Labels = labels;
 	}
 
@@ -385,10 +388,10 @@ export async function ociImageFromLayers(
 	const platform: Platform = {
 		os: config.os,
 		architecture: config.architecture,
-		variant: config.variant,
+		...(config.variant !== undefined ? { variant: config.variant } : {}),
 		"os.features": config["os.features"],
 		"os.version": config["os.version"],
-		features: config.features,
+		...(config.features !== undefined ? { features: config.features } : {}),
 	};
 
 	// Add the config as a blob.
@@ -505,8 +508,8 @@ export type Platform = {
 	os: string;
 	"os.version"?: string | undefined;
 	"os.features"?: Array<string> | undefined;
-	variant?: string | undefined;
-	features?: Array<string> | undefined;
+	variant?: string;
+	features?: Array<string>;
 };
 
 export function platform(system: string): Platform {

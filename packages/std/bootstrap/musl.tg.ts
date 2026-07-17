@@ -25,11 +25,11 @@ export async function source() {
 }
 
 export type Arg = {
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 
 export async function build(arg?: Arg) {

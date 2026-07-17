@@ -22,8 +22,8 @@ export async function plain(arg: tg.Unresolved<Arg>) {
 	const env_ =
 		envArg ??
 		(await std.env.arg(
-			env({ build: resolved.build, host: resolved.host }),
-			envArg,
+			env({ build: resolved.build ?? null, host: resolved.host ?? null }),
+			envArg ?? null,
 		));
 	const toolchain = await ruby.self();
 	const interpreter = await toolchain.get("bin/ruby").then(tg.File.expect);
@@ -38,8 +38,8 @@ export async function plain(arg: tg.Unresolved<Arg>) {
 export default plain;
 
 type EnvArg = {
-	build?: string | undefined;
-	host?: string | undefined;
+	build?: string | null;
+	host?: string | null;
 };
 
 export async function env(arg: tg.Unresolved<EnvArg>) {

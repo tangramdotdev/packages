@@ -69,7 +69,7 @@ export async function toolchain(arg?: LLVMArg) {
 		.then((d) => d.get(host))
 		.then(tg.Directory.expect);
 
-	const env = await std.env.arg(...deps, env_, { utils: false });
+	const env = await std.env.arg(...deps, env_ ?? null, { utils: false });
 
 	const ldsoName = glibc.interpreterName(host);
 	// Ensure that stage2 unproxied binaries are runnable during the build, before we have a chance to wrap them post-install.
@@ -117,7 +117,7 @@ export async function toolchain(arg?: LLVMArg) {
 		target: host,
 		env,
 		phases,
-		sdk,
+		sdk: sdk ?? null,
 		source: tg`${sourceDir}/llvm`,
 	});
 
@@ -265,7 +265,7 @@ export async function libclang(arg?: LLVMArg) {
 	const zlibNgArtifact = await zlibNg();
 	const deps = [git(), pythonForBuild, zlibNgArtifact];
 
-	const env = await std.env.arg(...deps, env_);
+	const env = await std.env.arg(...deps, env_ ?? null);
 
 	// Define default flags.
 	const configure = {
@@ -289,7 +289,7 @@ export async function libclang(arg?: LLVMArg) {
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases,
-		sdk,
+		sdk: sdk ?? null,
 		source: tg`${sourceDir}/llvm`,
 	});
 }
@@ -314,7 +314,7 @@ export async function lld(arg?: LLVMArg) {
 	const zlibNgArtifact = await zlibNg();
 	const deps = [git(), pythonForBuild, zlibNgArtifact];
 
-	const env = await std.env.arg(...deps, env_);
+	const env = await std.env.arg(...deps, env_ ?? null);
 
 	// Define default flags.
 	const configure = {
@@ -333,7 +333,7 @@ export async function lld(arg?: LLVMArg) {
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases,
-		sdk,
+		sdk: sdk ?? null,
 		source: tg`${sourceDir}/llvm`,
 	});
 }
@@ -361,7 +361,7 @@ export async function wrapArgs(arg: WrapArgsArg) {
 
 	// Define common flags.
 	const commonFlags = [
-		tg`-resource-dir=${toolchainDir}/lib/clang/${version}`,
+		tg`-resource-dir=${toolchainDir}/lib/clang/${version ?? null}`,
 		tg`-L${toolchainDir}/lib/${target}`,
 	];
 

@@ -22,7 +22,10 @@ export async function cargo(arg: tg.Unresolved<Arg>) {
 
 	const env_ =
 		envArg ??
-		std.env.arg(env({ build: resolved.build, host: resolved.host }), envArg);
+		std.env.arg(
+			env({ build: resolved.build ?? null, host: resolved.host ?? null }),
+			envArg ?? null,
+		);
 	const arg_ = { ...rest, env: env_ };
 
 	return await rust.cargo.build(arg_);
@@ -34,15 +37,17 @@ export async function plain(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const { env: envArg, ...rest } = resolved;
 
-	const env_ = envArg ?? env({ build: resolved.build, host: resolved.host });
+	const env_ =
+		envArg ??
+		env({ build: resolved.build ?? null, host: resolved.host ?? null });
 	const arg_ = { ...rest, env: env_ };
 
 	return await rust.build.build(arg_);
 }
 
 type EnvArg = {
-	build?: string | undefined;
-	host?: string | undefined;
+	build?: string | null;
+	host?: string | null;
 };
 
 export async function env(arg?: tg.Unresolved<EnvArg>) {

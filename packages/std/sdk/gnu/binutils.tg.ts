@@ -35,8 +35,8 @@ export async function build(...args: std.Args<Arg>) {
 		args,
 		map: async (arg) => arg,
 		reduce: {
-			env: (a, b) => std.env.arg(a, b),
-			sdk: (a, b) => std.sdk.arg(a, b),
+			env: (a, b) => std.env.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
 		},
 	});
 	const { target: target_, fortifySource: fortifySource_, ...rest } = collected;
@@ -86,7 +86,7 @@ export async function build(...args: std.Args<Arg>) {
 	envs.push({
 		CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " "),
 	});
-	const env = std.env.arg(...envs, env_);
+	const env = std.env.arg(...envs, env_ ?? null);
 
 	const output = await std.autotools.build({
 		build,
@@ -98,7 +98,7 @@ export async function build(...args: std.Args<Arg>) {
 		env,
 		opt: "3",
 		phases,
-		sdk,
+		sdk: sdk ?? null,
 		source: source_,
 	});
 

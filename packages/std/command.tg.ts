@@ -42,17 +42,17 @@ async function stdCommandArg(
 
 /** The internal arg type shared by process wrappers. */
 export type ProcessArgObject = {
-	args?: Array<tg.Value> | undefined;
-	checksum?: tg.Checksum | undefined;
-	cwd?: string | undefined;
+	args?: Array<tg.Value>;
+	checksum?: tg.Checksum;
+	cwd?: string;
 	env?: std.env.Arg;
-	executable?: tg.Command.Arg.Executable | undefined;
-	host?: string | undefined;
-	name?: string | undefined;
-	network?: boolean | undefined;
-	sandbox?: boolean | tg.Sandbox.Arg | tg.Sandbox.Id | undefined;
-	stdin?: tg.Blob.Arg | undefined;
-	user?: string | undefined;
+	executable?: tg.Command.Arg.Executable;
+	host?: string;
+	name?: string;
+	network?: boolean;
+	sandbox?: boolean | tg.Sandbox.Arg | tg.Sandbox.Id;
+	stdin?: tg.Blob.Arg;
+	user?: string;
 };
 
 /** Merge an array of ProcessArgObjects into a single one. */
@@ -81,17 +81,17 @@ export async function mergeArgs(
 					env: obj.env as std.env.EnvObject,
 					executable: obj.executable,
 					host: obj.host,
-					...(obj.cwd !== undefined && { cwd: obj.cwd }),
-					...(obj.stdin !== undefined && { stdin: obj.stdin }),
-					...(obj.user !== undefined && { user: obj.user }),
+					...(obj.cwd !== null && { cwd: obj.cwd }),
+					...(obj.stdin !== null && { stdin: obj.stdin }),
+					...(obj.user !== null && { user: obj.user }),
 				};
 			} else {
-				return { ...arg, env: arg.env };
+				return { ...arg, env: arg.env ?? null };
 			}
 		},
 		reduce: {
 			args: "append",
-			env: (a, b) => std.env.arg(a, b, { utils: false }),
+			env: (a, b) => std.env.arg(a ?? null, b ?? null, { utils: false }),
 		},
 	});
 }

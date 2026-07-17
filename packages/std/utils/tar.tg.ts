@@ -22,11 +22,11 @@ export function source() {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
@@ -48,7 +48,13 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 	};
 	if (os === "darwin") {
 		dependencies.push(
-			libiconv({ bootstrap: bootstrap_, build, env: env_, host, sdk }),
+			libiconv({
+				bootstrap: bootstrap_,
+				build,
+				env: env_ ?? null,
+				host,
+				sdk: sdk ?? null,
+			}),
 		);
 		additionalEnv = {
 			...additionalEnv,
@@ -60,7 +66,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	const env = std.env.arg(env_, ...dependencies, additionalEnv, {
+	const env = std.env.arg(env_ ?? null, ...dependencies, additionalEnv, {
 		utils: false,
 	});
 
@@ -71,7 +77,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		env,
 		phases: { configure },
 		processName: metadata.name,
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(),
 	});
 

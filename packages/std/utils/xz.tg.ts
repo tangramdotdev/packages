@@ -22,11 +22,11 @@ export async function source() {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 
 export async function build(arg?: tg.Unresolved<Arg>) {
@@ -50,7 +50,9 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		],
 	};
 
-	const env = std.env.arg(env_, prerequisites(build), { utils: false });
+	const env = std.env.arg(env_ ?? null, prerequisites(build), {
+		utils: false,
+	});
 
 	return autotoolsInternal({
 		build,
@@ -59,7 +61,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		env,
 		phases: { configure },
 		processName: metadata.name,
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(),
 		wrapBashScriptPaths: [
 			"bin/xzdiff",

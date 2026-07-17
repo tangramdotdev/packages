@@ -24,7 +24,9 @@ export type Arg = {
 export async function build(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const { env: envArg, ...rest } = resolved ?? {};
-	const env_ = envArg ?? env({ build: resolved.build, host: resolved.host });
+	const env_ =
+		envArg ??
+		env({ build: resolved.build ?? null, host: resolved.host ?? null });
 
 	let source = resolved.source;
 	if (await needsReconf(source)) {
@@ -59,8 +61,8 @@ export async function reconfigure(source: tg.Unresolved<tg.Directory>) {
 }
 
 export type EnvArg = {
-	build?: string | undefined;
-	host?: string | undefined;
+	build?: string | null;
+	host?: string | null;
 };
 
 export async function env(arg: tg.Unresolved<EnvArg>) {

@@ -50,12 +50,12 @@ export async function build(...args: std.Args<Arg>) {
 	// FIXME - how do I use this flag with cross compilation?
 	let phases = arg.phases;
 	if (arg.build === arg.host) {
-		phases = await std.phases.arg(phases, {
+		phases = await std.phases.arg(phases ?? null, {
 			configure: { args: ["--with-shared-termcap-library"] },
 		});
 	}
 
-	return std.autotools.build({ ...arg, phases });
+	return std.autotools.build({ ...arg, phases: phases ?? null });
 }
 
 export default build;

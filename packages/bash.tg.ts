@@ -59,7 +59,7 @@ export async function wrapScript(
 	const interpreter = tg.File.expect(
 		await (await build({ host })).get("bin/bash"),
 	);
-	return std.wrap(script, { interpreter, env });
+	return std.wrap(script, { interpreter, env: env ?? null });
 }
 
 export async function test() {

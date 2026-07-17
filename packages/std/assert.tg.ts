@@ -217,7 +217,7 @@ export async function fileExistsOneOf(arg: FileExistsOneOfArg) {
 type RunnableBinArg = {
 	directory: tg.Directory;
 	binary: BinarySpec;
-	env?: std.env.Arg | undefined;
+	env?: std.env.Arg;
 	host: string;
 };
 
@@ -235,9 +235,7 @@ export async function runnableBin(arg: RunnableBinArg) {
 	if (typeof arg.binary === "string") {
 		name = arg.binary;
 	} else {
-		if (arg.binary.name) {
-			name = arg.binary.name;
-		}
+		name = arg.binary.name;
 		if (arg.binary.pre) {
 			pre = arg.binary.pre;
 		}
@@ -302,7 +300,7 @@ export async function runnableBin(arg: RunnableBinArg) {
 
 	const stdout = await $`${executable}`
 		.bootstrap(true)
-		.env(arg.env)
+		.env(arg.env ?? null)
 		.exitOnErr(exitOnErr)
 		.host(arg.host)
 		.then(tg.File.expect)
@@ -503,11 +501,13 @@ export async function linkableLib(arg: LibraryArg) {
 				testDylib({
 					directory: arg.directory,
 					libraryName: name,
-					pkgConfigName: resolvedPkgConfigName,
+					...(resolvedPkgConfigName !== undefined
+						? { pkgConfigName: resolvedPkgConfigName }
+						: {}),
 					env,
 					host,
 					runtimeDepDirs: runtimeDeps,
-					sdk,
+					...(sdk !== undefined ? { sdk } : {}),
 				}),
 			),
 		);
@@ -523,11 +523,13 @@ export async function linkableLib(arg: LibraryArg) {
 				testStaticlib({
 					directory: arg.directory,
 					library: name,
-					pkgConfigName: resolvedPkgConfigName,
+					...(resolvedPkgConfigName !== undefined
+						? { pkgConfigName: resolvedPkgConfigName }
+						: {}),
 					env,
 					host,
 					runtimeDepDirs: runtimeDeps,
-					sdk,
+					...(sdk !== undefined ? { sdk } : {}),
 				}),
 			),
 		);
@@ -558,7 +560,7 @@ async function getPkgConfigFlags(
 type TestDylibArg = {
 	directory: tg.Directory;
 	libraryName: string;
-	pkgConfigName?: string | undefined;
+	pkgConfigName?: string;
 	env?: std.env.Arg;
 	host: string;
 	runtimeDepDirs: Array<tg.Unresolved<tg.Directory>>;
@@ -568,7 +570,7 @@ type TestDylibArg = {
 
 /** Compile, link, and run a program against a dynamic library. */
 export async function testDylib(arg: TestDylibArg) {
-	if (arg.host != std.triple.host()) {
+	if (arg.host !== std.triple.host()) {
 		throw new Error("unsupported");
 	}
 
@@ -589,7 +591,7 @@ export async function testDylib(arg: TestDylibArg) {
 
 		const symbols =
 			await $`nm ${nmFlags} "${dylibPath}" | grep ' T ' | head -1 > ${tg.output}`
-				.env(std.sdk(arg?.sdk))
+				.env(std.sdk(...(arg.sdk !== undefined ? [arg.sdk] : [])))
 				.then(tg.File.expect)
 				.then((f) => f.text)
 				.catch(() => null);
@@ -628,12 +630,18 @@ export async function testDylib(arg: TestDylibArg) {
 	}
 
 	// Set up environment with pkg-config and all directories
-	const sdkEnv = std.sdk(arg?.sdk);
+	const sdkEnv = std.sdk(...(arg.sdk !== undefined ? [arg.sdk] : []));
 	const pkgConfigEnv = buildTools({ preset: "minimal" });
 	const allEnvDirs = [directory, ...arg.runtimeDepDirs];
-	const compileEnv = std.env.arg(sdkEnv, pkgConfigEnv, ...allEnvDirs, arg.env, {
-		utils: false,
-	});
+	const compileEnv = std.env.arg(
+		sdkEnv,
+		pkgConfigEnv,
+		...allEnvDirs,
+		arg.env ?? null,
+		{
+			utils: false,
+		},
+	);
 
 	// Get pkg-config flags if available
 	let compileFlags = `-l${libraryName}`;
@@ -666,7 +674,10 @@ export async function testDylib(arg: TestDylibArg) {
 			.then(tg.File.expect);
 
 	// Run the program to ensure it's functional
-	await $`${program}`.bootstrap(true).env(arg.env).host(arg.host);
+	await $`${program}`
+		.bootstrap(true)
+		.env(arg.env ?? null)
+		.host(arg.host);
 
 	return true;
 }
@@ -674,7 +685,7 @@ export async function testDylib(arg: TestDylibArg) {
 type TestStaticlibArg = {
 	directory: tg.Directory;
 	library: string;
-	pkgConfigName?: string | undefined;
+	pkgConfigName?: string;
 	env?: std.env.Arg;
 	host: string;
 	runtimeDepDirs?: Array<tg.Unresolved<tg.Directory>>;
@@ -684,7 +695,7 @@ type TestStaticlibArg = {
 
 /** Compile, link, and run a program against a static library. */
 export async function testStaticlib(arg: TestStaticlibArg) {
-	if (arg.host != std.triple.host()) {
+	if (arg.host !== std.triple.host()) {
 		throw new Error("unsupported");
 	}
 
@@ -698,13 +709,19 @@ export async function testStaticlib(arg: TestStaticlibArg) {
 	}
 
 	// Set up environment with pkg-config and all directories
-	const sdkEnv = std.sdk(arg?.sdk);
+	const sdkEnv = std.sdk(...(arg.sdk !== undefined ? [arg.sdk] : []));
 	const pkgConfigEnv = buildTools({ preset: "minimal" });
 	const runtimeDepDirs = arg.runtimeDepDirs ?? [];
 	const allEnvDirs = [arg.directory, ...runtimeDepDirs];
-	const compileEnv = std.env.arg(sdkEnv, pkgConfigEnv, ...allEnvDirs, arg.env, {
-		utils: false,
-	});
+	const compileEnv = std.env.arg(
+		sdkEnv,
+		pkgConfigEnv,
+		...allEnvDirs,
+		arg.env ?? null,
+		{
+			utils: false,
+		},
+	);
 
 	// Get pkg-config flags if available
 	let compileFlags = `-l${arg.library}`;
@@ -738,7 +755,10 @@ export async function testStaticlib(arg: TestStaticlibArg) {
 			.then(tg.File.expect);
 
 	// Run the program to ensure it's functional
-	await $`${program}`.bootstrap(true).env(arg.env).host(arg.host);
+	await $`${program}`
+		.bootstrap(true)
+		.env(arg.env ?? null)
+		.host(arg.host);
 
 	return true;
 }

@@ -2,9 +2,9 @@ export type Components = {
 	arch: string;
 	vendor?: string;
 	os: string;
-	osVersion?: string | undefined;
+	osVersion?: string;
 	environment?: string;
-	environmentVersion?: string | undefined;
+	environmentVersion?: string;
 };
 
 export type Arg = string | Partial<Components>;
@@ -229,8 +229,8 @@ export function normalize(s: string): string {
 
 /** Given optional `build` and `host` machines for a build, return the concrete `host` and `target` for producing the correct build toolchain by "rotating" the inputs: build->host, host->target. */
 export async function rotate(arg: {
-	build?: string | undefined;
-	host?: string | undefined;
+	build?: string;
+	host?: string;
 }): Promise<{ host: string; target: string }> {
 	const host = arg.host ?? currentHost();
 	const build = arg.build ?? host;
@@ -240,8 +240,8 @@ export async function rotate(arg: {
 /** Strip the version components if present. */
 export function stripVersions(s: string) {
 	const c = components(s);
-	c.osVersion = undefined;
-	c.environmentVersion = undefined;
+	delete c.osVersion;
+	delete c.environmentVersion;
 	return fromComponents(c);
 }
 
@@ -249,9 +249,7 @@ const envs = ["gnu", "musl"];
 const oss = ["linux", "darwin"];
 
 /** Check if a string contains a known OS and optional version. Return undefined if not. */
-function parseOs(
-	s: string,
-): { os: string; osVersion?: string | undefined } | undefined {
+function parseOs(s: string): { os: string; osVersion?: string } | undefined {
 	for (const knownOs of oss) {
 		if (s.startsWith(knownOs)) {
 			// If we found it, check if there's an os version.
@@ -259,7 +257,7 @@ function parseOs(
 			const osVersion = s.slice(knownOs.length);
 			return {
 				os,
-				osVersion: osVersion.length > 0 ? osVersion : undefined,
+				...(osVersion.length > 0 ? { osVersion } : {}),
 			};
 		}
 	}
@@ -269,9 +267,7 @@ function parseOs(
 /** Check if a string contains a known environment and optional version. Return undefined if not. */
 function parseEnv(
 	s: string,
-):
-	| { environment: string; environmentVersion?: string | undefined }
-	| undefined {
+): { environment: string; environmentVersion?: string } | undefined {
 	for (const knownEnv of envs) {
 		if (s.startsWith(knownEnv)) {
 			// If we found it, check if there's an environment version.
@@ -279,8 +275,7 @@ function parseEnv(
 			const environmentVersion = s.slice(knownEnv.length);
 			return {
 				environment,
-				environmentVersion:
-					environmentVersion.length > 0 ? environmentVersion : undefined,
+				...(environmentVersion.length > 0 ? { environmentVersion } : {}),
 			};
 		}
 	}

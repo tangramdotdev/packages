@@ -54,7 +54,7 @@ export async function build(...args: std.Args<Arg>) {
 	// On macOS, disable gettext to avoid libintl dependency.
 	const os = std.triple.os(arg.host);
 	if (os === "darwin") {
-		arg.env = await std.env.arg(arg.env, {
+		arg.env = await std.env.arg(arg.env ?? null, {
 			CFLAGS: tg.Mutation.suffix("-DHAVE_GETTEXT=0", " "),
 		});
 	}

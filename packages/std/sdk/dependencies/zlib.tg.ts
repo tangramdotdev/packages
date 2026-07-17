@@ -30,7 +30,7 @@ export async function build(...args: std.Args<Arg>) {
 	const host = resolved.host ?? std.triple.host();
 	const build = resolved.build ?? host;
 
-	const envs: std.Args<std.env.Arg> = [resolved.env];
+	const envs: std.Args<std.env.Arg> = [resolved.env ?? null];
 	if (build !== host) {
 		envs.push({ CHOST: host });
 	}

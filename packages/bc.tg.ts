@@ -50,7 +50,7 @@ export async function build(...args: std.Args<Arg>) {
 	// On Darwin, add _DARWIN_C_SOURCE define.
 	const ccCommand =
 		std.triple.os(arg.build) === "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
-	const env = std.env.arg(arg.env, {
+	const env = std.env.arg(arg.env ?? null, {
 		CC: tg.Mutation.setIfUnset(ccCommand),
 	});
 	let output = await std.autotools.build({ ...arg, env });

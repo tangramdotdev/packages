@@ -106,8 +106,8 @@ export async function build(...args: std.Args<Arg>) {
 
 	// On Linux, the linker needs help finding sibling libraries in the build tree.
 	// We customize the build phase to pass LDFLAGS with rpath-link directly to make.
-	let setRuntimeLibraryPath = arg.setRuntimeLibraryPath;
-	let phases = arg.phases;
+	let setRuntimeLibraryPath = arg.setRuntimeLibraryPath ?? false;
+	let phases = arg.phases ?? null;
 	if (os === "linux") {
 		setRuntimeLibraryPath = true;
 		phases = await std.phases.arg(phases, {

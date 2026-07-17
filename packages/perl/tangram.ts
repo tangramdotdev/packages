@@ -103,7 +103,7 @@ export async function build(...args: std.Args<Arg>) {
 		if (artifact instanceof tg.File) {
 			const metadata = await std.file.executableMetadata(artifact);
 			if (
-				metadata.format == "shebang" &&
+				metadata.format === "shebang" &&
 				metadata.interpreter.includes("perl")
 			) {
 				scripts.push(name);
@@ -131,7 +131,7 @@ export async function build(...args: std.Args<Arg>) {
 	for (const [scriptName, artifact] of wrappedScripts) {
 		// Replace in the original artifact.
 		perlArtifact = await tg.directory(perlArtifact, {
-			[`bin/${scriptName}`]: artifact,
+			[`bin/${scriptName}`]: artifact ?? null,
 		});
 	}
 

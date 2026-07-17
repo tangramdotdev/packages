@@ -79,7 +79,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	let env: std.Args<std.env.Arg> = [
 		{ utils: false },
 		buildToolchain,
-		hostToolchain,
+		hostToolchain ?? null,
 		{
 			[`AR_${tripleToEnvVar(target)}`]: `${prefix}ar`,
 			[`CC_${tripleToEnvVar(target)}`]: tg`${prefix}cc${suffix}`,
@@ -148,7 +148,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		.build(std.phases.run, {
 			bootstrap: true,
 			env: std.env.arg(...env),
-			phases: { prepare: undefined, build: buildPhase, install: undefined },
+			phases: { build: buildPhase },
 			command: {
 				host: system,
 			},

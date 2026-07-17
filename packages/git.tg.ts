@@ -67,7 +67,7 @@ export async function build(...args: std.Args<Arg>) {
 
 	const output = await std.autotools.build({
 		...arg,
-		setRuntimeLibraryPath,
+		...(setRuntimeLibraryPath !== undefined ? { setRuntimeLibraryPath } : {}),
 	});
 
 	// Wrap the git binary with GIT_EXEC_PATH so it can find its helper programs.
@@ -110,7 +110,7 @@ export async function test() {
 
 	// Check for README file existence.
 	const readme = await clonedRepo.tryGet("README");
-	tg.assert(readme !== undefined);
+	tg.assert(readme !== null);
 
 	return true;
 }

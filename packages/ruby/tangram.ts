@@ -112,7 +112,7 @@ export async function self(...args: std.Args<Arg>) {
 	const ruby = await std.autotools.build({
 		...arg,
 		source: sourceDir,
-		env: std.env.arg(arg.env, ...depsEnv),
+		env: std.env.arg(arg.env ?? null, ...depsEnv),
 		phases: {
 			configure: {
 				args: [

@@ -9,11 +9,11 @@ export async function env(...args: std.Args<env.Arg>) {
 
 export namespace env {
 	export type Arg =
-		| undefined
 		| tg.Artifact
 		| tg.Command<[], tg.Artifact>
 		| UtilsToggle
-		| tg.MaybeMutation<ArgObject>;
+		| tg.MaybeMutation<ArgObject>
+		| null;
 
 	/** An object containing values or mutations, accepting booleans or numbers. */
 	export type ArgObject = tg.MaybeMutationMap<
@@ -34,7 +34,7 @@ export namespace env {
 		const resolved = await Promise.all(args.map(tg.resolve));
 		const envObjects = await Promise.all(
 			resolved.map(async (arg) => {
-				if (arg === undefined) {
+				if (arg === undefined || arg === null) {
 					return {};
 				} else if (isUtilsToggle(arg)) {
 					includeUtils = arg.utils;
@@ -138,7 +138,11 @@ export namespace env {
 				}
 
 				// Set the new value.
-				result[key] = current;
+				if (current === undefined) {
+					delete result[key];
+				} else {
+					result[key] = current;
+				}
 			}
 		}
 		return result;
@@ -185,7 +189,7 @@ export namespace env {
 
 	/** Combine two tg.MaybeMutation<tg.Template.Arg> values into one. */
 	export async function mergeTemplateMaybeMutations(
-		a: tg.MaybeMutation<tg.Template.Arg | boolean | number>,
+		a: tg.MaybeMutation<tg.Template.Arg | boolean | number> | undefined,
 		b: tg.MaybeMutation<tg.Template.Arg | boolean | number>,
 	): Promise<tg.MaybeMutation<tg.Template>> {
 		// Reject prepend and append mutations.
@@ -255,13 +259,10 @@ export namespace env {
 				) {
 					if (artifact instanceof tg.Symlink) {
 						const symlinkArtifact = await artifact.artifact;
-						if (symlinkArtifact === undefined) {
+						if (symlinkArtifact === null) {
 							// If this symlink points above the current directory, we don't have the context to resolve. No match.
 							const symlinkTarget = await artifact.path;
-							if (
-								symlinkTarget === undefined ||
-								symlinkTarget.startsWith("..")
-							) {
+							if (symlinkTarget === null || symlinkTarget.startsWith("..")) {
 								continue;
 							}
 							// Otherwise, construct a new symlink using this directory as the artifact.
@@ -706,7 +707,7 @@ export async function envObjectFromArtifact(
 	} else if (artifact instanceof tg.Symlink) {
 		// Resolve the symlink and try again.
 		const resolved = await artifact.resolve();
-		if (resolved === undefined) {
+		if (resolved === null) {
 			throw new Error(`Could not resolve symlink ${artifact}`);
 		} else {
 			return await envObjectFromArtifact(resolved);

@@ -14,10 +14,10 @@ type CommonArg = {
 	channel?: "stable" | "nightly" | string;
 
 	/** Dependencies configuration. When provided, deps are resolved to env automatically. */
-	deps?: std.deps.ConfigArg | undefined;
+	deps?: std.deps.ConfigArg;
 
 	/** Dependency argument overrides. Keys must match deps config keys. */
-	dependencies?: std.packages.ResolvedDependencyArgs | undefined;
+	dependencies?: std.packages.ResolvedDependencyArgs;
 
 	/** Environment variables to set during the build. */
 	env?: std.env.Arg;
@@ -104,11 +104,11 @@ export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
 		args,
 		map: async (arg) => arg,
 		reduce: {
-			env: (a, b) => std.env.arg(a, b),
+			env: (a, b) => std.env.arg(a ?? null, b ?? null),
 			features: "append",
-			sdk: (a, b) => std.sdk.arg(a, b),
-			subtreeEnv: (a, b) => std.env.arg(a, b),
-			subtreeSdk: (a, b) => std.sdk.arg(a, b),
+			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			subtreeEnv: (a, b) => std.env.arg(a ?? null, b ?? null),
+			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
 		},
 	});
 
@@ -149,11 +149,11 @@ export async function runArg(
 		args,
 		map: async (arg) => arg,
 		reduce: {
-			env: (a, b) => std.env.arg(a, b),
+			env: (a, b) => std.env.arg(a ?? null, b ?? null),
 			features: "append",
-			sdk: (a, b) => std.sdk.arg(a, b),
-			subtreeEnv: (a, b) => std.env.arg(a, b),
-			subtreeSdk: (a, b) => std.sdk.arg(a, b),
+			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			subtreeEnv: (a, b) => std.env.arg(a ?? null, b ?? null),
+			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
 		},
 	});
 
@@ -178,11 +178,15 @@ async function resolveDepsEnv(
 	return std.deps.env(depsConfig, {
 		build: resolved.build,
 		host: resolved.host,
-		sdk: resolved.sdk,
-		dependencies: resolved.dependencies,
-		env: resolved.env,
-		subtreeEnv: resolved.subtreeEnv,
-		subtreeSdk: resolved.subtreeSdk,
+		env: resolved.env ?? null,
+		subtreeEnv: resolved.subtreeEnv ?? null,
+		...(resolved.sdk !== undefined ? { sdk: resolved.sdk } : {}),
+		...(resolved.dependencies !== undefined
+			? { dependencies: resolved.dependencies }
+			: {}),
+		...(resolved.subtreeSdk !== undefined
+			? { subtreeSdk: resolved.subtreeSdk }
+			: {}),
 	});
 }
 
@@ -221,9 +225,9 @@ export async function run(...args: std.Args<RunArg>): Promise<tg.Command> {
 			tg.assert(source, "source is required when useCargoVendor is true");
 			const manifests = await tg.build(extractCargoManifests, source);
 			cargoConfig = await tg.build(vendoredSources, {
-				manifestSubdir,
 				source: manifests,
 				useCargoVendor: true,
+				...(manifestSubdir !== undefined ? { manifestSubdir } : {}),
 			});
 		} else {
 			let lockFile: tg.File;
@@ -289,7 +293,7 @@ VENDORCFG`;
 		// `self()` toolchain runs without a system dynamic linker. Pinning the
 		// same channel as the host means the two rustc binaries produce ABI-
 		// identical rlibs so cargo's per-crate fingerprint accepts both.
-		const toolchainDir = await tg.build(self, {
+		const toolchainDir = await self({
 			host: rustHost,
 			channel: effectiveChannel,
 		});
@@ -424,7 +428,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	// Without nightly we still proxy rustc invocations but build scripts run
 	// on the host (no sandbox, no cache).
 	const channel = channel_ ?? (proxy ? "nightly" : "stable");
-	const rustArtifact = await tg.build(self, {
+	const rustArtifact = await self({
 		host: rustHost,
 		target,
 		channel,
@@ -439,9 +443,9 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	if (useCargoVendor) {
 		const manifests = await tg.build(extractCargoManifests, source);
 		cargoConfig = await tg.build(vendoredSources, {
-			manifestSubdir,
 			source: manifests,
 			useCargoVendor: true,
+			...(manifestSubdir !== undefined ? { manifestSubdir } : {}),
 		});
 	} else {
 		const sourcePath = manifestSubdir
@@ -534,7 +538,7 @@ linker = "${hostLinker}"`;
 		"\n",
 		preparePaths,
 		prepareSource,
-		pre,
+		pre ?? null,
 		buildCommand,
 	);
 
@@ -603,10 +607,10 @@ linker = "${hostLinker}"`;
 		envs.push(verbosityEnv);
 	}
 
-	const env = std.env.arg(...envs, env_);
+	const env = std.env.arg(...envs, env_ ?? null);
 
 	let builder = std.build`${buildScript}`
-		.checksum(checksum)
+		.checksum(checksum ?? null)
 		.network(network)
 		.env(env);
 	if (processName !== undefined) {
@@ -660,7 +664,7 @@ linker = "${hostLinker}"`;
 
 export type VendoredSourcesArg = {
 	rustTarget?: string;
-	manifestSubdir?: string | undefined;
+	manifestSubdir?: string;
 	source: tg.Directory;
 	useCargoVendor?: boolean;
 };
@@ -707,7 +711,7 @@ directory = "${vendoredSources}"`;
 
 export type CargoVendorArg = {
 	rustTarget?: string;
-	manifestSubdir?: string | undefined;
+	manifestSubdir?: string;
 	source: tg.Directory;
 };
 
@@ -853,9 +857,9 @@ export async function vendorPackage(
 	};
 
 	pkg = await tg.directory(pkg, {
-		[".cargo_vcs_info.json"]: undefined,
-		[".gitignore"]: undefined,
-		["Cargo.toml.orig"]: undefined,
+		[".cargo_vcs_info.json"]: null,
+		[".gitignore"]: null,
+		["Cargo.toml.orig"]: null,
 	});
 
 	const cargoChecksum: CargoChecksum = {
@@ -864,7 +868,7 @@ export async function vendorPackage(
 	};
 
 	const stack: Array<[string, tg.Directory]> = [["", pkg]];
-	while (!(stack.length == 0)) {
+	while (!(stack.length === 0)) {
 		const [path, dir] = stack.pop() as [string, tg.Directory];
 		for (let [subpath, artifact] of Object.entries(await dir.entries)) {
 			subpath = `${path}${subpath}`;

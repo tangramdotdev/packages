@@ -125,7 +125,7 @@ export async function build(...args: std.Args<Arg>) {
 		// dependency to all tools.
 		configureArgs.push("--without-libiconv-prefix");
 	}
-	const phases = std.phases.arg(arg.phases, {
+	const phases = std.phases.arg(arg.phases ?? null, {
 		configure: { args: configureArgs },
 	});
 
@@ -153,14 +153,26 @@ export async function build(...args: std.Args<Arg>) {
 	if (os === "linux") {
 		const { acl: aclArtifact, attr: attrArtifact } = await std.deps.artifacts(
 			deps,
-			arg,
+			{
+				build: arg.build,
+				host: arg.host,
+				...(arg.sdk !== undefined && arg.sdk !== null ? { sdk: arg.sdk } : {}),
+				...(arg.dependencies !== undefined && arg.dependencies !== null
+					? { dependencies: arg.dependencies }
+					: {}),
+				env: arg.env ?? null,
+				subtreeEnv: arg.subtreeEnv ?? null,
+				...(arg.subtreeSdk !== undefined && arg.subtreeSdk !== null
+					? { subtreeSdk: arg.subtreeSdk }
+					: {}),
+			},
 		);
 		const recodeBin = tg.File.expect(await output.get("bin/recode-sr-latin"));
 		output = await tg.directory(output, {
 			"bin/recode-sr-latin": std.wrap(recodeBin, {
 				libraryPaths: [
-					tg`${aclArtifact}/lib`,
-					tg`${attrArtifact}/lib`,
+					tg`${aclArtifact ?? null}/lib`,
+					tg`${attrArtifact ?? null}/lib`,
 					tg`${await libiconv.build({ host: arg.host })}/lib`,
 				],
 			}),

@@ -48,7 +48,9 @@ export async function build(...args: std.Args<Arg>) {
 		);
 	}
 
-	const env = await std.env.arg(...envs, resolved.env, { utils: false });
+	const env = await std.env.arg(...envs, resolved.env ?? null, {
+		utils: false,
+	});
 	const providedCc = await std.env.tryGetKey({ env, key: "CC" });
 	if (providedCc) {
 		configureArgs.push(`CC="$CC"`);

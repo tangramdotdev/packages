@@ -22,13 +22,18 @@ export function source() {
 }
 
 export type Arg = {
-	host?: string;
-	embedWrapper?: boolean | undefined;
+	host?: string | null;
+	embedWrapper?: boolean;
 };
 
-export async function build(arg?: Arg) {
-	const host = arg?.host ?? std.triple.host();
-	const embedWrapper = arg?.embedWrapper ?? std.triple.os(host) === "linux";
+export async function build(...args: std.Args<Arg>) {
+	const arg = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
+	const host = arg.host ?? std.triple.host();
+	const embedWrapper = arg.embedWrapper ?? std.triple.os(host) === "linux";
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],

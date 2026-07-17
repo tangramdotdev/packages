@@ -43,7 +43,7 @@ export async function build(...args: std.Args<Arg>) {
 		},
 		...args,
 	);
-	let phases = arg.phases;
+	let phases = arg.phases ?? null;
 	if (arg.build !== arg.host) {
 		phases = await std.phases.arg(phases, {
 			configure: {

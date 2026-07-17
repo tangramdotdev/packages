@@ -33,20 +33,24 @@ export * as tar from "./utils/tar.tg.ts";
 export * as xz from "./utils/xz.tg.ts";
 
 export type Arg = {
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
 };
 
 /** A basic set of GNU system utilites. */
-export async function env(arg?: tg.Unresolved<Arg>) {
+export async function env(...args: std.Args<Arg>) {
 	const {
 		build,
 		env: env_,
 		host: host_,
 		sdk: sdk_,
-	} = arg ? await tg.resolve(arg) : {};
+	} = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (arg) => arg,
+		reduce: {},
+	});
 	const bootstrap = true;
 	const host = host_ ?? std.triple.host();
 
@@ -55,13 +59,21 @@ export async function env(arg?: tg.Unresolved<Arg>) {
 
 	const shellArtifact = await bash.build({
 		bootstrap,
-		build,
-		env: env_,
+		build: build ?? null,
+		env: env_ ?? null,
 		host,
-		sdk,
+		sdk: sdk ?? null,
 	});
-	const env = await std.env.arg(env_, { utils: false });
-	const commonArg = { bootstrap, build, env, host, sdk };
+	const env = await std.env.arg(env_ ?? null, {
+		utils: false,
+	});
+	const commonArg = {
+		bootstrap,
+		build: build ?? null,
+		env,
+		host,
+		sdk: sdk ?? null,
+	};
 
 	let utils = [shellArtifact];
 	utils = utils.concat(
@@ -123,7 +135,7 @@ export async function prerequisites(hostArg?: tg.Unresolved<string>) {
 
 export type BuildUtilArg = Omit<std.autotools.Arg, "deps"> & {
 	/** Wrap the scripts in the output at the specified paths with bash as the interpreter. */
-	wrapBashScriptPaths?: Array<string> | undefined;
+	wrapBashScriptPaths?: Array<string>;
 };
 
 /** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and disabling extra tools. */

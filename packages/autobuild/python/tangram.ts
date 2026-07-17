@@ -23,8 +23,8 @@ export async function build(arg: tg.Unresolved<Arg>) {
 	const env_ =
 		envArg ??
 		(await std.env.arg(
-			env({ build: resolved.build, host: resolved.host }),
-			envArg,
+			env({ build: resolved.build ?? null, host: resolved.host ?? null }),
+			envArg ?? null,
 		));
 	let arg_: python.BuildArg = { ...rest, env: env_, source };
 
@@ -43,7 +43,12 @@ export default build;
 export async function plain(arg: tg.Unresolved<Arg>) {
 	const { build, env: envArg, host, source } = await tg.resolve(arg);
 
-	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg);
+	const env_ =
+		envArg ??
+		std.env.arg(
+			env({ build: build ?? null, host: host ?? null }),
+			envArg ?? null,
+		);
 	const toolchain = await python.self();
 	const interpreter = await toolchain.get("bin/python3").then(tg.File.expect);
 	return wrapScripts({
@@ -74,8 +79,8 @@ export async function pyproject(arg: tg.Unresolved<Arg>) {
 	const env_ =
 		envArg ??
 		(await std.env.arg(
-			env({ build: resolved.build, host: resolved.host }),
-			envArg,
+			env({ build: resolved.build ?? null, host: resolved.host ?? null }),
+			envArg ?? null,
 		));
 	const pyprojectToml = await source.get("pyproject.toml").then(tg.File.expect);
 	const arg_ = { ...rest, env: env_, pyprojectToml, source };
@@ -83,8 +88,8 @@ export async function pyproject(arg: tg.Unresolved<Arg>) {
 }
 
 type EnvArg = {
-	build?: string | undefined;
-	host?: string | undefined;
+	build?: string | null;
+	host?: string | null;
 };
 
 export async function env(arg: tg.Unresolved<EnvArg>) {

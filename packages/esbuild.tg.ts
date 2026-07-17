@@ -55,7 +55,7 @@ export async function build(...args: std.Args<Arg>) {
 		{
 			SSL_CERT_FILE: certFile,
 		},
-		env_,
+		env_ ?? null,
 	);
 
 	return await $`mkdir work

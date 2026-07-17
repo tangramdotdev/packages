@@ -166,7 +166,7 @@ export async function build(...args: std.Args<Arg>) {
 	}
 
 	// Combine the envs with the user env last.
-	const env = std.env.arg(...envs, env_);
+	const env = std.env.arg(...envs, env_ ?? null);
 
 	// Run the rustc command.
 	const result = await $`${pre}\n${rustcCommand}`

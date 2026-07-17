@@ -25,12 +25,12 @@ export async function source() {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	phases?: std.phases.Arg;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	phases?: std.phases.Arg | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 
 export async function kernelHeaders(arg?: tg.Unresolved<Arg>) {
@@ -74,14 +74,21 @@ export async function kernelHeaders(arg?: tg.Unresolved<Arg>) {
 	};
 	const order = ["build", "install"];
 
-	const envs: std.Args<std.env.Arg> = [env_];
+	const envs: std.Args<std.env.Arg> = [env_ ?? null];
 	if (!bootstrap_) {
 		// Add the toolchain.
 		const sdkArg =
 			typeof sdk === "boolean"
 				? { host: buildTriple, target: buildTriple }
 				: sdk;
-		envs.push(await tg.build(std.sdk, sdkArg).named("sdk"));
+		envs.push(
+			await tg
+				.build(
+					std.sdk,
+					...(sdkArg !== undefined && sdkArg !== null ? [sdkArg] : []),
+				)
+				.named("sdk"),
+		);
 
 		// Add the standard utils, built with the default SDK.
 		const utils = await tg.build(std.buildDefaultEnv).named("default env");
@@ -100,7 +107,7 @@ export async function kernelHeaders(arg?: tg.Unresolved<Arg>) {
 					order,
 					command: { host: system },
 				},
-				phasesArg,
+				...(phasesArg !== null ? [phasesArg] : []),
 			)
 			.named("kernel headers"),
 	);

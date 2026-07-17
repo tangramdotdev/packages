@@ -63,7 +63,7 @@ export const metadata = {
 };
 
 const PROFILE = "minimal" as const;
-export const VERSION = "1.96.1" as const;
+export const VERSION = "1.97.1" as const;
 
 export type ToolchainArg = {
 	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD" for pinned nightly. */
@@ -74,7 +74,7 @@ export type ToolchainArg = {
 };
 
 export async function self(unresolvedArg?: tg.Unresolved<ToolchainArg>) {
-	const arg = await tg.resolve(unresolvedArg);
+	const arg = await tg.resolve(unresolvedArg ?? null);
 	// Determine the list of target triples to support other than the inferred host.
 	const detectedHost = std.triple.host();
 	const host = rustTriple(arg?.host ?? detectedHost);
@@ -97,7 +97,7 @@ export async function self(unresolvedArg?: tg.Unresolved<ToolchainArg>) {
 	if (channel === "stable" || channel === undefined) {
 		manifestUrl = `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`;
 		manifestChecksum =
-			"sha256:87eb76c53073e72b766083bed5530820694253b832a762d8385bda5759f03975";
+			"sha256:3ff344e30b9b1ed2971044eabb438a08f2e2245ddb5f8ab1a3ad8b63ab4eaf91";
 	} else if (channel === "nightly") {
 		manifestUrl = "https://static.rust-lang.org/dist/channel-rust-nightly.toml";
 		manifestChecksum = "sha256:any";

@@ -24,11 +24,11 @@ export async function source() {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 	staticBuild?: boolean;
 	usePrerequisites?: boolean;
 };
@@ -72,7 +72,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 
 	const phases = { configure };
 
-	const env: std.Args<std.env.Arg> = [env_];
+	const env: std.Args<std.env.Arg> = [env_ ?? null];
 	if (usePrerequisites) {
 		env.push(prerequisites(build));
 	}
@@ -87,8 +87,8 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		env: std.env.arg(...env, { utils: false }),
 		phases,
 		processName: metadata.name,
-		opt: staticBuild ? "s" : undefined,
-		sdk,
+		...(staticBuild ? { opt: "s" as const } : {}),
+		sdk: sdk ?? null,
 		source: sourceDir,
 	});
 }

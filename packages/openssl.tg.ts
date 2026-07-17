@@ -58,7 +58,7 @@ export async function build(...args: std.Args<Arg>) {
 		configureArgs.push(`--cross-compile-prefix=${arg.host}-`);
 	}
 
-	let phases = std.phases.arg(arg.phases, {
+	let phases = std.phases.arg(arg.phases ?? null, {
 		configure: {
 			command: tg`perl ./Configure ${osCompiler}`,
 			args: configureArgs,
@@ -81,14 +81,14 @@ export async function build(...args: std.Args<Arg>) {
 	const output = await std.autotools.build({
 		...arg,
 		phases,
-		env: std.env.arg(packageEnv, arg.env),
+		env: std.env.arg(packageEnv, arg.env ?? null),
 	});
 
 	// Wrap the `c_rehash` perl script.
 	const perlArtifact = await perl.build({
 		build: arg.build,
 		host: arg.host,
-		sdk: arg.sdk,
+		sdk: arg.sdk ?? null,
 	});
 	const perlInterpreter = await tg.symlink({
 		artifact: perlArtifact,

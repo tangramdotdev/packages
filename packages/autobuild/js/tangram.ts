@@ -26,7 +26,7 @@ export async function node(arg: tg.Unresolved<Arg>) {
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
-	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg);
+	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg ?? null);
 	const arg_ = { build, env: env_, host, source };
 	return nodejs.build(arg_);
 }
@@ -37,12 +37,17 @@ export async function plain(arg: tg.Unresolved<Arg>) {
 	const { env, source } = await tg.resolve(arg);
 	const toolchain = await nodejs.self();
 	const interpreter = await toolchain.get("bin/node").then(tg.File.expect);
-	return wrapScripts({ directory: source, env, extension: ".js", interpreter });
+	return wrapScripts({
+		directory: source,
+		env: env ?? null,
+		extension: ".js",
+		interpreter,
+	});
 }
 
 type EnvArg = {
-	build?: string | undefined;
-	host?: string | undefined;
+	build?: string | null;
+	host?: string | null;
 };
 
 export async function env(arg?: tg.Unresolved<EnvArg>) {

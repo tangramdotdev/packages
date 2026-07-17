@@ -62,7 +62,7 @@ export type Variant =
 	| "stage2_full"; // Everything enabled.
 
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
-export async function build(arg: tg.Unresolved<Arg>) {
+export async function build(...args: std.Args<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -77,7 +77,11 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		targetBinutils,
 		variant,
 		...autotoolsRest
-	} = await tg.resolve(arg);
+	} = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 
 	// Finalize triples.
 	const host = host_ ?? std.triple.host();
@@ -226,11 +230,11 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		bootstrap: bootstrap_,
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
-		env,
+		env: env ?? null,
 		fortifySource: shouldFortify,
 		phases,
 		opt: "3",
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(bundledSources),
 	});
 

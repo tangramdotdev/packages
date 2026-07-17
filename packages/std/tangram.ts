@@ -107,6 +107,7 @@ function testActions(): Record<string, () => any> {
 		wrap: wrap.test,
 		env: env.test,
 		proxyBasic: sdk.proxy.testBasic,
+		proxyLdDependencies: sdk.proxy.testLdProxyDependencies,
 		proxyTransitiveAll: sdk.proxy.testTransitiveAll,
 		proxyNone: sdk.proxy.testTransitiveNone,
 		proxyFilter: sdk.proxy.testTransitive,

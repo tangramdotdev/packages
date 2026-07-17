@@ -26,13 +26,13 @@ export function source() {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
 	autoconfArtifact: tg.Directory;
 	perlArtifact: tg.Directory;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 
 export async function build(arg: tg.Unresolved<Arg>) {
@@ -56,15 +56,15 @@ export async function build(arg: tg.Unresolved<Arg>) {
 	const { version } = metadata;
 	let binDirectory = tg.directory({});
 
-	const env = std.env.arg(env_, { utils: false });
+	const env = std.env.arg(env_ ?? null, { utils: false });
 
 	const automake = await std.utils.autotoolsInternal({
-		build,
-		host,
+		build: build ?? null,
+		host: host ?? null,
 		bootstrap,
 		env,
 		processName: metadata.name,
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(),
 	});
 

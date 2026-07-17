@@ -15,15 +15,21 @@ type Arg = {
 	sdk?: std.sdk.Arg;
 };
 
-export function image(arg?: Arg) { return std.image(env(arg), { cmd: ["bash"] }); }
+export function image(arg?: Arg) {
+	return std.image(env(arg), { cmd: ["bash"] });
+}
 
-export function env(arg?: Arg) { return std.env(...packages(arg)); }
+export function env(arg?: Arg) {
+	return std.env(...packages(arg));
+}
 
-export function executable(arg?: Arg) { return std.wrap(script, { env: env(arg) }); }
+export function executable(arg?: Arg) {
+	return std.wrap(script, { env: env(arg) });
+}
 
 function packages(arg?: Arg) {
 	const arg_ = arg ?? {};
-	return [nodejs.toolchain(arg_), postgresql.build(arg_), ripgrep.build(arg_)];
+	return [nodejs.self(arg_), postgresql.build(arg_), ripgrep.build(arg_)];
 }
 
 export const script = tg`

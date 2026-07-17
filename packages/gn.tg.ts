@@ -44,8 +44,8 @@ export async function build(...args: std.Args<Arg>) {
 		args,
 		map: async (arg) => arg,
 		reduce: {
-			env: (a, b) => std.env.arg(a, b),
-			sdk: (a, b) => std.sdk.arg(a, b),
+			env: (a, b) => std.env.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
 		},
 	});
 	const host = host_ ?? std.triple.host();
@@ -56,7 +56,7 @@ export async function build(...args: std.Args<Arg>) {
 		std.sdk({ host: build, target: host, toolchain: "llvm", ...sdk }),
 		ninja({ build, host: build }),
 		python({ build, host: build }),
-		env_,
+		env_ ?? null,
 	);
 
 	return await $`

@@ -62,14 +62,14 @@ export class StdProcessBuilder {
 	#exitOnErr: boolean;
 	#disallowUnset: boolean;
 	#pipefail: boolean;
-	#name: tg.Unresolved<string | undefined> | undefined;
+	#name: tg.Unresolved<string | null> | undefined;
 	#extra: Array<(b: tg.Process.Builder<any>) => tg.Process.Builder<any>>;
 	#cwdExplicit: boolean;
 
 	constructor(
 		mode: Mode,
-		template: TemplateStringsArray | undefined,
-		placeholders: std.Args<tg.Template.Arg> | undefined,
+		template?: TemplateStringsArray,
+		placeholders?: std.Args<tg.Template.Arg>,
 		passthrough?: std.Args<tg.Process.Arg>,
 	) {
 		this.#mode = mode;
@@ -128,7 +128,7 @@ export class StdProcessBuilder {
 	}
 
 	/** Set the process name. */
-	named(name: tg.Unresolved<string | undefined>): this {
+	named(name: tg.Unresolved<string | null>): this {
 		this.#name = name;
 		return this;
 	}
@@ -145,13 +145,13 @@ export class StdProcessBuilder {
 	}
 
 	checksum(
-		checksum: tg.Unresolved<tg.MaybeMutation<tg.Checksum | undefined>>,
+		checksum: tg.Unresolved<tg.MaybeMutation<tg.Checksum> | null>,
 	): this {
 		this.#extra.push((b) => b.checksum(checksum));
 		return this;
 	}
 
-	cwd(cwd: tg.Unresolved<tg.MaybeMutation<string | undefined>>): this {
+	cwd(cwd: tg.Unresolved<tg.MaybeMutation<string> | null>): this {
 		this.#cwdExplicit = true;
 		this.#extra.push((b) => b.cwd(cwd));
 		return this;
@@ -175,9 +175,9 @@ export class StdProcessBuilder {
 	}
 
 	sandbox(
-		sandbox: tg.Unresolved<
-			tg.MaybeMutation<boolean | tg.Sandbox.Arg | tg.Sandbox.Id | undefined>
-		>,
+		sandbox: tg.Unresolved<tg.MaybeMutation<
+			boolean | tg.Sandbox.Arg | tg.Sandbox.Id
+		> | null>,
 	): this {
 		this.#extra.push((b) => b.sandbox(sandbox));
 		return this;

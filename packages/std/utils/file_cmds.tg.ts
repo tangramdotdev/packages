@@ -23,16 +23,16 @@ export async function source() {
 }
 
 export type Arg = {
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | boolean | null;
+	source?: tg.Directory | null;
 };
 
 /** Produce `cp`, `install`, and `xattr` executables that preserve xattrs on macOS, to include with the coreutils. */
 export async function macOsXattrCmds(arg?: tg.Unresolved<Arg>) {
-	const resolved = await tg.resolve(arg);
+	const resolved = arg !== undefined ? await tg.resolve(arg) : undefined;
 	const build = resolved?.build ?? std.triple.host();
 	const os = std.triple.os(build);
 

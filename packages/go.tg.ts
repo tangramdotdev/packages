@@ -41,7 +41,7 @@ export type ToolchainArg = {
 export async function self(
 	arg?: tg.Unresolved<ToolchainArg>,
 ): Promise<tg.Directory> {
-	const resolved = await tg.resolve(arg);
+	const resolved = await tg.resolve(arg ?? null);
 	const host = resolved?.host ?? std.triple.host();
 	const system = std.triple.archAndOs(host);
 	tg.assert(
@@ -80,19 +80,19 @@ export default self;
 
 export type Arg = {
 	/** The machine performing the compilation. */
-	build?: string | undefined;
+	build?: string | null;
 
 	/** If the build requires network access, provide a checksum or the string "sha256:any" to accept any result, or `sha256:none` to ensure a failure, displaying the computed value. */
-	checksum?: tg.Checksum | undefined;
+	checksum?: tg.Checksum | null;
 
 	/** Should cgo be enabled? Default: true. */
-	cgo?: boolean | undefined;
+	cgo?: boolean | null;
 
 	/** Dependencies configuration. */
-	deps?: std.deps.ConfigArg | undefined;
+	deps?: std.deps.ConfigArg | null;
 
 	/** Any user-specified environment variables that will be set during the build. */
-	env?: std.env.Arg | undefined;
+	env?: std.env.Arg | null;
 
 	/**
 	 * Explicitly enable or disable the `go generate` phase.
@@ -100,38 +100,38 @@ export type Arg = {
 	 * - `true`: Always run `go generate`.
 	 * - `{command: ...}`: Always run `go generate`, and override the specific command used.
 	 */
-	generate?: boolean | { command: tg.Template.Arg } | undefined;
+	generate?: boolean | { command: tg.Template.Arg } | null;
 
 	/** The machine that will run the compilation. */
-	host?: string | undefined;
+	host?: string | null;
 
 	/**
 	 * Configure the installation phase, where binaries are built and copied to the output.
 	 *
 	 * If set, `command` will be run instead of `go install` to build the output binaries.
 	 */
-	install?: { command: tg.Template.Arg } | undefined;
+	install?: { command: tg.Template.Arg } | null;
 
 	/** Should this build have network access? Must set a checksum to enable. Default: false. */
-	network?: boolean | undefined;
+	network?: boolean | null;
 
 	/** A name for the build process. */
-	processName?: string | undefined;
+	processName?: string | null;
 
 	/** Any required SDK customization. */
-	sdk?: std.sdk.Arg | undefined;
+	sdk?: std.sdk.Arg | null;
 
 	/** The source directory. */
-	source?: tg.Directory | undefined;
+	source?: tg.Directory | null;
 
 	/** Environment to propagate to all dependencies in the subtree. */
 	subtreeEnv?: std.env.Arg;
 
 	/** SDK configuration to propagate to all dependencies in the subtree. */
-	subtreeSdk?: std.sdk.Arg | undefined;
+	subtreeSdk?: std.sdk.Arg | null;
 
 	/** The machine the produced artifacts will run on. */
-	target?: string | undefined;
+	target?: string | null;
 
 	/**
 	 * Configure how we vendor dependencies:
@@ -143,7 +143,7 @@ export type Arg = {
 	 *
 	 * Native vendoring downloads modules from proxy.golang.org using checksums from go.sum.
 	 */
-	vendor?: boolean | "native" | "go" | tg.Template.Arg | undefined;
+	vendor?: boolean | "native" | "go" | tg.Template.Arg | null;
 };
 
 /** The result of arg() - an Arg with build, host, and source guaranteed to be resolved. */
@@ -159,10 +159,10 @@ export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
 		args,
 		map: async (arg) => arg,
 		reduce: {
-			env: (a, b) => std.env.arg(a, b),
-			sdk: (a, b) => std.sdk.arg(a, b),
-			subtreeEnv: (a, b) => std.env.arg(a, b),
-			subtreeSdk: (a, b) => std.sdk.arg(a, b),
+			env: (a, b) => std.env.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			subtreeEnv: (a, b) => std.env.arg(a ?? null, b ?? null),
+			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
 		},
 	});
 
@@ -175,7 +175,10 @@ export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
 		...rest
 	} = collect;
 
-	tg.assert(source_ !== undefined, "source must be defined");
+	tg.assert(
+		source_ !== undefined && source_ !== null,
+		"source must be defined",
+	);
 	const source = await tg.resolve(source_);
 
 	// Determine build and host triples.
@@ -188,15 +191,19 @@ export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
 		? await std.deps.env(depsConfig, {
 				build,
 				host,
-				sdk: rest.sdk,
-				env: userEnv,
-				subtreeEnv: rest.subtreeEnv,
-				subtreeSdk: rest.subtreeSdk,
+				...(rest.sdk !== undefined && rest.sdk !== null
+					? { sdk: rest.sdk }
+					: {}),
+				env: userEnv ?? null,
+				subtreeEnv: rest.subtreeEnv ?? null,
+				...(rest.subtreeSdk !== undefined && rest.subtreeSdk !== null
+					? { subtreeSdk: rest.subtreeSdk }
+					: {}),
 			})
 		: undefined;
 
 	// Merge env: deps env → user env.
-	const env = await std.env.arg(depsEnv, userEnv);
+	const env = await std.env.arg(depsEnv ?? null, userEnv ?? null);
 
 	return {
 		build,
@@ -227,7 +234,10 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	const system = std.triple.archAndOs(host);
 	const target = target_ ?? host;
 
-	const sdk = std.sdk({ host, target }, sdkArg);
+	const sdk = std.sdk(
+		{ host, target },
+		...(sdkArg !== undefined && sdkArg !== null ? [sdkArg] : []),
+	);
 
 	// Determine if we should vendor and which method to use.
 	// vendor_ can be: undefined, boolean, "native", "go", or a template arg
@@ -241,7 +251,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	if (vendor_ === false) {
 		// Explicitly disabled
 		shouldCreateVendor = false;
-	} else if (vendor_ === undefined) {
+	} else if (vendor_ === undefined || vendor_ === null) {
 		// Auto-detect: vendor if no vendor dir exists (default behavior)
 		shouldCreateVendor = !hasVendorDir;
 		vendorMode = "native";
@@ -316,7 +326,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	if (generate === false) {
 		generateCommand =
 			await tg`echo "'go generate' phase disabled by 'generate: false'"`;
-	} else if (typeof generate === "object") {
+	} else if (generate !== null && typeof generate === "object") {
 		generateCommand = await tg.template(generate.command);
 	}
 
@@ -340,7 +350,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 			GOOS: goOs,
 			SSL_CERT_FILE: certFile,
 		},
-		env_,
+		env_ ?? null,
 	];
 
 	const env = std.env.arg(...envs);
@@ -373,8 +383,8 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		${installCommand}`
 		.env(env)
 		.host(system)
-		.checksum(checksum)
-		.network(network);
+		.checksum(checksum ?? null)
+		.network(network ?? false);
 	if (processName !== undefined) {
 		builder = builder.named(processName);
 	}

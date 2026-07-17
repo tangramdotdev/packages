@@ -6,18 +6,18 @@ export type Args<T extends tg.Value = tg.Value> = Array<
 
 /** Base argument type for packages to extend. Add build-system-specific options (autotools, cmake, cargo, etc.) and package-specific dependencies by intersection. */
 export type BasePackageArg = {
-	build?: string | undefined;
-	dependencies?: DependencyArgs | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
+	build?: string | null;
+	dependencies?: DependencyArgs | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
 	/** Top-level phases that merge with builder-specific phases. */
-	phases?: std.phases.Arg;
-	sdk?: std.sdk.Arg | undefined;
-	source?: tg.Directory | undefined;
+	phases?: std.phases.Arg | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 	/** Environment to propagate to all dependencies in the subtree. */
-	subtreeEnv?: std.env.Arg;
+	subtreeEnv?: std.env.Arg | null;
 	/** SDK configuration to propagate to all dependencies in the subtree. */
-	subtreeSdk?: std.sdk.Arg | undefined;
+	subtreeSdk?: std.sdk.Arg | null;
 };
 
 /** Internal constraint type for package arguments. Includes index signature for type system compatibility. */
@@ -36,23 +36,23 @@ export type DependencyArgs = {
 };
 
 type Input<T extends tg.Value, O extends { [key: string]: tg.Value }> = {
-	args: tg.Args<T>;
+	args: Args<T>;
 	map: (
 		arg: ValueOrMaybeMutationMap<T>,
 	) => tg.MaybePromise<tg.MaybeMutationMap<O>>;
 	reduce: {
-		[K in keyof O]:
+		[K in keyof O]?:
 			| tg.Mutation.Kind
 			| ((a: O[K] | undefined, b: O[K]) => tg.MaybePromise<O[K]>);
 	};
 };
 
 export type MakeArrayKeys<T, K extends keyof T> = {
-	[P in keyof T]: P extends K ? Array<T[P]> : T[P];
+	[P in keyof T]: P extends K ? Array<Exclude<T[P], undefined>> : T[P];
 };
 
 type ValueOrMaybeMutationMap<T extends tg.Value = tg.Value> = T extends
-	| undefined
+	| null
 	| boolean
 	| number
 	| string
@@ -64,9 +64,13 @@ type ValueOrMaybeMutationMap<T extends tg.Value = tg.Value> = T extends
 	| Array<infer _U extends tg.Value>
 	? T
 	: T extends { [key: string]: tg.Value }
-		? {
-				[K in keyof T]?: tg.MaybeMutation<T[K]>;
-			}
+		? string extends keyof T
+			? {
+					[key: string]: tg.MaybeMutation<
+						Exclude<T[string & keyof T], undefined>
+					>;
+				}
+			: { [K in keyof T]?: tg.MaybeMutation<Exclude<T[K], undefined>> }
 		: never;
 
 export async function apply<
@@ -189,7 +193,7 @@ export async function mergeMutations(
 			return [
 				await tg.Mutation.set(
 					tg.Template.join(
-						b.inner.separator,
+						b.inner.separator ?? null,
 						b.inner.template,
 						tg.template(setVal),
 					),
@@ -204,7 +208,7 @@ export async function mergeMutations(
 			return [
 				await tg.Mutation.set(
 					tg.Template.join(
-						b.inner.separator,
+						b.inner.separator ?? null,
 						tg.template(setVal),
 						b.inner.template,
 					),
@@ -254,7 +258,7 @@ export async function mergeMutations(
 			return [
 				await tg.Mutation.prefix(
 					tg.Template.join(
-						a.inner.separator ?? b.inner.separator,
+						a.inner.separator ?? b.inner.separator ?? null,
 						b.inner.template,
 						a.inner.template,
 					),
@@ -269,7 +273,7 @@ export async function mergeMutations(
 			return [
 				await tg.Mutation.prefix(
 					tg.Template.join(
-						a.inner.separator ?? b.inner.separator,
+						a.inner.separator ?? b.inner.separator ?? null,
 						b.inner.template,
 						a.inner.template,
 					),
@@ -299,7 +303,7 @@ export async function mergeMutations(
 			return [
 				await tg.Mutation.suffix(
 					tg.Template.join(
-						b.inner.separator ?? a.inner.separator,
+						b.inner.separator ?? a.inner.separator ?? null,
 						b.inner.template,
 						a.inner.template,
 					),
@@ -314,7 +318,7 @@ export async function mergeMutations(
 			return [
 				await tg.Mutation.suffix(
 					tg.Template.join(
-						a.inner.separator ?? b.inner.separator,
+						a.inner.separator ?? b.inner.separator ?? null,
 						a.inner.template,
 						b.inner.template,
 					),

@@ -1,6 +1,5 @@
-diff -Naur perl-5.38.2/installperl perl-5.38.2_patched/installperl
---- perl-5.38.2/installperl	2023-11-28 06:57:28
-+++ perl-5.38.2_patched/installperl	2023-12-10 14:23:51
+--- a/installperl
++++ b/installperl
 @@ -282,7 +282,6 @@
      safe_unlink("$installbin/$perl_verbase$ver$exe_ext");
      copy("perl$exe_ext", "$installbin/$perl_verbase$ver$exe_ext");
@@ -17,3 +16,23 @@ diff -Naur perl-5.38.2/installperl perl-5.38.2_patched/installperl
  	    chmod($SO_MODE, "$installarchlib/CORE/$file");
  	} else {
  	    chmod($NON_SO_MODE, "$installarchlib/CORE/$file");
+@@ -559,6 +557,19 @@
+ 	    unless -f $to and (chmod(0666, $to), unlink $to)
+ 		   and File::Copy::copy($from, $to);
+     }
++    # Preserve the Tangram dependencies xattr, which File::Copy drops on macOS.
++    # Without it the installed copy of a wrapped executable loses its dependency
++    # edges at check-in, orphaning the interpreter it references so that the
++    # object cannot be authorized to consumers of the build.
++    unless ($opts{notify} or $^O ne 'darwin') {
++	my $attr = 'user.tangram.dependencies';
++	my $hex = `xattr -px '$attr' "$from" 2>/dev/null`;
++	if ($? == 0 and $hex =~ /\S/) {
++	    $hex =~ s/\s+//g;
++	    system('xattr', '-wx', $attr, $hex, $to) == 0
++		or warn "Couldn't preserve $attr on $to\n";
++	}
++    }
+     $packlist->{$xto} = { type => 'file' };
+ }
+ 

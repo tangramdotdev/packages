@@ -92,8 +92,8 @@ export async function build(unresolvedArg: tg.Unresolved<Arg>) {
 export default build;
 
 export type EnvArg = {
-	build?: string | undefined;
-	host?: string | undefined;
+	build?: string | null;
+	host?: string | null;
 	source: tg.Directory;
 };
 
@@ -104,7 +104,7 @@ export async function env(unresolvedArg: tg.Unresolved<EnvArg>) {
 	console.log("received source dir", sourceId);
 	const kind = await detectKind(source);
 
-	const arg_ = { build, host };
+	const arg_ = { build: build ?? null, host: host ?? null };
 
 	switch (kind) {
 		case "cc-autotools": {
@@ -282,7 +282,7 @@ export async function testKind(kind: Kind) {
 	// Test detection
 	console.log("source", source.id);
 	const detectedKind = await detectKind(source);
-	tg.assert(detectedKind == kind, `expected ${kind}, got ${detectedKind}`);
+	tg.assert(detectedKind === kind, `expected ${kind}, got ${detectedKind}`);
 
 	// Test build
 	const buildOutput = await build({ source }).then(tg.Directory.expect);

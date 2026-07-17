@@ -42,11 +42,11 @@ export function source(version?: GlibcVersion) {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 	linuxHeaders: tg.Directory;
 };
 
@@ -108,7 +108,7 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		install,
 	};
 
-	const env: std.Args<std.env.Arg> = [env_];
+	const env: std.Args<std.env.Arg> = [env_ ?? null];
 
 	env.push({
 		CPATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
@@ -132,7 +132,7 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		opt: "3",
 		phases,
 		prefixPath: "/",
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(version),
 	});
 

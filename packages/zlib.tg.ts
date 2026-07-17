@@ -49,7 +49,7 @@ export async function build(...args: std.Args<Arg>) {
 
 	return std.autotools.build({
 		...arg,
-		env: std.env.arg(packageEnv, arg.env),
+		env: std.env.arg(packageEnv, arg.env ?? null),
 	});
 }
 

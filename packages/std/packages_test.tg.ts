@@ -230,25 +230,26 @@ async function testKindSubdirectoryFiltering() {
 	// Runtime keeps lib and include, not bin.
 	const runtime = artifacts.runtimeDep;
 	tg.assert(runtime !== undefined);
-	tg.assert((await runtime.tryGet("lib")) !== undefined, "runtime has lib");
-	tg.assert(
-		(await runtime.tryGet("include")) !== undefined,
-		"runtime has include",
-	);
-	tg.assert((await runtime.tryGet("bin")) === undefined, "runtime no bin");
+	tg.assert((await runtime.tryGet("lib")) !== null, "runtime has lib");
+	tg.assert((await runtime.tryGet("include")) !== null, "runtime has include");
+	tg.assert((await runtime.tryGet("bin")) === null, "runtime no bin");
 
 	// Buildtime keeps only bin.
 	const buildtime = artifacts.buildtimeDep;
 	tg.assert(buildtime !== undefined);
-	tg.assert((await buildtime.tryGet("bin")) !== undefined, "buildtime has bin");
-	tg.assert((await buildtime.tryGet("lib")) === undefined, "buildtime no lib");
+	tg.assert((await buildtime.tryGet("bin")) !== null, "buildtime has bin");
+	tg.assert((await buildtime.tryGet("lib")) === null, "buildtime no lib");
+	tg.assert(
+		(await buildtime.tryGet("include")) === null,
+		"buildtime no include",
+	);
 
 	// Full keeps everything.
 	const full = artifacts.fullDep;
 	tg.assert(full !== undefined);
-	tg.assert((await full.tryGet("bin")) !== undefined, "full has bin");
-	tg.assert((await full.tryGet("lib")) !== undefined, "full has lib");
-	tg.assert((await full.tryGet("include")) !== undefined, "full has include");
+	tg.assert((await full.tryGet("bin")) !== null, "full has bin");
+	tg.assert((await full.tryGet("lib")) !== null, "full has lib");
+	tg.assert((await full.tryGet("include")) !== null, "full has include");
 }
 
 async function testBuildtimeKindSetsBuildAsHost() {

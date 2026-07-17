@@ -107,7 +107,7 @@ export async function canadianCross(arg?: CanadianCrossArg) {
 	const bootstrapBuildEnv = std.env.arg(
 		bootstrapUtils,
 		bootstrapBuildTools,
-		env_,
+		env_ ?? null,
 	);
 
 	// Create cross-toolchain from build to host.
@@ -129,7 +129,7 @@ export async function canadianCross(arg?: CanadianCrossArg) {
 		crossProxyEnv,
 		bootstrapUtils,
 		bootstrapBuildTools,
-		env_,
+		env_ ?? null,
 	);
 
 	// Create a native toolchain (host to host).
@@ -164,7 +164,7 @@ export async function canadianCross(arg?: CanadianCrossArg) {
 export async function buildToHostCrossToolchain(
 	arg?: tg.Unresolved<CanadianCrossArg>,
 ) {
-	const { host: host_, env } = (await tg.resolve(arg)) ?? {};
+	const { host: host_, env } = arg ? await tg.resolve(arg) : {};
 	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 	const build = bootstrap.toolchainTriple(host);
 	const buildToolchain = bootstrap.sdk(build);
@@ -173,7 +173,7 @@ export async function buildToHostCrossToolchain(
 	return crossToolchain({
 		build,
 		buildToolchain,
-		env,
+		env: env ?? null,
 		host: build,
 		target: host,
 		variant: "stage1_limited",
@@ -212,13 +212,18 @@ export async function crossToolchain(arg: tg.Unresolved<CrossToolchainArg>) {
 	const hostLibraries = await tg
 		.build(dependencies.hostLibraries, {
 			host,
-			buildToolchain: std.env.arg(buildToolchain, env_, { utils: false }),
+			buildToolchain: std.env.arg(buildToolchain ?? null, env_ ?? null, {
+				utils: false,
+			}),
 			preset: "gcc",
 		})
 		.named("host libraries");
-	const buildEnv = std.env.arg(env_, buildToolchain, hostLibraries, {
-		utils: false,
-	});
+	const buildEnv = std.env.arg(
+		env_ ?? null,
+		buildToolchain ?? null,
+		hostLibraries,
+		{ utils: false },
+	);
 
 	const targetBinutils = binutils({
 		bootstrap: true,
@@ -228,16 +233,16 @@ export async function crossToolchain(arg: tg.Unresolved<CrossToolchainArg>) {
 		target,
 	});
 
-	const binutilsEnv = std.env.arg(env_, targetBinutils, hostLibraries, {
+	const binutilsEnv = std.env.arg(env_ ?? null, targetBinutils, hostLibraries, {
 		utils: false,
 	});
 
 	const sysroot = await buildSysroot({
 		build: buildTriple,
-		buildToolchain,
+		buildToolchain: buildToolchain ?? null,
 		env: binutilsEnv,
 		host: target,
-		sdk,
+		...(sdk !== undefined ? { sdk } : {}),
 		targetBinutils,
 	});
 
@@ -248,7 +253,7 @@ export async function crossToolchain(arg: tg.Unresolved<CrossToolchainArg>) {
 			build: buildTriple,
 			env: buildEnv,
 			host,
-			sdk,
+			sdk: sdk ?? null,
 			sysroot,
 			target,
 			targetBinutils,
@@ -286,7 +291,9 @@ export async function buildSysroot(arg: tg.Unresolved<BuildSysrootArg>) {
 	const buildTriple = build_ ?? host;
 	const target = host;
 
-	const buildEnv = std.env.arg(env, buildToolchain, { utils: false });
+	const buildEnv = std.env.arg(env ?? null, buildToolchain ?? null, {
+		utils: false,
+	});
 	const targetBinutils =
 		targetBinutils_ ??
 		(await binutils({
@@ -294,7 +301,7 @@ export async function buildSysroot(arg: tg.Unresolved<BuildSysrootArg>) {
 			build: buildTriple,
 			env: buildEnv,
 			host,
-			sdk,
+			sdk: sdk ?? null,
 			target,
 		}));
 
@@ -305,7 +312,7 @@ export async function buildSysroot(arg: tg.Unresolved<BuildSysrootArg>) {
 			build: buildTriple,
 			env: buildEnv,
 			host: target,
-			sdk,
+			sdk: sdk ?? null,
 		}),
 	});
 
@@ -321,7 +328,7 @@ export async function buildSysroot(arg: tg.Unresolved<BuildSysrootArg>) {
 			build: buildTriple,
 			env: buildEnv,
 			host: buildTriple,
-			sdk,
+			sdk: sdk ?? null,
 			sysroot,
 			target,
 			targetBinutils,
@@ -335,8 +342,8 @@ export async function buildSysroot(arg: tg.Unresolved<BuildSysrootArg>) {
 		build: buildTriple,
 		host,
 		linuxHeaders,
-		env: std.env.arg(env, initialGccDir, { utils: false }),
-		sdk,
+		env: std.env.arg(env ?? null, initialGccDir, { utils: false }),
+		...(sdk !== undefined ? { sdk } : {}),
 	});
 }
 

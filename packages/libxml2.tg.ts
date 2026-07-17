@@ -64,8 +64,19 @@ export async function build(...args: std.Args<Arg>) {
 	);
 
 	// Get the python artifact for CPATH setup.
-	const { python: pythonArtifact } = await std.deps.artifacts(deps, arg);
-	const env = std.env.arg(arg.env, {
+	const { python: pythonArtifact } = await std.deps.artifacts(deps, {
+		build: arg.build,
+		host: arg.host,
+		...(arg.dependencies !== undefined && arg.dependencies !== null
+			? { dependencies: arg.dependencies }
+			: {}),
+		subtreeEnv: arg.subtreeEnv ?? null,
+		...(arg.subtreeSdk !== undefined && arg.subtreeSdk !== null
+			? { subtreeSdk: arg.subtreeSdk }
+			: {}),
+	});
+	tg.assert(pythonArtifact !== undefined);
+	const env = std.env.arg(arg.env ?? null, {
 		CPATH: tg.Mutation.suffix(
 			tg`${pythonArtifact}/include/python${python.versionString()}`,
 			":",

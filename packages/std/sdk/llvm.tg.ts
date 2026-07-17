@@ -55,7 +55,7 @@ export type LLVMArg = {
 };
 
 /** Produce a complete clang+lld distribution. */
-export async function toolchain(arg?: LLVMArg) {
+export async function toolchain(...args: std.Args<LLVMArg>) {
 	const {
 		build: build_,
 		env: env_,
@@ -64,7 +64,11 @@ export async function toolchain(arg?: LLVMArg) {
 		sdk,
 		source: source_,
 		target: target_,
-	} = arg ?? {};
+	} = await std.args.apply<LLVMArg, LLVMArg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 
 	const build = build_ ?? host;
@@ -81,9 +85,9 @@ export async function toolchain(arg?: LLVMArg) {
 			return await tg.directory(
 				toolchain,
 				{
-					[`bin/ld`]: undefined,
-					[`bin/ld64.lld`]: undefined,
-					[`bin/ld-classic`]: undefined,
+					[`bin/ld`]: null,
+					[`bin/ld64.lld`]: null,
+					[`bin/ld-classic`]: null,
 				},
 				lld,
 				{ [`bin/ld`]: tg.symlink("./lld") },
@@ -131,7 +135,7 @@ export async function toolchain(arg?: LLVMArg) {
 	});
 
 	// Combine into build environment.
-	const env = [buildTools, hostLibraries, gitArtifact, env_];
+	const env = [buildTools, hostLibraries, gitArtifact, env_ ?? null];
 
 	// Obtain a sysroot for the requested host.
 	const sysroot = await constructSysroot({
@@ -187,7 +191,7 @@ export async function toolchain(arg?: LLVMArg) {
 		target: host,
 		env: std.env.arg(...env, { utils: false }),
 		phases,
-		sdk,
+		...(sdk !== undefined ? { sdk } : {}),
 		source: tg`${sourceDir}/llvm`,
 	});
 
@@ -259,7 +263,7 @@ export async function toolchain(arg?: LLVMArg) {
 
 /** Grab the LLD linker from the toolchain. */
 export async function lld(arg?: LLVMArg) {
-	const toolchainDir = await toolchain(arg);
+	const toolchainDir = await toolchain(...(arg !== undefined ? [arg] : []));
 	tg.assert(toolchainDir instanceof tg.Directory);
 	// Use a template instead of the file directly so the linker proxy invokes the linker by its full name.
 	return tg`${toolchainDir}/bin/ld.lld`;
@@ -294,7 +298,7 @@ export async function buildLld(arg?: LLVMArg) {
 	});
 	const deps = [buildTools, zlibArtifact];
 
-	const env = await std.env.arg(...deps, buildToolchain, env_);
+	const env = await std.env.arg(...deps, buildToolchain, env_ ?? null);
 
 	// Define default flags.
 	const configure = {
@@ -315,7 +319,7 @@ export async function buildLld(arg?: LLVMArg) {
 		bootstrap: true,
 		env,
 		phases,
-		sdk,
+		...(sdk !== undefined ? { sdk } : {}),
 		source: tg`${sourceDir}/llvm`,
 	});
 
@@ -364,7 +368,7 @@ export async function linuxToDarwin(arg?: LinuxToDarwinArg) {
 }
 
 export async function testLinuxToDarwin(arg?: LinuxToDarwinArg) {
-	const { target } = arg ?? {
+	const { target = "aarch64-apple-darwin" } = arg ?? {
 		host: std.triple.host(),
 		target: "aarch64-apple-darwin",
 	};

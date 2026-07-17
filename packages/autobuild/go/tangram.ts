@@ -18,7 +18,9 @@ export async function build(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const { env: envArg, ...rest } = resolved;
 
-	const env_ = envArg ?? env({ build: resolved.build, host: resolved.host });
+	const env_ =
+		envArg ??
+		env({ build: resolved.build ?? null, host: resolved.host ?? null });
 	const arg_ = { ...rest, env: env_ };
 	return go.build(arg_);
 }
@@ -26,8 +28,8 @@ export async function build(arg: tg.Unresolved<Arg>) {
 export default build;
 
 type EnvArg = {
-	build?: string | undefined;
-	host?: string | undefined;
+	build?: string | null;
+	host?: string | null;
 };
 
 export async function env(arg: tg.Unresolved<EnvArg>) {

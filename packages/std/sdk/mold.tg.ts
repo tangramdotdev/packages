@@ -30,21 +30,25 @@ export function source() {
 }
 
 export type Arg = {
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 
-export async function mold(arg?: Arg) {
+export async function mold(...args: std.Args<Arg>) {
 	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
@@ -58,14 +62,16 @@ export async function mold(arg?: Arg) {
 		sourceDir = await std.patch(sourceDir, blake3DisableNeonFlag);
 	}
 
-	const env = await std.env.arg(zstd({ build, host }), env_, { utils: false });
+	const env = await std.env.arg(zstd({ build, host }), env_ ?? null, {
+		utils: false,
+	});
 
 	const result = cmake.build({
 		host: build,
 		target: host,
 		env,
 		phases: { configure },
-		sdk,
+		...(sdk !== undefined && sdk !== null ? { sdk } : {}),
 		source: sourceDir,
 	});
 

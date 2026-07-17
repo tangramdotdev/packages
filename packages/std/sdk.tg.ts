@@ -45,7 +45,7 @@ export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 
 /** Inner SDK implementation. Takes already-resolved, canonical arguments so
  * the build ID is stable across all callers. */
-export async function sdkInner(arg: sdk.ResolvedArg) {
+export async function sdkInner(...args: std.Args<sdk.ResolvedArg>) {
 	const {
 		embedWrapper,
 		host,
@@ -55,7 +55,11 @@ export async function sdkInner(arg: sdk.ResolvedArg) {
 		target,
 		toolchain: toolchain_,
 		linker,
-	} = arg;
+	} = await std.args.apply<sdk.ResolvedArg, sdk.ResolvedArg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 	const hostOs = std.triple.os(host);
 
 	// Determine host toolchain.
@@ -115,7 +119,7 @@ export async function sdkInner(arg: sdk.ResolvedArg) {
 	// Proxy the host toolchain.
 	let proxyArg: proxy.Arg = {
 		compiler: proxyCompiler,
-		embedWrapper,
+		...(embedWrapper !== undefined ? { embedWrapper } : {}),
 		linker: proxyLinker,
 		strip: proxyStrip,
 		toolchain: toolchain,
@@ -133,14 +137,14 @@ export namespace sdk {
 	export const macOsDeploymentTarget = "11.0";
 
 	/** The possible types to pass to `std.sdk()`. Pass `undefined` or `true` to get the default SDK, `false` for an empty env, or use the `ArgObject` to configure the provided env. */
-	export type Arg = undefined | ArgObject;
+	export type Arg = ArgObject;
 
 	export type ArgObject = {
-		embedWrapper?: boolean | undefined;
+		embedWrapper?: boolean;
 		/** The machine this SDK will compile on. */
-		host?: string;
+		host?: string | null;
 		/** An alternate linker to use. */
-		linker?: LinkerKind | undefined;
+		linker?: LinkerKind | null;
 		/** Use the compiler proxy? Default: false. */
 		proxyCompiler?: boolean;
 		/** Use the linker proxy? Default: true. */
@@ -148,12 +152,12 @@ export namespace sdk {
 		/** Use the strip proxy? Default: true. */
 		proxyStrip?: boolean;
 		/** The machine this SDK produces executables for. */
-		target?: string;
+		target?: string | null;
 		/** Env containing the compiler. If not provided, will default to a native GCC toolchain. */
-		toolchain?: sdk.ToolchainKind;
+		toolchain?: sdk.ToolchainKind | null;
 	};
 
-	export async function arg(...args: std.Args<Arg>) {
+	export async function arg(...args: std.Args<Arg | null>) {
 		let {
 			embedWrapper,
 			host: host_,
@@ -163,10 +167,10 @@ export namespace sdk {
 			proxyStrip = true,
 			target,
 			toolchain: toolchain_,
-		} = await std.args.apply<sdk.Arg, sdk.ArgObject>({
+		} = await std.args.apply<sdk.Arg | null, sdk.ArgObject>({
 			args,
 			map: async (arg) => {
-				if (arg === undefined) {
+				if (arg === undefined || arg === null) {
 					return {};
 				} else {
 					return arg;
@@ -191,7 +195,7 @@ export namespace sdk {
 		validateCrossTarget({ host, target });
 
 		// Set the default toolchain if not provided.
-		if (toolchain_ === undefined) {
+		if (toolchain_ === undefined || toolchain_ === null) {
 			toolchain_ = hostOs === "darwin" ? "llvm" : "gnu";
 		}
 
@@ -202,14 +206,14 @@ export namespace sdk {
 		}
 
 		return {
-			embedWrapper,
 			host,
 			proxyCompiler,
 			proxyLinker,
 			proxyStrip,
 			target,
 			toolchain: toolchain_,
-			linker,
+			...(embedWrapper !== undefined ? { embedWrapper } : {}),
+			...(linker !== undefined && linker !== null ? { linker } : {}),
 		};
 	}
 
@@ -217,8 +221,8 @@ export namespace sdk {
 
 	type ProvidesToolchainArg = {
 		env: std.env.EnvObject;
-		host?: string | undefined;
-		target?: string | undefined;
+		host?: string | null;
+		target?: string | null;
 	};
 
 	function requiredCompilerComponents(os: string, flavor: "gnu" | "llvm") {
@@ -340,14 +344,14 @@ export namespace sdk {
 		// Make sure we have a toolchain.
 		await sdk.assertProvidesToolchain({
 			env,
-			host: host_,
-			target: targetTriple,
+			host: host_ ?? null,
+			target: targetTriple ?? null,
 		});
 
 		const host = await determineToolchainHost({
 			env,
-			host: host_,
-			target: targetTriple,
+			host: host_ ?? null,
+			target: targetTriple ?? null,
 		});
 		const os = std.triple.os(host);
 		const target = targetTriple ?? host;
@@ -397,7 +401,7 @@ export namespace sdk {
 		return {
 			cc,
 			cxx,
-			fortran,
+			...(fortran !== undefined ? { fortran } : {}),
 			directory,
 			flavor: compilerInfo.flavor,
 			host,
@@ -412,7 +416,7 @@ export namespace sdk {
 	type CompilerInfo = {
 		cc: tg.File | tg.Symlink;
 		cxx: tg.File | tg.Symlink;
-		fortran?: tg.File | tg.Symlink | undefined;
+		fortran?: tg.File | tg.Symlink;
 		flavor: sdk.ToolchainFlavor;
 		targetPrefix: string;
 	};
@@ -525,7 +529,7 @@ export namespace sdk {
 		return {
 			cc: gcc,
 			cxx: gxx,
-			fortran: gfortran,
+			...(gfortran !== undefined ? { fortran: gfortran } : {}),
 			flavor: "gnu",
 		};
 	}
@@ -575,7 +579,7 @@ export namespace sdk {
 	): Promise<{
 		cc: tg.Symlink;
 		cxx: tg.Symlink;
-		fortran?: tg.Symlink | undefined;
+		fortran?: tg.Symlink;
 	}> {
 		const compiler =
 			compilerInfo.flavor === "gnu" ? `${targetPrefix}gcc` : "clang";
@@ -590,7 +594,7 @@ export namespace sdk {
 			fortran = await tg.symlink(tg`${directory}/bin/${targetPrefix}gfortran`);
 		}
 
-		return { cc, cxx, fortran };
+		return { cc, cxx, ...(fortran !== undefined ? { fortran } : {}) };
 	}
 
 	async function locateLinker(
@@ -707,15 +711,15 @@ export namespace sdk {
 		/** The environment to ascertain the host from. */
 		env: std.env.EnvObject;
 		/** What machine is the compiler expecting to run on? */
-		host?: string | undefined;
+		host?: string | null;
 		/** If the environment is a cross-compiler, what target should we use to look for prefixes? */
-		target?: string | undefined;
+		target?: string | null;
 	};
 
 	export type ToolchainComponents = {
 		cc: tg.Symlink;
 		cxx: tg.Symlink;
-		fortran?: tg.Symlink | undefined;
+		fortran?: tg.Symlink;
 		directory: tg.Directory;
 		flavor: ToolchainFlavor;
 		host: string;
@@ -789,7 +793,7 @@ export namespace sdk {
 
 		// If the file is a symlink, resolve it.
 		if (foundCC instanceof tg.Symlink) {
-			foundCC = await foundCC.resolve();
+			foundCC = (await foundCC.resolve()) ?? undefined;
 		}
 		tg.assert(foundCC instanceof tg.File);
 
@@ -851,7 +855,7 @@ export namespace sdk {
 	type ProxyTestArg = {
 		// Only the lld and mold linkers leave comments in the binary we can search for.
 		flavor: sdk.ToolchainFlavor;
-		linkerFlavor?: "LLD" | "mold" | undefined;
+		linkerFlavor?: "LLD" | "mold";
 		parameters: ProxyTestParameters;
 		proxiedLinker?: boolean;
 		sdkEnv: std.env.Arg;
@@ -859,15 +863,15 @@ export namespace sdk {
 		target?: string;
 	};
 
-	/** Compile a program and assert a correct wrapper for the target was produced. If `host == target`, ensure the wrapper execute and produces the expected output. */
+	/** Compile a program and assert a correct wrapper for the target was produced. If `host === target`, ensure the wrapper execute and produces the expected output. */
 	export async function assertCompiler(arg: ProxyTestArg) {
 		const proxiedLinker = arg.proxiedLinker ?? false;
 		const linkerFlavor = arg.linkerFlavor;
 		const flavor = arg.flavor;
 		// Determine requested host and target.
 		const expected = await resolveHostAndTarget({
-			host: arg.host,
-			target: arg.target,
+			host: arg.host ?? null,
+			target: arg.target ?? null,
 		});
 		const expectedHost = expected.host;
 		const expectedTarget = expected.target;
@@ -1028,11 +1032,13 @@ export namespace sdk {
 				if (arg?.linker === "mold") {
 					linkerFlavor = "mold" as const;
 				}
+				const linkerFlavorArg =
+					linkerFlavor !== undefined ? { linkerFlavor } : {};
 
 				// Test C.
 				await assertCompiler({
 					flavor,
-					linkerFlavor,
+					...linkerFlavorArg,
 					parameters: testCParameters,
 					proxiedLinker,
 					sdkEnv: env,
@@ -1043,7 +1049,7 @@ export namespace sdk {
 					// Test C with linker proxy bypass.
 					await assertCompiler({
 						flavor,
-						linkerFlavor,
+						...linkerFlavorArg,
 						parameters: testCParameters,
 						proxiedLinker: false,
 						sdkEnv: await std.env.arg(
@@ -1061,7 +1067,7 @@ export namespace sdk {
 				// Test C++.
 				await assertCompiler({
 					flavor,
-					linkerFlavor,
+					...linkerFlavorArg,
 					parameters: testCxxParameters,
 					proxiedLinker,
 					sdkEnv: env,
@@ -1072,7 +1078,7 @@ export namespace sdk {
 					// Test C++ with linker proxy bypass.
 					await assertCompiler({
 						flavor,
-						linkerFlavor,
+						...linkerFlavorArg,
 						parameters: testCxxParameters,
 						proxiedLinker: false,
 						sdkEnv: await std.env.arg(
@@ -1092,7 +1098,7 @@ export namespace sdk {
 				await assertCompiler({
 					flavor,
 
-					linkerFlavor,
+					...linkerFlavorArg,
 
 					parameters: testCxxAtomicParameters,
 
@@ -1109,7 +1115,7 @@ export namespace sdk {
 					// Test C++ atomic with linker proxy bypass.
 					await assertCompiler({
 						flavor,
-						linkerFlavor,
+						...linkerFlavorArg,
 						parameters: testCxxAtomicParameters,
 						proxiedLinker: false,
 						sdkEnv: await std.env.arg(
@@ -1132,7 +1138,7 @@ export namespace sdk {
 				) {
 					await assertCompiler({
 						flavor,
-						linkerFlavor,
+						...linkerFlavorArg,
 						parameters: testFortranParameters,
 						proxiedLinker,
 						sdkEnv: env,
@@ -1143,7 +1149,7 @@ export namespace sdk {
 						// Test Fortran with linker proxy bypass.
 						await assertCompiler({
 							flavor,
-							linkerFlavor,
+							...linkerFlavorArg,
 							parameters: testFortranParameters,
 							proxiedLinker: false,
 							sdkEnv: await std.env.arg(
@@ -1180,8 +1186,8 @@ export namespace sdk {
 	}
 
 	export type HostAndTargetsOptions = {
-		host?: string | undefined;
-		target?: string | undefined;
+		host?: string | null;
+		target?: string | null;
 	};
 
 	export type HostAndTarget = {
@@ -1196,14 +1202,14 @@ export namespace sdk {
 	/** The resolved form of SDK args, returned by `sdk.arg()`. All fields are
 	 * canonical and defaulted. */
 	export type ResolvedArg = {
-		embedWrapper: boolean | undefined;
+		embedWrapper?: boolean;
 		host: string;
 		proxyCompiler: boolean;
 		proxyLinker: boolean;
 		proxyStrip: boolean;
 		target: string;
 		toolchain: ToolchainKind;
-		linker: LinkerKind | undefined;
+		linker?: LinkerKind;
 	};
 
 	/** Check whether the resolved args match platform defaults. Used by `sdk()`

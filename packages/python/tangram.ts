@@ -125,7 +125,9 @@ export async function self(...args: std.Args<Arg>) {
 	const artifacts = await std.deps.artifacts(deps, {
 		build,
 		host,
-		sdk: customOptions.sdk,
+		...(customOptions.sdk !== undefined && customOptions.sdk !== null
+			? { sdk: customOptions.sdk }
+			: {}),
 	});
 
 	// Build configure args.
@@ -186,7 +188,7 @@ export async function self(...args: std.Args<Arg>) {
 
 	let python: PromiseLike<tg.Directory> = wrapScripts(
 		pythonInterpreter,
-		undefined,
+		null,
 		output,
 		pythonVersionString,
 	);
@@ -407,7 +409,12 @@ export async function build(...args: std.Args<BuildArg>) {
 	}
 
 	// Build the base python environment.
-	const baseEnv = await self({ ...pythonArg, build: buildTriple, env, host });
+	const baseEnv = await self({
+		...pythonArg,
+		build: buildTriple,
+		env: env ?? null,
+		host,
+	});
 
 	// Merge the package source with any existing package directory in site-packages.
 	// This handles namespace packages (e.g. poetry.core from poetry-core coexisting with poetry from source).

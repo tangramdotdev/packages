@@ -161,7 +161,8 @@ mod tests {
 		.unwrap();
 		write_sidecars(&dir, &["libbar-def456".to_owned()], &[]).unwrap();
 		write_sidecars(&dir, &["libbaz-789abc".to_owned()], &[]).unwrap();
-		let (visited, complete) = closure_from_sidecars(&[dir.as_path()], &["libfoo-abc123".to_owned()]);
+		let (visited, complete) =
+			closure_from_sidecars(&[dir.as_path()], &["libfoo-abc123".to_owned()]);
 		assert!(complete);
 		assert_eq!(
 			visited,
@@ -176,7 +177,8 @@ mod tests {
 	#[test]
 	fn missing_sidecar_marks_incomplete() {
 		let dir = temp_dir();
-		let (_visited, complete) = closure_from_sidecars(&[dir.as_path()], &["libfoo-abc123".to_owned()]);
+		let (_visited, complete) =
+			closure_from_sidecars(&[dir.as_path()], &["libfoo-abc123".to_owned()]);
 		assert!(!complete);
 	}
 

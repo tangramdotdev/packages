@@ -60,7 +60,7 @@ export async function build(...args: std.Args<Arg>) {
 
 	const output = await std.autotools.build({
 		...arg,
-		setRuntimeLibraryPath,
+		...(setRuntimeLibraryPath !== undefined ? { setRuntimeLibraryPath } : {}),
 	});
 
 	// Wrap the binary to include the CA certificates.

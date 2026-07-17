@@ -2,115 +2,115 @@ import * as std from "./tangram.ts";
 
 export type Arg = {
 	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explicitly provided via `env`. Default: false. */
-	bootstrap?: boolean | undefined;
+	bootstrap?: boolean;
 
 	/** The machine performing the compilation. */
-	build?: string | undefined;
+	build?: string | null;
 
 	/** Dependencies configuration. When provided, deps are resolved to env automatically. */
-	deps?: std.deps.ConfigArg | undefined;
+	deps?: std.deps.ConfigArg | null;
 
 	/** Dependency argument overrides. Keys must match deps config keys. */
-	dependencies?: std.args.DependencyArgs | undefined;
+	dependencies?: std.args.DependencyArgs | null;
 
 	/** By default, autotools builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
-	buildInTree?: boolean | undefined;
+	buildInTree?: boolean;
 
 	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
-	checksum?: tg.Checksum | undefined;
+	checksum?: tg.Checksum | null;
 
 	/** Debug mode will enable additional log output, allow failures in subprocesses, and include a folder of logs at ${tg.output}/.tangram_logs. Default: false */
-	debug?: boolean | undefined;
+	debug?: boolean;
 
 	/** Should we automatically add configure flags to support cross compilation when build !== host? If false, you must provide the necessary configuration manually. Default: true. */
-	defaultCrossArgs?: boolean | undefined;
+	defaultCrossArgs?: boolean;
 
 	/** Should we automatically set environment variables pointing to a cross toolchain when build !== host? If false, you must provide the necessary environment manually. Default: true. */
-	defaultCrossEnv?: boolean | undefined;
+	defaultCrossEnv?: boolean;
 
 	/** Should the development environment include `texinfo`, `help2man`, `autoconf` and `automake`? Default: false. */
-	developmentTools?: boolean | undefined;
+	developmentTools?: boolean;
 
 	/** Should we run the check phase? Default: false */
-	doCheck?: boolean | undefined;
+	doCheck?: boolean;
 
 	/** Any environment to add to the build. */
-	env?: std.env.Arg | undefined;
+	env?: std.env.Arg | null;
 
 	/** Should the build environment include `m4`, `bison`, `perl`, and `gettext`? Default: true. */
-	extended?: boolean | undefined;
+	extended?: boolean;
 
 	/** Should the flags include FORTIFY_SOURCE? `false` will disable, `true` will default to 3, values less than 0 or greater than 3 will throw an error. Default: 3.  */
-	fortifySource?: boolean | number | undefined;
+	fortifySource?: boolean | number | null;
 
 	/** Use full RELRO? Will use partial if disabled. May cause long start-up times in large programs. Default: true. */
-	fullRelro?: boolean | undefined;
+	fullRelro?: boolean;
 
 	/** Should we add the extra set of hardening CFLAGS? Default: true. */
-	hardeningCFlags?: boolean | undefined;
+	hardeningCFlags?: boolean;
 
 	/** The machine the build output will run on. */
-	host?: string | undefined;
+	host?: string | null;
 
 	/** The value to pass to `-march` in the default CFLAGS. Default: undefined. */
-	march?: string | undefined;
+	march?: string | null;
 
 	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
-	mtune?: string | undefined;
+	mtune?: string | null;
 
 	/** A name for the build process. */
-	processName?: string | undefined;
+	processName?: string | null;
 
 	/** Should this build have network access? Must set a checksum to enable. Default: false. */
-	network?: boolean | undefined;
+	network?: boolean;
 
 	/** Should we normalize the prefix written to pkg-config files? Default: true. */
-	normalizePkgConfigPrefix?: boolean | undefined;
+	normalizePkgConfigPrefix?: boolean;
 
 	/** The optlevel to pass. Defaults to "2" */
-	opt?: "1" | "2" | "3" | "s" | "z" | "fast" | undefined;
+	opt?: "1" | "2" | "3" | "s" | "z" | "fast" | null;
 
 	/** Override the default phase order. Default: ["prepare", "configure", "build", "check", "install", "fixup"]. */
-	order?: Array<string> | undefined;
+	order?: Array<string> | null;
 
 	/** Should make jobs run in parallel? Default: false until new branch. */
-	parallel?: boolean | number | undefined;
+	parallel?: boolean | number | null;
 
 	/** Override the phases. Can be a single Arg or array of Args. */
-	phases?: std.phases.Arg | Array<std.phases.Arg> | undefined;
+	phases?: std.phases.Arg | Array<std.phases.Arg> | null;
 
 	/** Compile with `-pipe`? This option allows the compiler to use pipes instead of temporary files internally, speeding up compilation at the cost of increased memory. Disable if compiling in low-memory environments. This has no effect on the output. Default: true. */
-	pipe?: boolean | undefined;
+	pipe?: boolean;
 
 	/** Should the build environment include pkg-config? Default: true */
-	pkgConfig?: boolean | undefined;
+	pkgConfig?: boolean;
 
 	/** The argument configuring the installation prefix. Default value is `--prefix=${prefixPath}` Set to `"none"` to omit an installation destination argument.*/
-	prefixArg?: tg.Template.Arg | "none" | undefined;
+	prefixArg?: tg.Template.Arg | "none" | null;
 
 	/** The filepath to use as the installation prefix. Usually the default is what you want here. */
-	prefixPath?: tg.Template.Arg | undefined;
+	prefixPath?: tg.Template.Arg | null;
 
 	/** Should we remove all Libtool archives from the output directory? The presence of these files can cause downstream builds to depend on absolute paths which may no longer be valid, and can interfere with cross-compilation. Tangram uses other methods for library resolution, rendering these files unnecessary, and in some cases detrimental. Default: true. */
-	removeLibtoolArchives?: boolean | undefined;
+	removeLibtoolArchives?: boolean;
 
 	/** Arguments to use for the SDK. */
-	sdk?: std.sdk.Arg | undefined;
+	sdk?: std.sdk.Arg | null;
 
 	/** Should we mirror the contents `LIBRARY_PATH` in `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`? Default: false */
-	setRuntimeLibraryPath?: boolean | undefined;
+	setRuntimeLibraryPath?: boolean;
 
 	/** Environment to propagate to all dependencies in the subtree. */
-	subtreeEnv?: std.env.Arg;
+	subtreeEnv?: std.env.Arg | null;
 
 	/** SDK configuration to propagate to all dependencies in the subtree. */
-	subtreeSdk?: std.sdk.Arg | undefined;
+	subtreeSdk?: std.sdk.Arg | null;
 
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
-	source?: tg.Directory | undefined;
+	source?: tg.Directory | null;
 
 	/** Should executables be stripped? Default is true. */
-	stripExecutables?: boolean | undefined;
+	stripExecutables?: boolean;
 };
 
 export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
@@ -123,16 +123,25 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		depsEnv = await std.deps.env(depsConfig, {
 			build: resolved.build,
 			host: resolved.host,
-			sdk: resolved.sdk,
-			dependencies: resolved.dependencies,
-			env: depsEnv,
-			subtreeEnv: resolved.subtreeEnv,
-			subtreeSdk: resolved.subtreeSdk,
+			...(resolved.sdk !== undefined && resolved.sdk !== null
+				? { sdk: resolved.sdk }
+				: {}),
+			...(resolved.dependencies !== undefined && resolved.dependencies !== null
+				? { dependencies: resolved.dependencies }
+				: {}),
+			env: depsEnv ?? null,
+			subtreeEnv: resolved.subtreeEnv ?? null,
+			...(resolved.subtreeSdk !== undefined && resolved.subtreeSdk !== null
+				? { subtreeSdk: resolved.subtreeSdk }
+				: {}),
 		});
 	}
 
 	// For top-level package, merge subtreeSdk with sdk (sdk takes precedence).
-	const effectiveSdk = await std.sdk.arg(resolved.subtreeSdk, resolved.sdk);
+	const effectiveSdk = await std.sdk.arg(
+		resolved.subtreeSdk ?? null,
+		resolved.sdk ?? null,
+	);
 
 	const {
 		bootstrap = false,
@@ -186,12 +195,12 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		bootstrap,
 		developmentTools,
 		extended,
-		fortifySource: fortifySource_,
+		fortifySource: fortifySource_ ?? 2,
 		fullRelro,
 		hardeningCFlags,
-		march,
-		mtune,
-		opt,
+		...(march !== undefined && march !== null ? { march } : {}),
+		mtune: mtune ?? "generic",
+		opt: opt ?? "2",
 		pipe,
 		pkgConfig,
 		sdk: sdkArg_,
@@ -200,7 +209,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	envs.push(ccEnv);
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	const env = await std.env.arg(...envs, userEnv);
+	const env = await std.env.arg(...envs, userEnv ?? null);
 
 	// Define default phases.
 	const configureArgs =
@@ -300,14 +309,15 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		phases: mergedPhases,
 		env,
 		command: { host: system },
-		checksum,
+		checksum: checksum ?? null,
 		network,
-		...(order !== undefined ? { order } : {}),
-		...(processName !== undefined
-			? { processName: `${processName} build` }
-			: {}),
+		order: order ?? null,
+		processName:
+			processName !== undefined && processName !== null
+				? `${processName} build`
+				: null,
 	});
-	if (processName !== undefined) {
+	if (processName !== undefined && processName !== null) {
 		result = result.named(processName);
 	}
 	return await result.then(tg.Directory.expect);
@@ -324,14 +334,16 @@ export type ResolvedArg = Omit<Arg, "build" | "host" | "phases" | "source"> & {
 
 /** Resolve autotools args to a mutable arg object. Returns an arg with build, host, and source guaranteed to be resolved. */
 export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
-	type Collect = std.args.MakeArrayKeys<Arg, "phases">;
+	type Collect = Omit<std.args.MakeArrayKeys<Arg, "phases">, "phases"> & {
+		phases: Array<std.phases.Arg>;
+	};
 	const collect = await std.args.apply<Arg, Collect>({
 		args,
 		map: async (arg) => {
 			// Normalize phases to array, flattening if already an array.
 			const phases = Array.isArray(arg.phases)
 				? arg.phases
-				: arg.phases !== undefined
+				: arg.phases !== undefined && arg.phases !== null
 					? [arg.phases]
 					: [];
 			return {
@@ -340,11 +352,17 @@ export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
 			} as Collect;
 		},
 		reduce: {
-			env: (a, b) => std.env.arg(a, b, { utils: false }),
+			env: (a, b) =>
+				std.env.arg(a ?? null, b ?? null, {
+					utils: false,
+				}),
 			phases: "append",
-			sdk: (a, b) => std.sdk.arg(a, b),
-			subtreeEnv: (a, b) => std.env.arg(a, b, { utils: false }),
-			subtreeSdk: (a, b) => std.sdk.arg(a, b),
+			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			subtreeEnv: (a, b) =>
+				std.env.arg(a ?? null, b ?? null, {
+					utils: false,
+				}),
+			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
 		},
 	});
 
@@ -356,7 +374,7 @@ export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
 		...rest
 	} = collect;
 
-	tg.assert(source !== undefined, `source must be defined`);
+	tg.assert(source !== undefined && source !== null, `source must be defined`);
 
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;

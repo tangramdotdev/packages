@@ -20,7 +20,10 @@ export async function build(arg: tg.Unresolved<Arg>) {
 
 	const env_ =
 		envArg ??
-		std.env.arg(env({ build: resolved.build, host: resolved.host }), envArg);
+		std.env.arg(
+			env({ build: resolved.build ?? null, host: resolved.host ?? null }),
+			envArg ?? null,
+		);
 	const arg_ = { ...rest, env: env_ };
 
 	return cmake.build(arg_);
@@ -29,8 +32,8 @@ export async function build(arg: tg.Unresolved<Arg>) {
 export default build;
 
 type EnvArg = {
-	build?: string | undefined;
-	host?: string | undefined;
+	build?: string | null;
+	host?: string | null;
 };
 
 export async function env(arg: tg.Unresolved<EnvArg>) {

@@ -35,14 +35,14 @@ export function source() {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
 	grepArtifact: tg.Directory;
 	m4Artifact: tg.Directory;
 	perlArtifact: tg.Directory;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 
 export async function build(arg: tg.Unresolved<Arg>) {
@@ -59,15 +59,15 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		source: source_,
 	} = resolved;
 
-	const env = std.env.arg(env_, { utils: false });
+	const env = std.env.arg(env_ ?? null, { utils: false });
 
 	let autoconf = await std.utils.autotoolsInternal({
-		build,
-		host,
+		build: build ?? null,
+		host: host ?? null,
 		bootstrap,
 		env,
 		processName: metadata.name,
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(),
 	});
 
@@ -193,7 +193,7 @@ export async function patchAutom4teCfg(
 			cat <<'EOF' | tee ${tg.output}
 			${contents}
 		`
-		.env(arg.env)
+		.env(arg.env ?? null)
 		.then(tg.File.expect);
 
 	return tg.directory(autoconf, {

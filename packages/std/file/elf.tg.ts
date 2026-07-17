@@ -6,13 +6,13 @@ export type ElfExecutableMetadata = {
 	arch: string;
 
 	/** The executable's interpreter. */
-	interpreter?: string | undefined;
+	interpreter?: string;
 
 	/** The SONAME of the library (for shared libraries) */
-	soname?: string | undefined;
+	soname?: string;
 
 	/** Required shared libraries. */
-	needed?: Array<string> | undefined;
+	needed?: Array<string>;
 };
 
 export async function elfExecutableMetadata(
@@ -146,9 +146,9 @@ export async function elfExecutableMetadata(
 	return {
 		format: "elf",
 		arch,
-		interpreter,
-		needed,
-		soname,
+		...(interpreter !== undefined ? { interpreter } : {}),
+		...(needed !== undefined ? { needed } : {}),
+		...(soname !== undefined ? { soname } : {}),
 	};
 }
 

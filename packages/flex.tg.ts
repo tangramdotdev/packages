@@ -48,7 +48,7 @@ export async function build(...args: std.Args<Arg>) {
 	});
 	return std.autotools.build({
 		...arg,
-		env: std.env.arg(arg.env, texinfoEnv),
+		env: std.env.arg(arg.env ?? null, texinfoEnv),
 	});
 }
 

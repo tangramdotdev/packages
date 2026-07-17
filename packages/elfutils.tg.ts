@@ -95,8 +95,21 @@ export async function build(...args: std.Args<Arg>) {
 		zlib: zlibArtifact,
 		xz: xzArtifact,
 		bzip2: bzip2Artifact,
-	} = await std.deps.artifacts(deps, arg);
-	const env = std.env.arg(arg.env, {
+	} = await std.deps.artifacts(deps, {
+		build: arg.build,
+		host: arg.host,
+		...(arg.dependencies !== undefined && arg.dependencies !== null
+			? { dependencies: arg.dependencies }
+			: {}),
+		subtreeEnv: arg.subtreeEnv ?? null,
+		...(arg.subtreeSdk !== undefined && arg.subtreeSdk !== null
+			? { subtreeSdk: arg.subtreeSdk }
+			: {}),
+	});
+	tg.assert(zlibArtifact !== undefined);
+	tg.assert(xzArtifact !== undefined);
+	tg.assert(bzip2Artifact !== undefined);
+	const env = std.env.arg(arg.env ?? null, {
 		LDFLAGS: tg.Mutation.suffix(
 			tg`-Wl,-rpath-link,${zlibArtifact}/lib:${xzArtifact}/lib:${bzip2Artifact}/lib`,
 			" ",

@@ -7,15 +7,15 @@ export type Arg = PhasesArg;
 
 /** Argument type for run() - execution metadata plus phases. */
 export type RunArg = {
-	bootstrap?: boolean | undefined;
-	debug?: boolean | undefined;
-	env?: std.env.Arg | undefined;
-	order?: Array<string> | undefined;
-	phases?: PhasesArg | undefined;
-	processName?: string | undefined;
-	checksum?: tg.Checksum | undefined;
-	network?: boolean | undefined;
-	command?: tg.Command.Arg.Object | undefined;
+	bootstrap?: boolean;
+	debug?: boolean;
+	env?: std.env.Arg | null;
+	order?: Array<string> | null;
+	phases?: PhasesArg | null;
+	processName?: string | null;
+	checksum?: tg.Checksum | null;
+	network?: boolean;
+	command?: tg.Command.Arg.Object | null;
 };
 
 /** Resolved phases after merging. */
@@ -23,11 +23,9 @@ export type Phases = {
 	[key: string]: Phase;
 };
 
-export type PhasesArg =
-	| {
-			[key: string]: PhaseArg;
-	  }
-	| undefined;
+export type PhasesArg = {
+	[key: string]: PhaseArg;
+};
 
 /** A phase body that is a complete script. Composable via prefix/suffix mutations. */
 export type ScriptBody = tg.Template;
@@ -35,14 +33,14 @@ export type ScriptBody = tg.Template;
 /** A phase body with structured command and args. Args are composable via append. */
 export type CommandBody = {
 	command: tg.Template;
-	args?: Array<tg.Template> | undefined;
+	args?: Array<tg.Template>;
 };
 
 /** Resolved phase after merging. */
 export type Phase = {
 	body: ScriptBody | CommandBody;
-	pre?: ScriptBody | CommandBody | undefined;
-	post?: ScriptBody | CommandBody | undefined;
+	pre?: ScriptBody | CommandBody;
+	post?: ScriptBody | CommandBody;
 };
 
 /** Input for a script body. */
@@ -50,12 +48,12 @@ export type ScriptBodyArg = tg.Template.Arg;
 
 /** Input for a command body. */
 export type CommandBodyArg = {
-	command?: tg.Template.Arg | tg.Mutation<tg.Template.Arg>;
-	args?: Array<tg.Template.Arg> | tg.Mutation | undefined;
+	command?: tg.Template.Arg | tg.Mutation<tg.Template.Arg> | null;
+	args?: Array<tg.Template.Arg> | tg.Mutation | null;
 };
 
 /** Alias for backward compatibility. */
-export type CommandArg = BodyArg | undefined;
+export type CommandArg = BodyArg;
 
 /** Input for a phase body - either script or command form. Also accepts resolved bodies. */
 export type BodyArg =
@@ -70,9 +68,9 @@ export type PhaseArg = BodyArg | PhaseArgObject | tg.Mutation<BodyArg>;
 
 /** Input for a phase with explicit body/pre/post structure. */
 export type PhaseArgObject = {
-	body?: BodyArg;
-	pre?: BodyArg;
-	post?: BodyArg;
+	body?: BodyArg | null;
+	pre?: BodyArg | null;
+	post?: BodyArg | null;
 };
 
 /** Construct a script and run it. */
@@ -83,8 +81,11 @@ export async function run(...args: std.Args<RunArg>) {
 		map: async (a) => a ?? {},
 		reduce: {
 			command: "merge",
-			env: (a, b) => std.env.arg(a, b, { utils: false }),
-			phases: (a, b) => arg(a, b),
+			env: (a, b) =>
+				std.env.arg(a ?? null, b ?? null, {
+					utils: false,
+				}),
+			phases: (a, b) => arg(a ?? null, b ?? null),
 		},
 	});
 
@@ -101,7 +102,7 @@ export async function run(...args: std.Args<RunArg>) {
 
 	// The reducer for phases calls arg() which returns Phases.
 	// TypeScript doesn't track this, so we need a helper to safely convert.
-	const phases = resolvePhases(runArg.phases);
+	const phases = resolvePhases(runArg.phases ?? undefined);
 
 	// Construct the phases in order.
 	let empty = tg.template();
@@ -162,22 +163,22 @@ export async function run(...args: std.Args<RunArg>) {
 		`;
 	}
 
-	let builder = std.run`${script}`.env(env_);
+	let builder = std.run`${script}`.env(env_ ?? null);
 	if (bootstrap) {
 		builder = builder.bootstrap(bootstrap);
 	}
-	if (commandArg !== undefined) {
-		if (commandArg.host !== undefined) {
+	if (commandArg !== undefined && commandArg !== null) {
+		if (commandArg.host !== undefined && commandArg.host !== null) {
 			builder = builder.host(commandArg.host);
 		}
-		if (commandArg.env !== undefined) {
+		if (commandArg.env !== undefined && commandArg.env !== null) {
 			builder = builder.env(commandArg.env as std.env.Arg);
 		}
 	}
 	if (checksum) {
 		builder = builder.checksum(checksum);
 	}
-	if (processName !== undefined) {
+	if (processName !== undefined && processName !== null) {
 		builder = builder.named(processName);
 	}
 	if (network) {
@@ -245,20 +246,20 @@ function isPhaseArg(value: unknown): value is PhaseArg {
 
 /** Merge phase arguments. Symmetric with std.sdk.arg, std.env.arg, etc. */
 export async function arg(
-	...args: Array<tg.Unresolved<Arg | Array<Arg>>>
+	...args: Array<tg.Unresolved<Arg | Array<Arg> | null>>
 ): Promise<Phases> {
 	const phases: Phases = {};
 
 	// Process a single PhasesArg, merging its phases into the accumulated result.
-	async function processPhasesArg(phasesArg: PhasesArg) {
-		if (phasesArg === undefined) return;
+	async function processPhasesArg(phasesArg: PhasesArg | null) {
+		if (phasesArg === undefined || phasesArg === null) return;
 		// Iterate over the phases and merge each one.
 		for (const key of Object.keys(phasesArg)) {
 			const rawValue = phasesArg[key];
 			// Validate the value is a PhaseArg (needed because tg.resolve types are wide).
 			if (!isPhaseArg(rawValue)) continue;
 			const existing = phases[key];
-			const mergedPhase = await mergePhaseArgs(existing, rawValue);
+			const mergedPhase = await mergePhaseArgs(existing ?? null, rawValue);
 			if (mergedPhase !== undefined) {
 				phases[key] = mergedPhase;
 			} else {
@@ -355,7 +356,7 @@ type PhaseArgIntermediate = {
 
 /** Convert a PhaseArg to PhaseArgIntermediate. */
 function toPhaseArgIntermediate(
-	arg: PhaseArg | undefined,
+	arg?: PhaseArg,
 ): PhaseArgIntermediate | "unset" | "set_if_unset" {
 	if (arg === undefined) {
 		return {};
@@ -411,7 +412,7 @@ function extractSetIfUnsetValue(arg: PhaseArg): PhaseArgIntermediate {
 
 /** Merge phase args into a resolved Phase. */
 export async function mergePhaseArgs(
-	...args: Array<tg.Unresolved<PhaseArg>>
+	...args: Array<tg.Unresolved<PhaseArg | null>>
 ): Promise<Phase | undefined> {
 	const resolved = await Promise.all(args.map(tg.resolve));
 
@@ -423,6 +424,9 @@ export async function mergePhaseArgs(
 
 	for (let i = 0; i < resolved.length; i++) {
 		const arg = resolved[i];
+		if (arg === null) {
+			continue;
+		}
 		const intermediate = toPhaseArgIntermediate(arg);
 
 		if (intermediate === "unset") {
@@ -471,7 +475,11 @@ export async function mergePhaseArgs(
 	// Create a phase. If body is undefined, use an empty template as placeholder.
 	// The builder will replace this with its default when merging.
 	const finalBody = body ?? (await tg.template(""));
-	return { body: finalBody, pre, post };
+	return {
+		body: finalBody,
+		...(pre !== undefined ? { pre } : {}),
+		...(post !== undefined ? { post } : {}),
+	};
 }
 
 /** Handle prefix mutation on a body. */
@@ -524,11 +532,11 @@ async function mergeCommandBodies(
 	}
 
 	// Args: handle mutation or append.
-	if (arg.args !== undefined) {
+	if (arg.args !== undefined && arg.args !== null) {
 		if (arg.args instanceof tg.Mutation) {
 			// Apply mutation to args.
 			if (arg.args.inner.kind === "unset") {
-				result.args = undefined;
+				delete result.args;
 			} else {
 				throw new Error(
 					`Unexpected mutation kind for args: ${arg.args.inner.kind}`,
@@ -601,7 +609,10 @@ export async function mergeBodyArgs(
 				return resolveCommandBodyArg(arg);
 			} else {
 				const resolvedArgs = await resolveArgsField(arg.args);
-				return { command: existing, args: resolvedArgs };
+				return {
+					command: existing,
+					...(resolvedArgs !== undefined ? { args: resolvedArgs } : {}),
+				};
 			}
 		} else {
 			return mergeCommandBodies(existing, arg);
@@ -613,9 +624,9 @@ export async function mergeBodyArgs(
 
 /** Resolve args field which may be an array or a mutation. */
 async function resolveArgsField(
-	args: Array<tg.Template.Arg> | tg.Mutation | undefined,
+	args?: Array<tg.Template.Arg> | tg.Mutation | null,
 ): Promise<Array<tg.Template> | undefined> {
-	if (args === undefined) {
+	if (args === undefined || args === null) {
 		return undefined;
 	}
 	if (args instanceof tg.Mutation) {
@@ -648,7 +659,7 @@ function isEmptyTemplate(template: tg.Template): boolean {
 
 /** Resolve a command field which may be a template arg or a mutation. */
 async function resolveCommandField(
-	command: tg.Template.Arg | tg.Mutation<tg.Template.Arg> | undefined,
+	command?: tg.Template.Arg | tg.Mutation<tg.Template.Arg>,
 	existing?: tg.Template,
 ): Promise<tg.Template> {
 	if (command === undefined) {
@@ -718,7 +729,7 @@ async function resolveCommandBodyArg(
 ): Promise<CommandBody> {
 	const command = await resolveCommandField(arg.command);
 	const args = await resolveArgsField(arg.args);
-	return { command, args };
+	return { command, ...(args !== undefined ? { args } : {}) };
 }
 
 /** Construct a template from a resolved phase. */
@@ -781,11 +792,18 @@ export async function maybeMutationToTemplate(
 		}
 	} else {
 		// If it is a Manifest template, get the value.
-		if (typeof arg === "object" && "kind" in arg && arg.kind === "unset") {
+		if (
+			typeof arg === "object" &&
+			arg !== null &&
+			"kind" in arg &&
+			arg.kind === "unset"
+		) {
 			return tg.template();
 		}
 		const templateArg =
-			typeof arg === "object" && "value" in arg ? arg.value : arg;
+			typeof arg === "object" && arg !== null && "value" in arg
+				? arg.value
+				: arg;
 		if (
 			templateArg instanceof tg.Template ||
 			tg.Artifact.is(templateArg) ||

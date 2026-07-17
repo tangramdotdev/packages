@@ -23,16 +23,15 @@ export async function source() {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-	libcc?: tg.File;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
+	libcc?: tg.File | null;
 };
 
 export async function build(arg?: tg.Unresolved<Arg>) {
-	const resolved = await tg.resolve(arg);
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -41,7 +40,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		libcc = false,
 		sdk,
 		source: source_,
-	} = resolved ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
@@ -62,7 +61,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		: [];
 
 	if (libcc) {
-		additionalFlags.push(await tg`LIBCC="${resolved?.libcc}"`);
+		additionalFlags.push(await tg`LIBCC="${libcc}"`);
 	}
 
 	const configure = {
@@ -84,7 +83,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		fixup,
 	};
 
-	const env: std.Args<std.env.Arg> = [env_];
+	const env: std.Args<std.env.Arg> = [env_ ?? null];
 	env.push({
 		CPATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
 		LIBRARY_PATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
@@ -100,7 +99,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		env: std.env.arg(...env),
 		phases,
 		prefixPath: "/", // It's going in a sysroot.
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(),
 	});
 }

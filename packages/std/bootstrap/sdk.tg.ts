@@ -17,9 +17,9 @@ export namespace sdk {
 	/** Build a thin `bin/` directory utilizing symlinks to their respective artifacts. */
 	async function thinBin(
 		sources: Array<tg.Directory>,
-		extras: Record<string, tg.Unresolved<tg.Artifact | undefined>> = {},
+		extras: Record<string, tg.Unresolved<tg.Artifact | null>> = {},
 	): Promise<tg.Directory> {
-		const entries: Record<string, tg.Unresolved<tg.Artifact | undefined>> = {};
+		const entries: Record<string, tg.Unresolved<tg.Artifact | null>> = {};
 		for (const src of sources) {
 			const srcEntries = await src.entries;
 			if (!("bin" in srcEntries)) continue;

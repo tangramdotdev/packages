@@ -35,12 +35,12 @@ export function source() {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
 	perlArtifact: tg.Directory;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 
 export async function build(arg: tg.Unresolved<Arg>) {
@@ -53,7 +53,7 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		sdk,
 		source: source_,
 	} = await tg.resolve(arg);
-	const env = std.env.arg(env_, { utils: false });
+	const env = std.env.arg(env_ ?? null, { utils: false });
 
 	const shellScripts = [
 		"bin/pdftexi2dvi",
@@ -62,12 +62,12 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		"bin/texindex",
 	];
 	const output = await std.utils.autotoolsInternal({
-		build,
-		host,
+		build: build ?? null,
+		host: host ?? null,
 		bootstrap,
 		env,
 		processName: metadata.name,
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(),
 		wrapBashScriptPaths: shellScripts,
 	});

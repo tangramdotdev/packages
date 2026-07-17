@@ -46,9 +46,9 @@ export namespace download {
 	}
 
 	export type fromGitHubArg = GithubSource & {
-		archiveFormat?: tg.ArchiveFormat | undefined;
+		archiveFormat?: tg.ArchiveFormat;
 		checksum: tg.Checksum;
-		compression?: tg.CompressionFormat | undefined;
+		compression?: tg.CompressionFormat;
 		owner: string;
 		repo: string;
 		tag: string;
@@ -109,7 +109,7 @@ export namespace download {
 
 	export type FromGnuArg = {
 		checksum: tg.Checksum;
-		compression?: tg.CompressionFormat | undefined;
+		compression?: tg.CompressionFormat;
 		name: string;
 		version: string;
 	};

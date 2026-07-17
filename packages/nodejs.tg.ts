@@ -70,7 +70,7 @@ async function source(): Promise<tg.Directory> {
 }
 
 export async function self(args?: tg.Unresolved<ToolchainArg>) {
-	const resolved = await tg.resolve(args);
+	const resolved = await tg.resolve(args ?? null);
 	// Download Node
 	const artifact = source();
 
@@ -160,10 +160,10 @@ export async function arg(...args: std.Args<any>): Promise<ResolvedArg> {
 		args,
 		map: async (arg) => arg,
 		reduce: {
-			env: (a, b) => std.env.arg(a, b),
-			sdk: (a, b) => std.sdk.arg(a, b),
-			subtreeEnv: (a, b) => std.env.arg(a, b),
-			subtreeSdk: (a, b) => std.sdk.arg(a, b),
+			env: (a, b) => std.env.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			subtreeEnv: (a, b) => std.env.arg(a ?? null, b ?? null),
+			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
 		},
 	});
 
@@ -196,7 +196,7 @@ export async function arg(...args: std.Args<any>): Promise<ResolvedArg> {
 		: undefined;
 
 	// Merge env: deps env → user env.
-	const env = await std.env.arg(depsEnv, userEnv);
+	const env = await std.env.arg(depsEnv ?? null, userEnv ?? null);
 
 	return {
 		build,
@@ -218,7 +218,7 @@ export async function build(...args: std.Args<any>) {
 		source,
 	} = resolved;
 
-	const node = await tg.build(self, std.triple.rotate({ build, host }));
+	const node = await self(std.triple.rotate({ build, host }));
 	const interpreter = await node.get("bin/node").then(tg.File.expect);
 
 	// Retrieve and parse the package.json, package-lock.json files.
@@ -274,7 +274,7 @@ export async function build(...args: std.Args<any>) {
 		node,
 		devBins,
 		{ NODE_PATH: tg`${devDependencies}/node_modules` },
-		env_,
+		env_ ?? null,
 	);
 
 	const built = await $`
@@ -420,7 +420,7 @@ async function installPackages(
 			if (isDev && !installDev) {
 				return undefined;
 			}
-			return [path, dir];
+			return [path, dir] as [string, tg.Directory];
 		}),
 	);
 

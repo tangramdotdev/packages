@@ -77,12 +77,12 @@ export async function build(...args: std.Args<Arg>) {
 
 	let phases = arg.phases;
 	if (configureArgs.length > 0) {
-		phases = await std.phases.arg(phases, {
+		phases = await std.phases.arg(phases ?? null, {
 			configure: { args: configureArgs },
 		});
 	}
 
-	let output = await std.autotools.build({ ...arg, phases });
+	let output = await std.autotools.build({ ...arg, phases: phases ?? null });
 
 	// Postprocess: create widechar symlinks and fix pkgconfig files.
 	const libNames = ["form", "menu", "ncurses", "ncurses++", "panel"];

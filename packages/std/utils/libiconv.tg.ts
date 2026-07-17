@@ -16,11 +16,11 @@ export function source() {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 	usePrerequisites?: boolean;
 };
 
@@ -45,8 +45,8 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 	const env: std.Args<std.env.Arg> = [];
 
 	const envArg = usePrerequisites
-		? std.env.arg(env_, ...env, prerequisites(build), { utils: false })
-		: std.env.arg(...env, env_, { utils: false });
+		? std.env.arg(env_ ?? null, ...env, prerequisites(build), { utils: false })
+		: std.env.arg(...env, env_ ?? null, { utils: false });
 
 	const output = autotoolsInternal({
 		build,
@@ -55,7 +55,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		env: envArg,
 		phases: { configure },
 		processName: metadata.name,
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(),
 	});
 

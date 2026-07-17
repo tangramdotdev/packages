@@ -9,28 +9,28 @@ export type FlagsArg = {
 	host: string;
 
 	/** Should the flags include FORTIFY_SOURCE? `false` will disable, `true` will default to 3, values less than 0 or greater than 3 will throw an error. Default: 2. */
-	fortifySource?: boolean | number | undefined;
+	fortifySource?: boolean | number;
 
 	/** Use full RELRO? Will use partial if disabled. May cause long start-up times in large programs. Default: true. */
-	fullRelro?: boolean | undefined;
+	fullRelro?: boolean;
 
 	/** Should we add the extra set of hardening CFLAGS? Default: true. */
-	hardeningCFlags?: boolean | undefined;
+	hardeningCFlags?: boolean;
 
 	/** The value to pass to `-march` in the default CFLAGS. Default: undefined. */
-	march?: string | undefined;
+	march?: string;
 
 	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
-	mtune?: string | undefined;
+	mtune?: string;
 
 	/** The optlevel to pass. Default: "2". */
-	opt?: "1" | "2" | "3" | "s" | "z" | "fast" | undefined;
+	opt?: "1" | "2" | "3" | "s" | "z" | "fast";
 
 	/** Compile with `-pipe`? This option allows the compiler to use pipes instead of temporary files internally, speeding up compilation at the cost of increased memory. Disable if compiling in low-memory environments. This has no effect on the output. Default: true. */
-	pipe?: boolean | undefined;
+	pipe?: boolean;
 
 	/** Should executables be stripped? Default: true. */
-	stripExecutables?: boolean | undefined;
+	stripExecutables?: boolean;
 };
 
 /**
@@ -133,25 +133,25 @@ export function flags(arg: FlagsArg, envs: std.Args<std.env.Arg>): void {
 /** Arguments for complete C/C++ environment setup. */
 export type EnvArg = FlagsArg & {
 	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explicitly provided via `env`. Default: false. */
-	bootstrap?: boolean | undefined;
+	bootstrap?: boolean;
 
 	/** The machine performing the compilation. */
-	build?: string | undefined;
+	build?: string;
 
 	/** Should the development environment include `texinfo`, `help2man`, `autoconf` and `automake`? Default: false. */
-	developmentTools?: boolean | undefined;
+	developmentTools?: boolean;
 
 	/** Should the build environment include `m4`, `bison`, `perl`, and `gettext`? Default: true. */
-	extended?: boolean | undefined;
+	extended?: boolean;
 
 	/** Should the build environment include pkg-config? Default: true. */
-	pkgConfig?: boolean | undefined;
+	pkgConfig?: boolean;
 
 	/** Arguments to use for the SDK. */
-	sdk?: std.sdk.Arg | undefined;
+	sdk?: std.sdk.Arg;
 
 	/** Any environment to merge with lower precedence than the C/C++ flags. */
-	env?: std.env.Arg | undefined;
+	env?: std.env.Arg;
 };
 
 /**
@@ -195,14 +195,14 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 	flags(
 		{
 			host,
-			fortifySource,
-			fullRelro,
-			hardeningCFlags,
-			march,
-			mtune,
-			opt,
-			pipe,
-			stripExecutables,
+			...(fortifySource !== undefined ? { fortifySource } : {}),
+			...(fullRelro !== undefined ? { fullRelro } : {}),
+			...(hardeningCFlags !== undefined ? { hardeningCFlags } : {}),
+			...(march !== undefined ? { march } : {}),
+			...(mtune !== undefined ? { mtune } : {}),
+			...(opt !== undefined ? { opt } : {}),
+			...(pipe !== undefined ? { pipe } : {}),
+			...(stripExecutables !== undefined ? { stripExecutables } : {}),
 		},
 		envs,
 	);
@@ -250,7 +250,7 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 			if (isCross) {
 				// SDK runs on `build`, produces code for `host`.
 				const crossSdk = await tg
-					.build(std.sdk, sdkArg, {
+					.build(std.sdk, ...(sdkArg !== undefined ? [sdkArg] : []), {
 						host: build,
 						target: host,
 					})
@@ -261,5 +261,5 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 	}
 
 	// Include any user-defined env with higher precedence.
-	return std.env.arg(...envs, userEnv, { utils: false });
+	return std.env.arg(...envs, userEnv ?? null, { utils: false });
 }

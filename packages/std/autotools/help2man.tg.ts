@@ -26,12 +26,12 @@ export function source() {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
 	perlArtifact: tg.Directory;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 
 export async function build(arg: tg.Unresolved<Arg>) {
@@ -49,13 +49,13 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		artifact: perlArtifact,
 		path: "bin/perl",
 	});
-	const env = std.env.arg(env_, { utils: false });
+	const env = std.env.arg(env_ ?? null, { utils: false });
 	const artifact = std.autotools.build({
-		build,
-		host,
+		build: build ?? null,
+		host: host ?? null,
 		bootstrap,
 		env,
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(),
 	});
 

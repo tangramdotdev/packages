@@ -56,7 +56,7 @@ export async function build(...args: std.Args<Arg>) {
 	std.assert.supportedHost(arg.host, metadata);
 
 	const isCross = arg.build !== arg.host;
-	let env = arg.env;
+	let env = arg.env ?? null;
 	if (isCross) {
 		const attrArtifact = await std.deps.artifacts(deps, {
 			build: arg.build,

@@ -9,7 +9,7 @@ export type MachOExecutableMetadata = {
 	dependencies?: Array<string>;
 
 	/** The install name of the library (for shared libraries) */
-	installName?: string | undefined;
+	installName?: string;
 };
 
 export async function machoExecutableMetadata(
@@ -48,11 +48,12 @@ export async function machoExecutableMetadata(
 			}),
 		)
 		.filter((name) => name !== undefined);
+	const installName = installNames[0];
 	return {
 		format: "mach-o",
 		arches: [...new Set(arches)],
 		dependencies: [...new Set(dependencies)],
-		installName: installNames[0],
+		...(installName !== undefined ? { installName } : {}),
 	};
 }
 

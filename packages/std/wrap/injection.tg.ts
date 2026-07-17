@@ -4,25 +4,29 @@ import * as std from "../tangram.ts";
 import injectionSource from "./injection" with { type: "directory" };
 
 export type Arg = {
-	build?: string | undefined;
-	buildToolchain?: std.env.Arg;
-	env?: std.env.Arg;
-	host?: string;
-	source?: tg.Directory;
+	build?: string | null;
+	buildToolchain?: std.env.Arg | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	source?: tg.Directory | null;
 };
 
-export async function injection(unresolved?: tg.Unresolved<Arg>) {
-	const arg = await tg.resolve(unresolved);
+export async function injection(...args: std.Args<Arg>) {
+	const arg = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 
-	const host = arg?.host ?? std.triple.host();
-	const build = arg?.build ?? host;
+	const host = arg.host ?? std.triple.host();
+	const build = arg.build ?? host;
 	const os = std.triple.os(host);
 
 	// Get the source.
-	const source = arg?.source ? arg.source : injectionSource;
+	const source = arg.source ? arg.source : injectionSource;
 
 	// Get the build toolchain. If not provided, use bootstrap SDK.
-	const buildToolchain = arg?.buildToolchain ?? (await bootstrap.sdk.env(host));
+	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(host));
 
 	// Get any additional env.
 	const env = arg?.env;
@@ -38,7 +42,7 @@ export async function injection(unresolved?: tg.Unresolved<Arg>) {
 			.build(dylib, {
 				build,
 				buildToolchain,
-				env,
+				env: env ?? null,
 				host,
 				source,
 				additionalArgs,
@@ -48,7 +52,7 @@ export async function injection(unresolved?: tg.Unresolved<Arg>) {
 	} else if (os === "darwin") {
 		const injection = macOsInjection({
 			buildToolchain,
-			env,
+			env: env ?? null,
 			host,
 			source,
 		});
@@ -60,7 +64,7 @@ export async function injection(unresolved?: tg.Unresolved<Arg>) {
 
 type MacOsInjectionArg = {
 	buildToolchain?: std.env.Arg;
-	env?: std.env.Arg;
+	env?: std.env.Arg | null;
 	host?: string;
 	source: tg.Directory;
 };
@@ -83,7 +87,7 @@ export async function macOsInjection(arg: MacOsInjectionArg) {
 		{
 			SDKROOT: tg`${bootstrap.macOsSdk()}/MacOSX.sdk`,
 		},
-		arg.env,
+		arg.env ?? null,
 		{ utils: false },
 	);
 
@@ -131,7 +135,14 @@ type DylibArg = {
 	source: tg.Directory;
 };
 
-export async function dylib(arg: DylibArg): Promise<tg.File> {
+export async function dylib(
+	...dylibArgs: std.Args<DylibArg>
+): Promise<tg.File> {
+	const arg = await std.args.apply<DylibArg, DylibArg>({
+		args: dylibArgs,
+		map: async (a) => a,
+		reduce: {},
+	});
 	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
 	const os = std.triple.os(std.triple.archAndOs(build));
@@ -224,7 +235,7 @@ export async function dylib(arg: DylibArg): Promise<tg.File> {
 					// Ensure the linker proxy is always skipped, whether or not the toolchain is proxied.
 					TGLD_PASSTHROUGH: true,
 				},
-				arg.env,
+				arg.env ?? null,
 				{ utils: false },
 			)
 			.host(system)

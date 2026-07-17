@@ -75,9 +75,11 @@ export async function self(...args: std.Args<Arg>) {
 	const artifacts = await std.deps.artifacts(deps, {
 		build: build_,
 		host,
-		sdk: arg.sdk,
-		subtreeEnv: arg.subtreeEnv,
-		subtreeSdk: arg.subtreeSdk,
+		...(arg.sdk !== undefined && arg.sdk !== null ? { sdk: arg.sdk } : {}),
+		subtreeEnv: arg.subtreeEnv ?? null,
+		...(arg.subtreeSdk !== undefined && arg.subtreeSdk !== null
+			? { subtreeSdk: arg.subtreeSdk }
+			: {}),
 	});
 	const artifactList = Object.values(artifacts).filter(
 		(v): v is tg.Directory => v !== undefined,
@@ -98,7 +100,7 @@ export async function self(...args: std.Args<Arg>) {
 		args: configureArgs,
 	};
 
-	const env = await std.env.arg(...artifactList, arg.env);
+	const env = await std.env.arg(...artifactList, arg.env ?? null);
 
 	let result = await std.autotools.build({
 		...arg,
@@ -125,94 +127,94 @@ export default self;
 
 export type BuildArg = {
 	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explicitly provided via `env`. Default: false. */
-	bootstrap?: boolean | undefined;
+	bootstrap?: boolean;
 
 	/** The machine performing the compilation. */
-	build?: string | undefined;
+	build?: string | null;
 
 	/** Path to use for the build directory. Default: "build". */
-	buildDir?: string | undefined;
+	buildDir?: string;
 
 	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
-	checksum?: tg.Checksum | undefined;
+	checksum?: tg.Checksum | null;
 
 	/** Debug mode will enable additional log output, allow failures in subprocesses, and include a folder of logs at ${tg.output}/.tangram_logs. Default: false */
-	debug?: boolean | undefined;
+	debug?: boolean;
 
 	/** Dependencies configuration. */
-	deps?: std.deps.ConfigArg | undefined;
+	deps?: std.deps.ConfigArg | null;
 
 	/** Any environment to add to the target. */
-	env?: std.env.Arg | undefined;
+	env?: std.env.Arg | null;
 
 	/** Should the build environment include `m4`, `bison`, `perl`, and `gettext`? Default: true. */
-	extended?: boolean | undefined;
+	extended?: boolean;
 
 	/** Should the flags include FORTIFY_SOURCE? `false` will disable, `true` will default to 3, values less than 0 or greater than 3 will throw an error. Default: 3. */
-	fortifySource?: boolean | number | undefined;
+	fortifySource?: boolean | number | null;
 
 	/** Use full RELRO? Will use partial if disabled. May cause long start-up times in large programs. Default: true. */
-	fullRelro?: boolean | undefined;
+	fullRelro?: boolean;
 
 	/** Which generator to use. Default: "Ninja" */
-	generator?: "Ninja" | "Unix Makefiles" | undefined;
+	generator?: "Ninja" | "Unix Makefiles";
 
 	/** Should we add the extra set of hardening CFLAGS? Default: true */
-	hardeningCFlags?: boolean | undefined;
+	hardeningCFlags?: boolean;
 
 	/** The computer this build should get compiled on. */
-	host?: string | undefined;
+	host?: string | null;
 
 	/** The value to pass to `-march` in the default CFLAGS. Default: undefined. */
-	march?: string | undefined;
+	march?: string | null;
 
 	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
-	mtune?: string | undefined;
+	mtune?: string | null;
 
 	/** A name for the build process. */
-	processName?: string | undefined;
+	processName?: string | null;
 
 	/** Should this build have network access? Must set a checksum to enable. Default: false. */
-	network?: boolean | undefined;
+	network?: boolean;
 
 	/** The optlevel to pass. Defaults to "2" */
-	opt?: "1" | "2" | "3" | "s" | "z" | "fast" | undefined;
+	opt?: "1" | "2" | "3" | "s" | "z" | "fast" | null;
 
 	/** Override the default phase order. Default: ["configure", "build", "install"]. */
-	order?: Array<string> | undefined;
+	order?: Array<string> | null;
 
 	/** Should make jobs run in parallel? Default: false until new branch. */
-	parallel?: boolean | number | undefined;
+	parallel?: boolean | number | null;
 
 	/** Override the phases. */
-	phases?: std.phases.Arg | std.phases.Arg[] | undefined;
+	phases?: std.phases.Arg | std.phases.Arg[] | null;
 
 	/** Compile with `-pipe`? This option allows the compiler to use pipes instead of temporary files internally, speeding up compilation at the cost of increased memory. Disable if compiling in low-memory environments. This has no effect on the output. Default: true. */
-	pipe?: boolean | undefined;
+	pipe?: boolean;
 
 	/** Should the build environment include pkg-config? Default: true */
-	pkgConfig?: boolean | undefined;
+	pkgConfig?: boolean;
 
 	/** The filepath to use as the installation prefix. Usually the default is what you want here. */
-	prefixPath?: tg.Template.Arg | undefined;
+	prefixPath?: tg.Template.Arg | null;
 
 	/** Arguments to use for the SDK. */
-	sdk?: std.sdk.Arg | undefined;
+	sdk?: std.sdk.Arg | null;
 
 	/** The source to build. Can be a Directory or a template path that resolves to a directory. */
-	source?: tg.Directory | tg.Template | undefined;
+	source?: tg.Directory | tg.Template | null;
 
 	/** Environment to propagate to all dependencies in the subtree. */
 	subtreeEnv?: std.env.Arg;
 
 	/** SDK configuration to propagate to all dependencies in the subtree. */
-	subtreeSdk?: std.sdk.Arg | undefined;
+	subtreeSdk?: std.sdk.Arg | null;
 
 	/** Should executables be stripped? Default is true. */
-	stripExecutables?: boolean | undefined;
+	stripExecutables?: boolean;
 
 	/** The computer this build produces executables for. */
-	target?: string | undefined;
+	target?: string | null;
 };
 
 /** The result of arg() - a BuildArg with build, host, and source guaranteed to be resolved. */
@@ -239,11 +241,11 @@ export async function arg(...args: std.Args<BuildArg>): Promise<ResolvedArg> {
 			} as Collect;
 		},
 		reduce: {
-			env: (a, b) => std.env.arg(a, b),
+			env: (a, b) => std.env.arg(a ?? null, b ?? null),
 			phases: "append",
-			sdk: (a, b) => std.sdk.arg(a, b),
-			subtreeEnv: (a, b) => std.env.arg(a, b),
-			subtreeSdk: (a, b) => std.sdk.arg(a, b),
+			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			subtreeEnv: (a, b) => std.env.arg(a ?? null, b ?? null),
+			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
 		},
 	});
 
@@ -257,7 +259,10 @@ export async function arg(...args: std.Args<BuildArg>): Promise<ResolvedArg> {
 		...rest
 	} = collect;
 
-	tg.assert(source_ !== undefined, "source must be defined");
+	tg.assert(
+		source_ !== undefined && source_ !== null,
+		"source must be defined",
+	);
 	const source = await tg.resolve(source_);
 
 	// Determine build and host triples.
@@ -270,10 +275,14 @@ export async function arg(...args: std.Args<BuildArg>): Promise<ResolvedArg> {
 		? await std.deps.env(depsConfig, {
 				build,
 				host,
-				sdk: rest.sdk,
-				env: userEnv,
-				subtreeEnv: rest.subtreeEnv,
-				subtreeSdk: rest.subtreeSdk,
+				...(rest.sdk !== undefined && rest.sdk !== null
+					? { sdk: rest.sdk }
+					: {}),
+				env: userEnv ?? null,
+				subtreeEnv: rest.subtreeEnv ?? null,
+				...(rest.subtreeSdk !== undefined && rest.subtreeSdk !== null
+					? { subtreeSdk: rest.subtreeSdk }
+					: {}),
 			})
 		: undefined;
 
@@ -281,7 +290,7 @@ export async function arg(...args: std.Args<BuildArg>): Promise<ResolvedArg> {
 	const mergedPhases = await std.phases.arg(...userPhaseArgs);
 
 	// Merge env: deps env → user env.
-	const env = await std.env.arg(depsEnv, userEnv);
+	const env = await std.env.arg(depsEnv ?? null, userEnv ?? null);
 
 	return {
 		build,
@@ -312,7 +321,7 @@ export async function build(...args: std.Args<BuildArg>) {
 		march,
 		mtune = "generic",
 		processName,
-		network,
+		network = false,
 		opt = "2",
 		order,
 		parallel = true,
@@ -338,15 +347,15 @@ export async function build(...args: std.Args<BuildArg>) {
 		build: build_,
 		bootstrap,
 		extended,
-		fortifySource: fortifySource_,
+		fortifySource: fortifySource_ ?? 2,
 		fullRelro,
 		hardeningCFlags,
-		march,
-		mtune,
-		opt,
+		...(march !== undefined && march !== null ? { march } : {}),
+		mtune: mtune ?? "generic",
+		opt: opt ?? "2",
 		pipe,
 		pkgConfig,
-		sdk: sdkArg,
+		...(sdkArg !== undefined && sdkArg !== null ? { sdk: sdkArg } : {}),
 		stripExecutables,
 	});
 	envs.push(ccEnv);
@@ -363,7 +372,7 @@ export async function build(...args: std.Args<BuildArg>) {
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and cmake settings.
-	const env = await std.env.arg(...envs, userEnv);
+	const env = await std.env.arg(...envs, userEnv ?? null);
 
 	// Define default phases.
 	const configureArgs = [
@@ -424,7 +433,7 @@ export async function build(...args: std.Args<BuildArg>) {
 			phases: mergedPhases,
 			env,
 			command: { host: system },
-			checksum,
+			checksum: checksum ?? null,
 			network,
 			...(order !== undefined ? { order } : {}),
 			...(processName !== undefined ? { processName } : {}),

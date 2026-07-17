@@ -162,8 +162,12 @@ function resolveConfig(arg: BuildToolsArg): ResolvedConfig {
 }
 
 /** An env containing build-time tools. Use presets or individual flags to control which tools are included. */
-export async function buildTools(unresolvedArg?: tg.Unresolved<BuildToolsArg>) {
-	const resolved = unresolvedArg ? await tg.resolve(unresolvedArg) : {};
+export async function buildTools(...args: std.Args<BuildToolsArg>) {
+	const resolved = await std.args.apply<BuildToolsArg, BuildToolsArg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 	const { host: host_, buildToolchain: buildToolchain_ } = resolved;
 
 	// Resolve configuration from preset + individual overrides

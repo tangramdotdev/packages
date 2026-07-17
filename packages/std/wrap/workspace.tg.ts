@@ -12,24 +12,26 @@ import tgld from "../packages/tgld" with { type: "directory" };
 import tgstrip from "../packages/tgstrip" with { type: "directory" };
 import wrap_ from "../packages/wrap" with { type: "directory" };
 export type Arg = {
-	build?: string;
-	host?: string;
+	build?: string | null;
+	host?: string | null;
 	release?: boolean;
-	source?: tg.Directory;
+	source?: tg.Directory | null;
 	verbose?: boolean;
 };
 
 /** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
-export async function workspace(
-	arg?: tg.Unresolved<Arg>,
-): Promise<tg.Directory> {
+export async function workspace(...args: std.Args<Arg>): Promise<tg.Directory> {
 	const {
 		build: build_,
 		host: host_,
 		release = true,
 		source: source_,
 		verbose = false,
-	} = await tg.resolve(arg ?? {});
+	} = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 	const host = host_ ?? std.triple.host();
 	const buildTriple = build_ ?? host;
 
@@ -62,10 +64,10 @@ export async function workspace(
 
 /** Check if the resolved arguments match the defaults and should use the default workspace for cache optimization. */
 async function shouldUseDefaultWorkspace(arg: {
-	build: string | undefined;
-	host: string | undefined;
+	build: string | null | undefined;
+	host: string | null | undefined;
 	release: boolean;
-	source: tg.Directory | undefined;
+	source: tg.Directory | null | undefined;
 	verbose: boolean;
 }): Promise<boolean> {
 	const detectedHost = std.triple.host();
@@ -76,7 +78,7 @@ async function shouldUseDefaultWorkspace(arg: {
 		build === host &&
 		host === detectedHost &&
 		arg.release === true &&
-		arg.source === undefined &&
+		(arg.source === undefined || arg.source === null) &&
 		arg.verbose === false
 	);
 }
@@ -122,8 +124,8 @@ export async function ldProxy(arg: tg.Unresolved<Arg>) {
 }
 
 export type WrapOutput = {
-	manifest?: std.wrap.Manifest | undefined;
-	location?: FileLocation | undefined;
+	manifest?: std.wrap.Manifest;
+	location?: FileLocation;
 };
 
 export type FileLocation = {
@@ -169,8 +171,12 @@ export async function stripProxy(arg: tg.Unresolved<Arg>) {
 		.then(tg.File.expect);
 }
 
-export async function wrapper(arg: tg.Unresolved<Arg>) {
-	const resolved = await tg.resolve(arg ?? {});
+export async function wrapper(...args: std.Args<Arg>) {
+	const resolved = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 	const { build, host, release = true, source, verbose = false } = resolved;
 
 	if (
@@ -180,14 +186,18 @@ export async function wrapper(arg: tg.Unresolved<Arg>) {
 	}
 
 	return await tg
-		.build(workspace, arg)
+		.build(workspace, ...args)
 		.named("workspace")
 		.then((dir) => dir.get("bin/wrapper.exe"))
 		.then(tg.File.expect);
 }
 
-export async function wrapperBinary(arg: tg.Unresolved<Arg>) {
-	const resolved = await tg.resolve(arg ?? {});
+export async function wrapperBinary(...args: std.Args<Arg>) {
+	const resolved = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 	const { build, host, release = true, source, verbose = false } = resolved;
 
 	if (
@@ -197,7 +207,7 @@ export async function wrapperBinary(arg: tg.Unresolved<Arg>) {
 	}
 
 	return await tg
-		.build(workspace, arg)
+		.build(workspace, ...args)
 		.named("workspace")
 		.then((dir) => dir.get("bin/wrapper.bin"))
 		.then(tg.File.expect);
@@ -240,19 +250,23 @@ type ToolchainArg = {
 };
 
 export async function rust(
-	arg?: tg.Unresolved<ToolchainArg>,
+	...args: std.Args<ToolchainArg>
 ): Promise<tg.Directory> {
-	const resolved = await tg.resolve(arg);
+	const { target: target_ } = await std.args.apply<ToolchainArg, ToolchainArg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 	const host = standardizeTriple(std.triple.host());
-	const target = standardizeTriple(resolved?.target ?? host);
+	const target = standardizeTriple(target_ ?? host);
 	const hostSystem = std.triple.archAndOs(host);
 
 	// Download and parse the Rust manifest for the selected version.
-	const version = "1.96.1";
+	const version = "1.97.1";
 	const manifestBlob = await std.download({
 		url: `https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
 		checksum:
-			"sha256:87eb76c53073e72b766083bed5530820694253b832a762d8385bda5759f03975",
+			"sha256:03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf",
 	});
 	tg.Blob.assert(manifestBlob);
 	const manifestFile = await tg.file(manifestBlob as tg.Blob);
@@ -459,11 +473,16 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		env.push({ MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget });
 	}
 
+	if (hostOs === "linux") {
+		env.push({ LDFLAGS: "-static" });
+	}
+
 	// Set up platform-specific environment.
 	let interpreter = tg``;
 	let rustc = tg``;
 	let cargo = tg``;
 	if (hostOs === "linux") {
+		tg.assert(ldso);
 		interpreter = tg`${ldso} --library-path ${libDir}`;
 		rustc = tg`${interpreter} ${rustToolchain}/bin/rustc`;
 		cargo = tg`${interpreter} ${rustToolchain}/bin/cargo`;
@@ -499,7 +518,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	if (hostOs === "darwin" && isCross) {
 		const hostFlag = tg`--sysroot ${bootstrap.macOsSdk()}/MacOSX.sdk`;
 		const { directory: targetDirectory } = await std.sdk.toolchainComponents({
-			env: await std.env.arg(hostToolchain, { utils: false }),
+			env: await std.env.arg(hostToolchain ?? null, { utils: false }),
 			host: host,
 		});
 		suffix = tg.Template
@@ -697,9 +716,9 @@ export async function rcodesign(host?: string) {
 		["x86_64-unknown-linux-musl"]:
 			"sha256:dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002",
 	};
-	if (std.triple.os(host_) == "linux") {
+	if (std.triple.os(host_) === "linux") {
 		target = `${std.triple.arch(host_)}-unknown-linux-musl`;
-	} else if (std.triple.os(host_) == "darwin") {
+	} else if (std.triple.os(host_) === "darwin") {
 		target = `${std.triple.arch(host_)}-apple-darwin`;
 	}
 

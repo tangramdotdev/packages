@@ -23,7 +23,7 @@ def main [
     cd $root
     if (git status --porcelain | lines | where { $in =~ 'Cargo\.(toml|lock)$' } | is-empty) { return }
     git diff --stat -- "*.toml" "*.lock"
-    if $auto_commit or ((input "Commit? [y/N] " | str trim | str downcase) == "y") {
+    if $auto_commit or ((input "Commit? [y/N] " | str trim | str lowercase) == "y") {
         git add -- "*/Cargo.toml" "*/Cargo.lock"; git commit -m $"chore: update tangram deps to ($hash | str substring 0..7)"
     }
 }

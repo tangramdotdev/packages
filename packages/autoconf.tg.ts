@@ -55,7 +55,11 @@ export async function build(...args: std.Args<Arg>) {
 		...args,
 	);
 
-	const ctx = { build: arg.build, host: arg.host, sdk: arg.sdk };
+	const ctx = {
+		build: arg.build,
+		host: arg.host,
+		...(arg.sdk !== undefined && arg.sdk !== null ? { sdk: arg.sdk } : {}),
+	};
 
 	// Get the perl artifact for wrapping scripts later.
 	const { perl: perlArtifact } = await std.deps.artifacts(deps, ctx);
@@ -64,7 +68,10 @@ export async function build(...args: std.Args<Arg>) {
 	let autoconf = await std.autotools.build(arg);
 
 	// Patch the autom4te.cfg file.
-	autoconf = await patchAutom4teCfg(autoconf, arg);
+	autoconf = await patchAutom4teCfg(autoconf, {
+		env: arg.env ?? null,
+		...(arg.sdk !== undefined && arg.sdk !== null ? { sdk: arg.sdk } : {}),
+	});
 
 	const shellSripts = ["autoconf"];
 
@@ -184,8 +191,8 @@ export async function patchAutom4teCfg(
 			cat <<'EOF' | tee ${tg.output}
 			${contents}
 		`
-		.env(arg?.env)
-		.env(std.sdk(arg?.sdk))
+		.env(arg?.env ?? null)
+		.env(std.sdk(...(arg?.sdk !== undefined ? [arg.sdk] : [])))
 		.then(tg.File.expect);
 
 	return tg.directory(autoconf, {

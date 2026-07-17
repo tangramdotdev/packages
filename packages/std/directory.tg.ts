@@ -9,7 +9,7 @@ export async function filter(
 	let ret = dir;
 	for await (const [name, artifact] of dir) {
 		if (!predicate(name, artifact)) {
-			ret = await tg.directory(dir, { [`${name}`]: undefined });
+			ret = await tg.directory(ret, { [`${name}`]: null });
 		}
 	}
 	return ret;
@@ -42,7 +42,7 @@ export async function provides(
 	const binDir = await directory.tryGet("bin");
 
 	// Collect executables.
-	if (binDir !== undefined && binDir instanceof tg.Directory) {
+	if (binDir instanceof tg.Directory) {
 		for await (let [name, artifact] of binDir) {
 			if (artifact instanceof tg.File && (await artifact.executable)) {
 				binaries.push(name);
@@ -52,7 +52,7 @@ export async function provides(
 
 	// Collect headers.
 	const includeDir = await directory.tryGet("include");
-	if (includeDir !== undefined && includeDir instanceof tg.Directory) {
+	if (includeDir instanceof tg.Directory) {
 		async function collectHeaders(
 			dir: tg.Directory,
 			prefix: string = "",
@@ -70,7 +70,7 @@ export async function provides(
 
 	// Collect libraries.
 	const libDir = await directory.tryGet("lib");
-	if (libDir !== undefined && libDir instanceof tg.Directory) {
+	if (libDir instanceof tg.Directory) {
 		const libraryMap = new Map<
 			string,
 			{
@@ -83,7 +83,7 @@ export async function provides(
 		// Check for pkgconfig files
 		const pkgconfigDir = await libDir.tryGet("pkgconfig");
 		const pkgconfigFiles = new Set<string>();
-		if (pkgconfigDir !== undefined && pkgconfigDir instanceof tg.Directory) {
+		if (pkgconfigDir instanceof tg.Directory) {
 			for await (let [name, artifact] of pkgconfigDir) {
 				if (artifact instanceof tg.File && name.endsWith(".pc")) {
 					pkgconfigFiles.add(name.slice(0, -3)); // remove .pc
@@ -150,26 +150,19 @@ export async function test() {
 }
 
 export async function testKeepSubdirectories() {
+	// Include two entries to drop, so that dropping one cannot mask a failure to
+	// accumulate the removals.
 	let orig = await tg.directory({
 		a: tg.directory(),
 		b: tg.directory(),
 		c: tg.directory(),
+		d: tg.directory(),
 	});
-	await orig.store();
-	let origId = orig.id;
-	console.log("orig", origId);
 
 	let filtered = await keepSubdirectories(orig, "a", "c");
-	await filtered.store();
-	let filteredId = filtered.id;
-	console.log("filtered", filteredId);
 
-	let maybeA = await filtered.tryGet("a");
-	tg.assert(maybeA !== undefined && maybeA instanceof tg.Directory);
-
-	let maybeB = await filtered.tryGet("b");
-	tg.assert(maybeB === undefined);
-
-	let maybeC = await filtered.tryGet("c");
-	tg.assert(maybeC !== undefined && maybeC instanceof tg.Directory);
+	tg.assert((await filtered.tryGet("a")) instanceof tg.Directory, "kept a");
+	tg.assert((await filtered.tryGet("c")) instanceof tg.Directory, "kept c");
+	tg.assert((await filtered.tryGet("b")) === null, "dropped b");
+	tg.assert((await filtered.tryGet("d")) === null, "dropped d");
 }

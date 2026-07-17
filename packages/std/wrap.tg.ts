@@ -13,7 +13,10 @@ export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
 /** Wrap an executable. */
 export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const arg = await wrap.arg(...args);
-	tg.assert(arg.executable !== undefined, "No executable was provided.");
+	tg.assert(
+		arg.executable !== undefined && arg.executable !== null,
+		"No executable was provided.",
+	);
 
 	// Check if the executable is already a wrapper and get its manifest.
 	// Only ELF and Mach-O binaries can have embedded manifests.
@@ -56,27 +59,43 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	let manifestInterpreter = undefined;
 	if (arg.interpreter) {
 		manifestInterpreter = await manifestInterpreterFromWrapArgObject({
-			buildToolchain: arg.buildToolchain,
+			...(arg.buildToolchain !== undefined
+				? { buildToolchain: arg.buildToolchain }
+				: {}),
 			build: buildTriple,
 			host,
 			interpreter: arg.interpreter,
-			executable: undefined,
-			libraryPaths: arg.libraryPaths,
-			libraryPathStrategy: arg.libraryPathStrategy,
-			preloads: arg.preloads,
+			...(arg.libraryPaths !== undefined && arg.libraryPaths !== null
+				? { libraryPaths: arg.libraryPaths }
+				: {}),
+			...(arg.libraryPathStrategy !== undefined &&
+			arg.libraryPathStrategy !== null
+				? { libraryPathStrategy: arg.libraryPathStrategy }
+				: {}),
+			...(arg.preloads !== undefined && arg.preloads !== null
+				? { preloads: arg.preloads }
+				: {}),
 		});
 	} else if (existingManifest?.interpreter) {
 		manifestInterpreter = existingManifest?.interpreter;
 	} else if (arg.executable && typeof arg.executable !== "number") {
 		manifestInterpreter = await manifestInterpreterFromWrapArgObject({
-			buildToolchain: arg.buildToolchain,
+			...(arg.buildToolchain !== undefined
+				? { buildToolchain: arg.buildToolchain }
+				: {}),
 			build: buildTriple,
 			host,
-			interpreter: undefined,
 			executable: arg.executable,
-			libraryPaths: arg.libraryPaths,
-			libraryPathStrategy: arg.libraryPathStrategy,
-			preloads: arg.preloads,
+			...(arg.libraryPaths !== undefined && arg.libraryPaths !== null
+				? { libraryPaths: arg.libraryPaths }
+				: {}),
+			...(arg.libraryPathStrategy !== undefined &&
+			arg.libraryPathStrategy !== null
+				? { libraryPathStrategy: arg.libraryPathStrategy }
+				: {}),
+			...(arg.preloads !== undefined && arg.preloads !== null
+				? { preloads: arg.preloads }
+				: {}),
 		});
 	}
 
@@ -88,15 +107,18 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		(arg.args ?? []).map(manifestTemplateFromArg),
 	);
 
+	const manifestEnvValue =
+		existingManifest?.env &&
+		manifestEnv &&
+		Object.keys(manifestEnv).length === 0
+			? existingManifest.env
+			: manifestEnv;
 	const manifest: wrap.Manifest = {
-		interpreter: manifestInterpreter,
+		...(manifestInterpreter !== undefined
+			? { interpreter: manifestInterpreter }
+			: {}),
 		executable,
-		env:
-			existingManifest?.env &&
-			manifestEnv &&
-			Object.keys(manifestEnv).length === 0
-				? existingManifest.env
-				: manifestEnv,
+		...(manifestEnvValue !== undefined ? { env: manifestEnvValue } : {}),
 		args:
 			manifestArgs.length === 0 && existingManifest?.args
 				? existingManifest.args
@@ -134,37 +156,37 @@ export namespace wrap {
 
 	export type ArgObject = {
 		/** Command line arguments to bind to the wrapper. If the executable is wrapped, they will be merged. */
-		args?: Array<tg.Template.Arg>;
+		args?: Array<tg.Template.Arg> | null;
 
 		/** The machine to build the wrapper on. */
-		build?: string;
+		build?: string | null;
 
 		/** The build toolchain to use to produce components. Will use the default for the system if not provided. */
-		buildToolchain?: std.env.Arg | undefined;
+		buildToolchain?: std.env.Arg | null;
 
 		/** Experimental: embed the manifest and wrapper logic into the binary. */
 		embed?: boolean;
 
 		/** Environment variables to bind to the wrapper. If the executable is wrapped, they will be merged. */
-		env?: std.env.Arg;
+		env?: std.env.Arg | null;
 
 		/** The executable to wrap. */
-		executable?: string | tg.Template | tg.File | tg.Symlink | number;
+		executable?: string | tg.Template | tg.File | tg.Symlink | number | null;
 
 		/** The host system to produce a wrapper for. */
-		host?: string;
+		host?: string | null;
 
 		/** The interpreter to run the executable with. If not provided, a default is detected. */
-		interpreter?: tg.File | tg.Symlink | tg.Template | Interpreter | undefined;
+		interpreter?: tg.File | tg.Symlink | tg.Template | Interpreter | null;
 
 		/** Library paths to include. If the executable is wrapped, they will be merged. */
-		libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template>;
+		libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template> | null;
 
 		/** Which library path strategy should we use? The default is "unfilteredIsolate", which separates libraries into individual directories. */
-		libraryPathStrategy?: LibraryPathStrategy | undefined;
+		libraryPathStrategy?: LibraryPathStrategy | null;
 
 		/** Preloads to include. If the executable is wrapped, they will be merged. */
-		preloads?: Array<tg.File | tg.Symlink | tg.Template>;
+		preloads?: Array<tg.File | tg.Symlink | tg.Template> | null;
 
 		/** Specify how to handle executables that are already Tangram wrappers. When `merge` is true, retain the original executable in the resulting manifest. When `merge` is set to false, produce a manifest pointing to the original wrapper. This option is ignored if the executable being wrapped is not a Tangram wrapper. Default: true. */
 		merge?: boolean;
@@ -184,7 +206,7 @@ export namespace wrap {
 		executable: tg.File | tg.Symlink;
 
 		/** Additional arguments to pass to the interpreter. */
-		args?: Array<tg.Template.Arg> | undefined;
+		args?: Array<tg.Template.Arg>;
 	};
 
 	export type LdLinuxInterpreter = {
@@ -194,13 +216,13 @@ export namespace wrap {
 		executable: tg.File | tg.Symlink;
 
 		/** Additional library paths to include. */
-		libraryPaths?: Array<tg.Template.Arg> | undefined;
+		libraryPaths?: Array<tg.Template.Arg>;
 
 		/** Additional preloads to load. */
-		preloads?: Array<tg.Template.Arg> | undefined;
+		preloads?: Array<tg.Template.Arg>;
 
 		/** Additional arguments to pass to the interpreter. */
-		args?: Array<tg.Template.Arg> | undefined;
+		args?: Array<tg.Template.Arg>;
 	};
 
 	export type LdMuslInterpreter = {
@@ -210,23 +232,23 @@ export namespace wrap {
 		executable: tg.File | tg.Symlink;
 
 		/** Additional library paths to include. */
-		libraryPaths?: Array<tg.Template.Arg> | undefined;
+		libraryPaths?: Array<tg.Template.Arg>;
 
 		/** Additional preloads to load. */
-		preloads?: Array<tg.Template.Arg> | undefined;
+		preloads?: Array<tg.Template.Arg>;
 
 		/** Additional arguments to pass to the interpreter. */
-		args?: Array<tg.Template.Arg> | undefined;
+		args?: Array<tg.Template.Arg>;
 	};
 
 	export type DyLdInterpreter = {
 		kind: "dyld";
 
 		/** Additional library paths to include. */
-		libraryPaths?: Array<tg.Template.Arg> | undefined;
+		libraryPaths?: Array<tg.Template.Arg>;
 
 		/** Additional preloads to load. */
-		preloads?: Array<tg.Template.Arg> | undefined;
+		preloads?: Array<tg.Template.Arg>;
 	};
 
 	/** Wrappers for dynamically linked executables can employ one of these strategies to optimize the set of library paths.
@@ -249,10 +271,10 @@ export namespace wrap {
 		| "combine";
 
 	export type Manifest = {
-		interpreter?: Manifest.Interpreter | undefined;
+		interpreter?: Manifest.Interpreter;
 		executable: Manifest.Executable;
-		env?: Manifest.Mutation | undefined;
-		args?: Array<Manifest.Template> | undefined;
+		env?: Manifest.Mutation;
+		args?: Array<Manifest.Template>;
 	};
 
 	/** Process variadic arguments. */
@@ -284,25 +306,25 @@ export namespace wrap {
 						executable: arg,
 					};
 				} else if (isArgObject(arg)) {
-					return { ...arg, env: arg.env };
+					return { ...arg, env: arg.env ?? null };
 				} else {
 					return tg.unreachable(`Unsupported argument: ${arg}`);
 				}
 			},
 			reduce: {
-				env: (a, b) => std.env.arg(a, b, { utils: false }),
+				env: (a, b) => std.env.arg(a ?? null, b ?? null, { utils: false }),
 				libraryPaths: "append",
 				preloads: "append",
 				args: "append",
 			},
 		});
 
-		tg.assert(executable !== undefined);
+		tg.assert(executable !== undefined && executable !== null);
 
 		// Determine the host. If it was not provided, detect the executable host if it's a file, and fall back to the detected host.
 		const detectedHost = std.triple.host();
 		let host = host_;
-		if (host === undefined) {
+		if (host === undefined || host === null) {
 			if (executable instanceof tg.File) {
 				try {
 					const metadata = await std.file.executableMetadata(executable);
@@ -370,7 +392,7 @@ export namespace wrap {
 			const existingInterpreter = await wrap.interpreterFromManifestInterpreter(
 				existingManifest.interpreter,
 			);
-			if (interpreter !== undefined) {
+			if (interpreter !== undefined && interpreter !== null) {
 				const newInterpreter = await interpreterFromArg(
 					interpreter,
 					buildToolchain,
@@ -404,28 +426,32 @@ export namespace wrap {
 		// If the executable is a content executable, make sure there is a normal interpreter for it.
 		if (executable instanceof tg.Template || typeof executable === "string") {
 			if (interpreter === undefined) {
-				interpreter = await wrap.defaultShell({ buildToolchain, build, host });
+				interpreter = await wrap.defaultShell({
+					...(buildToolchain !== undefined ? { buildToolchain } : {}),
+					build,
+					host,
+				});
 			}
 		}
 
 		return {
 			args: args_,
 			build,
-			buildToolchain,
+			...(buildToolchain !== undefined ? { buildToolchain } : {}),
 			env,
 			executable,
 			host,
-			interpreter,
+			...(interpreter !== undefined ? { interpreter } : {}),
 			merge,
 			libraryPaths,
-			libraryPathStrategy,
+			...(libraryPathStrategy !== undefined ? { libraryPathStrategy } : {}),
 			preloads,
 		};
 	}
 
 	export type DefaultShellArg = {
 		/** The toolchain to use to build constituent components. Default: `std.sdk()`. */
-		buildToolchain?: std.env.Arg | undefined;
+		buildToolchain?: std.env.Arg;
 		/* Build machine. */
 		build?: string;
 		/** Should scripts treat unset variables as errors? Equivalent to setting `-u`. Default: true. */
@@ -511,7 +537,7 @@ export namespace wrap {
 	}
 
 	export async function envObjectFromManifestEnv(
-		mutation: wrap.Manifest.Mutation | undefined,
+		mutation?: wrap.Manifest.Mutation,
 	): Promise<std.env.EnvObject> {
 		const ret: std.env.EnvObject = {};
 		if (mutation?.kind !== "set") {
@@ -522,7 +548,7 @@ export namespace wrap {
 	}
 
 	export async function interpreterFromManifestInterpreter(
-		manifestInterpreter: wrap.Manifest.Interpreter | undefined,
+		manifestInterpreter?: wrap.Manifest.Interpreter,
 	): Promise<wrap.Interpreter | undefined> {
 		if (manifestInterpreter === undefined) {
 			return undefined;
@@ -535,12 +561,13 @@ export namespace wrap {
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
-					args:
-						manifestInterpreter.args === undefined
-							? undefined
-							: await Promise.all(
+					...(manifestInterpreter.args === undefined
+						? {}
+						: {
+								args: await Promise.all(
 									manifestInterpreter.args.map(templateFromManifestTemplate),
 								),
+							}),
 				};
 			}
 			case "ld-linux": {
@@ -549,28 +576,31 @@ export namespace wrap {
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
-					libraryPaths:
-						manifestInterpreter.libraryPaths === undefined
-							? undefined
-							: await Promise.all(
+					...(manifestInterpreter.libraryPaths === undefined
+						? {}
+						: {
+								libraryPaths: await Promise.all(
 									manifestInterpreter.libraryPaths.map(
 										templateFromManifestTemplate,
 									),
 								),
-					preloads:
-						manifestInterpreter.preloads === undefined
-							? undefined
-							: await Promise.all(
+							}),
+					...(manifestInterpreter.preloads === undefined
+						? {}
+						: {
+								preloads: await Promise.all(
 									manifestInterpreter.preloads.map(
 										fileOrSymlinkFromManifestTemplate,
 									),
 								),
-					args:
-						manifestInterpreter.args === undefined
-							? undefined
-							: await Promise.all(
+							}),
+					...(manifestInterpreter.args === undefined
+						? {}
+						: {
+								args: await Promise.all(
 									manifestInterpreter.args.map(templateFromManifestTemplate),
 								),
+							}),
 				};
 			}
 			case "ld-musl": {
@@ -579,49 +609,54 @@ export namespace wrap {
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
-					libraryPaths:
-						manifestInterpreter.libraryPaths === undefined
-							? undefined
-							: await Promise.all(
+					...(manifestInterpreter.libraryPaths === undefined
+						? {}
+						: {
+								libraryPaths: await Promise.all(
 									manifestInterpreter.libraryPaths.map(
 										templateFromManifestTemplate,
 									),
 								),
-					preloads:
-						manifestInterpreter.preloads === undefined
-							? undefined
-							: await Promise.all(
+							}),
+					...(manifestInterpreter.preloads === undefined
+						? {}
+						: {
+								preloads: await Promise.all(
 									manifestInterpreter.preloads.map(
 										fileOrSymlinkFromManifestTemplate,
 									),
 								),
-					args:
-						manifestInterpreter.args === undefined
-							? undefined
-							: await Promise.all(
+							}),
+					...(manifestInterpreter.args === undefined
+						? {}
+						: {
+								args: await Promise.all(
 									manifestInterpreter.args.map(templateFromManifestTemplate),
 								),
+							}),
 				};
 			}
 			case "dyld": {
 				return {
 					kind,
-					libraryPaths:
-						manifestInterpreter.libraryPaths === undefined
-							? undefined
-							: await Promise.all(
+					...(manifestInterpreter.libraryPaths === undefined
+						? {}
+						: {
+								libraryPaths: await Promise.all(
 									manifestInterpreter.libraryPaths.map(
 										templateFromManifestTemplate,
 									),
 								),
-					preloads:
-						manifestInterpreter.preloads === undefined
-							? undefined
-							: await Promise.all(
+							}),
+					...(manifestInterpreter.preloads === undefined
+						? {}
+						: {
+								preloads: await Promise.all(
 									manifestInterpreter.preloads.map(
 										fileOrSymlinkFromManifestTemplate,
 									),
 								),
+							}),
 				};
 			}
 			default: {
@@ -661,8 +696,8 @@ export namespace wrap {
 
 	/** Merge two interpreters, with the new interpreter's properties taking precedence but arrays being concatenated. */
 	export async function mergeInterpreters(
-		existingInterpreter: wrap.Interpreter | undefined,
-		newInterpreter: wrap.Interpreter | undefined,
+		existingInterpreter?: wrap.Interpreter,
+		newInterpreter?: wrap.Interpreter,
 	): Promise<wrap.Interpreter | undefined> {
 		// If no existing interpreter, just return the new one
 		if (!existingInterpreter) {
@@ -685,83 +720,75 @@ export namespace wrap {
 			case "normal": {
 				const existing = existingInterpreter as wrap.NormalInterpreter;
 				const new_ = newInterpreter as wrap.NormalInterpreter;
+				// Concatenate args arrays.
+				const args = [...(existing.args ?? []), ...(new_.args ?? [])];
 				return {
 					kind,
-					// New executable takes precedence
+					// New executable takes precedence.
 					executable: new_.executable ?? existing.executable,
-					// Concatenate args arrays
-					args:
-						[...(existing.args ?? []), ...(new_.args ?? [])].length > 0
-							? [...(existing.args ?? []), ...(new_.args ?? [])]
-							: undefined,
+					...(args.length > 0 ? { args } : {}),
 				};
 			}
 			case "ld-linux": {
 				const existing = existingInterpreter as wrap.LdLinuxInterpreter;
 				const new_ = newInterpreter as wrap.LdLinuxInterpreter;
+				// Concatenate libraryPaths, preloads, and args arrays.
+				const libraryPaths = [
+					...(existing.libraryPaths ?? []),
+					...(new_.libraryPaths ?? []),
+				];
+				const preloads = [
+					...(existing.preloads ?? []),
+					...(new_.preloads ?? []),
+				];
+				const args = [...(existing.args ?? []), ...(new_.args ?? [])];
 				return {
 					kind,
-					// New executable takes precedence
+					// New executable takes precedence.
 					executable: new_.executable ?? existing.executable,
-					// Concatenate libraryPaths arrays
-					libraryPaths:
-						[...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
-							.length > 0
-							? [...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
-							: undefined,
-					// Concatenate preloads arrays
-					preloads:
-						[...(existing.preloads ?? []), ...(new_.preloads ?? [])].length > 0
-							? [...(existing.preloads ?? []), ...(new_.preloads ?? [])]
-							: undefined,
-					// Concatenate args arrays
-					args:
-						[...(existing.args ?? []), ...(new_.args ?? [])].length > 0
-							? [...(existing.args ?? []), ...(new_.args ?? [])]
-							: undefined,
+					...(libraryPaths.length > 0 ? { libraryPaths } : {}),
+					...(preloads.length > 0 ? { preloads } : {}),
+					...(args.length > 0 ? { args } : {}),
 				};
 			}
 			case "ld-musl": {
 				const existing = existingInterpreter as wrap.LdMuslInterpreter;
 				const new_ = newInterpreter as wrap.LdMuslInterpreter;
+				// Concatenate libraryPaths, preloads, and args arrays.
+				const libraryPaths = [
+					...(existing.libraryPaths ?? []),
+					...(new_.libraryPaths ?? []),
+				];
+				const preloads = [
+					...(existing.preloads ?? []),
+					...(new_.preloads ?? []),
+				];
+				const args = [...(existing.args ?? []), ...(new_.args ?? [])];
 				return {
 					kind,
-					// New executable takes precedence
+					// New executable takes precedence.
 					executable: new_.executable ?? existing.executable,
-					// Concatenate libraryPaths arrays
-					libraryPaths:
-						[...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
-							.length > 0
-							? [...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
-							: undefined,
-					// Concatenate preloads arrays
-					preloads:
-						[...(existing.preloads ?? []), ...(new_.preloads ?? [])].length > 0
-							? [...(existing.preloads ?? []), ...(new_.preloads ?? [])]
-							: undefined,
-					// Concatenate args arrays
-					args:
-						[...(existing.args ?? []), ...(new_.args ?? [])].length > 0
-							? [...(existing.args ?? []), ...(new_.args ?? [])]
-							: undefined,
+					...(libraryPaths.length > 0 ? { libraryPaths } : {}),
+					...(preloads.length > 0 ? { preloads } : {}),
+					...(args.length > 0 ? { args } : {}),
 				};
 			}
 			case "dyld": {
 				const existing = existingInterpreter as wrap.DyLdInterpreter;
 				const new_ = newInterpreter as wrap.DyLdInterpreter;
+				// Concatenate libraryPaths and preloads arrays.
+				const libraryPaths = [
+					...(existing.libraryPaths ?? []),
+					...(new_.libraryPaths ?? []),
+				];
+				const preloads = [
+					...(existing.preloads ?? []),
+					...(new_.preloads ?? []),
+				];
 				return {
 					kind,
-					// Concatenate libraryPaths arrays
-					libraryPaths:
-						[...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
-							.length > 0
-							? [...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
-							: undefined,
-					// Concatenate preloads arrays
-					preloads:
-						[...(existing.preloads ?? []), ...(new_.preloads ?? [])].length > 0
-							? [...(existing.preloads ?? []), ...(new_.preloads ?? [])]
-							: undefined,
+					...(libraryPaths.length > 0 ? { libraryPaths } : {}),
+					...(preloads.length > 0 ? { preloads } : {}),
 				};
 			}
 			default: {
@@ -790,7 +817,7 @@ export namespace wrap {
 			!Array.isArray(value),
 			`Expected a single value, but got an array: ${value}`,
 		);
-		if (value === undefined) {
+		if (value === null) {
 			return undefined;
 		}
 		tg.assert(
@@ -865,29 +892,29 @@ export namespace wrap {
 		export type NormalInterpreter = {
 			kind: "normal";
 			path: Manifest.Template;
-			args?: Array<Manifest.Template> | undefined;
+			args?: Array<Manifest.Template>;
 		};
 
 		export type LdLinuxInterpreter = {
 			kind: "ld-linux";
 			path: Manifest.Template;
-			libraryPaths?: Array<Manifest.Template> | undefined;
-			preloads?: Array<Manifest.Template> | undefined;
-			args?: Array<Manifest.Template> | undefined;
+			libraryPaths?: Array<Manifest.Template>;
+			preloads?: Array<Manifest.Template>;
+			args?: Array<Manifest.Template>;
 		};
 
 		export type LdMuslInterpreter = {
 			kind: "ld-musl";
 			path: Manifest.Template;
-			libraryPaths?: Array<Manifest.Template> | undefined;
-			preloads?: Array<Manifest.Template> | undefined;
-			args?: Array<Manifest.Template> | undefined;
+			libraryPaths?: Array<Manifest.Template>;
+			preloads?: Array<Manifest.Template>;
+			args?: Array<Manifest.Template>;
 		};
 
 		export type DyLdInterpreter = {
 			kind: "dyld";
-			libraryPaths?: Array<Manifest.Template> | undefined;
-			preloads?: Array<Manifest.Template> | undefined;
+			libraryPaths?: Array<Manifest.Template>;
+			preloads?: Array<Manifest.Template>;
 		};
 
 		export type Executable =
@@ -916,12 +943,12 @@ export namespace wrap {
 			| {
 					kind: "prefix";
 					template: Manifest.Template;
-					separator?: string | undefined;
+					separator?: string;
 			  }
 			| {
 					kind: "suffix";
 					template: Manifest.Template;
-					separator?: string | undefined;
+					separator?: string;
 			  }
 			| { kind: "prepend"; values: Array<Manifest.Value> }
 			| { kind: "append"; values: Array<Manifest.Value> }
@@ -932,7 +959,7 @@ export namespace wrap {
 
 		// Matches tg::value::Data
 		export type Value =
-			| undefined
+			| null
 			| boolean
 			| number
 			| string
@@ -1103,19 +1130,14 @@ function isManifestExecutable(arg: unknown): arg is wrap.Manifest.Executable {
 
 /** The subset of `wrap.ArgObject` relevant to producing a `wrap.Manifest.Interpreter`. */
 type ManifestInterpreterArg = {
-	buildToolchain?: std.env.Arg | undefined;
+	buildToolchain?: std.env.Arg;
 	build?: string;
 	host?: string;
-	interpreter?:
-		| tg.File
-		| tg.Symlink
-		| tg.Template
-		| wrap.Interpreter
-		| undefined;
-	executable?: string | tg.Template | tg.File | tg.Symlink | undefined;
-	libraryPaths?: Array<tg.Template.Arg> | undefined;
-	libraryPathStrategy?: wrap.LibraryPathStrategy | undefined;
-	preloads?: Array<tg.File | tg.Symlink | tg.Template> | undefined;
+	interpreter?: tg.File | tg.Symlink | tg.Template | wrap.Interpreter;
+	executable?: string | tg.Template | tg.File | tg.Symlink;
+	libraryPaths?: Array<tg.Template.Arg>;
+	libraryPathStrategy?: wrap.LibraryPathStrategy;
+	preloads?: Array<tg.File | tg.Symlink | tg.Template>;
 };
 
 /** Compute the buildToolchain, using the provided value or computing a default. */
@@ -1162,10 +1184,10 @@ async function manifestInterpreterFromWrapArgObject(
 	if (interpreter.kind !== "normal") {
 		const { executable, libraryPaths, libraryPathStrategy, preloads } = arg;
 		interpreter = await optimizeLibraryPaths({
-			executable,
+			...(executable !== undefined ? { executable } : {}),
 			interpreter,
-			libraryPaths,
-			libraryPathStrategy,
+			...(libraryPaths !== undefined ? { libraryPaths } : {}),
+			...(libraryPathStrategy !== undefined ? { libraryPathStrategy } : {}),
 		});
 
 		// Add any additional preloads from the arg
@@ -1262,7 +1284,7 @@ async function interpreterFromArg(
 		arg instanceof tg.Template
 	) {
 		const executable = await tg.build(std.wrap, {
-			buildToolchain: buildToolchainArg,
+			buildToolchain: buildToolchainArg ?? null,
 			build: buildTriple,
 			host,
 			executable: arg,
@@ -1324,9 +1346,9 @@ async function interpreterFromArg(
 			return {
 				kind,
 				executable,
-				libraryPaths,
+				...(libraryPaths !== undefined ? { libraryPaths } : {}),
 				preloads,
-				args,
+				...(args !== undefined ? { args } : {}),
 			};
 		}
 		case "ld-musl": {
@@ -1374,9 +1396,9 @@ async function interpreterFromArg(
 			return {
 				kind,
 				executable,
-				libraryPaths,
+				...(libraryPaths !== undefined ? { libraryPaths } : {}),
 				preloads,
-				args,
+				...(args !== undefined ? { args } : {}),
 			};
 		}
 		case "dyld": {
@@ -1402,7 +1424,7 @@ async function interpreterFromArg(
 					const injectionLibrary = await tg
 						.build(injection.injection, {
 							buildToolchain,
-							build: buildArg,
+							build: buildArg ?? null,
 							host,
 						})
 						.named("injection");
@@ -1412,7 +1434,7 @@ async function interpreterFromArg(
 
 			return {
 				kind,
-				libraryPaths,
+				...(libraryPaths !== undefined ? { libraryPaths } : {}),
 				preloads,
 			};
 		}
@@ -1420,7 +1442,7 @@ async function interpreterFromArg(
 			return {
 				kind,
 				executable: arg.executable,
-				args: arg.args,
+				...(arg.args !== undefined ? { args: arg.args } : {}),
 			};
 		}
 		default: {
@@ -1472,7 +1494,6 @@ async function interpreterFromExecutableArg(
 					.named("default injection");
 				return {
 					kind: "dyld",
-					libraryPaths: undefined,
 					preloads: [injectionDylib],
 				};
 			} else {
@@ -1493,7 +1514,6 @@ async function interpreterFromExecutableArg(
 					.named("injection");
 				return {
 					kind: "dyld",
-					libraryPaths: undefined,
 					preloads: [injectionDylib],
 				};
 			}
@@ -1504,7 +1524,7 @@ async function interpreterFromExecutableArg(
 				const buildTriple = buildArg ?? host;
 				return interpreterFromArg(
 					await wrap.defaultShell({
-						buildToolchain: buildToolchainArg,
+						buildToolchain: buildToolchainArg ?? null,
 						build: buildTriple,
 						host,
 					}),
@@ -1602,13 +1622,13 @@ async function interpreterFromElf(
 }
 
 type OptimizeLibraryPathsArg = {
-	executable?: string | tg.Template | tg.File | tg.Symlink | undefined;
+	executable?: string | tg.Template | tg.File | tg.Symlink;
 	interpreter:
 		| wrap.DyLdInterpreter
 		| wrap.LdLinuxInterpreter
 		| wrap.LdMuslInterpreter;
-	libraryPaths?: Array<tg.Template.Arg> | undefined;
-	libraryPathStrategy?: wrap.LibraryPathStrategy | undefined;
+	libraryPaths?: Array<tg.Template.Arg>;
+	libraryPathStrategy?: wrap.LibraryPathStrategy;
 };
 
 async function optimizeLibraryPaths(
@@ -1764,7 +1784,7 @@ async function getNeededLibraries(executable: tg.File): Promise<Array<string>> {
 
 type DirWithSubpath = {
 	dir: tg.Directory;
-	subpath?: string | undefined;
+	subpath?: string;
 };
 
 async function createLibraryPathSet(
@@ -1784,11 +1804,11 @@ async function createLibraryPathSet(
 		}
 		if (path instanceof tg.Symlink) {
 			const artifact = await path.artifact;
-			if (artifact !== undefined) {
+			if (artifact !== null) {
 				tg.Directory.assert(artifact);
 				let ret: DirWithSubpath = { dir: artifact };
 				const subpath = await path.path;
-				if (subpath !== undefined) {
+				if (subpath !== null) {
 					ret = { ...ret, subpath };
 				}
 				set.add(ret);
@@ -1961,7 +1981,7 @@ async function getInner(dirWithSubpath: DirWithSubpath): Promise<tg.Directory> {
 		subpath = subpath.slice(1);
 	}
 	const inner = await directory.tryGet(subpath);
-	if (inner !== undefined) {
+	if (inner !== null) {
 		if (inner instanceof tg.Directory) {
 			return inner;
 		}
@@ -2098,7 +2118,7 @@ async function manifestMutationFromMutation(
 		tg.assert(tg.Value.isMap(value), "expected a map");
 		const manifestValue = await manifestValueFromValue(value);
 		tg.assert(
-			manifestValue !== undefined &&
+			manifestValue !== null &&
 				typeof manifestValue === "object" &&
 				!Array.isArray(manifestValue) &&
 				manifestValue.kind === "map",
@@ -2200,8 +2220,8 @@ function mutationFromManifestMutation(
 async function manifestValueFromValue(
 	value: tg.Value,
 ): Promise<wrap.Manifest.Value> {
-	if (typeof value === undefined) {
-		return undefined;
+	if (value === null) {
+		return null;
 	} else if (typeof value === "boolean") {
 		return value;
 	} else if (typeof value === "number") {
@@ -2247,8 +2267,8 @@ async function valueFromManifestValue(
 ): Promise<tg.Value> {
 	if (value instanceof Array) {
 		return await Promise.all(value.map(valueFromManifestValue));
-	} else if (value === undefined) {
-		return undefined;
+	} else if (value === null) {
+		return null;
 	} else if (typeof value === "boolean") {
 		return value;
 	} else if (typeof value === "number") {
@@ -2316,7 +2336,8 @@ async function envObjectFromMapValue(
 	value: wrap.Manifest.Value,
 ): Promise<std.env.EnvObject> {
 	tg.assert(
-		!(value instanceof Array) &&
+		value !== null &&
+			!(value instanceof Array) &&
 			typeof value === "object" &&
 			value.kind === "map",
 		"Malformed env, expected a map of mutations.",
@@ -2325,7 +2346,11 @@ async function envObjectFromMapValue(
 	for (const [key, val] of Object.entries(value.value)) {
 		if (val instanceof Array) {
 			return tg.unreachable();
-		} else if (typeof val === "object" && val.kind === "mutation") {
+		} else if (
+			val !== null &&
+			typeof val === "object" &&
+			val.kind === "mutation"
+		) {
 			ret[key] = (await mutationFromManifestMutation(
 				val.value,
 			)) as tg.Mutation<tg.Template.Arg>;
@@ -2484,9 +2509,12 @@ async function* manifestTemplateDependencies(
 }
 
 /** Yield the artifacts referenced by a value. */
-async function* manifestValueDependencies(
+export async function* manifestValueDependencies(
 	value: wrap.Manifest.Value,
 ): AsyncGenerator<tg.Object> {
+	if (value === null) {
+		return;
+	}
 	if (value instanceof Array) {
 		for (const v of value) {
 			yield* manifestValueDependencies(v);

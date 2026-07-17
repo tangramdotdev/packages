@@ -38,16 +38,16 @@ export async function source(os: string) {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 	staticBuild?: boolean;
 	usePrerequisites?: boolean;
 };
 
-export async function build(arg?: tg.Unresolved<Arg>) {
+export async function build(...args: std.Args<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -57,7 +57,11 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		source: source_,
 		staticBuild = false,
 		usePrerequisites = true,
-	} = arg ? await tg.resolve(arg) : {};
+	} = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 	const os = std.triple.os(host);
@@ -73,9 +77,9 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		attrArtifact = attr({
 			bootstrap: bootstrap_,
 			build,
-			env: env_,
+			env: env_ ?? null,
 			host,
-			sdk,
+			sdk: sdk ?? null,
 			staticBuild,
 			usePrerequisites,
 		});
@@ -85,9 +89,9 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 			libiconv({
 				bootstrap: bootstrap_,
 				build,
-				env: env_,
+				env: env_ ?? null,
 				host,
-				sdk,
+				sdk: sdk ?? null,
 				usePrerequisites,
 			}),
 		);
@@ -104,7 +108,9 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 	if (staticBuild) {
 		env.push({ CC: "gcc -static" });
 	}
-	env.push(env_);
+	if (env_ !== undefined && env_ !== null) {
+		env.push(env_);
+	}
 	if (os === "darwin" && appleXattrCmds) {
 		env.push(appleXattrCmds);
 	}
@@ -134,8 +140,8 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		env: std.env.arg(...env, { utils: false }),
 		phases,
 		processName: metadata.name,
-		opt: staticBuild ? "s" : undefined,
-		sdk,
+		...(staticBuild ? { opt: "s" as const } : {}),
+		sdk: sdk ?? null,
 		source: source_ ?? source(os),
 	});
 
@@ -143,8 +149,8 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 	if (os === "darwin") {
 		output = await tg.directory(
 			output,
-			{ "bin/cp": undefined, "bin/install": undefined },
-			appleXattrCmds,
+			{ "bin/cp": null, "bin/install": null },
+			...(appleXattrCmds !== undefined ? [appleXattrCmds] : []),
 		);
 	}
 
@@ -157,7 +163,7 @@ export default build;
 export async function bootstrapBuild(hostArg?: string) {
 	const host = bootstrap.toolchainTriple(hostArg ?? std.triple.host());
 	const env = std.env.arg(
-		tg.build(bootstrap.sdk, host),
+		bootstrap.sdk(host),
 		tg.build(bootstrap.make.build, { host }),
 		{ utils: false },
 	);

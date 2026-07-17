@@ -1563,11 +1563,7 @@ pub async fn dir_with_subpath_from_directory(
 	directory.store().await?;
 	let id = directory.id();
 	let token = directory.state().token();
-	let ret = DirectoryWithSubpath {
-		id,
-		subpath,
-		token,
-	};
+	let ret = DirectoryWithSubpath { id, subpath, token };
 	Ok(ret)
 }
 

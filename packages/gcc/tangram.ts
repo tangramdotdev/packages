@@ -95,7 +95,7 @@ export async function build(...args: std.Args<Arg>) {
 
 	const phases = { configure };
 
-	const env = std.env.arg(additionalEnv, ...deps, arg.env);
+	const env = std.env.arg(additionalEnv, ...deps, arg.env ?? null);
 
 	let result = await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
@@ -105,7 +105,7 @@ export async function build(...args: std.Args<Arg>) {
 		fortifySource: false,
 		phases,
 		opt: "3",
-		sdk: arg.sdk,
+		sdk: arg.sdk ?? null,
 		source: arg.source,
 	});
 
@@ -199,7 +199,7 @@ export async function libgcc(...args: std.Args<Arg>) {
 
 	const phases = { configure, build: buildPhase, install };
 
-	const env = std.env.arg(additionalEnv, ...deps, arg.env);
+	const env = std.env.arg(additionalEnv, ...deps, arg.env ?? null);
 
 	const result = await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
@@ -209,7 +209,7 @@ export async function libgcc(...args: std.Args<Arg>) {
 		fortifySource: false,
 		phases,
 		opt: "3",
-		sdk: arg.sdk,
+		sdk: arg.sdk ?? null,
 		source: arg.source,
 	});
 

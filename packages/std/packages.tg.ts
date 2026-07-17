@@ -7,7 +7,7 @@ import {
 
 /** Minimal constraint for package arg types. Only requires host for test execution. */
 export type MinimalPackageArg = {
-	host?: string | undefined;
+	host?: string;
 };
 
 /** A function that accepts a variable amount of package args and produces a directory. This is the standard type for the default exports of most packages. */
@@ -62,28 +62,31 @@ export type ResolvedDependencyArgs = {
 export async function applyArgs<T extends PackageArg>(
 	...args: std.Args<T>
 ): Promise<ResolvedPackageArg<T>> {
-	type Collect = std.args.MakeArrayKeys<T, "dependencies">;
-	const arg = await std.args.apply<T, Collect>({
-		args,
+	type Collect = std.args.MakeArrayKeys<BasePackageArg, "dependencies">;
+	const arg = (await std.args.apply<BasePackageArg, Collect>({
+		args: args as std.Args<BasePackageArg>,
 		map: async (arg) => {
 			return {
 				...arg,
-				dependencies: [arg.dependencies],
-			} as Collect;
+				dependencies: [arg.dependencies ?? null],
+			} as unknown as tg.MaybeMutationMap<Collect>;
 		},
 		reduce: {
 			dependencies: "append",
-			env: (a: std.env.Arg | undefined, b: std.env.Arg) =>
-				std.env.arg(a, b, { utils: false }),
-			phases: (a: std.phases.PhasesArg, b: std.phases.PhasesArg) =>
-				std.phases.arg(a, b),
-			sdk: (a: std.sdk.Arg | undefined, b: std.sdk.Arg) => std.sdk.arg(a, b),
-			subtreeEnv: (a: std.env.Arg | undefined, b: std.env.Arg) =>
-				std.env.arg(a, b, { utils: false }),
-			subtreeSdk: (a: std.sdk.Arg | undefined, b: std.sdk.Arg) =>
-				std.sdk.arg(a, b),
-		} as any,
-	});
+			env: (a?: std.env.Arg | null, b?: std.env.Arg | null) =>
+				std.env.arg(a ?? null, b ?? null, { utils: false }),
+			phases: (
+				a?: std.phases.PhasesArg | null,
+				b?: std.phases.PhasesArg | null,
+			) => std.phases.arg(a ?? null, b ?? null),
+			sdk: (a?: std.sdk.Arg | null, b?: std.sdk.Arg | null) =>
+				std.sdk.arg(a ?? null, b ?? null),
+			subtreeEnv: (a?: std.env.Arg | null, b?: std.env.Arg | null) =>
+				std.env.arg(a ?? null, b ?? null, { utils: false }),
+			subtreeSdk: (a?: std.sdk.Arg | null, b?: std.sdk.Arg | null) =>
+				std.sdk.arg(a ?? null, b ?? null),
+		},
+	})) as std.args.MakeArrayKeys<T, "dependencies">;
 
 	// Determine build and host;
 	const host = arg.host ?? std.triple.host();
@@ -98,7 +101,7 @@ export async function applyArgs<T extends PackageArg>(
 	const dependencyArgs = arg.dependencies ?? [];
 	const resolvedDependencies: ResolvedDependencyArgs = {};
 	for (const dependency of dependencyArgs) {
-		if (dependency === undefined) {
+		if (dependency === undefined || dependency === null) {
 			continue;
 		}
 		for (let [key, value] of Object.entries(dependency)) {
@@ -132,9 +135,11 @@ export async function applyArgs<T extends PackageArg>(
 										})
 									).dependencies
 								: {}) ?? {},
-						env: await std.env.arg(value.env as std.env.Arg, { utils: false }),
+						env: await std.env.arg((value.env as std.env.Arg) ?? null, {
+							utils: false,
+						}),
 						host,
-						sdk: await std.sdk.arg(value.sdk as std.sdk.Arg),
+						sdk: await std.sdk.arg((value.sdk as std.sdk.Arg) ?? null),
 					};
 				}
 			} else {
@@ -157,26 +162,34 @@ export async function applyArgs<T extends PackageArg>(
 										})
 									).dependencies
 								: existing?.dependencies) ?? {},
-						env: await std.env.arg(existing?.env, value.env as std.env.Arg, {
-							utils: false,
-						}),
+						env: await std.env.arg(
+							existing?.env ?? null,
+							(value.env as std.env.Arg) ?? null,
+							{ utils: false },
+						),
 						host: existing?.host ?? host,
-						sdk: await std.sdk.arg(existing?.sdk, value.sdk as std.sdk.Arg),
+						sdk: await std.sdk.arg(
+							existing?.sdk ?? null,
+							(value.sdk as std.sdk.Arg) ?? null,
+						),
 					};
 				}
 			}
 		}
 	}
 
+	// Omit the optional fields that are unset. An explicit `undefined` is not a
+	// tg.Value, so including the key would fail to resolve when the arg is passed
+	// to a command.
 	return {
 		...arg,
 		build,
 		dependencies: resolvedDependencies,
-		env,
+		...(env !== undefined ? { env } : {}),
 		host,
-		sdk,
-		subtreeEnv,
-		subtreeSdk,
+		...(sdk !== undefined ? { sdk } : {}),
+		...(subtreeEnv !== undefined ? { subtreeEnv } : {}),
+		...(subtreeSdk !== undefined ? { subtreeSdk } : {}),
 	} as ResolvedPackageArg<T>;
 }
 
@@ -280,7 +293,7 @@ export namespace deps {
 		host: string;
 		sdk?: std.sdk.Arg;
 		/** Dependency argument overrides from user input. build/host are added automatically. */
-		dependencies?: std.args.DependencyArgs | undefined;
+		dependencies?: std.args.DependencyArgs;
 		env?: tg.Unresolved<std.env.Arg>;
 		/** Environment to propagate to all dependencies in the subtree. */
 		subtreeEnv?: tg.Unresolved<std.env.Arg>;
@@ -290,9 +303,9 @@ export namespace deps {
 
 	/** Resolve a ConfigArg to a Config. */
 	export async function resolveConfig(
-		configArg: tg.Unresolved<ConfigArg> | undefined,
+		configArg?: tg.Unresolved<ConfigArg> | null,
 	): Promise<Config | undefined> {
-		if (configArg === undefined) {
+		if (configArg === undefined || configArg === null) {
 			return undefined;
 		}
 		const resolved = await tg.resolve(configArg);
@@ -309,13 +322,13 @@ export namespace deps {
 	): Promise<std.env.EnvObject> {
 		const config = await resolveConfig(configArg);
 		if (!config) {
-			return std.env.arg(ctx.env);
+			return std.env.arg(ctx.env ?? null);
 		}
 		const artifactMap = await artifacts(config, ctx);
 		const artifactList = Object.values(artifactMap).filter(
 			(v): v is tg.Directory => v !== undefined,
 		);
-		return std.env.arg(...artifactList, ctx.env);
+		return std.env.arg(...artifactList, ctx.env ?? null);
 	}
 
 	/** Resolve a deps config to individual artifacts by name. */
@@ -361,23 +374,27 @@ export namespace deps {
 					build,
 					host: host_,
 					sdk: subtreeSdk ?? {},
-					subtreeSdk,
-					subtreeEnv,
+					...(subtreeSdk !== undefined ? { subtreeSdk } : {}),
+					...(subtreeEnv !== undefined ? { subtreeEnv } : {}),
 				};
 			} else {
 				// When user provides custom sdk for a dependency, merge with subtreeSdk.
 				const argSdk = arg.sdk as std.sdk.Arg | undefined;
 				const mergedSdk = argSdk
-					? await std.sdk.arg(subtreeSdk, argSdk)
+					? await std.sdk.arg(subtreeSdk ?? null, argSdk)
 					: (subtreeSdk ?? {});
+				// Allow the dependency to override the subtree values, otherwise propagate.
+				const argSubtreeSdk =
+					(arg as Record<string, unknown>).subtreeSdk ?? subtreeSdk;
+				const argSubtreeEnv =
+					(arg as Record<string, unknown>).subtreeEnv ?? subtreeEnv;
 				buildArg = {
 					...arg,
 					build,
 					host: host_,
 					sdk: mergedSdk,
-					// Allow dependency to override subtree values, otherwise propagate.
-					subtreeSdk: (arg as Record<string, unknown>).subtreeSdk ?? subtreeSdk,
-					subtreeEnv: (arg as Record<string, unknown>).subtreeEnv ?? subtreeEnv,
+					...(argSubtreeSdk !== undefined ? { subtreeSdk: argSubtreeSdk } : {}),
+					...(argSubtreeEnv !== undefined ? { subtreeEnv: argSubtreeEnv } : {}),
 				};
 			}
 

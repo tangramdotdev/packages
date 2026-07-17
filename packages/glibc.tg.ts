@@ -77,7 +77,7 @@ export async function build(...args: std.Args<Arg>) {
 			LIBRARY_PATH: tg.Mutation.unset(),
 			TGLD_PASSTHROUGH: true,
 		},
-		arg.env,
+		arg.env ?? null,
 		{ utils: false },
 	);
 
@@ -92,7 +92,7 @@ export async function build(...args: std.Args<Arg>) {
 		opt: "3",
 		phases,
 		prefixPath: "/",
-		sdk: arg.sdk,
+		sdk: arg.sdk ?? null,
 		source: arg.source,
 	});
 

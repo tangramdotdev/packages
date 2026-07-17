@@ -29,21 +29,24 @@ export function source() {
 }
 
 export type Arg = {
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	source?: tg.Directory | null;
 };
 
 /** Build `cmake`. */
-export async function cmake(arg?: tg.Unresolved<Arg>) {
-	const resolved = await tg.resolve(arg);
+export async function cmake(...args: std.Args<Arg>) {
 	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		source: source_,
-	} = resolved ?? {};
+	} = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
@@ -75,7 +78,7 @@ export async function cmake(arg?: tg.Unresolved<Arg>) {
 			CXX: "c++ -static",
 		});
 	}
-	const env = std.env.arg(...envs, env_, { utils: false });
+	const env = std.env.arg(...envs, env_ ?? null, { utils: false });
 
 	const result = std.autotools.build({
 		build,
@@ -203,9 +206,9 @@ export async function build(...args: std.Args<BuildArg>) {
 			} as Collect;
 		},
 		reduce: {
-			env: (a, b) => std.env.arg(a, b, { utils: false }),
+			env: (a, b) => std.env.arg(a ?? null, b ?? null, { utils: false }),
 			phases: "append",
-			sdk: (a, b) => std.sdk.arg(a, b),
+			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
 		},
 	});
 
@@ -232,12 +235,12 @@ export async function build(...args: std.Args<BuildArg>) {
 		fortifySource: fortifySource_,
 		fullRelro,
 		hardeningCFlags,
-		march,
+		...(march !== undefined ? { march } : {}),
 		mtune,
 		opt,
 		pipe,
 		pkgConfig,
-		sdk: sdkArg,
+		...(sdkArg !== undefined ? { sdk: sdkArg } : {}),
 		stripExecutables,
 	});
 	envs.push(ccEnv);
@@ -259,7 +262,7 @@ export async function build(...args: std.Args<BuildArg>) {
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and cmake settings.
-	const env = await std.env.arg(...envs, userEnv);
+	const env = await std.env.arg(...envs, userEnv ?? null);
 
 	// Define default phases.
 	const configureArgs = [

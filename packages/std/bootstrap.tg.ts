@@ -15,14 +15,14 @@ export const LatestSdkVersion: SdkVersion = "26.2";
 
 export type Arg = {
 	/** Specify which component to provide. */
-	component?: string | undefined;
+	component?: string | null;
 	/** Optionally select a system different from the detected host. */
-	host?: string | undefined;
+	host?: string | null;
 };
 
 /** Download all bootstrap components for a host, or a single component. */
 export async function bootstrap(arg?: Arg) {
-	const host = normalizeHost(arg?.host);
+	const host = normalizeHost(arg?.host ?? undefined);
 	if (!arg?.component) {
 		const components = componentList(host);
 		if (!components) {
@@ -43,12 +43,12 @@ export default bootstrap;
 
 /** Retrieve just the toolchain component. */
 export function toolchain(host?: string) {
-	return bootstrap({ host, component: "toolchain" });
+	return bootstrap({ host: host ?? null, component: "toolchain" });
 }
 
 /** Retrieve just the utils component. */
 export function utils(host?: string) {
-	return bootstrap({ host, component: "utils" });
+	return bootstrap({ host: host ?? null, component: "utils" });
 }
 
 /** Retrieve a macOS SDK wrapped under a `MacOSX.sdk/` subdirectory. */

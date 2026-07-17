@@ -101,7 +101,19 @@ export async function build(...args: std.Args<Arg>) {
 	const os = std.triple.os(arg.host);
 
 	// Get individual artifacts for cross-compilation library paths.
-	const artifacts = await std.deps.artifacts(deps, arg);
+	const artifacts = await std.deps.artifacts(deps, {
+		build: arg.build,
+		host: arg.host,
+		...(arg.sdk !== undefined && arg.sdk !== null ? { sdk: arg.sdk } : {}),
+		...(arg.dependencies !== undefined && arg.dependencies !== null
+			? { dependencies: arg.dependencies }
+			: {}),
+		env: arg.env ?? null,
+		subtreeEnv: arg.subtreeEnv ?? null,
+		...(arg.subtreeSdk !== undefined && arg.subtreeSdk !== null
+			? { subtreeSdk: arg.subtreeSdk }
+			: {}),
+	});
 	const runtimeArtifacts = [
 		artifacts.icu,
 		artifacts.lz4,
@@ -167,7 +179,7 @@ export async function build(...args: std.Args<Arg>) {
 
 	return await std.autotools.build({
 		...arg,
-		env: std.env.arg(arg.env, ...additionalEnv),
+		env: std.env.arg(arg.env ?? null, ...additionalEnv),
 		parallel,
 		phases,
 		setRuntimeLibraryPath: true,

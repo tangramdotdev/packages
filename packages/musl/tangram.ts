@@ -79,7 +79,7 @@ export async function build(...args: std.Args<Arg>) {
 		configureArgs.push(await tg`LIBCC="${libcc}"`);
 	}
 
-	const phases = await std.phases.arg(arg.phases, {
+	const phases = await std.phases.arg(arg.phases ?? null, {
 		configure: { args: configureArgs },
 	});
 

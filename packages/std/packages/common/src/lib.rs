@@ -17,8 +17,7 @@ pub fn template_to_symlink(template: &tg::Template) -> tg::Result<tg::Symlink> {
 	use tg::template::Component;
 	match template.components() {
 		[Component::String(s)] => Ok(tg::Symlink::with_path(s.into())),
-		[Component::Artifact(artifact)]
-		| [Component::String(_), Component::Artifact(artifact)] => {
+		[Component::Artifact(artifact)] | [Component::String(_), Component::Artifact(artifact)] => {
 			Ok(tg::Symlink::with_artifact(artifact.clone()))
 		},
 		[Component::Artifact(artifact), Component::String(s)]

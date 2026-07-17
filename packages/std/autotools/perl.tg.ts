@@ -24,11 +24,11 @@ export async function source(os: string) {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 
 export async function build(arg?: tg.Unresolved<Arg>) {
@@ -64,7 +64,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 
 	const phases = { configure };
 
-	const env = await std.env.arg(env_, { utils: false });
+	const env = await std.env.arg(env_ ?? null, { utils: false });
 
 	let perlArtifact = await std.utils.autotoolsInternal({
 		build,
@@ -75,7 +75,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		phases,
 		prefixArg: "-Dprefix=",
 		processName: metadata.name,
-		sdk,
+		sdk: sdk ?? null,
 		source: sourceDir,
 	});
 
@@ -97,7 +97,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		if (artifact instanceof tg.File) {
 			const metadata = await std.file.executableMetadata(artifact);
 			if (
-				metadata.format == "shebang" &&
+				metadata.format === "shebang" &&
 				metadata.interpreter.includes("perl")
 			) {
 				scripts.push(name);
@@ -126,7 +126,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 	for (const [scriptName, artifact] of wrappedScripts) {
 		// Replace in the original artifact.
 		perlArtifact = await tg.directory(perlArtifact, {
-			[`bin/${scriptName}`]: artifact,
+			[`bin/${scriptName}`]: artifact ?? null,
 		});
 	}
 

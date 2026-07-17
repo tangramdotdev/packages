@@ -14,11 +14,11 @@ export const metadata = {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 
 export async function source() {
@@ -30,7 +30,7 @@ export async function source() {
 	return source;
 }
 
-export async function build(arg?: tg.Unresolved<Arg>) {
+export async function build(...args: std.Args<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -38,7 +38,11 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ? await tg.resolve(arg) : {};
+	} = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
@@ -46,7 +50,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 	const configureArgs = ["--without-bash-malloc", "--disable-nls"];
 
 	// If the provided env has ncurses in the library path, use it instead of termcap.
-	const envArg = await std.env.arg(env_, { utils: false });
+	const envArg = await std.env.arg(env_ ?? null, { utils: false });
 	if (await providesNcurses(envArg)) {
 		configureArgs.push("--with-curses");
 	}
@@ -66,7 +70,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 				// not found, try next.
 			}
 		}
-		if (!hasCompiler && sdk === undefined) {
+		if (!hasCompiler && (sdk === undefined || sdk === null)) {
 			const diag = new Error(
 				"std.utils.bash.build invoked with bootstrap=true but env_ contains no C compiler and no sdk was provided. This will fail at configure time with 'no acceptable C compiler found'.",
 			);
@@ -93,10 +97,10 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		build,
 		host,
 		bootstrap: bootstrap_,
-		env: std.env.arg(env_, ...env, { utils: false }),
+		env: std.env.arg(env_ ?? null, ...env, { utils: false }),
 		phases,
 		processName: metadata.name,
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(),
 	});
 

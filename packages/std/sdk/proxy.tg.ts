@@ -1,6 +1,7 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import * as sdk from "../sdk.tg.ts";
+import { manifestValueDependencies, wrap } from "../wrap.tg.ts";
 import * as injection from "../wrap/injection.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
 import * as gnu from "./gnu.tg.ts";
@@ -10,30 +11,32 @@ import * as llvmToolchain from "./llvm.tg.ts";
 
 export type Arg = {
 	/** The target triple of the build machine. */
-	build?: string;
+	build?: string | null;
 	/** Should the compiler get proxied? Default: false. */
 	compiler?: boolean;
 	/** Should the ld proxy embed wrappers? Default: false.  */
-	embedWrapper?: boolean | undefined;
+	embedWrapper?: boolean;
 	/** Should the linker get proxied? Default: true. */
 	linker?: boolean;
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
-	linkerExe?: tg.File | tg.Symlink | tg.Template;
+	linkerExe?: tg.File | tg.Symlink | tg.Template | null;
 	/** The triple of the computer the toolchain being proxied produces binaries for. */
-	host?: string;
+	host?: string | null;
 	/** Should `strip` get proxied? Default: true.  */
 	strip?: boolean;
 	/** Optional strip command to use. If omitted, will use the strip located with the toolchain. */
-	stripExe?: tg.File | tg.Symlink | tg.Template;
+	stripExe?: tg.File | tg.Symlink | tg.Template | null;
 	/** The build toolchain to be proxied. */
 	toolchain: tg.Directory;
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export async function env(arg?: Arg): Promise<tg.Directory> {
-	if (arg === undefined) {
-		throw new Error("Cannot proxy an undefined env");
-	}
+export async function env(...args: std.Args<Arg>): Promise<tg.Directory> {
+	const arg = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (a) => a,
+		reduce: {},
+	});
 
 	const proxyCompiler = arg.compiler ?? false;
 	const proxyLinker = arg.linker ?? true;
@@ -77,7 +80,7 @@ export async function env(arg?: Arg): Promise<tg.Directory> {
 	const originalBinDir = tg.Directory.expect(
 		await buildToolchainDir.get("bin"),
 	);
-	let replacements: Record<string, tg.Unresolved<tg.Artifact | undefined>> = {};
+	let replacements: Record<string, tg.Unresolved<tg.Artifact | null>> = {};
 
 	if (proxyLinker) {
 		const isCross = build !== host;
@@ -87,16 +90,17 @@ export async function env(arg?: Arg): Promise<tg.Directory> {
 		const ldProxyArtifact = await ldProxy({
 			buildToolchain: buildToolchainDir,
 			build,
-			embedWrapper: arg?.embedWrapper,
+			...(arg?.embedWrapper !== undefined
+				? { embedWrapper: arg.embedWrapper }
+				: {}),
 			linker:
-				arg.linkerExe === undefined
-					? os === "linux" && isLlvm
-						? await tg`${directory}/bin/ld.lld`
-						: os === "darwin" && isCross
-							? await tg`${directory}/bin/${host}-ld.gold`
-							: ld
-					: arg.linkerExe,
-			interpreter: ldso,
+				arg.linkerExe ??
+				(os === "linux" && isLlvm
+					? await tg`${directory}/bin/ld.lld`
+					: os === "darwin" && isCross
+						? await tg`${directory}/bin/${host}-ld.gold`
+						: ld),
+			...(ldso !== undefined ? { interpreter: ldso } : {}),
 			host,
 		});
 		if (isLlvm) {
@@ -140,7 +144,7 @@ export async function env(arg?: Arg): Promise<tg.Directory> {
 					replacements[`${host}-gcc`] = wrappedCC;
 					replacements[`${host}-g++`] = wrappedCXX;
 					if (fortran) {
-						replacements[`${host}-gfortran`] = wrappedGFortran;
+						replacements[`${host}-gfortran`] = wrappedGFortran ?? null;
 					}
 				} else {
 					replacements.cc = tg.symlink("gcc");
@@ -152,7 +156,7 @@ export async function env(arg?: Arg): Promise<tg.Directory> {
 					replacements["g++"] = wrappedCXX;
 					replacements[`${host}-g++`] = tg.symlink("g++");
 					if (fortran) {
-						replacements.gfortran = wrappedGFortran;
+						replacements.gfortran = wrappedGFortran ?? null;
 						replacements[`${host}-gfortran`] = tg.symlink("gfortran");
 					}
 				}
@@ -214,16 +218,15 @@ export async function env(arg?: Arg): Promise<tg.Directory> {
 			buildToolchain,
 			host,
 			stripCommand: arg.stripExe ?? strip,
-			runtimeLibraryPath: os === "darwin" ? tg`${directory}/lib` : undefined,
+			...(os === "darwin" ? { runtimeLibraryPath: tg`${directory}/lib` } : {}),
 		});
 		replacements.strip = stripProxyArtifact;
 	}
 
 	// Build a thin bin directory overlay.
-	const thinBinEntries: Record<
-		string,
-		tg.Unresolved<tg.Artifact | undefined>
-	> = { ...replacements };
+	const thinBinEntries: Record<string, tg.Unresolved<tg.Artifact | null>> = {
+		...replacements,
+	};
 	const originalBinEntries = await originalBinDir.entries;
 	for (const [name, entry] of Object.entries(originalBinEntries)) {
 		if (name in thinBinEntries) continue;
@@ -277,8 +280,8 @@ async function ccProxy(arg: CcProxyArg) {
 type LdProxyArg = {
 	buildToolchain: tg.Directory;
 	build?: string;
-	embedWrapper?: boolean | undefined;
-	interpreter?: tg.File | undefined;
+	embedWrapper?: boolean;
+	interpreter?: tg.File;
 	interpreterArgs?: Array<tg.Template.Arg>;
 	linker: tg.File | tg.Symlink | tg.Template;
 	mandatoryLibraryPaths?: Array<tg.Directory>;
@@ -320,7 +323,7 @@ async function ldProxy(arg: LdProxyArg) {
 		host: build,
 	});
 
-	// The injection library and wrapper are built for the host machine.
+	// The injection library is built for the host machine.
 	const hostInjectionLibrary = await tg
 		.build(injection.injection, {
 			buildToolchain,
@@ -329,18 +332,8 @@ async function ldProxy(arg: LdProxyArg) {
 		})
 		.named("injection");
 
-	// Use default wrapper when no custom build or host is provided.
-	const hostWrapper =
-		arg.build === undefined && arg.host === undefined
-			? await tg.build(std.buildDefaultWrapper).named("default wrapper")
-			: await workspace.wrapper({
-					build,
-					host,
-				});
-	await hostWrapper.store();
-
 	// Use the host machine's codesign binary;
-	const codesign = await tg.build(workspace.rcodesign).named("rcodesign");
+	const codesign = await workspace.rcodesign();
 	await codesign.store();
 
 	// Define environment for the linker proxy.
@@ -349,18 +342,23 @@ async function ldProxy(arg: LdProxyArg) {
 			tg.File | tg.Symlink | tg.Template
 		>(arg.linker),
 		TGLD_INJECTION_PATH: tg.Mutation.set(hostInjectionLibrary),
-		TGLD_INTERPRETER_ARGS: arg.interpreterArgs
-			? tg.Mutation.setIfUnset(tg.Template.join(" ", ...arg.interpreterArgs))
-			: undefined,
+		...(arg.interpreterArgs
+			? {
+					TGLD_INTERPRETER_ARGS: tg.Mutation.setIfUnset(
+						tg.Template.join(" ", ...arg.interpreterArgs),
+					),
+				}
+			: {}),
 		TGLD_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
 			arg.interpreter ?? "none",
 		),
-		TANGRAM_CODESIGN_ID: tg.Mutation.set(codesign.id),
-		TANGRAM_WRAPPER_BIN_ID: tg.Mutation.set(wrapperBin.id),
-		TANGRAM_WRAPPER_EXE_ID: tg.Mutation.set(wrapperExe.id),
-		TANGRAM_OBJCOPY_ID: objcopy
-			? tg.Mutation.set(objcopy.id)
-			: (tg.Mutation.unset() as tg.Mutation<string>),
+		// Pass artifacts, not IDs, so that they are recorded as dependencies.
+		TANGRAM_CODESIGN_PATH: tg.Mutation.set(codesign),
+		TANGRAM_WRAPPER_BIN_PATH: tg.Mutation.set(wrapperBin),
+		TANGRAM_WRAPPER_EXE_PATH: tg.Mutation.set(wrapperExe),
+		TANGRAM_OBJCOPY_PATH: objcopy
+			? tg.Mutation.set(objcopy)
+			: (tg.Mutation.unset() as tg.Mutation<tg.File>),
 		TGLD_EMBED_WRAPPER: embedWrapper
 			? tg.Mutation.set("true")
 			: (tg.Mutation.unset() as tg.Mutation<string>),
@@ -381,7 +379,7 @@ type StripProxyArg = {
 	buildToolchain: std.env.Arg;
 	host?: string;
 	stripCommand: tg.File | tg.Symlink | tg.Template;
-	runtimeLibraryPath?: tg.Directory | tg.Template | undefined;
+	runtimeLibraryPath?: tg.Directory | tg.Template;
 };
 
 export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
@@ -412,7 +410,7 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 	});
 
 	// Use the host machine's codesign binary.
-	const codesign = await tg.build(workspace.rcodesign).named("rcodesign");
+	const codesign = await workspace.rcodesign();
 	await codesign.store();
 
 	const envs: std.Args<std.env.Arg> = [
@@ -420,8 +418,8 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 			TGSTRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
 				tg.File | tg.Symlink | tg.Template
 			>(stripCommand),
-			TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
-			TANGRAM_CODESIGN_ID: tg.Mutation.setIfUnset(codesign.id),
+			TANGRAM_WRAPPER_EXE_PATH: tg.Mutation.setIfUnset(hostWrapper),
+			TANGRAM_CODESIGN_PATH: tg.Mutation.setIfUnset(codesign),
 		},
 	];
 	if (runtimeLibraryPath !== undefined) {
@@ -439,6 +437,7 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 export async function test() {
 	const tests = [
 		testBasic(),
+		testLdProxyDependencies(),
 		testTransitiveAll(),
 		testTransitiveDiscovery(),
 		testSamePrefix(),
@@ -449,6 +448,100 @@ export async function test() {
 		testStripMultipleFiles(),
 	];
 	await Promise.all(tests);
+	return true;
+}
+
+/** The names of the linker proxy env vars that each locate an artifact the proxy checks out at run time. */
+const ldProxyArtifactEnvVars = [
+	"TANGRAM_CODESIGN_PATH",
+	"TANGRAM_WRAPPER_BIN_PATH",
+	"TANGRAM_WRAPPER_EXE_PATH",
+	"TGLD_INJECTION_PATH",
+];
+
+/** Get the value the manifest env sets for a name. */
+const manifestEnvValue = (
+	manifest: wrap.Manifest,
+	name: string,
+): wrap.Manifest.Value | undefined => {
+	const env = manifest.env;
+	if (
+		env === undefined ||
+		(env.kind !== "set" && env.kind !== "set_if_unset" && env.kind !== "merge")
+	) {
+		return undefined;
+	}
+	const map = env.value;
+	if (
+		map === null ||
+		typeof map !== "object" ||
+		map instanceof Array ||
+		map.kind !== "map"
+	) {
+		return undefined;
+	}
+	return map.value[name];
+};
+
+/** Every artifact the linker proxy needs at run time must be reachable from its object graph.
+ *
+ * The proxy receives the wrapper executable, the wrapper binary, `codesign`, and the injection
+ * library through its env. Passing any of them as a bare id string smuggles the reference past the
+ * object graph: a string component is not an artifact component, so no dependency edge is recorded,
+ * so the sandboxed process holds no grant and its runtime checkout is denied ("failed to ensure the
+ * artifacts are stored and authorized ... failed to find the artifact").
+ *
+ * Note that a bare id string is invisible to `manifestDependencies`, which only yields artifact
+ * components. Asserting only that every referent is a recorded dependency therefore passes
+ * vacuously. This test asserts the property the proxy actually needs: each of these env vars carries
+ * an artifact, and every artifact they carry is recorded as a dependency of the proxy. */
+export async function testLdProxyDependencies() {
+	const host = std.triple.host();
+	const buildToolchain = await bootstrap.sdk();
+	const { ld } = await std.sdk.toolchainComponents({
+		env: await std.env.arg(buildToolchain, { utils: false }),
+		host,
+		target: host,
+	});
+	const proxy = await ldProxy({ buildToolchain, linker: ld, host });
+
+	const manifest = await wrap.Manifest.read(proxy);
+	tg.assert(
+		manifest !== undefined,
+		"the linker proxy should be a Tangram wrapper with an embedded manifest",
+	);
+
+	// Each env var must carry an artifact, not a bare id string.
+	const referents = new Set<tg.Object.Id>();
+	for (const name of ldProxyArtifactEnvVars) {
+		const value = manifestEnvValue(manifest, name);
+		tg.assert(value !== undefined, `the linker proxy env should set ${name}`);
+		const artifacts = [];
+		for await (const artifact of manifestValueDependencies(value)) {
+			await artifact.store();
+			artifacts.push(artifact.id);
+		}
+		tg.assert(
+			artifacts.length > 0,
+			`${name} does not reference an artifact, so it records no dependency: ${JSON.stringify(value)}`,
+		);
+		for (const id of artifacts) {
+			referents.add(id);
+		}
+	}
+	console.log("linker proxy env referents", [...referents]);
+
+	// Every referent must be recorded as a dependency of the proxy.
+	const recorded = new Set<tg.Object.Id>();
+	for (const dependency of await proxy.dependencyObjects) {
+		await dependency.store();
+		recorded.add(dependency.id);
+	}
+	const missing = [...referents].filter((id) => !recorded.has(id));
+	tg.assert(
+		missing.length === 0,
+		`the linker proxy env references artifacts that are not recorded as dependencies: ${missing.join(", ")}`,
+	);
 	return true;
 }
 
@@ -505,7 +598,7 @@ type MakeSharedArg = {
 	libName: string;
 	sdk: std.env.Arg;
 	source: tg.File;
-	target?: string | undefined;
+	target?: string;
 };
 
 async function makeShared(arg: tg.Unresolved<MakeSharedArg>) {
@@ -538,7 +631,9 @@ export async function testSharedLibraryWithDep(target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
-	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const testSDK = target
+		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
+		: await bootstrap.sdk();
 	const dylibExt = std.triple.os(targetTriple) === "darwin" ? "dylib" : "so";
 	const constantsSource = await tg.file`
 		const char* getGreetingA() {
@@ -665,7 +760,9 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
-	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const testSDK = target
+		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
+		: await bootstrap.sdk();
 	const os = std.triple.os(targetTriple);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 
@@ -681,7 +778,7 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 		libName: "libconstantsa",
 		sdk: testSDK,
 		source: constantsSourceA,
-		target,
+		...(target !== undefined ? { target } : {}),
 	});
 	await constantsA.store();
 	console.log("CONTANTS A ORIG", constantsA.id);
@@ -701,7 +798,7 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 		libName: "libconstantsb",
 		sdk: testSDK,
 		source: constantsSourceB,
-		target,
+		...(target !== undefined ? { target } : {}),
 	});
 	await constantsB.store();
 	const constantsHeaderB = await tg.file`const char* getGreetingB();`;
@@ -729,7 +826,7 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 		libName: "libgreeta",
 		sdk: testSDK,
 		source: greetSourceA,
-		target,
+		...(target !== undefined ? { target } : {}),
 	});
 	await greetA.store();
 	greetA = await tg.directory(greetA, {
@@ -756,7 +853,7 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 		libName: "libgreetb",
 		sdk: testSDK,
 		source: greetSourceB,
-		target,
+		...(target !== undefined ? { target } : {}),
 	});
 	await greetB.store();
 	greetB = await tg.directory(greetB, {
@@ -931,7 +1028,9 @@ export async function testSamePrefix(target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
-	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const testSDK = target
+		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
+		: await bootstrap.sdk();
 	const os = std.triple.os(targetTriple);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
@@ -989,7 +1088,9 @@ export async function testSamePrefixDirect(target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
-	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const testSDK = target
+		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
+		: await bootstrap.sdk();
 	const os = std.triple.os(targetTriple);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
@@ -1044,7 +1145,9 @@ export async function testDifferentPrefixDirect(target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
-	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const testSDK = target
+		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
+		: await bootstrap.sdk();
 	const os = std.triple.os(targetTriple);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
@@ -1112,7 +1215,9 @@ import inspectProcessSource from "../wrap/test/inspectProcess.c" with { type: "f
 export async function testStrip(target?: string) {
 	const host = std.triple.host();
 	const sdkArg = target ? { host, target } : undefined;
-	const toolchain = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const toolchain = target
+		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
+		: await bootstrap.sdk();
 	const output = await std.build`
 		set -x
 		cc -g -o main -xc ${inspectProcessSource}
@@ -1206,7 +1311,9 @@ export async function testTransitiveDiscovery(target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
-	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const testSDK = target
+		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
+		: await bootstrap.sdk();
 	const os = std.triple.os(targetTriple);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 
@@ -1220,7 +1327,7 @@ export async function testTransitiveDiscovery(target?: string) {
 		libName: "libbottom",
 		sdk: testSDK,
 		source: bottomSource,
-		target,
+		...(target !== undefined ? { target } : {}),
 	});
 
 	// Create top library that depends on bottom, linking against the same directory.
@@ -1236,7 +1343,7 @@ export async function testTransitiveDiscovery(target?: string) {
 		libName: "libtop",
 		sdk: testSDK,
 		source: topSource,
-		target,
+		...(target !== undefined ? { target } : {}),
 	});
 
 	// Combine both libraries into a single directory.

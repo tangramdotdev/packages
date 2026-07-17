@@ -1,4 +1,9 @@
-use std::{collections::BTreeMap, os::unix::fs::PermissionsExt, path::Path, sync::LazyLock};
+use std::{
+	collections::BTreeMap,
+	os::unix::fs::PermissionsExt,
+	path::{Path, PathBuf},
+	sync::LazyLock,
+};
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
@@ -231,54 +236,32 @@ impl Manifest {
 		#[cfg(feature = "tracing")]
 		tracing::debug!(?self, "Embedding manifest");
 
-		// Get the required files.
-		let wrapper_bin = TANGRAM_WRAPPER_BIN
+		// Get the paths of the required files.
+		let wrapper_bin = TANGRAM_WRAPPER_BIN_PATH
 			.as_ref()
 			.ok_or_else(|| tg::error!("missing wrapper bin"))?;
-		let wrapper_exe = TANGRAM_WRAPPER_EXE
+		let wrapper_exe = TANGRAM_WRAPPER_EXE_PATH
 			.as_ref()
 			.ok_or_else(|| tg::error!("missing wrapper exe"))?;
-		let objcopy = TANGRAM_OBJCOPY.as_ref();
+		let objcopy = TANGRAM_OBJCOPY_PATH.as_ref();
 
-		// Cache all the artifacts.
+		// Cache the input file, which is not a dependency of this executable.
 		tg::cache::cache(tg::cache::Arg {
-			artifacts: objcopy
-				.map(|file| file.id().into())
-				.into_iter()
-				.chain([
-					file.id().into(),
-					wrapper_exe.id().into(),
-					wrapper_bin.id().into(),
-				])
-				.collect(),
+			artifacts: vec![file.id().into()],
 		})
 		.await
 		.map_err(|error| tg::error!(!error, "failed to cache artifacts"))?;
 
-		// Get their paths on disk.
+		// Get the input path on disk.
 		let input_id: tg::artifact::Id = file.id().into();
-		let wrapper_bin_id: tg::artifact::Id = wrapper_bin.id().into();
-		let wrapper_exe_id: tg::artifact::Id = wrapper_exe.id().into();
 		let input = artifact_path_for(&input_id)
 			.ok_or_else(|| tg::error!("failed to locate input file in any artifact root"))?;
-		let wrapper_bin = artifact_path_for(&wrapper_bin_id)
-			.ok_or_else(|| tg::error!("failed to locate wrapper bin in any artifact root"))?;
-		let wrapper_exe = artifact_path_for(&wrapper_exe_id)
-			.ok_or_else(|| tg::error!("failed to locate wrapper exe in any artifact root"))?;
-		let objcopy = objcopy
-			.as_ref()
-			.map(|file| {
-				let id: tg::artifact::Id = file.id().into();
-				artifact_path_for(&id)
-					.ok_or_else(|| tg::error!("failed to locate objcopy in any artifact root"))
-			})
-			.transpose()?;
 
 		// Provide the context to wrap.
-		wrap::set_wrapper_bin_path(wrapper_bin);
-		wrap::set_wrapper_exe_path(wrapper_exe);
+		wrap::set_wrapper_bin_path(wrapper_bin.clone());
+		wrap::set_wrapper_exe_path(wrapper_exe.clone());
 		if let Some(objcopy) = objcopy {
-			wrap::set_objcopy_path(objcopy);
+			wrap::set_objcopy_path(objcopy.clone());
 		}
 
 		// Copy the input file to a a temp.
@@ -309,17 +292,7 @@ impl Manifest {
 			Ok(Some(wrap::Format::Mach64))
 		) {
 			tracing::info!("codesigning binary");
-			let path = tg::checkout(tg::checkout::Arg {
-				artifact: TANGRAM_CODESIGN.id().into(),
-				dependencies: false,
-				extension: None,
-				force: false,
-				lock: Some(tg::checkout::Lock::Attr),
-				path: None,
-			})
-			.await
-			.map_err(|error| tg::error!(!error, "failed to checkout the wrapper binary"))?;
-			let output = tokio::process::Command::new(path)
+			let output = tokio::process::Command::new(&*TANGRAM_CODESIGN_PATH)
 				.arg("sign")
 				.arg(tempfile.path())
 				.stdout(std::process::Stdio::piped())
@@ -373,25 +346,14 @@ impl Manifest {
 		Ok(())
 	}
 
-	/// Create a new wrapper from a manifest. Will locate the wrapper file from the `TANGRAM_WRAPPER_ID` environment variable.
+	/// Create a new wrapper from a manifest. Will locate the wrapper file from the `TANGRAM_WRAPPER_EXE_PATH` environment variable.
 	pub async fn write(&self) -> tg::Result<tg::File> {
 		tracing::debug!(?self, "Writing manifest");
 
-		// Check out the wrapper file.
-		let path = tg::checkout(tg::checkout::Arg {
-			artifact: TANGRAM_WRAPPER_EXE
-				.as_ref()
-				.ok_or_else(|| tg::error!("missing wrapper exe"))?
-				.id()
-				.into(),
-			dependencies: false,
-			extension: None,
-			force: false,
-			lock: Some(tg::checkout::Lock::Attr),
-			path: None,
-		})
-		.await
-		.map_err(|error| tg::error!(!error, "failed to checkout the wrapper binary"))?;
+		// Get the path of the wrapper file.
+		let path = TANGRAM_WRAPPER_EXE_PATH
+			.as_ref()
+			.ok_or_else(|| tg::error!("missing wrapper exe"))?;
 
 		// Create a temp.
 		let temp = tempfile::NamedTempFile::new()
@@ -419,17 +381,7 @@ impl Manifest {
 		// Codesign if necessary.
 		if matches!(wrap::detect_format(&path), Ok(Some(wrap::Format::Mach64))) {
 			tracing::info!("codesigning binary");
-			let path = tg::checkout(tg::checkout::Arg {
-				artifact: TANGRAM_CODESIGN.id().into(),
-				dependencies: false,
-				extension: None,
-				force: false,
-				lock: Some(tg::checkout::Lock::Attr),
-				path: None,
-			})
-			.await
-			.map_err(|error| tg::error!(!error, "failed to checkout the wrapper binary"))?;
-			let output = tokio::process::Command::new(path)
+			let output = tokio::process::Command::new(&*TANGRAM_CODESIGN_PATH)
 				.arg("sign")
 				.arg(temp.path())
 				.stdout(std::process::Stdio::piped())
@@ -660,35 +612,27 @@ fn dependency_from_object_id(id: &tg::object::Id) -> Option<tg::file::Dependency
 	))))
 }
 
-static TANGRAM_WRAPPER_BIN: LazyLock<Option<tg::File>> = LazyLock::new(|| {
-	std::env::var("TANGRAM_WRAPPER_BIN_ID").ok().map(|id| {
-		let id = id
-			.parse()
-			.expect("TANGRAM_WRAPPER_BIN_ID is not a valid ID");
-		tg::File::with_id(id)
-	})
+// These are rendered from artifacts in the manifest, so each is a dependency already present in an
+// artifact root.
+static TANGRAM_WRAPPER_BIN_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+	std::env::var("TANGRAM_WRAPPER_BIN_PATH")
+		.ok()
+		.map(PathBuf::from)
 });
 
-static TANGRAM_WRAPPER_EXE: LazyLock<Option<tg::File>> = LazyLock::new(|| {
-	std::env::var("TANGRAM_WRAPPER_EXE_ID").ok().map(|id| {
-		let id = id
-			.parse()
-			.expect("TANGRAM_WRAPPER_EXE_ID is not a valid ID");
-		tg::File::with_id(id)
-	})
+static TANGRAM_WRAPPER_EXE_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+	std::env::var("TANGRAM_WRAPPER_EXE_PATH")
+		.ok()
+		.map(PathBuf::from)
 });
 
-static TANGRAM_OBJCOPY: LazyLock<Option<tg::File>> = LazyLock::new(|| {
-	std::env::var("TANGRAM_OBJCOPY_ID").ok().map(|id| {
-		let id = id.parse().expect("TANGRAM_WRAP_ID is not a valid ID");
-		tg::File::with_id(id)
-	})
+static TANGRAM_OBJCOPY_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+	std::env::var("TANGRAM_OBJCOPY_PATH")
+		.ok()
+		.map(PathBuf::from)
 });
 
-static TANGRAM_CODESIGN: LazyLock<tg::File> = LazyLock::new(|| {
-	let id_value = std::env::var("TANGRAM_CODESIGN_ID").expect("TANGRAM_CODESIGN_ID not set");
-	let id = id_value
-		.parse()
-		.expect("TANGRAM_CODESIGN_ID is not a valid ID");
-	tg::File::with_id(id)
+static TANGRAM_CODESIGN_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
+	let path = std::env::var("TANGRAM_CODESIGN_PATH").expect("TANGRAM_CODESIGN_PATH not set");
+	PathBuf::from(path)
 });

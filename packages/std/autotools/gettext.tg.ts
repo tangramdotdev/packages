@@ -52,11 +52,11 @@ export function source() {
 
 export type Arg = {
 	bootstrap?: boolean;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+	build?: string | null;
+	env?: std.env.Arg | null;
+	host?: string | null;
+	sdk?: std.sdk.Arg | null;
+	source?: tg.Directory | null;
 };
 
 export async function build(arg?: tg.Unresolved<Arg>) {
@@ -71,7 +71,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 	const host = host_ ?? std.triple.host();
 	const os = std.triple.os(host);
 
-	const env = std.env.arg(env_, { utils: false });
+	const env = std.env.arg(env_ ?? null, { utils: false });
 
 	const configure = {
 		args: [
@@ -96,13 +96,13 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 	const phases = { configure };
 
 	return std.utils.autotoolsInternal({
-		build,
+		build: build ?? null,
 		host,
 		bootstrap: bootstrap_,
 		env,
 		phases,
 		processName: metadata.name,
-		sdk,
+		sdk: sdk ?? null,
 		source: source_ ?? source(),
 	});
 }

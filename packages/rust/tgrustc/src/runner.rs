@@ -27,7 +27,10 @@ pub async fn run() -> tg::Result<()> {
 		.map_err(|_| tg::error!("CARGO_MANIFEST_DIR is not set"))?;
 	let (source_artifact, manifest_subpath) = match parse_artifact_path(&manifest_dir) {
 		Some((id, subpath)) => (tg::Artifact::with_id(id), subpath),
-		None => (outer::checkin(Path::new(&manifest_dir)).await?, String::new()),
+		None => (
+			outer::checkin(Path::new(&manifest_dir)).await?,
+			String::new(),
+		),
 	};
 	let source_template =
 		tg::Template::with_components([tg::template::Component::Artifact(source_artifact)]);

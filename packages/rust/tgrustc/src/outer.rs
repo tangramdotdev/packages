@@ -378,14 +378,16 @@ async fn build_spawn_args(
 		tg::template::Component::Artifact(toolchain_artifact.clone()),
 		tg::template::Component::String("/bin/rustc".to_owned()),
 	]);
-	let all_dirs: Vec<&Path> = direct_extern_stems_by_dir.keys().map(PathBuf::as_path).collect();
+	let all_dirs: Vec<&Path> = direct_extern_stems_by_dir
+		.keys()
+		.map(PathBuf::as_path)
+		.collect();
 	let all_stems: Vec<String> = direct_extern_stems_by_dir
 		.values()
 		.flatten()
 		.cloned()
 		.collect();
-	let (global_closure, global_complete) =
-		sidecar::closure_from_sidecars(&all_dirs, &all_stems);
+	let (global_closure, global_complete) = sidecar::closure_from_sidecars(&all_dirs, &all_stems);
 	let global_closure = global_complete.then_some(global_closure);
 	let mut spawn_args: tg::value::Array = Vec::with_capacity(passthrough.len() + 1);
 	spawn_args.push(tg::Value::Template(rustc_template));
