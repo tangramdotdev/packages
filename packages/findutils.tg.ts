@@ -8,8 +8,8 @@ export const metadata = {
 	name: "findutils",
 	license: "GPL-3.0-or-later",
 	repository: "https://git.savannah.gnu.org/cgit/findutils.git",
-	version: "4.10.0",
-	tag: "findutils/4.10.0",
+	version: "4.11.0",
+	tag: "findutils/4.11.0",
 	provides: {
 		binaries: ["find", "locate", "updatedb", "xargs"],
 	},
@@ -19,7 +19,7 @@ function source() {
 	const { name, version } = metadata;
 	const compression = "xz";
 	const checksum =
-		"sha256:1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5";
+		"sha256:bfd19cb06cc71f3352d567e90284d8cdac02ac89774bbeadf0b533b0c11432fd";
 	return std.download.fromGnu({ name, version, checksum, compression });
 }
 

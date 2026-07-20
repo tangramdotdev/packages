@@ -9,8 +9,8 @@ export const metadata = {
 	name: "perl",
 	license: "GPL-1.0-or-later",
 	repository: "https://github.com/Perl/perl5",
-	version: "5.42.0",
-	tag: "perl/5.42.0",
+	version: "5.42.2",
+	tag: "perl/5.42.2",
 	provides: {
 		binaries: ["perl"],
 	},
@@ -22,7 +22,7 @@ export async function source() {
 	// Download raw source.
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:e093ef184d7f9a1b9797e2465296f55510adb6dab8842b0c3ed53329663096dc";
+		"sha256:9384e8deb75b7b1695e5637971b752281aaecd025a3d5d4734d33c1d0adfee47";
 	const base = `https://www.cpan.org/src/5.0`;
 	return await std.download
 		.extractArchive({ base, checksum, extension, name, version })

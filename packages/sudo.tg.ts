@@ -7,14 +7,14 @@ export const metadata = {
 	license: "https://github.com/sudo-project/sudo/blob/main/LICENSE.md",
 	name: "sudo",
 	repository: "https://github.com/sudo-project/sudo",
-	version: "1.9.17p1",
-	tag: "sudo/1.9.17p1",
+	version: "1.9.17p2",
+	tag: "sudo/1.9.17p2",
 };
 
 export async function source(): Promise<tg.Directory> {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:ff607ea717072197738a78f778692cd6df9a7e3e404565f51de063ca27455d32";
+		"sha256:4a38a1ab3adb1199257edc2a7c4a2bd714665eb605b04368843b06dada2cfcfb";
 	const owner = "sudo-project";
 	const repo = name;
 	const tag = `v${version}`;

@@ -5,8 +5,8 @@ export const metadata = {
 	homepage: "https://www.ffmpeg.org/",
 	name: "FFmpeg",
 	repository: "https://github.com/FFmpeg/FFmpeg",
-	version: "7.1.2",
-	tag: "ffmpeg/7.1.2",
+	version: "8.1.2",
+	tag: "ffmpeg/8.1.2",
 	provides: {
 		binaries: ["ffmpeg", "ffprobe"],
 		libraries: [
@@ -24,7 +24,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:8cb1bb8cfa9aeae13279b4da42ae8307ae6777456d4270f2e603c95aa08ca8ef";
+		"sha256:9fd092511605bbebafe095ea6d38d9e40f34d12f7386e1258372df8be0576eb7";
 	const owner = name;
 	const repo = name;
 	const tag = `n${version}`;

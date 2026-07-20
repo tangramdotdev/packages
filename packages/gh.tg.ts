@@ -6,8 +6,8 @@ export const metadata = {
 	license: "MIT",
 	name: "gh",
 	repository: "https://github.com/cli/cli",
-	version: "2.82.1",
-	tag: "gh/2.82.1",
+	version: "2.96.0",
+	tag: "gh/2.96.0",
 	provides: {
 		binaries: ["gh"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export function source() {
 	const { version } = metadata;
 	const checksum =
-		"sha256:999bdea5c8baf3d03fe0314127c2c393d6c0f7a504a573ad0c107072973af973";
+		"sha256:8d80d0aeccea7bec8024f8c30365bbfa76852901f2b2cb0afb7ab2cbf6d317c2";
 	return std.download.fromGithub({
 		checksum,
 		owner: "cli",

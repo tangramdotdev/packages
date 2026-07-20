@@ -16,8 +16,8 @@ export const metadata = {
 	license: "https://www.postgresql.org/about/licence/",
 	name: "postgresql",
 	repository: "https://git.postgresql.org/gitweb/?p=postgresql.git;a=summary",
-	version: "18.1",
-	tag: "postgresql/18.1",
+	version: "18.4",
+	tag: "postgresql/18.4",
 	provides: {
 		binaries: [
 			"clusterdb",
@@ -63,7 +63,7 @@ export const metadata = {
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:ff86675c336c46e98ac991ebb306d1b67621ece1d06787beaade312c2c915d54";
+		"sha256:81a81ec695fb0c7901407defaa1d2f7973617154cf27ba74e3a7ab8e64436094";
 	const extension = ".tar.bz2";
 	const base = `https://ftp.postgresql.org/pub/source/v${version}`;
 	const output = await std.download

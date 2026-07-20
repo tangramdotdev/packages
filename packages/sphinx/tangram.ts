@@ -7,8 +7,8 @@ export const metadata = {
 	license: "BSD-2-Clause",
 	name: "sphinx",
 	repository: "https://github.com/sphinx-doc/sphinx",
-	version: "8.2.3",
-	tag: "sphinx/8.2.3",
+	version: "9.1.0",
+	tag: "sphinx/9.1.0",
 	provides: {
 		binaries: [
 			"sphinx-apidoc",
@@ -25,7 +25,7 @@ import requirements from "./requirements.txt" with { type: "file" };
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:94cd09fa065b819dcc40de329441d53710cf51f6857b39ce20840bb2b5d3ec78";
+		"sha256:fc64c3d18fe9614fec5dddb3eff0b74c5f0a73ff244e03e129d7d8862ac00815";
 	const owner = "sphinx-doc";
 	const repo = name;
 	const tag = `v${version}`;

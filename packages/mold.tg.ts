@@ -8,8 +8,8 @@ export const metadata = {
 	license: "MIT",
 	name: "mold",
 	repository: "https://github.com/rui314/mold",
-	version: "2.40.2",
-	tag: "mold/2.40.2",
+	version: "2.41.0",
+	tag: "mold/2.41.0",
 	provides: {
 		binaries: ["mold"],
 	},
@@ -18,7 +18,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:28c7976c39e53ee440217b6b9f036a8cf13e3b2f93e8da83e19c66f4fc9a774c";
+		"sha256:0a61abac85d818437b425df856822e9d6e9982baeae5a93bcb02fe6c0060c61a";
 	const owner = "rui314";
 	const repo = name;
 	const tag = `v${version}`;

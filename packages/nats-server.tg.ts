@@ -6,8 +6,8 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "nats-server",
 	repository: "https://github.com/nats-io/nats-server",
-	version: "2.12.3",
-	tag: "nats-server/2.12.3",
+	version: "2.14.3",
+	tag: "nats-server/2.14.3",
 	provides: {
 		binaries: ["nats-server"],
 	},
@@ -19,7 +19,7 @@ export function source() {
 	const repo = name;
 	const tag = `v${version}`;
 	const checksum =
-		"sha256:34611454a6c38aed0bb26711b2d89620cb4c298cca93485539c7dc1e84558054";
+		"sha256:dba5286035ce9017b897ea24a783551dc28b07ad50c78da5471ead2bcfab3e86";
 	return std.download.fromGithub({
 		checksum,
 		owner,

@@ -12,8 +12,8 @@ export const metadata = {
 	license: "MPL-2.0",
 	name: "bind",
 	repository: "https://gitlab.isc.org/isc-projects/bind9",
-	version: "9.20.16",
-	tag: "bind/9.20.16",
+	version: "9.20.24",
+	tag: "bind/9.20.24",
 	provides: {
 		binaries: [
 			"arpaname",
@@ -47,7 +47,7 @@ export const metadata = {
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:03ffcc7a4fcb7c39b82b34be1ba2b59f6c191bc795c5935530d5ebe630a352d6";
+		"sha256:989fef1fc88ea59d04cd86f854dca5a4616a20a9968bcdde3c1a3668ab36be08";
 	const extension = ".tar.xz";
 	const base = `https://downloads.isc.org/isc/bind9/${version}`;
 	return std.download

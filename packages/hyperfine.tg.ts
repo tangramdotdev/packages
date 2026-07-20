@@ -6,8 +6,8 @@ export const metadata = {
 	license: "Apache-2.0, MIT",
 	name: "hyperfine",
 	repository: "https://github.com/sharkdp/hyperfine",
-	version: "1.18.0",
-	tag: "hyperfine/1.18.0",
+	version: "1.20.0",
+	tag: "hyperfine/1.20.0",
 	provides: {
 		binaries: ["hyperfine"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:fea7b92922117ed04b9c84bb9998026264346768804f66baa40743c5528bed6b";
+		"sha256:f90c3b096af568438be7da52336784635a962c9822f10f98e5ad11ae8c7f5c64";
 	const owner = "sharkdp";
 	const repo = name;
 	const tag = `v${version}`;

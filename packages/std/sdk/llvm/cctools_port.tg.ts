@@ -3,9 +3,9 @@ import libDispatch from "./apple_libdispatch.tg.ts";
 import libTapi from "./apple_libtapi.tg.ts";
 
 export async function source() {
-	const url = `https://github.com/tpoechtrager/cctools-port/archive/856d7d1bfcc890357bfe79b3f4aa206a0487b416.zip`;
+	const url = `https://github.com/tpoechtrager/cctools-port/archive/904de2a71d4da6a9b30d2efaf912a10ddc7d9ddb.zip`;
 	const checksum =
-		"sha256:d3a912976e9467c5df3bed4f6e2f44cf62b20a5ecaffa074acd26484e4444f51";
+		"sha256:04abaeb59d68a562f50a772ad9791d09adc7fa937b2780bb5d62b99aab30f87e";
 	let directory = await std.download
 		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)

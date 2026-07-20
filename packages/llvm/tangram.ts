@@ -14,14 +14,14 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "21.1.8",
-	tag: "llvm/21.1.8",
+	version: "22.1.8",
+	tag: "llvm/22.1.8",
 };
 
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:4633a23617fa31a3ea51242586ea7fb1da7140e426bd62fc164261fe036aa142";
+		"sha256:922f1817a0df7b1489272d18134ee0087a8b068828f87ac63b9861b1a9965888";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -208,11 +208,11 @@ export async function prebuilt(arg?: PrebuiltArg) {
 
 	const checksums: Record<string, tg.Checksum> = {
 		["aarch64-linux"]:
-			"sha256:b855cc17d935fdd83da82206b7a7cfc680095efd1e9e8182c4a05e761958bef8",
+			"sha256:805efad2bb91cb4967fa569e0881d10c0f69c04461cf671cccbae19f547acc34",
 		["x86_64-linux"]:
-			"sha256:1ead36b3dfcb774b57be530df42bec70ab2d239fbce9889447c7a29a4ddc1ae6",
+			"sha256:df0e1ecf16caf3489a272a5eea4eec9b0d82878f6477fa309504f918a0006384",
 		["aarch64-darwin"]:
-			"sha256:a9a22f450d35f1f73cd61ab6a17c6f27d8f6051d56197395c1eb397f0c9bbec4",
+			"sha256:f260f4f7c0d430828a81ae8a3826a1d63fc0963ec2459489308cc23b1f7eab4f",
 	};
 	const archAndOs = `${arch}-${os}`;
 	const checksum = checksums[archAndOs];

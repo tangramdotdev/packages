@@ -6,8 +6,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "libtool",
 	repository: "https://git.savannah.gnu.org/git/libtool.git",
-	version: "2.5.4",
-	tag: "libtool/2.5.4",
+	version: "2.6.2",
+	tag: "libtool/2.6.2",
 	provides: {
 		binaries: ["libtool", "libtoolize"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:f81f5860666b0bc7d84baddefa60d1cb9fa6fceb2398cc3baca6afaa60266675";
+		"sha256:2ef1067c16c97db930fd740cc9bc3d3ba9a583804ae5ac42cc3e8719e49e191e";
 	return std.download.fromGnu({
 		name,
 		version,

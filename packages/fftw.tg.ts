@@ -6,8 +6,8 @@ export const metadata = {
 	license: "GPL-2.0-or-later",
 	name: "fftw",
 	repository: "https://github.com/FFTW/fftw3",
-	version: "3.3.10",
-	tag: "fftw/3.3.10",
+	version: "3.3.11",
+	tag: "fftw/3.3.11",
 	provides: {
 		binaries: ["fftw-wisdom", "fftw-wisdom-to-conf"],
 		libraries: ["fftw3"],
@@ -17,7 +17,7 @@ export const metadata = {
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467";
+		"sha256:5630c24cdeb33b131612f7eb4b1a9934234754f9f388ff8617458d0be6f239a1";
 	const extension = ".tar.gz";
 	const base = `https://fftw.org/pub/${name}`;
 	return await std.download

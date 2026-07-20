@@ -6,8 +6,8 @@ export const metadata = {
 	license: "MIT",
 	name: "isort",
 	repository: "https://github.com/PyCQA/isort",
-	version: "8.0.0",
-	tag: "isort/8.0.0",
+	version: "8.0.1",
+	tag: "isort/8.0.1",
 	provides: {
 		binaries: ["isort"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:0c6f8dc203df5d4d16c94fc3607299940026c3f5a1751e94fe23bbdb35280145";
+		"sha256:7693717d79f0f85057c6fbfd576699547644b535a06aba57d512a30838a6ba2e";
 	const owner = "PyCQA";
 	const repo = name;
 	const tag = version;

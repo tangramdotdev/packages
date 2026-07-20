@@ -6,8 +6,8 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "hey",
 	repository: "https://github.com/rakyll/hey",
-	version: "0.1.4",
-	tag: "hey/0.1.4",
+	version: "0.1.5",
+	tag: "hey/0.1.5",
 	provides: {
 		binaries: ["hey"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:944097e62dd0bd5012d3b355d9fe2e7b7afcf13cc0b2c06151e0f4c2babfc279";
+		"sha256:f678bc0f07c62a6513726298873940b70099aa85244efa813f6a0d925092ffe9";
 	const owner = "rakyll";
 	const repo = name;
 	const tag = `v${version}`;

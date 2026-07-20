@@ -6,8 +6,8 @@ export const metadata = {
 	license: "MIT",
 	name: "libuv",
 	repository: "https://github.com/libuv/libuv",
-	version: "1.51.0",
-	tag: "libuv/1.51.0",
+	version: "1.52.1",
+	tag: "libuv/1.52.1",
 	provides: {
 		libraries: ["uv"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export function source() {
 	const { version } = metadata;
 	const checksum =
-		"sha256:27e55cf7083913bfb6826ca78cde9de7647cded648d35f24163f2d31bb9f51cd";
+		"sha256:478baf2599bfbc882c355288c9cb6f92e0e7dda435fa04031fa5b607cf3f414c";
 	const owner = "libuv";
 	const repo = "libuv";
 	const tag = `v${version}`;

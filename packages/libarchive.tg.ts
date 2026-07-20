@@ -11,8 +11,8 @@ export const metadata = {
 		"https://raw.githubusercontent.com/libarchive/libarchive/master/COPYING",
 	name: "libarchive",
 	repository: "https://github.com/libarchive/libarchive",
-	version: "3.7.7",
-	tag: "libarchive/3.7.7",
+	version: "3.8.8",
+	tag: "libarchive/3.8.8",
 	provides: {
 		libraries: ["archive"],
 	},
@@ -21,7 +21,7 @@ export const metadata = {
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:879acd83c3399c7caaee73fe5f7418e06087ab2aaf40af3e99b9e29beb29faee";
+		"sha256:3873a88801da067d0528a989af06877710529d50ee8fe6f3970cbb4302efb918";
 	const extension = ".tar.xz";
 	const base = `https://www.libarchive.org/downloads`;
 	return std.download

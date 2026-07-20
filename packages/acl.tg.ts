@@ -7,8 +7,8 @@ export const metadata = {
 	license: "GPL-2.0-or-later",
 	name: "acl",
 	repository: "https://git.savannah.nongnu.org/cgit/acl.git",
-	version: "2.3.2",
-	tag: "acl/2.3.2",
+	version: "2.4.0",
+	tag: "acl/2.4.0",
 	provides: {
 		binaries: ["chacl", "getfacl", "setfacl"],
 		headers: ["acl/libacl.h", "sys/acl.h"],
@@ -19,7 +19,7 @@ export const metadata = {
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:97203a72cae99ab89a067fe2210c1cbf052bc492b479eca7d226d9830883b0bd";
+		"sha256:e661131456d2708a01c614a0f400e11d7d1bfaeb6f3e74b75bb980b72f0161a3";
 	const base = `https://download.savannah.gnu.org/releases/${name}`;
 	const extension = ".tar.xz";
 	return std.download

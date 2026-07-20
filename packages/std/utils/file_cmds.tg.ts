@@ -2,14 +2,14 @@ import * as std from "../tangram.ts";
 
 export const metadata = {
 	name: "file_cmds",
-	version: "457.120.3",
-	tag: "file_cmds/457.120.3",
+	version: "479",
+	tag: "file_cmds/479",
 };
 
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:0a3f9b5bbf4dcd3d7a2f76f3fb4f0671eadaa0603341ef6be34796f847c9a5fa";
+		"sha256:999c5e6f24b26587aaec996b7ebcca5d6e668f9319667331ebcaf2ac1a5ac7bb";
 	const owner = "apple-oss-distributions";
 	const repo = "file_cmds";
 	const tag = std.download.packageName({ name, version });

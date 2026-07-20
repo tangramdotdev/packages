@@ -6,8 +6,8 @@ export const metadata = {
 	license: "LGPL-3.0-or-later",
 	name: "nettle",
 	repository: "https://git.lysator.liu.se/nettle/nettle",
-	version: "3.10",
-	tag: "nettle/3.10",
+	version: "4.0",
+	tag: "nettle/4.0",
 	provides: {
 		libraries: ["hogweed", "nettle"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:b4c518adb174e484cb4acea54118f02380c7133771e7e9beb98a0787194ee47c";
+		"sha256:3addbc00da01846b232fb3bc453538ea5468da43033f21bb345cb1e9073f5094";
 	return std.download.fromGnu({ name, version, checksum });
 }
 

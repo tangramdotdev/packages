@@ -6,8 +6,8 @@ export const metadata = {
 	license: "MIT",
 	name: "libpsl",
 	repository: "https://github.com/rockdaboot/libpsl",
-	version: "0.21.5",
-	tag: "libpsl/0.21.5",
+	version: "0.23.0",
+	tag: "libpsl/0.23.0",
 	provides: {
 		libraries: ["psl"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export async function source(): Promise<tg.Directory> {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:1dcc9ceae8b128f3c0b3f654decd0e1e891afc6ff81098f227ef260449dae208";
+		"sha256:f39b9631b3d369a21259ea4654f8875c0ec6995ce9551c0eb5d423e4c011f911";
 	const owner = "rockdaboot";
 	const repo = name;
 	const tag = version;

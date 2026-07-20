@@ -9,8 +9,8 @@ export const metadata = {
 	license: "LGPL-2.1-or-later",
 	name: "gnutls",
 	repository: "https://gitlab.com/gnutls/gnutls",
-	version: "3.8.9",
-	tag: "gnutls/3.8.9",
+	version: "3.8.13",
+	tag: "gnutls/3.8.13",
 	provides: {
 		libraries: ["gnutls"],
 	},
@@ -19,7 +19,7 @@ export const metadata = {
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:69e113d802d1670c4d5ac1b99040b1f2d5c7c05daec5003813c049b5184820ed";
+		"sha256:ffed8ec1bf09c2426d4f14aae377de4753b53e537d685e604e99a8b16ca9c97e";
 	const extension = ".tar.xz";
 	const base = `https://www.gnupg.org/ftp/gcrypt/${name}/v3.8`;
 	return std.download
