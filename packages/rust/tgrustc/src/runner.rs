@@ -89,7 +89,7 @@ pub async fn run() -> tg::Result<()> {
 			)
 		})?;
 	tg::checkout(tg::checkout::Arg {
-		artifact: build_dir.id().into(),
+		artifact: tg::Referent::with_item(build_dir.id().into()),
 		dependencies: true,
 		extension: None,
 		force: true,

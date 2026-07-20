@@ -122,7 +122,7 @@ pub fn render_template_data(data: &tg::template::Data) -> tg::Result<String> {
 		.map(|component| match component {
 			tg::template::data::Component::String(string) => Ok(string.clone()),
 			tg::template::data::Component::Artifact(artifact_id) => {
-				let artifact_id = artifact_id.as_ref().map_right(|wt| &wt.id).into_inner();
+				let artifact_id = &artifact_id.item;
 				let path = artifact_path_for(artifact_id).ok_or_else(|| {
 					tg::error!("artifact {artifact_id} not present in any artifact root")
 				})?;

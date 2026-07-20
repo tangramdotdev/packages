@@ -664,7 +664,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_path = cwd.join(&options.output_path);
 		let output_file_id = output_file.id();
 		tracing::debug!(?output_file_id, ?output_path, "checking out output file");
-		let artifact = tg::Artifact::from(output_file).id();
+		let artifact = tg::Referent::with_item(tg::Artifact::from(output_file).id());
 		tg::checkout(tg::checkout::Arg {
 			artifact,
 			dependencies: false,
@@ -1166,7 +1166,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	// Cache all the library paths.
 	let artifacts = library_paths
 		.iter()
-		.map(|dir_with_subpath| dir_with_subpath.id.clone().into())
+		.map(|dir_with_subpath| tg::Referent::with_item(dir_with_subpath.id.clone().into()))
 		.collect();
 	let arg = tg::cache::Arg { artifacts };
 	tracing::debug!("caching libraries");
