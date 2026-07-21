@@ -1,5 +1,5 @@
 diff --git a/Makefile.am b/Makefile.am
-index a203c6c..1a3e376 100644
+index 33806e1..f521f44 100644
 --- a/Makefile.am
 +++ b/Makefile.am
 @@ -35,7 +35,7 @@ DISTCLEANFILES = tool-versions.txt
@@ -12,10 +12,10 @@ index a203c6c..1a3e376 100644
  ALL_RECURSIVE_TARGETS =
  
 diff --git a/Makefile.in b/Makefile.in
-index d8a2ee4..4b0a0d5 100644
+index 5421f6c..e7d7f3a 100644
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -2247,11 +2247,11 @@ EXTRA_DIST = COPYING ChangeLog README-hacking THANKS TODO \
+@@ -2810,11 +2810,11 @@ EXTRA_DIST = COPYING ChangeLog README-hacking THANKS TODO \
  DISTCLEANFILES = tool-versions.txt
  
  # "gnulib-tests" is the gnulib unit test dir.
@@ -26,11 +26,11 @@ index d8a2ee4..4b0a0d5 100644
  TESTFILE_SUFFIXES = .exp .xo .xe .xi
 -built_programs = find xargs frcode locate updatedb
 +built_programs = find xargs frcode
+ AM_CPPFLAGS = -I$(top_srcdir)/gl/lib
+ LDADD = $(top_builddir)/gl/lib/libgnulib.a
  
- # Indirections required so that we'll still be able to know the
- # complete list of our tests even if the user overrides TESTS
 diff --git a/doc/Makefile.am b/doc/Makefile.am
-index d16ebfa..4baa5a2 100644
+index 0af544c..8353311 100644
 --- a/doc/Makefile.am
 +++ b/doc/Makefile.am
 @@ -16,11 +16,11 @@ AM_CFLAGS = $(WARN_CFLAGS)
@@ -48,7 +48,7 @@ index d16ebfa..4baa5a2 100644
  	find_mono.html findutils.texi_html_node.tar.gz \
  	find-info.tar.gz find.texi.tar.gz \
  	find.txt  tmp-doc-install find_mono.html.gz
-@@ -73,9 +73,6 @@ findutils.texi_html_node.tar.gz: find.html
+@@ -81,9 +81,6 @@ findutils.texi_html_node.tar.gz: find.html
  	tar zcf $@ find.html
  
  
@@ -58,7 +58,7 @@ index d16ebfa..4baa5a2 100644
  find-info.tar.gz:
  	$(MKDIR_P) tmp-doc-install/info
  	$(MAKE) $(AM_MAKEFLAGS) \
-@@ -88,7 +85,7 @@ find-info.tar.gz:
+@@ -96,7 +93,7 @@ find-info.tar.gz:
  find.texi.tar.gz: $(TEXINFOS) $(find_TEXINFOS) $(nodist_find_TEXINFOS) $(info_TEXINFOS) $(find_maint_TEXINFOS)  $(srcdir)/version.texi $(srcdir)/versionmaint.texi Makefile
  	$(MKDIR_P) tmp-doc-install/texi
  	for f in $(TEXINFOS) $(find_TEXINFOS) $(info_TEXINFOS) $(find_maint_TEXINFOS)  version.texi versionmaint.texi ; \
@@ -68,10 +68,10 @@ index d16ebfa..4baa5a2 100644
  	rm -rf tmp-doc-install/texi
  	rmdir tmp-doc-install
 diff --git a/doc/Makefile.in b/doc/Makefile.in
-index cefb6ae..a485b9f 100644
+index d19f6f7..7fdaf24 100644
 --- a/doc/Makefile.in
 +++ b/doc/Makefile.in
-@@ -2022,11 +2022,11 @@ top_srcdir = @top_srcdir@
+@@ -2544,11 +2544,11 @@ top_srcdir = @top_srcdir@
  AM_CFLAGS = $(WARN_CFLAGS)
  info_TEXINFOS = find.texi find-maint.texi
  find_TEXINFOS = perm.texi parse-datetime.texi regexprops.texi fdl.texi
@@ -86,7 +86,7 @@ index cefb6ae..a485b9f 100644
  	find_mono.html findutils.texi_html_node.tar.gz \
  	find-info.tar.gz find.texi.tar.gz \
  	find.txt  tmp-doc-install find_mono.html.gz
-@@ -2563,9 +2563,6 @@ find_mono.html: find.texi
+@@ -3096,9 +3096,6 @@ find_mono.html: find.texi
  findutils.texi_html_node.tar.gz: find.html
  	tar zcf $@ find.html
  
@@ -96,7 +96,7 @@ index cefb6ae..a485b9f 100644
  find-info.tar.gz:
  	$(MKDIR_P) tmp-doc-install/info
  	$(MAKE) $(AM_MAKEFLAGS) \
-@@ -2578,7 +2575,7 @@ find-info.tar.gz:
+@@ -3111,7 +3108,7 @@ find-info.tar.gz:
  find.texi.tar.gz: $(TEXINFOS) $(find_TEXINFOS) $(nodist_find_TEXINFOS) $(info_TEXINFOS) $(find_maint_TEXINFOS)  $(srcdir)/version.texi $(srcdir)/versionmaint.texi Makefile
  	$(MKDIR_P) tmp-doc-install/texi
  	for f in $(TEXINFOS) $(find_TEXINFOS) $(info_TEXINFOS) $(find_maint_TEXINFOS)  version.texi versionmaint.texi ; \
