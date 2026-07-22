@@ -1,7 +1,5 @@
 import * as std from "std" with { source: "../std" };
 
-import patches from "./patches" with { type: "directory" };
-
 export const metadata = {
 	homepage: "https://savannah.nongnu.org/projects/attr",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
@@ -26,8 +24,7 @@ function source() {
 	return std.download
 		.extractArchive({ checksum, name, base, version, extension })
 		.then(tg.Directory.expect)
-		.then(std.directory.unwrap)
-		.then((source) => std.patch(source, patches));
+		.then(std.directory.unwrap);
 }
 
 export type Arg = std.autotools.Arg;

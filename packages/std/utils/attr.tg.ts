@@ -1,7 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
-import basenamePatch from "./attr_basename.patch" with { type: "file" };
 
 export const metadata = {
 	name: "attr",
@@ -18,8 +17,7 @@ export async function source() {
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
-		.then(std.directory.unwrap)
-		.then((source) => bootstrap.patch(source, basenamePatch));
+		.then(std.directory.unwrap);
 }
 
 export type Arg = {
