@@ -2622,7 +2622,39 @@ export async function test() {
 		tg.build(testInterpreterWrappingPreloads, {
 			name: "interpreter wrapping preloads",
 		}),
+		tg.build(testWrapInstalledWrapper, { name: "wrap installed wrapper" }),
 	]);
+	return true;
+}
+
+/** Wrapping a wrapper that a build installed into its output directory must succeed. The ld proxy records the inner executable as a dependency of the wrapper it links, but an install phase copies the wrapper, and the copy carries no dependencies. The inner executable named by the embedded manifest is then unreachable from the output directory, which is the only thing the caller holds a grant for. */
+export async function testWrapInstalledWrapper() {
+	const host = std.triple.host();
+	const buildToolchain = await bootstrap.sdk(bootstrap.toolchainTriple(host));
+
+	// Link an executable, which the ld proxy wraps, then install it. Only the installed copy is part of the output.
+	const directory = await std.build`
+		cc -xc ${inspectProcessSource} -o exe
+		mkdir -p ${tg.output}/bin
+		cp exe ${tg.output}/bin/exe
+	`
+		.bootstrap(true)
+		.env(buildToolchain, { utils: false })
+		.then(tg.Directory.expect);
+
+	const installed = await directory.get("bin/exe").then(tg.File.expect);
+	await installed.store();
+	console.log("installed wrapper", installed.id);
+	console.log("installed wrapper dependencies", await installed.dependencies);
+
+	// Wrap the installed copy. This reads the embedded manifest and rehydrates its executable.
+	const wrapper = await wrap(installed, {
+		buildToolchain: await bootstrap.sdk.env(host),
+		env: { HELLO: "WORLD" },
+	});
+	await wrapper.store();
+	console.log("wrapper", wrapper.id);
+
 	return true;
 }
 
