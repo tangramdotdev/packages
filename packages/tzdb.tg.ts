@@ -6,8 +6,8 @@ export const metadata = {
 	name: "tzdb",
 	license: "https://github.com/eggert/tz/blob/main/LICENSE",
 	repository: "https://github.com/eggert/tz",
-	version: "2025c",
-	tag: "tzdb/2025c",
+	version: "2026c",
+	tag: "tzdb/2026c",
 	provides: {
 		binaries: ["zdump", "zic"],
 		libraries: [
@@ -19,7 +19,7 @@ export const metadata = {
 export async function source(): Promise<tg.Directory> {
 	const { version } = metadata;
 	const checksum =
-		"sha256:d970fb6753529583226fb1bb9df6237e5e968ea7d70a8bd0df2f3394c86f7ac4";
+		"sha256:99fcce3d468fbb94b9395db2d4a83777ffdf7740a1890ba2e52e8ae089cc8e3b";
 	const owner = "eggert";
 	const repo = "tz";
 	const tag = `${version}`;

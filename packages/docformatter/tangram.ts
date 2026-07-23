@@ -7,8 +7,8 @@ export const metadata = {
 	name: "docformatter",
 	license: "MIT",
 	repository: "https://github.com/PyCQA/docformatter",
-	version: "1.7.7",
-	tag: "docformatter/1.7.7",
+	version: "1.7.8",
+	tag: "docformatter/1.7.8",
 	provides: {
 		binaries: ["docformatter"],
 	},
@@ -17,7 +17,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:6d76165e3a52384ed982889672751bf3d96f3126b57c47c04f66925b35dd7374";
+		"sha256:96627a39134bc6e1811f534ff19806572aa1888da1d029b45c11854478eebd1a";
 	const owner = "PyCQA";
 	const repo = name;
 	const tag = `v${version}`;

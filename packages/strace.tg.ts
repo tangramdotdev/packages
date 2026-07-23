@@ -6,8 +6,8 @@ export const metadata = {
 	name: "strace",
 	license: "https://github.com/strace/strace/blob/master/COPYING",
 	repository: "https://github.com/strace/strace",
-	version: "6.19",
-	tag: "strace/6.19",
+	version: "7.1",
+	tag: "strace/7.1",
 	provides: {
 		binaries: ["strace"],
 	},
@@ -19,7 +19,7 @@ export async function source() {
 	const repo = name;
 	const tag = `v${version}`;
 	const checksum =
-		"sha256:e076c851eec0972486ec842164fdc54547f9d17abd3d1449de8b120f5d299143";
+		"sha256:81743ecf2a5b44186b2f5038afdc8beda7e5c70aed15b4fbfbcc6e9ece24490f";
 	return std.download.fromGithub({
 		checksum,
 		compression: "xz",

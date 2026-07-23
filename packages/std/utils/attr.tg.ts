@@ -1,25 +1,23 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
-import basenamePatch from "./attr_basename.patch" with { type: "file" };
 
 export const metadata = {
 	name: "attr",
-	version: "2.5.2",
-	tag: "attr/2.5.2",
+	version: "2.6.0",
+	tag: "attr/2.6.0",
 };
 
 export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
+		"sha256:6c8a2148a7b85043b68492bce43316b0e2e214fc4e628c7ede078e76e216330b";
 	const base = `https://download.savannah.gnu.org/releases/${name}`;
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
-		.then(std.directory.unwrap)
-		.then((source) => bootstrap.patch(source, basenamePatch));
+		.then(std.directory.unwrap);
 }
 
 export type Arg = {

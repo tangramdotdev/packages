@@ -10,8 +10,8 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "foundationdb",
 	repository: "https://github.com/apple/foundationdb",
-	version: "7.4.5",
-	tag: "foundationdb/7.4.5",
+	version: "7.4.6",
+	tag: "foundationdb/7.4.6",
 	provides: {
 		binaries: ["fdbbackup", "fdbcli", "fdbdecode", "fdbmonitor", "fdbserver"],
 		libraries: [
@@ -91,8 +91,8 @@ export async function downloadMacosPrebuilt(build: string, host: string) {
 	const arch = std.triple.arch(host) === "aarch64" ? "arm64" : "x86_64";
 	const checksum =
 		arch === "arm64"
-			? "sha256:ea9156125ba5fc67ed886a1d3365e4b973a5f0fa9345b11204f762aa48c9b1f0"
-			: "sha256:6c48078e116ba694f8aab99944c3689709a4653732a2f879448eec7212dfbe6f";
+			? "sha256:6728c036d2ddbe1bab411db4c6966c7d6677036e5fa04e085764a3f6669ca99e"
+			: "sha256:f58171a27c0ed23041a3d53245191f4851d521379690f384de4db325cb4fe37b";
 	const base = `${repository}/releases/download/${version}`;
 	const fileName = `FoundationDB-${version}_${arch}.pkg`;
 	const url = `${base}/${fileName}`;
@@ -145,31 +145,31 @@ export async function downloadMacosPrebuilt(build: string, host: string) {
 const linuxChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
 	["aarch64-linux"]: {
 		fdbcli:
-			"sha256:e3b4e413a0235a8c016a5fc8c2807e3f470f3cd986c87d526e95c842f2d5c574",
+			"sha256:fcd253e758ee3257f4a2acf11824fa49bf4fb8f540f3702b7fb2bb5936364498",
 		fdbserver:
-			"sha256:c9343d3d75fd48563505d4d80a0edfb1ee8905e9ccf1e851efd5b6b2f8dcdbc1",
+			"sha256:ebf926fdcccf5a0b8847cad4efdecb4d764eff4971d74d8598193a9385f5e9a2",
 		fdbbackup:
-			"sha256:fcd95f5adabec0086449eeabab816daf798465489cc85ee924583309ab1cf0c0",
+			"sha256:d75201f732cdfc0e49daccada04f3f2ef2af0fd9c34ca1cffedf15e7165a8775",
 		fdbdecode:
-			"sha256:abc30a428ae2294fead3d3fdae8627923fd5fe79c34314ecc1d196a82814dbd0",
+			"sha256:5ab543b2c8d8e01282b74dcc1ac2bdfa620427ff44d17bc3877fb8c3456023cb",
 		fdbmonitor:
-			"sha256:7d0def72bf7bd6bbec3fdba039f39c632355c817484723f0f9267f735992bae1",
+			"sha256:7e694f7be6006e858df2bf2652263010719b4b3c6f56ba495e2e13e0902ce29c",
 		libfdb_c:
-			"sha256:ef99ec0aaf07d9c2f67411870b32f54ae64ff05021d26cc2c99428645e2ae8d0",
+			"sha256:69ba4f4899f39a5fae6dbd765d586056a2d9d41896c0f60e4549e76a7de3ea03",
 	},
 	["x86_64-linux"]: {
 		fdbcli:
-			"sha256:bd267011f2795f0f00ab635f301bca3a3be86a61bbf4299ebef139a03e8da601",
+			"sha256:b0e47b9bd03addc745ba7ee283fa7a0c5fd7bfe2fa9d99bfb63692369d5659c6",
 		fdbserver:
-			"sha256:cccc7f5cfc13e3912bc55c10831091cacb7ea726c2abc2b883e6fe31668afa84",
+			"sha256:2e9bd4ce461821c5d978e1119d4065e7f2db8da77655273a2ddd31177543aa18",
 		fdbbackup:
-			"sha256:4c182a4a112de70f3e0431e4cd186b0f39c267eedab4a563cfbf0e8403fb66fc",
+			"sha256:3f5be8bc62a738cefd3a03f9d07be4924f6eb4896a5171c0085758f4480f2245",
 		fdbdecode:
-			"sha256:ec2df185aaa42b1128b7226c5f3c701521f870955f032174dbeb0927098724ae",
+			"sha256:e1c0b437821bfd9aea3b1b8c0b3296d720de5ac96fae6c9784f39c1422d092c9",
 		fdbmonitor:
-			"sha256:2a4be59eac44145f71a634a66742813fda08b33c41d920c13be06a6dddc633cc",
+			"sha256:4256b67f603909f4739578c7c216dc03660d6de1440c5ff54939e78bc088bd5c",
 		libfdb_c:
-			"sha256:f3eb95d649fc9a2193cfa22d6871ad01c03b23c341f2b6e8e4668a0f5609a1f4",
+			"sha256:d1a097c3947fbc4aadfbfcb42daac101b4150160656377fba19bcdbe4656513c",
 	},
 };
 

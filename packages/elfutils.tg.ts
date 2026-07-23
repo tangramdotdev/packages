@@ -2,7 +2,6 @@ import * as bzip2 from "bzip2" with { source: "./bzip2" };
 import * as libarchive from "libarchive" with { source: "./libarchive.tg.ts" };
 import * as openssl from "openssl" with { source: "./openssl.tg.ts" };
 import * as std from "std" with { source: "./std" };
-import constFix from "./elfutils-const-fix.patch" with { type: "file" };
 import * as xz from "xz" with { source: "./xz.tg.ts" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
@@ -12,8 +11,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "elfutils",
 	repository: "https://sourceware.org/git/?p=elfutils.git;a=summary",
-	version: "0.194",
-	tag: "elfutils/0.194",
+	version: "0.195",
+	tag: "elfutils/0.195",
 	provides: {
 		binaries: [
 			"eu-addr2line",
@@ -40,14 +39,13 @@ export const metadata = {
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:09e2ff033d39baa8b388a2d7fbc5390bfde99ae3b7c67c7daaf7433fbcf0f01e";
+		"sha256:37629fdf7f1f3dc2818e138fca2b8094177d6c2d0f701d3bb650a561218dc026";
 	const extension = ".tar.bz2";
 	const base = `https://sourceware.org/elfutils/ftp/${version}`;
-	const source = await std.download
+	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-	return std.patch(source, constFix);
 }
 
 export function deps() {

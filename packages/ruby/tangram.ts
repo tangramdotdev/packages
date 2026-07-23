@@ -19,8 +19,8 @@ export const metadata = {
 	name: "ruby",
 	license: "BSD-2-Clause",
 	repository: "https://git.ruby-lang.org/ruby.git",
-	version: "4.0.1",
-	tag: "ruby/4.0.1",
+	version: "4.0.6",
+	tag: "ruby/4.0.6",
 	provides: {
 		binaries: [
 			"bundle",
@@ -39,7 +39,7 @@ export const metadata = {
 export async function source() {
 	const { version } = metadata;
 	const checksum =
-		"sha256:3924be2d05db30f4e35f859bf028be85f4b7dd01714142fd823e4af5de2faf9d";
+		"sha256:837d299e8f7ddf2be31a229a7a7e019d354979825117989acb3b32b1a9be262a";
 	const extension = ".tar.gz";
 	const majorMinor = version.split(".").slice(0, 2).join(".");
 	const url = `https://cache.ruby-lang.org/pub/ruby/${majorMinor}/ruby-${version}${extension}`;

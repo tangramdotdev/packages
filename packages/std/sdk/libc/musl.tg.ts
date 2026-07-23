@@ -4,15 +4,15 @@ import muslPermissionPatch from "./musl_permission.patch" with { type: "file" };
 
 export const metadata = {
 	name: "musl",
-	version: "1.2.5",
-	tag: "musl/1.2.5",
+	version: "1.2.6",
+	tag: "musl/1.2.6",
 };
 
 export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4";
+		"sha256:d585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a";
 	const base = `https://musl.libc.org/releases`;
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })

@@ -4,8 +4,8 @@ export const metadata = {
 	homepage: "https://www.nasm.us/",
 	name: "nasm",
 	repository: "https://github.com/netwide-assembler/nasm",
-	version: "3.01",
-	tag: "nasm/3.01",
+	version: "3.02",
+	tag: "nasm/3.02",
 	provides: {
 		binaries: ["nasm", "ndisasm"],
 	},
@@ -15,7 +15,7 @@ export async function source() {
 	std.download;
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:aea120d4adb0241f08ae24d6add09e4a993bc1c4d9f754dbfc8020d6916c9be1";
+		"sha256:f504227b2f529e658d41629075f0503b38d67d790af345f34eba4af60c6a5998";
 	return std
 		.download({
 			url: `https://www.nasm.us/pub/${name}/releasebuilds/${version}/nasm-${version}.tar.gz`,

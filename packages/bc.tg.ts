@@ -5,8 +5,8 @@ export const metadata = {
 	name: "bc",
 	license: "BSD-2-Clause",
 	repository: "https://github.com/gavinhoward/bc",
-	version: "7.0.3",
-	tag: "bc/7.0.3",
+	version: "7.1.0",
+	tag: "bc/7.1.0",
 	provides: {
 		binaries: ["bc", "dc"],
 	},
@@ -15,7 +15,7 @@ export const metadata = {
 async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:91eb74caed0ee6655b669711a4f350c25579778694df248e28363318e03c7fc4";
+		"sha256:1f13663ba0f2435b684321714a4d0b9fff32bb951fc78dc7424cd69bba5c0d3a";
 	const tag = version;
 	const owner = "gavinhoward";
 	const repo = name;

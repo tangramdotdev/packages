@@ -1,7 +1,6 @@
 import * as std from "std" with { source: "../std" };
 import binutils from "binutils" with { source: "../binutils.tg.ts" };
 import * as glibc from "glibc" with { source: "../glibc.tg.ts" };
-import libgompConstFix from "./gcc-libgomp-const-fix.patch" with { type: "file" };
 import musl from "musl" with { source: "../musl" };
 import perl from "perl" with { source: "../perl" };
 import python from "python" with { source: "../python" };
@@ -14,8 +13,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",
-	version: "15.2.0",
-	tag: "gcc/15.2.0",
+	version: "16.1.0",
+	tag: "gcc/16.1.0",
 	provides: {
 		binaries: ["gcc"],
 	},
@@ -222,13 +221,12 @@ export async function gccSource() {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:438fd996826b0c82485a29da03a72d71d6e3541a83ec702df4271f6fe025d24e";
+		"sha256:50efb4d94c3397aff3b0d61a5abd748b4dd31d9d3f2ab7be05b171d36a510f79";
 	const base = `http://ftpmirror.gnu.org/gnu/${name}/${name}-${version}`;
-	const source = await std.download
+	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-	return std.patch(source, libgompConstFix);
 }
 
 /** Select the correct libc sysroot for the host. Returns a directory with headers and libraries at the root level (include/, lib/). */

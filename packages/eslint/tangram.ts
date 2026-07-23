@@ -8,8 +8,8 @@ export const metadata = {
 	license: "MIT",
 	name: "eslint",
 	repository: "https://github.com/eslint/eslint",
-	version: "10.0.0",
-	tag: "eslint/10.0.0",
+	version: "10.7.0",
+	tag: "eslint/10.7.0",
 	provides: {
 		binaries: ["eslint"],
 	},
@@ -18,7 +18,7 @@ export const metadata = {
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:465f34c0e6d389957194daced33a5ea65a193559f012c6463218a1d8cd638348";
+		"sha256:be765b80bdb3537132aac8dfd9c62db0d2de11fb5eea7a941ce80b8aaa32b4bd";
 	const owner = name;
 	const repo = name;
 	const tag = `v${version}`;

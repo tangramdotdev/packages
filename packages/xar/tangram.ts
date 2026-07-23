@@ -11,8 +11,8 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "xar",
 	repository: "https://github.com/mackyle/xar/tree/master",
-	version: "498",
-	tag: "xar/498",
+	version: "503",
+	tag: "xar/503",
 	provides: {
 		binaries: ["xar"],
 	},
@@ -24,7 +24,7 @@ import patches from "./patches" with { type: "directory" };
 async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:9cee4f80b96cf592ccc545a4fdd51e4da4a5bd3b4734901637d67b043eff3c75";
+		"sha256:43b9b5149e4046cf98dcf7c03330b008e04d23e3f029a698a5618adee10ccbb2";
 	const owner = "apple-oss-distributions";
 	const repo = name;
 	const tag = `${name}-${version}`;

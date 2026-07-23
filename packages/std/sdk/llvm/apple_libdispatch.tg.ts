@@ -3,9 +3,9 @@ import libbsd from "./libbsd.tg.ts";
 import * as cmake from "../cmake.tg.ts";
 
 export async function source() {
-	const url = `https://github.com/tpoechtrager/apple-libdispatch/archive/ee39300b12a77efd3f2f020e009e42d557adbb29.zip`;
+	const url = `https://github.com/tpoechtrager/apple-libdispatch/archive/323b9b4e0ca05d6c56a0c2f2d7d8d47363e612b7.zip`;
 	const checksum =
-		"sha256:d6ab90b7e8cbf30725be83491bc85ff708daea130bafcac94381b0a2de958b14";
+		"sha256:3a90136264ca82ca86fd5dd04dc23d969c6594d9764ecbbe7b6b88ba50641d8d";
 	return await std.download
 		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)

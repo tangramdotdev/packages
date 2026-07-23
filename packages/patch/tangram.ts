@@ -6,8 +6,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "patch",
 	repository: "https://git.savannah.gnu.org/cgit/patch.git",
-	version: "2.7.6",
-	tag: "patch/2.7.6",
+	version: "2.8",
+	tag: "patch/2.8",
 	provides: {
 		binaries: ["patch"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:8cf86e00ad3aaa6d26aca30640e86b0e3e1f395ed99f189b06d4c9f74bc58a4e";
+		"sha256:308a4983ff324521b9b21310bfc2398ca861798f02307c79eb99bb0e0d2bf980";
 	return std.download
 		.fromGnu({ name, version, checksum })
 		.then((source) => std.patch(source, patches));

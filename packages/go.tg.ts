@@ -6,30 +6,30 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "go",
 	repository: "https://github.com/golang/go",
-	version: "1.25.3",
-	tag: "go/1.25.3",
+	version: "1.26.5",
+	tag: "go/1.26.5",
 };
 
 // See https://go.dev/dl.
 const RELEASES: { [key: string]: { checksum: tg.Checksum; url: string } } = {
 	["aarch64-linux"]: {
 		checksum:
-			"sha256:1d42ebc84999b5e2069f5e31b67d6fc5d67308adad3e178d5a2ee2c9ff2001f5",
+			"sha256:fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49",
 		url: `https://go.dev/dl/go${metadata.version}.linux-arm64.tar.gz`,
 	},
 	["x86_64-linux"]: {
 		checksum:
-			"sha256:0335f314b6e7bfe08c3d0cfaa7c19db961b7b99fb20be62b0a826c992ad14e0f",
+			"sha256:5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053",
 		url: `https://go.dev/dl/go${metadata.version}.linux-amd64.tar.gz`,
 	},
 	["aarch64-darwin"]: {
 		checksum:
-			"sha256:7c083e3d2c00debfeb2f77d9a4c00a1aac97113b89b9ccc42a90487af3437382",
+			"sha256:efb87ff28af9a188d0536ef5d42e63dd52ba8263cd7344a993cc48dd11dedb6a",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-arm64.tar.gz`,
 	},
 	["x86_64-darwin"]: {
 		checksum:
-			"sha256:1641050b422b80dfd6299f8aa7eb8798d1cd23eac7e79f445728926e881b7bcd",
+			"sha256:6231d8d3b8f5552ec6cbf6d685bdd5482e1e703214b120e89b3bf0d7bf1ef725",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-amd64.tar.gz`,
 	},
 };
@@ -864,7 +864,7 @@ export async function testCgo() {
 	// https://github.com/tangramdotdev/packages/issues/169
 	if (os === "darwin") {
 		console.log(
-			"Skipping testCgo on Darwin due to Go 1.25.3 linker code signing issues",
+			"Skipping testCgo on Darwin due to Go 1.26.5 linker code signing issues",
 		);
 		return;
 	}

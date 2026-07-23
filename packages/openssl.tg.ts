@@ -6,8 +6,8 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "openssl",
 	repository: "https://github.com/openssl/openssl",
-	version: "3.5.4",
-	tag: "openssl/3.5.4",
+	version: "4.0.1",
+	tag: "openssl/4.0.1",
 	provides: {
 		binaries: ["c_rehash", "openssl"],
 		libraries: ["crypto", "ssl"],
@@ -17,7 +17,7 @@ export const metadata = {
 function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:967311f84955316969bdb1d8d4b983718ef42338639c621ec4c34fddef355e99";
+		"sha256:2db3f3a0d6ea4b59e1f094ace2c8cd536dffb87cdc39084c5afa1e6f7f37dd09";
 	const owner = name;
 	const repo = name;
 	const tag = `${name}-${version}`;

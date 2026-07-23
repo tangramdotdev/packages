@@ -3,14 +3,14 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 
 export const metadata = {
 	name: "gawk",
-	version: "5.4.0",
-	tag: "gawk/5.4.0",
+	version: "5.4.1",
+	tag: "gawk/5.4.1",
 };
 
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:3dd430f0cd3b4428c6c3f6afc021b9cd3c1f8c93f7a688dc268ca428a90b4ac1";
+		"sha256:07f6f7342b7febe4313fc2c2542ad93d64fe20ad8717200109f105a826f5fd37";
 	return std.download.fromGnu({
 		name,
 		version,

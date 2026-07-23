@@ -5,8 +5,8 @@ export const metadata = {
 	license: "https://github.com/libffi/libffi/blob/master/LICENSE",
 	name: "libffi",
 	repository: "https://github.com/libffi/libffi",
-	version: "3.4.8",
-	tag: "libffi/3.4.8",
+	version: "3.7.1",
+	tag: "libffi/3.7.1",
 	provides: {
 		docs: [
 			"info/libffi.info",
@@ -23,7 +23,7 @@ export const metadata = {
 function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:bc9842a18898bfacb0ed1252c4febcc7e78fa139fd27fdc7a3e30d9d9356119b";
+		"sha256:d5e9a6638ddbd2513ddb54518eb67e4bbe6fa707bcc01c10f6212f0a088d819d";
 	const owner = name;
 	const repo = name;
 	const tag = `v${version}`;

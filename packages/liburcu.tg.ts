@@ -5,8 +5,8 @@ export const metadata = {
 	license: "LGPL-2.1-or-later",
 	name: "liburcu",
 	repository: "https://git.liburcu.org/userspace-rcu.git",
-	version: "0.15.5",
-	tag: "liburcu/0.15.5",
+	version: "0.15.6",
+	tag: "liburcu/0.15.6",
 	provides: {
 		libraries: [
 			"urcu",
@@ -22,7 +22,7 @@ export const metadata = {
 export async function source() {
 	const { version } = metadata;
 	const checksum =
-		"sha256:b2f787a8a83512c32599e71cdabcc5131464947b82014896bd11413b2d782de1";
+		"sha256:850b192096eb11ebf2c70e8f97bc7da7479ee41da1bebeb44e3986908bac414f";
 	const name = "userspace-rcu";
 	const extension = ".tar.bz2";
 	const base = "https://lttng.org/files/urcu";

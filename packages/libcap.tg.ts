@@ -8,8 +8,8 @@ export const metadata = {
 	license: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git/tree/License",
 	name: "libcap",
 	repository: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
-	version: "2.73",
-	tag: "libcap/2.73",
+	version: "2.78",
+	tag: "libcap/2.78",
 	provides: {
 		binaries: ["capsh", "getcap", "setcap", "getpcaps"],
 		libraries: ["cap"],
@@ -20,7 +20,7 @@ export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:6405f6089cf4cdd8c271540cd990654d78dd0b1989b2d9bda20f933a75a795a5";
+		"sha256:0d621e562fd932ccf67b9660fb018e468a683d7b827541df27813228c996bb11";
 	const base = `https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2`;
 	let source = await std.download
 		.extractArchive({ checksum, base, name, version, extension })

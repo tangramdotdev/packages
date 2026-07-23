@@ -6,8 +6,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "autoconf",
 	repository: "https://git.savannah.gnu.org/git/autoconf.git",
-	version: "2.72",
-	tag: "autoconf/2.72",
+	version: "2.73",
+	tag: "autoconf/2.73",
 	provides: {
 		binaries: [
 			"autoconf",
@@ -24,7 +24,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:ba885c1319578d6c94d46e9b0dceb4014caafe2490e437a0dbca3f270a223f5a";
+		"sha256:9fd672b1c8425fac2fa67fa0477b990987268b90ff36d5f016dae57be0d6b52e";
 	return std.download.fromGnu({
 		name,
 		version,

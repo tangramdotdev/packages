@@ -5,8 +5,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gperf",
 	repository: "https://git.savannah.gnu.org/git/gperf.git",
-	version: "3.1",
-	tag: "gperf/3.1",
+	version: "3.3",
+	tag: "gperf/3.3",
 	provides: {
 		binaries: ["gperf"],
 	},
@@ -15,7 +15,7 @@ export const metadata = {
 function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:588546b945bba4b70b6a3a616e80b4ab466e3f33024a352fc2198112cdbb3ae2";
+		"sha256:fd87e0aba7e43ae054837afd6cd4db03a3f2693deb3619085e6ed9d8d9604ad8";
 	return std.download.fromGnu({ name, version, checksum });
 }
 

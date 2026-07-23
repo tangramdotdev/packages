@@ -5,14 +5,14 @@ import disableLocatePatch from "./findutils-disable-locate.diff" with { type: "f
 
 export const metadata = {
 	name: "findutils",
-	version: "4.10.0",
-	tag: "findutils/4.10.0",
+	version: "4.11.0",
+	tag: "findutils/4.11.0",
 };
 
 export async function source(os: string) {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5";
+		"sha256:bfd19cb06cc71f3352d567e90284d8cdac02ac89774bbeadf0b533b0c11432fd";
 	let source = await std.download.fromGnu({
 		name,
 		version,

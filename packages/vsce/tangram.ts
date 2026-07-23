@@ -8,8 +8,8 @@ export const metadata = {
 	license: "MIT",
 	name: "vsce",
 	repository: "https://github.com/microsoft/vscode-vsce",
-	version: "3.7.1",
-	tag: "vsce/3.7.1",
+	version: "3.9.2",
+	tag: "vsce/3.9.2",
 	provides: {
 		binaries: ["vsce"],
 	},
@@ -18,7 +18,7 @@ export const metadata = {
 export function source() {
 	const { version } = metadata;
 	const checksum =
-		"sha256:761b176487de3e3091383e4fb0d210e4c3a95657afdcbad8fb0c79b7a89cf700";
+		"sha256:96819256dca27c353fa3a06c27ba14979f262d470d9856fa972505f0e4aa1fc1";
 	const owner = "microsoft";
 	const repo = "vscode-vsce";
 	const tag = `v${version}`;

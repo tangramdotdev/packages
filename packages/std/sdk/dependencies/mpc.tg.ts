@@ -3,15 +3,15 @@ import * as std from "../../tangram.ts";
 export const metadata = {
 	homepage: "https://www.multiprecision.org",
 	name: "mpc",
-	version: "1.3.1",
-	tag: "mpc/1.3.1",
+	version: "1.4.1",
+	tag: "mpc/1.4.1",
 };
 
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8";
-	return std.download.fromGnu({ checksum, name, version });
+		"sha256:91204cd32f164bd3b7c992d4a6a8ce6519511aadab30f78b6982d0bf8d73e931";
+	return std.download.fromGnu({ checksum, name, version, compression: "xz" });
 }
 
 export type Arg = std.autotools.Arg;

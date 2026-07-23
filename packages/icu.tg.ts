@@ -6,8 +6,8 @@ export const metadata = {
 	name: "icu",
 	license: "https://github.com/unicode-org/icu?tab=License-1-ov-file#readme",
 	repository: "https://github.com/unicode-org/icu",
-	version: "78.2",
-	tag: "icu/78.2",
+	version: "78.3",
+	tag: "icu/78.3",
 	provides: {
 		binaries: [
 			"derb",
@@ -31,7 +31,7 @@ export async function source() {
 	const repo = name;
 	const tag = `release-${version}`;
 	const checksum =
-		"sha256:3e99687b5c435d4b209630e2d2ebb79906c984685e78635078b672e03c89df35";
+		"sha256:3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0";
 	const pkgName = `icu4c-${version}-sources`;
 	const url = `https://github.com/${owner}/${repo}/releases/download/${tag}/${pkgName}.tgz`;
 	return std.download
@@ -119,7 +119,7 @@ export async function test() {
 			gencfu: hasUsage,
 			gencnval: { testArgs: ["--help"], snapshot: "usage" },
 			gendict: hasUsage,
-			icuinfo: { testArgs: [], snapshot: "78.2" },
+			icuinfo: { testArgs: [], snapshot: "78.3" },
 			makeconv: { snapshot: "6.2" },
 			pkgdata: { testArgs: ["--help"], snapshot: "usage:", exitOnErr: false },
 		}),

@@ -10,8 +10,8 @@ export const metadata = {
 	license: "https://gitlab.gnome.org/GNOME/libxml2/-/blob/master/Copyright",
 	name: "libxml2",
 	repository: "https://gitlab.gnome.org/GNOME/libxml2/-/tree/master",
-	version: "2.15.1",
-	tag: "libxml2/2.15.1",
+	version: "2.15.3",
+	tag: "libxml2/2.15.3",
 	provides: {
 		binaries: ["xml2-config", "xmlcatalog", "xmllint"],
 		libraries: ["xml2"],
@@ -21,7 +21,7 @@ export const metadata = {
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:c008bac08fd5c7b4a87f7b8a71f283fa581d80d80ff8d2efd3b26224c39bc54c";
+		"sha256:78262a6e7ac170d6528ebfe2efccdf220191a5af6a6cd61ea4a9a9a5042c7a07";
 	const extension = ".tar.xz";
 	const majorMinor = version.split(".").slice(0, 2).join(".");
 	const base = `https://download.gnome.org/sources/${name}/${majorMinor}`;
@@ -93,7 +93,7 @@ export async function test() {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.binaries(metadata.provides.binaries, {
 			xmlcatalog: { testArgs: ["--verbose"], snapshot: "Catalogs cleanup" },
-			xmllint: { snapshot: "using libxml version 21501" },
+			xmllint: { snapshot: "using libxml version 21503" },
 		}),
 	};
 	return await std.assert.pkg(build, spec);

@@ -5,8 +5,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "texinfo",
 	repository: "https://git.savannah.gnu.org/git/texinfo.git",
-	version: "7.2",
-	tag: "texinfo/7.2",
+	version: "7.3",
+	tag: "texinfo/7.3",
 	provides: {
 		binaries: [
 			"install-info",
@@ -24,7 +24,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:0329d7788fbef113fa82cb80889ca197a344ce0df7646fe000974c5d714363a6";
+		"sha256:51f74eb0f51cfa9873b85264dfdd5d46e8957ec95b88f0fb762f63d9e164c72e";
 	return std.download.fromGnu({
 		name,
 		version,

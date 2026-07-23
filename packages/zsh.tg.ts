@@ -7,8 +7,8 @@ export const metadata = {
 	license: "https://sourceforge.net/p/zsh/code/ci/master/tree/LICENCE",
 	name: "zsh",
 	repository: "https://sourceforge.net/p/zsh/code/ci/master/tree/",
-	version: "5.9",
-	tag: "zsh/5.9",
+	version: "5.9.2",
+	tag: "zsh/5.9.2",
 	provides: {
 		binaries: ["zsh"],
 	},
@@ -16,9 +16,9 @@ export const metadata = {
 
 export async function source() {
 	const { name, version } = metadata;
-	const url = `https://sourceforge.net/projects/zsh/files/zsh/5.9/${name}-${version}.tar.xz/download`;
+	const url = `https://sourceforge.net/projects/zsh/files/zsh/${version}/${name}-${version}.tar.xz/download`;
 	const checksum =
-		"sha256:9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5";
+		"sha256:36fa734374b44783582cec09bcd67822e2f992c779ec1624ab5596df078d2f81";
 	return await std.download
 		.extractArchive({ url, checksum })
 		.then(tg.Directory.expect)

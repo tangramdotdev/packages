@@ -4,15 +4,15 @@ import noFixDepsPatch from "./perl_no_fix_deps.patch" with { type: "file" };
 
 export const metadata = {
 	name: "perl",
-	version: "5.42.0",
-	tag: "perl/5.42.0",
+	version: "5.42.2",
+	tag: "perl/5.42.2",
 };
 
 export async function source(os: string) {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:e093ef184d7f9a1b9797e2465296f55510adb6dab8842b0c3ed53329663096dc";
+		"sha256:9384e8deb75b7b1695e5637971b752281aaecd025a3d5d4734d33c1d0adfee47";
 	const base = `https://www.cpan.org/src/5.0`;
 	const patches = [noFixDepsPatch];
 	return await std.download

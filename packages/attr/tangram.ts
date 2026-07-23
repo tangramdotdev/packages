@@ -1,15 +1,13 @@
 import * as std from "std" with { source: "../std" };
 
-import patches from "./patches" with { type: "directory" };
-
 export const metadata = {
 	homepage: "https://savannah.nongnu.org/projects/attr",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "GPL-2.0-or-later",
 	name: "attr",
 	repository: "https://git.savannah.nongnu.org/cgit/attr.git",
-	version: "2.5.2",
-	tag: "attr/2.5.2",
+	version: "2.6.0",
+	tag: "attr/2.6.0",
 	provides: {
 		binaries: ["attr", "getfattr", "setfattr"],
 		headers: ["attr/attributes.h", "attr/error_context.h", "attr/libattr.h"],
@@ -20,14 +18,13 @@ export const metadata = {
 function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
+		"sha256:6c8a2148a7b85043b68492bce43316b0e2e214fc4e628c7ede078e76e216330b";
 	const base = `https://download.savannah.gnu.org/releases/${name}`;
 	const extension = ".tar.xz";
 	return std.download
 		.extractArchive({ checksum, name, base, version, extension })
 		.then(tg.Directory.expect)
-		.then(std.directory.unwrap)
-		.then((source) => std.patch(source, patches));
+		.then(std.directory.unwrap);
 }
 
 export type Arg = std.autotools.Arg;

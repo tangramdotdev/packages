@@ -9,14 +9,14 @@ export const metadata = {
 	license: "MIT",
 	name: "esbuild",
 	repository: "https://github.com/evanw/esbuild",
-	version: "0.25.2",
-	tag: "esbuild/0.25.2",
+	version: "0.28.1",
+	tag: "esbuild/0.28.1",
 };
 
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:01a6c0a5949e5c2d53e19be52aec152b3186f8bbcf98df6996a20a972a78c330";
+		"sha256:65c756fa87d43178ac4a5242454c2bd0fde325f8ecf77997f8fa4b88f94d5cd2";
 	const owner = "evanw";
 	const repo = name;
 	const tag = `v${version}`;

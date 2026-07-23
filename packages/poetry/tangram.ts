@@ -9,8 +9,8 @@ export const metadata = {
 	license: "MIT",
 	name: "poetry",
 	repository: "https://github.com/python-poetry/poetry",
-	version: "2.3.2",
-	tag: "poetry/2.3.2",
+	version: "2.4.1",
+	tag: "poetry/2.4.1",
 	provides: {
 		binaries: ["poetry"],
 	},
@@ -19,7 +19,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:6e81526ae99a4f07f75174600bfe8b73e74c786dc18c9d1ce1800dd6f807414b";
+		"sha256:189399b80347ecf908244b2564a7b1d92b648fa1fe2a204888f94a472fec0cac";
 	const owner = "python-poetry";
 	const repo = name;
 	const tag = version;

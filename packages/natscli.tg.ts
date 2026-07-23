@@ -6,8 +6,8 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "nats-cli",
 	repository: "https://github.com/nats-io/natscli",
-	version: "0.3.1",
-	tag: "natscli/0.3.1",
+	version: "0.4.0",
+	tag: "natscli/0.4.0",
 	provides: {
 		binaries: ["nats"],
 	},
@@ -19,7 +19,7 @@ export function source() {
 	const repo = "natscli";
 	const tag = `v${version}`;
 	const checksum =
-		"sha256:d543d31802276d185b01248bb08892840f84ab055d68e18c240314e224220456";
+		"sha256:6dc9056aa439f90de2a705983005363ae05f1f9985b81881cbfffa867a344ef6";
 	return std.download.fromGithub({
 		checksum,
 		owner,

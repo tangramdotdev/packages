@@ -18,17 +18,22 @@ export const metadata = {
 	license: "GPL-2.0-or-later",
 	name: "automake",
 	repository: "https://git.savannah.gnu.org/git/automake.git",
-	version: "1.18",
-	tag: "automake/1.18",
+	version: "1.18.1",
+	tag: "automake/1.18.1",
 	provides: {
 		binaries: ["aclocal", "aclocal-1.18", "automake", "automake-1.18"],
 	},
 };
 
+// Automake names its versioned binaries and share directories by API version
+// (major.minor), not by the full release version. The 1.18.1 release still
+// installs `automake-1.18`, `share/automake-1.18`, etc.
+const apiVersion = "1.18";
+
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:5bdccca96b007a7e344c24204b9b9ac12ecd17f5971931a9063bdee4887f4aaf";
+		"sha256:168aa363278351b89af56684448f525a5bce5079d0b6842bd910fdd3f1646887";
 	return std.download.fromGnu({
 		name,
 		version,
@@ -59,7 +64,8 @@ export async function build(...args: std.Args<Arg>) {
 	});
 	const scripts = ["automake", "aclocal"];
 
-	const { version } = metadata;
+	// Use the API version (major.minor) for binary and share-directory names.
+	const version = apiVersion;
 	let binDirectory = tg.directory({});
 
 	const automake = await std.autotools.build(arg);

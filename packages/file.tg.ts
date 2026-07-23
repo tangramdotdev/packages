@@ -6,11 +6,11 @@ import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.darwinsys.com/file/",
-	license: "https://github.com/file/file/blob/FILE5_45/COPYING",
+	license: "https://github.com/file/file/blob/FILE5_48/COPYING",
 	name: "file",
 	repository: "https://github.com/file/file",
-	version: "5.45",
-	tag: "file/5.45",
+	version: "5.48",
+	tag: "file/5.48",
 	provides: {
 		binaries: ["file"],
 		headers: ["magic.h"],
@@ -22,7 +22,7 @@ export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:fc97f51029bb0e2c9f4e3bffefdaf678f0e039ee872b9de5c002a6d09c784d82";
+		"sha256:ed14656883b23a364b4057c05595d93252da9bc473d30106519519d0da141283";
 	const base = `https://astron.com/pub/${name}`;
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })

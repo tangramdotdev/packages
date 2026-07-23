@@ -7,8 +7,8 @@ export const metadata = {
 	license: "MIT",
 	name: "xh",
 	repository: "https://github.com/ducaale/xh",
-	version: "0.25.0",
-	tag: "xh/0.25.0",
+	version: "0.26.1",
+	tag: "xh/0.26.1",
 	provides: {
 		binaries: ["xh"],
 	},
@@ -17,7 +17,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:6145f48cbefbb2bd1aa97ebcc8528d15ada1303e6e80fdd6a4637014f0f1df1c";
+		"sha256:6c4822374d3b9bacfc50719ffb5653a32fd84344e50fd88b499ed8fc9e52198b";
 	const owner = "ducaale";
 	const repo = name;
 	const tag = `v${version}`;

@@ -6,9 +6,9 @@ import cmake from "../cmake.tg.ts";
 import ninja from "../ninja.tg.ts";
 
 export async function source() {
-	const url = `https://github.com/tpoechtrager/apple-libtapi/archive/refs/heads/1300.6.5.zip`;
+	const url = `https://github.com/tpoechtrager/apple-libtapi/archive/593d29141bf176d24021208c75af54a2ef23c38b.zip`;
 	const checksum =
-		"sha256:22615934da56e710a63a44b7bda55d619e1c23a3ee2331661592661acf3b8a88";
+		"sha256:277b9f6498ff209f662ca6b6c2583f3581b37213756ff2d2ea278fbdd3b5d91c";
 	return await std.download
 		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)

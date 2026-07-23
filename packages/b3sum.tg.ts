@@ -6,8 +6,8 @@ export const metadata = {
 	license: "CC0-1.0",
 	name: "b3sum",
 	repository: "https://github.com/BLAKE3-team/BLAKE3",
-	version: "1.8.2",
-	tag: "b3sum/1.8.2",
+	version: "1.8.5",
+	tag: "b3sum/1.8.5",
 	provides: {
 		binaries: ["b3sum"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export function source() {
 	const { version } = metadata;
 	const checksum =
-		"sha256:6b51aefe515969785da02e87befafc7fdc7a065cd3458cf1141f29267749e81f";
+		"sha256:220bd81286e2a0585beac66d41ac3f4c2c33ae8a4e339fc88cf22d5e00514fe9";
 	const owner = "BLAKE3-team";
 	const repo = "blake3";
 	return std.download.fromGithub({

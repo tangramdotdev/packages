@@ -5,8 +5,8 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "dash",
 	repository: "https://git.kernel.org/pub/scm/utils/dash/dash.git",
-	version: "0.5.13",
-	tag: "dash/0.5.13",
+	version: "0.5.13.5",
+	tag: "dash/0.5.13.5",
 	provides: {
 		binaries: ["dash"],
 	},
@@ -15,7 +15,7 @@ export const metadata = {
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:fd8da121e306b27f59330613417b182b8844f11e269531cc4720bf523e3e06d7";
+		"sha256:40090101a2a491f13e901d3d48e90414f26634628b9bfff35ff540363c227a7d";
 	const url = `http://gondor.apana.org.au/~herbert/dash/files/${name}-${version}.tar.gz`;
 	return std.download
 		.extractArchive({ url, checksum })

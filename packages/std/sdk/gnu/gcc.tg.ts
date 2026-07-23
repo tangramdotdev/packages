@@ -3,7 +3,6 @@ import { mergeLibDirs } from "../../sdk.tg.ts";
 import { interpreterName } from "../libc.tg.ts";
 import { defaultGlibcVersion } from "../libc/glibc.tg.ts";
 import * as dependencies from "../dependencies.tg.ts";
-import libgompConstFix from "./gcc-libgomp-const-fix.patch" with { type: "file" };
 import * as std from "../../tangram.ts";
 
 export const metadata = {
@@ -11,8 +10,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",
-	version: "15.2.0",
-	tag: "gcc/15.2.0",
+	version: "16.1.0",
+	tag: "gcc/16.1.0",
 };
 
 /** Produce a GCC source directory with the gmp, mpfr, isl, and mpc sources optionally included. */
@@ -22,13 +21,12 @@ export function source(bundledSources?: boolean) {
 	// Download and unpack the GCC source.
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:438fd996826b0c82485a29da03a72d71d6e3541a83ec702df4271f6fe025d24e";
+		"sha256:50efb4d94c3397aff3b0d61a5abd748b4dd31d9d3f2ab7be05b171d36a510f79";
 	const base = `http://ftpmirror.gnu.org/gnu/${name}/${name}-${version}`;
 	let sourceDir: PromiseLike<tg.Directory> = std.download
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
-		.then(std.directory.unwrap)
-		.then((source) => bootstrap.patch(source, libgompConstFix));
+		.then(std.directory.unwrap);
 
 	// If requested, include the bundled sources as subdirectories.
 	if (bundledSources) {

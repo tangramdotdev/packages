@@ -5,8 +5,8 @@ export const metadata = {
 	license: "GPL-2.0-or-later",
 	name: "libsigsegv",
 	repository: "https://git.savannah.gnu.org/gitweb/?p=libsigsegv.git",
-	version: "2.14",
-	tag: "libsigsegv/2.14",
+	version: "2.15",
+	tag: "libsigsegv/2.15",
 	provides: {
 		libraries: [{ name: "sigsegv", pkgConfigName: false, dylib: false }],
 	},
@@ -15,7 +15,7 @@ export const metadata = {
 function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:cdac3941803364cf81a908499beb79c200ead60b6b5b40cad124fd1e06caa295";
+		"sha256:036855660225cb3817a190fc00e6764ce7836051bacb48d35e26444b8c1729d9";
 
 	return std.download.fromGnu({ name, version, checksum });
 }
