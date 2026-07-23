@@ -202,8 +202,8 @@ TG_VISIBILITY int munmap (void* addr, uint64_t len) {
 	return (int)syscall2(__NR_munmap, (long)addr, (long)len);
 }
 
-TG_VISIBILITY int pread (int fd, void* buf, size_t count, off_t offset) {
-	return (int)syscall4(__NR_pread64, (long)fd, (long)buf, (long)count, (long)offset);
+TG_VISIBILITY int64_t pread (int fd, void* buf, size_t count, off_t offset) {
+	return (int64_t)syscall4(__NR_pread64, (long)fd, (long)buf, (long)count, (long)offset);
 }
 
 TG_VISIBILITY int execve (char* pathname, char** argv, char** envp) {

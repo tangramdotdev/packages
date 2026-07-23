@@ -25,7 +25,7 @@
 
 // Helper to allocate an array of n T.
 #define ALLOC_N(arena, n, T) \
-	(T*)alloc(arena, ((size_t)(n)) * sizeof(T), _Alignof(T))
+	(T*)alloc_n(arena, (size_t)(n), sizeof(T), _Alignof(T))
 
 // Helper to align `m` to `n`.
 #define ALIGN(m, n) \
@@ -50,6 +50,7 @@ struct Segment {
 TG_VISIBILITY void create_arena (Arena* arena, uint64_t page_size);
 TG_VISIBILITY void destroy_arena (Arena* arena);
 TG_VISIBILITY void* alloc (Arena* arena, size_t size, size_t alignment);
+TG_VISIBILITY void* alloc_n (Arena* arena, size_t count, size_t size, size_t alignment);
 TG_VISIBILITY void add_segment (Arena* arena, size_t num_pages);
 
 // util methods that require allocation are defined here.
@@ -87,6 +88,7 @@ TG_VISIBILITY void destroy_arena (Arena* arena) {
 TG_VISIBILITY void* alloc (Arena* arena, size_t size, size_t alignment) {
 	// Sanity check.
 	ABORT_IF((size % alignment) != 0, "internal error: misaligned allocation");
+	ABORT_IF(size > (SIZE_MAX >> 1), "internal error: allocation too large");
 
 	// Compute start/end of the allocation.
 	size_t start = ALIGN(arena->segment->offset, alignment);
@@ -99,7 +101,7 @@ TG_VISIBILITY void* alloc (Arena* arena, size_t size, size_t alignment) {
 		size_t min_num_pages = min_size / arena->page_size;
 
 		// The number of pages we use is the MAX(min_num_pages, DEFAULT_NUM_PAGES).
-		size_t num_pages = min_num_pages < DEFAULT_NUM_PAGES ? DEFAULT_NUM_PAGES : min_size;
+		size_t num_pages = min_num_pages < DEFAULT_NUM_PAGES ? DEFAULT_NUM_PAGES : min_num_pages;
 
 		// Add a new segment.
 		add_segment(arena, num_pages);
@@ -117,6 +119,11 @@ TG_VISIBILITY void* alloc (Arena* arena, size_t size, size_t alignment) {
 
 	// Return the allocated pointer.
 	return (void*)pointer;
+}
+
+TG_VISIBILITY void* alloc_n (Arena* arena, size_t count, size_t size, size_t alignment) {
+	ABORT_IF(size != 0 && count > SIZE_MAX / size, "internal error: array allocation overflow");
+	return alloc(arena, count * size, alignment);
 }
 
 TG_VISIBILITY void add_segment (Arena* arena, size_t num_pages) {
@@ -184,7 +191,7 @@ TG_VISIBILITY String join (Arena* arena, String separator, String* strings, size
 TG_VISIBILITY void u64_to_string (Arena* arena, uint64_t d, String* s) {
 	s->ptr = ALLOC_N(arena, 64, uint8_t);
 	do {
-		append_ch_to_string(s, "012345689"[d % 10], 64);
+		append_ch_to_string(s, "0123456789"[d % 10], 64);
 		d /= 10;
 	} while (d != 0);
 	reverse(s);
@@ -200,7 +207,7 @@ TG_VISIBILITY void double_to_string (Arena* arena, double d, String* s) {
 	ABORT_IF(frac != 0, "only integer numbers are supported");
 	
 	do {
-		append_ch_to_string(s, "012345689"[whole % 10], 64);
+		append_ch_to_string(s, "0123456789"[whole % 10], 64);
 		whole /= 10;
 	} while (whole != 0);
 
