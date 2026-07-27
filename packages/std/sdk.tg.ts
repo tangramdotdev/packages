@@ -947,7 +947,7 @@ export namespace sdk {
 		}
 
 		// Assert the result contains a Tangram manifest, meaning it got automatically wrapped.
-		tg.assert(std.wrap.Manifest.read(compiledProgram));
+		tg.assert((await std.wrap.Manifest.read(compiledProgram)) !== undefined);
 
 		// If we are not cross-compiling, assert we can execute the program and recieve the expected result, without providing the SDK env at runtime.
 		if (!isCross && proxiedLinker) {

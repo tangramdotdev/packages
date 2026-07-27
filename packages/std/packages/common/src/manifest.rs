@@ -292,7 +292,10 @@ impl Manifest {
 			Ok(Some(wrap::Format::Mach64))
 		) {
 			tracing::info!("codesigning binary");
-			let output = tokio::process::Command::new(&*TANGRAM_CODESIGN_PATH)
+			let codesign = TANGRAM_CODESIGN_PATH
+				.as_ref()
+				.ok_or_else(|| tg::error!("missing the codesign binary"))?;
+			let output = tokio::process::Command::new(codesign)
 				.arg("sign")
 				.arg(tempfile.path())
 				.stdout(std::process::Stdio::piped())
@@ -381,7 +384,10 @@ impl Manifest {
 		// Codesign if necessary.
 		if matches!(wrap::detect_format(&path), Ok(Some(wrap::Format::Mach64))) {
 			tracing::info!("codesigning binary");
-			let output = tokio::process::Command::new(&*TANGRAM_CODESIGN_PATH)
+			let codesign = TANGRAM_CODESIGN_PATH
+				.as_ref()
+				.ok_or_else(|| tg::error!("missing the codesign binary"))?;
+			let output = tokio::process::Command::new(codesign)
 				.arg("sign")
 				.arg(temp.path())
 				.stdout(std::process::Stdio::piped())
@@ -632,7 +638,9 @@ static TANGRAM_OBJCOPY_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 		.map(PathBuf::from)
 });
 
-static TANGRAM_CODESIGN_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
-	let path = std::env::var("TANGRAM_CODESIGN_PATH").expect("TANGRAM_CODESIGN_PATH not set");
-	PathBuf::from(path)
+// Only a proxy that targets Darwin sets this.
+static TANGRAM_CODESIGN_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+	std::env::var("TANGRAM_CODESIGN_PATH")
+		.ok()
+		.map(PathBuf::from)
 });

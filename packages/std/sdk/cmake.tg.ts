@@ -171,7 +171,9 @@ export type BuildArg = {
 
 /** Construct a cmake package build target. */
 export async function build(...args: std.Args<BuildArg>) {
-	type Collect = std.args.MakeArrayKeys<BuildArg, "phases">;
+	type Collect = Omit<std.args.MakeArrayKeys<BuildArg, "phases">, "phases"> & {
+		phases: Array<std.phases.Arg>;
+	};
 	const {
 		bootstrap = false,
 		buildDir = "build",
@@ -200,9 +202,14 @@ export async function build(...args: std.Args<BuildArg>) {
 	} = await std.args.apply<BuildArg, Collect>({
 		args,
 		map: async (arg) => {
+			const phases = Array.isArray(arg.phases)
+				? arg.phases
+				: arg.phases !== undefined && arg.phases !== null
+					? [arg.phases]
+					: [];
 			return {
 				...arg,
-				phases: [arg.phases],
+				phases,
 			} as Collect;
 		},
 		reduce: {

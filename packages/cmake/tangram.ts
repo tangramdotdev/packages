@@ -231,13 +231,20 @@ export type ResolvedArg = Omit<
 
 /** Resolve cmake args to a mutable arg object. Returns a BuildArg with build, host, and source guaranteed to be resolved. */
 export async function arg(...args: std.Args<BuildArg>): Promise<ResolvedArg> {
-	type Collect = std.args.MakeArrayKeys<BuildArg, "phases">;
+	type Collect = Omit<std.args.MakeArrayKeys<BuildArg, "phases">, "phases"> & {
+		phases: Array<std.phases.Arg>;
+	};
 	const collect = await std.args.apply<BuildArg, Collect>({
 		args,
 		map: async (arg) => {
+			const phases = Array.isArray(arg.phases)
+				? arg.phases
+				: arg.phases !== undefined && arg.phases !== null
+					? [arg.phases]
+					: [];
 			return {
 				...arg,
-				phases: [arg.phases],
+				phases,
 			} as Collect;
 		},
 		reduce: {

@@ -1074,6 +1074,9 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 		return Ok(library_paths);
 	}
 
+	// Cache the library paths before searching them, so reads do not reassemble blobs.
+	cache_library_paths(&library_paths).await?;
+
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
 	find_transitive_needed_libraries(file, &library_paths, needed_libraries, max_depth, 0).await?;
 	tracing::debug!(?needed_libraries, "post-find");
@@ -1157,22 +1160,38 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 }
 
-/// Produce the set of library paths to be written to the wrapper post-optimization.
-async fn finalize_library_paths<H: BuildHasher + Default>(
-	disallow_missing: bool,
-	library_paths: HashSet<DirectoryWithSubpath, H>,
-	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
-) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
-	// Cache all the library paths.
+/// Cache a set of library paths. Each referent carries its stored token, without which the server
+/// falls back to an index lookup to authorize it.
+async fn cache_library_paths<H: BuildHasher + Default>(
+	library_paths: &HashSet<DirectoryWithSubpath, H>,
+) -> tg::Result<()> {
+	if library_paths.is_empty() {
+		return Ok(());
+	}
 	let artifacts = library_paths
 		.iter()
-		.map(|dir_with_subpath| tg::Referent::with_item(dir_with_subpath.id.clone().into()))
+		.map(|dir_with_subpath| {
+			tg::Referent::with_item_and_token(
+				dir_with_subpath.id.clone().into(),
+				dir_with_subpath.token.clone(),
+			)
+		})
 		.collect();
 	let arg = tg::cache::Arg { artifacts };
 	tracing::debug!("caching libraries");
 	tg::cache::cache(arg)
 		.await
 		.map_err(|error| tg::error!(!error, "failed to cache libraries"))?;
+	Ok(())
+}
+
+/// Produce the set of library paths to be written to the wrapper post-optimization.
+async fn finalize_library_paths<H: BuildHasher + Default>(
+	disallow_missing: bool,
+	library_paths: HashSet<DirectoryWithSubpath, H>,
+	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
+) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
+	cache_library_paths(&library_paths).await?;
 
 	// Warn or error if any required libraries are not included in the set.
 	verify_missing_libraries(disallow_missing, needed_libraries, &library_paths).await?;

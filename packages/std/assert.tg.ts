@@ -273,7 +273,7 @@ export async function runnableBin(arg: RunnableBinArg) {
 		if (file !== undefined) {
 			const kind = await std.file.detectExecutableKind(file);
 			if (kind === "elf" || kind === "mach-o") {
-				const manifest = await wrap.Manifest.read(file);
+				const manifest = await wrap.Manifest.tryRead(file);
 				if (manifest !== undefined) {
 					const deps = await file.dependencyObjects;
 					tg.assert(
@@ -332,8 +332,11 @@ export async function assertFileReferences(
 	tg.assert(fileManifest.interpreter?.kind === interpreterKind);
 	const interpreter = fileManifest.interpreter;
 	const interpreterPath = interpreter.path;
-	const interpreterArtifact =
-		await fileOrSymlinkFromManifestTemplate(interpreterPath);
+	const interpreterArtifact = await fileOrSymlinkFromManifestTemplate(
+		interpreterPath,
+		undefined,
+		file.state.token,
+	);
 	const interpreterId = interpreterArtifact.id;
 	tg.assert(interpreterId);
 	let foundManifest = false;

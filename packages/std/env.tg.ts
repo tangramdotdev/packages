@@ -675,14 +675,18 @@ export async function envObjectFromArtifact(
 			);
 		}
 		// Attempt to read the manifest from the file.
-		const manifest = await std.wrap.Manifest.read(artifact);
+		const manifest = await std.wrap.Manifest.tryRead(artifact);
 		if (!manifest) {
 			// If the file was not a wrapper, throw an error.
 			const artifactId = artifact.id;
 			throw new Error(`Could not read manifest from ${artifactId}.`);
 		}
 		// If the file was a wrapper, return its env.
-		return await wrap.envObjectFromManifestEnv(manifest.env);
+		return await wrap.envObjectFromManifestEnv(
+			manifest.env,
+			undefined,
+			artifact.state.token,
+		);
 	} else if (artifact instanceof tg.Directory) {
 		// Return an env with PATH/CPATH/LIBRARY_PATH according to the contents of the directory.
 		const env: env.EnvObject = {};

@@ -332,9 +332,14 @@ async function ldProxy(arg: LdProxyArg) {
 		})
 		.named("injection");
 
-	// Use the host machine's codesign binary;
-	const codesign = await workspace.rcodesign();
-	await codesign.store();
+	// Only Mach-O outputs get codesigned. The binary runs on the build machine.
+	const codesign =
+		std.triple.os(host) === "darwin"
+			? await workspace.rcodesign(build)
+			: undefined;
+	if (codesign !== undefined) {
+		await codesign.store();
+	}
 
 	// Define environment for the linker proxy.
 	const env = {
@@ -353,7 +358,9 @@ async function ldProxy(arg: LdProxyArg) {
 			arg.interpreter ?? "none",
 		),
 		// Pass artifacts, not IDs, so that they are recorded as dependencies.
-		TANGRAM_CODESIGN_PATH: tg.Mutation.set(codesign),
+		TANGRAM_CODESIGN_PATH: codesign
+			? tg.Mutation.set(codesign)
+			: (tg.Mutation.unset() as tg.Mutation<tg.File>),
 		TANGRAM_WRAPPER_BIN_PATH: tg.Mutation.set(wrapperBin),
 		TANGRAM_WRAPPER_EXE_PATH: tg.Mutation.set(wrapperExe),
 		TANGRAM_OBJCOPY_PATH: objcopy
@@ -409,9 +416,14 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 		host,
 	});
 
-	// Use the host machine's codesign binary.
-	const codesign = await workspace.rcodesign();
-	await codesign.store();
+	// Only Mach-O outputs get codesigned. The binary runs on the build machine.
+	const codesign =
+		std.triple.os(host) === "darwin"
+			? await workspace.rcodesign(build)
+			: undefined;
+	if (codesign !== undefined) {
+		await codesign.store();
+	}
 
 	const envs: std.Args<std.env.Arg> = [
 		{
@@ -419,7 +431,9 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 				tg.File | tg.Symlink | tg.Template
 			>(stripCommand),
 			TANGRAM_WRAPPER_EXE_PATH: tg.Mutation.setIfUnset(hostWrapper),
-			TANGRAM_CODESIGN_PATH: tg.Mutation.setIfUnset(codesign),
+			...(codesign !== undefined
+				? { TANGRAM_CODESIGN_PATH: tg.Mutation.setIfUnset(codesign) }
+				: {}),
 		},
 	];
 	if (runtimeLibraryPath !== undefined) {
@@ -1411,4 +1425,52 @@ export async function testTransitiveDiscovery(target?: string) {
 	await std.assert.stdoutIncludes(output, "Hello from bottom library!");
 
 	return true;
+}
+
+/** Measure the per-link overhead of the linker proxy the way a configure script exercises it. The
+ * gap between the passthrough and full proxy figures is the proxy's own cost. Not part of `test`,
+ * because it reports timings rather than asserting. */
+export async function benchLdProxy() {
+	const buildToolchain = await bootstrap.sdk();
+	const source = await tg.file`
+		#include <stdio.h>
+		int main() {
+			printf("hello\\n");
+			return 0;
+		}`;
+
+	return await std.build`
+		set -e
+		cp ${source} conftest.c
+
+		# The build shell is POSIX sh, so time whole seconds over as many iterations as fit in the
+		# window rather than relying on sub-second formats it does not implement.
+		bench() {
+			label="$1"
+			shift
+			"$@" >/dev/null 2>&1 || true
+			start=$(date +%s)
+			n=0
+			while [ $(( $(date +%s) - start )) -lt 6 ]; do
+				"$@" >/dev/null 2>&1
+				n=$(( n + 1 ))
+			done
+			elapsed=$(( $(date +%s) - start ))
+			echo "$label: $(( elapsed * 1000 / n )) ms/iter ($n iters in ${elapsed}s)"
+		}
+
+		bench "compile only (-c)          " cc -c conftest.c -o conftest.o
+		cc -c conftest.c -o conftest.o
+		bench "link, proxy passthrough    " cc conftest.o -o conftest -Wl,--tg-passthrough
+		bench "link, full proxy           " cc conftest.o -o conftest
+		bench "compile+link, full proxy   " cc conftest.c -o conftest
+
+		echo "=== one traced link ==="
+		TGLD_TRACING=tgld=trace,tangram_std=trace cc conftest.o -o conftest 2>&1 | tail -200
+
+		echo done > ${tg.output}
+	`
+		.bootstrap(true)
+		.env(std.env.arg(buildToolchain, { utils: false }))
+		.then(tg.File.expect);
 }

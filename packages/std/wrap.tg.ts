@@ -10,9 +10,13 @@ export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
 
 /** This module provides the `std.wrap()` function, which can be used to bundle an executable with a predefined environment and arguments, either of which may point to other Tangram artifacts.*/
 
+// Retain authorized objects separately from the token-free manifest.
+export type ManifestReferences = Map<tg.Object.Id, tg.Object>;
+
 /** Wrap an executable. */
 export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
-	const arg = await wrap.arg(...args);
+	const references: ManifestReferences = new Map();
+	const arg = await wrap.argWithReferences(references, ...args);
 	tg.assert(
 		arg.executable !== undefined && arg.executable !== null,
 		"No executable was provided.",
@@ -20,7 +24,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 
 	// Check if the executable is already a wrapper and get its manifest.
 	// Only ELF and Mach-O binaries can have embedded manifests.
-	let existingManifest = undefined;
+	let detectedManifest = undefined;
 	let binary = undefined;
 	if (
 		arg.executable instanceof tg.File ||
@@ -33,17 +37,23 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		if (f instanceof tg.File) {
 			const kind = await std.file.detectExecutableKind(f);
 			if (kind === "elf" || kind === "mach-o") {
-				existingManifest = await wrap.Manifest.read(f);
-				if (existingManifest && kind === "elf") {
+				detectedManifest = await wrap.Manifest.tryRead(f);
+				if (detectedManifest !== undefined) {
+					for (const dependency of manifestDependencies(detectedManifest)) {
+						inheritManifestReference(dependency, references, f.state.token);
+					}
+				}
+				if (detectedManifest && kind === "elf") {
 					binary = f;
 				}
 			}
 		}
 	}
+	const existingManifest = existingManifestForWrap(arg.merge, detectedManifest);
 
 	const executable =
 		existingManifest?.executable ??
-		(await manifestExecutableFromArg(arg.executable));
+		(await manifestExecutableFromArg(arg.executable, references));
 	const host = arg.host ?? std.triple.host();
 	std.triple.assert(host);
 
@@ -58,53 +68,60 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	// - there is no interpreter arg and no original manifest.
 	let manifestInterpreter = undefined;
 	if (arg.interpreter) {
-		manifestInterpreter = await manifestInterpreterFromWrapArgObject({
-			...(arg.buildToolchain !== undefined
-				? { buildToolchain: arg.buildToolchain }
-				: {}),
-			build: buildTriple,
-			host,
-			interpreter: arg.interpreter,
-			...(arg.libraryPaths !== undefined && arg.libraryPaths !== null
-				? { libraryPaths: arg.libraryPaths }
-				: {}),
-			...(arg.libraryPathStrategy !== undefined &&
-			arg.libraryPathStrategy !== null
-				? { libraryPathStrategy: arg.libraryPathStrategy }
-				: {}),
-			...(arg.preloads !== undefined && arg.preloads !== null
-				? { preloads: arg.preloads }
-				: {}),
-		});
+		manifestInterpreter = await manifestInterpreterFromWrapArgObject(
+			{
+				...(arg.buildToolchain !== undefined
+					? { buildToolchain: arg.buildToolchain }
+					: {}),
+				build: buildTriple,
+				host,
+				interpreter: arg.interpreter,
+				...(arg.libraryPaths !== undefined && arg.libraryPaths !== null
+					? { libraryPaths: arg.libraryPaths }
+					: {}),
+				...(arg.libraryPathStrategy !== undefined &&
+				arg.libraryPathStrategy !== null
+					? { libraryPathStrategy: arg.libraryPathStrategy }
+					: {}),
+				...(arg.preloads !== undefined && arg.preloads !== null
+					? { preloads: arg.preloads }
+					: {}),
+			},
+			references,
+		);
 	} else if (existingManifest?.interpreter) {
 		manifestInterpreter = existingManifest?.interpreter;
 	} else if (arg.executable && typeof arg.executable !== "number") {
-		manifestInterpreter = await manifestInterpreterFromWrapArgObject({
-			...(arg.buildToolchain !== undefined
-				? { buildToolchain: arg.buildToolchain }
-				: {}),
-			build: buildTriple,
-			host,
-			executable: arg.executable,
-			...(arg.libraryPaths !== undefined && arg.libraryPaths !== null
-				? { libraryPaths: arg.libraryPaths }
-				: {}),
-			...(arg.libraryPathStrategy !== undefined &&
-			arg.libraryPathStrategy !== null
-				? { libraryPathStrategy: arg.libraryPathStrategy }
-				: {}),
-			...(arg.preloads !== undefined && arg.preloads !== null
-				? { preloads: arg.preloads }
-				: {}),
-		});
+		manifestInterpreter = await manifestInterpreterFromWrapArgObject(
+			{
+				...(arg.buildToolchain !== undefined
+					? { buildToolchain: arg.buildToolchain }
+					: {}),
+				build: buildTriple,
+				host,
+				executable: arg.executable,
+				...(arg.libraryPaths !== undefined && arg.libraryPaths !== null
+					? { libraryPaths: arg.libraryPaths }
+					: {}),
+				...(arg.libraryPathStrategy !== undefined &&
+				arg.libraryPathStrategy !== null
+					? { libraryPathStrategy: arg.libraryPathStrategy }
+					: {}),
+				...(arg.preloads !== undefined && arg.preloads !== null
+					? { preloads: arg.preloads }
+					: {}),
+			},
+			references,
+		);
 	}
 
 	// Use existing manifest values as defaults if we're wrapping a wrapper
 	const manifestEnv = await wrap.manifestEnvFromEnvObject(
 		arg.env as std.env.EnvObject,
+		references,
 	);
 	const manifestArgs = await Promise.all(
-		(arg.args ?? []).map(manifestTemplateFromArg),
+		(arg.args ?? []).map((arg) => manifestTemplateFromArg(arg, references)),
 	);
 
 	const manifestEnvValue =
@@ -134,7 +151,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 
 	// If there's an existing binary, use it.
 	if (binary) {
-		return wrap.Manifest.write(binary, manifest);
+		return wrap.Manifest.write(binary, manifest, references);
 	} else {
 		// We can't wrap a non-existent binary with a manifest specifying an address.
 		if (manifest.executable.kind === "address") {
@@ -142,10 +159,10 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		}
 		// Use tg.build for the wrapper so the call is deduplicated across
 		// concurrent wrap() invocations and can cache-hit from a remote.
-		let wrapper = await tg
+		const wrapper = await tg
 			.build(workspace.wrapper, { build, host })
 			.named("default wrapper");
-		return wrap.Manifest.write(wrapper, manifest);
+		return wrap.Manifest.write(wrapper, manifest, references);
 	}
 }
 
@@ -163,9 +180,6 @@ export namespace wrap {
 
 		/** The build toolchain to use to produce components. Will use the default for the system if not provided. */
 		buildToolchain?: std.env.Arg | null;
-
-		/** Experimental: embed the manifest and wrapper logic into the binary. */
-		embed?: boolean;
 
 		/** Environment variables to bind to the wrapper. If the executable is wrapped, they will be merged. */
 		env?: std.env.Arg | null;
@@ -281,6 +295,14 @@ export namespace wrap {
 	export async function arg(
 		...args: std.Args<wrap.Arg>
 	): Promise<wrap.ArgObject> {
+		return argWithReferences(new Map(), ...args);
+	}
+
+	/** @internal Process variadic arguments while retaining authorized manifest references. */
+	export async function argWithReferences(
+		references: ManifestReferences,
+		...args: std.Args<wrap.Arg>
+	): Promise<wrap.ArgObject> {
 		let {
 			args: args_ = [],
 			build: build_,
@@ -371,6 +393,7 @@ export namespace wrap {
 		// If the executable arg is a wrapper, obtain its manifest.
 		const existingManifest =
 			await wrap.existingManifestFromExecutableArg(executable);
+		const token = tg.Artifact.is(executable) ? executable.state.token : null;
 
 		// Determine whether to try to merge this wrapper with an existing one. If the user specified `true`, only honor if an existing manifest was found.
 		const merge = merge_ && existingManifest !== undefined;
@@ -386,11 +409,19 @@ export namespace wrap {
 				);
 			}
 
-			envs.push(await wrap.envObjectFromManifestEnv(existingManifest.env));
+			envs.push(
+				await wrap.envObjectFromManifestEnv(
+					existingManifest.env,
+					references,
+					token,
+				),
+			);
 
 			// Merge the existing interpreter with any new interpreter provided
 			const existingInterpreter = await wrap.interpreterFromManifestInterpreter(
 				existingManifest.interpreter,
+				references,
+				token,
 			);
 			if (interpreter !== undefined && interpreter !== null) {
 				const newInterpreter = await interpreterFromArg(
@@ -411,14 +442,17 @@ export namespace wrap {
 			if (existingManifest.executable.kind !== "address") {
 				executable = await wrap.executableFromManifestExecutable(
 					existingManifest.executable,
+					references,
+					token,
 				);
 			}
 
-			args_ = (args_ ?? []).concat(
-				await Promise.all(
-					(existingManifest.args ?? []).map(templateFromManifestTemplate),
+			const existingArgs = await Promise.all(
+				(existingManifest.args ?? []).map((arg) =>
+					templateFromManifestTemplate(arg, references, token),
 				),
 			);
+			args_ = mergeWrapArgs(args_ ?? [], existingArgs);
 		}
 
 		const env = await std.env.arg(...envs, env_, { utils: false });
@@ -434,7 +468,7 @@ export namespace wrap {
 			}
 		}
 
-		return {
+		const output = {
 			args: args_,
 			build,
 			...(buildToolchain !== undefined ? { buildToolchain } : {}),
@@ -447,6 +481,8 @@ export namespace wrap {
 			...(libraryPathStrategy !== undefined ? { libraryPathStrategy } : {}),
 			preloads,
 		};
+
+		return output;
 	}
 
 	export type DefaultShellArg = {
@@ -538,17 +574,23 @@ export namespace wrap {
 
 	export async function envObjectFromManifestEnv(
 		mutation?: wrap.Manifest.Mutation,
+		references?: ManifestReferences,
+		token?: tg.Grant.Token | null,
 	): Promise<std.env.EnvObject> {
-		const ret: std.env.EnvObject = {};
-		if (mutation?.kind !== "set") {
-			return ret;
+		if (mutation === undefined || mutation.kind === "unset") {
+			return {};
 		}
-		tg.assert(mutation.kind === "set", "Malformed env, expected set or unset.");
-		return envObjectFromMapValue(mutation.value);
+		tg.assert(
+			mutation.kind === "set",
+			"malformed env, expected a set or unset mutation",
+		);
+		return envObjectFromMapValue(mutation.value, references, token);
 	}
 
 	export async function interpreterFromManifestInterpreter(
 		manifestInterpreter?: wrap.Manifest.Interpreter,
+		references?: ManifestReferences,
+		token?: tg.Grant.Token | null,
 	): Promise<wrap.Interpreter | undefined> {
 		if (manifestInterpreter === undefined) {
 			return undefined;
@@ -560,61 +602,35 @@ export namespace wrap {
 					kind,
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
+						references,
+						token,
 					),
 					...(manifestInterpreter.args === undefined
 						? {}
 						: {
 								args: await Promise.all(
-									manifestInterpreter.args.map(templateFromManifestTemplate),
+									manifestInterpreter.args.map((arg) =>
+										templateFromManifestTemplate(arg, references, token),
+									),
 								),
 							}),
 				};
 			}
-			case "ld-linux": {
-				return {
-					kind,
-					executable: await fileOrSymlinkFromManifestTemplate(
-						manifestInterpreter.path,
-					),
-					...(manifestInterpreter.libraryPaths === undefined
-						? {}
-						: {
-								libraryPaths: await Promise.all(
-									manifestInterpreter.libraryPaths.map(
-										templateFromManifestTemplate,
-									),
-								),
-							}),
-					...(manifestInterpreter.preloads === undefined
-						? {}
-						: {
-								preloads: await Promise.all(
-									manifestInterpreter.preloads.map(
-										fileOrSymlinkFromManifestTemplate,
-									),
-								),
-							}),
-					...(manifestInterpreter.args === undefined
-						? {}
-						: {
-								args: await Promise.all(
-									manifestInterpreter.args.map(templateFromManifestTemplate),
-								),
-							}),
-				};
-			}
+			case "ld-linux":
 			case "ld-musl": {
 				return {
 					kind,
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
+						references,
+						token,
 					),
 					...(manifestInterpreter.libraryPaths === undefined
 						? {}
 						: {
 								libraryPaths: await Promise.all(
-									manifestInterpreter.libraryPaths.map(
-										templateFromManifestTemplate,
+									manifestInterpreter.libraryPaths.map((arg) =>
+										templateFromManifestTemplate(arg, references, token),
 									),
 								),
 							}),
@@ -622,8 +638,8 @@ export namespace wrap {
 						? {}
 						: {
 								preloads: await Promise.all(
-									manifestInterpreter.preloads.map(
-										fileOrSymlinkFromManifestTemplate,
+									manifestInterpreter.preloads.map((arg) =>
+										fileOrSymlinkFromManifestTemplate(arg, references, token),
 									),
 								),
 							}),
@@ -631,7 +647,9 @@ export namespace wrap {
 						? {}
 						: {
 								args: await Promise.all(
-									manifestInterpreter.args.map(templateFromManifestTemplate),
+									manifestInterpreter.args.map((arg) =>
+										templateFromManifestTemplate(arg, references, token),
+									),
 								),
 							}),
 				};
@@ -643,8 +661,8 @@ export namespace wrap {
 						? {}
 						: {
 								libraryPaths: await Promise.all(
-									manifestInterpreter.libraryPaths.map(
-										templateFromManifestTemplate,
+									manifestInterpreter.libraryPaths.map((arg) =>
+										templateFromManifestTemplate(arg, references, token),
 									),
 								),
 							}),
@@ -652,8 +670,8 @@ export namespace wrap {
 						? {}
 						: {
 								preloads: await Promise.all(
-									manifestInterpreter.preloads.map(
-										fileOrSymlinkFromManifestTemplate,
+									manifestInterpreter.preloads.map((arg) =>
+										fileOrSymlinkFromManifestTemplate(arg, references, token),
 									),
 								),
 							}),
@@ -684,7 +702,7 @@ export namespace wrap {
 			if (f instanceof tg.File) {
 				const kind = await std.file.detectExecutableKind(f);
 				if (kind === "elf" || kind === "mach-o") {
-					const manifest = await wrap.Manifest.read(f);
+					const manifest = await wrap.Manifest.tryRead(f);
 					if (manifest) {
 						ret = manifest;
 					}
@@ -729,31 +747,14 @@ export namespace wrap {
 					...(args.length > 0 ? { args } : {}),
 				};
 			}
-			case "ld-linux": {
-				const existing = existingInterpreter as wrap.LdLinuxInterpreter;
-				const new_ = newInterpreter as wrap.LdLinuxInterpreter;
-				// Concatenate libraryPaths, preloads, and args arrays.
-				const libraryPaths = [
-					...(existing.libraryPaths ?? []),
-					...(new_.libraryPaths ?? []),
-				];
-				const preloads = [
-					...(existing.preloads ?? []),
-					...(new_.preloads ?? []),
-				];
-				const args = [...(existing.args ?? []), ...(new_.args ?? [])];
-				return {
-					kind,
-					// New executable takes precedence.
-					executable: new_.executable ?? existing.executable,
-					...(libraryPaths.length > 0 ? { libraryPaths } : {}),
-					...(preloads.length > 0 ? { preloads } : {}),
-					...(args.length > 0 ? { args } : {}),
-				};
-			}
+			case "ld-linux":
 			case "ld-musl": {
-				const existing = existingInterpreter as wrap.LdMuslInterpreter;
-				const new_ = newInterpreter as wrap.LdMuslInterpreter;
+				const existing = existingInterpreter as
+					| wrap.LdLinuxInterpreter
+					| wrap.LdMuslInterpreter;
+				const new_ = newInterpreter as
+					| wrap.LdLinuxInterpreter
+					| wrap.LdMuslInterpreter;
 				// Concatenate libraryPaths, preloads, and args arrays.
 				const libraryPaths = [
 					...(existing.libraryPaths ?? []),
@@ -799,11 +800,21 @@ export namespace wrap {
 
 	export async function executableFromManifestExecutable(
 		manifestExecutable: wrap.Manifest.Executable,
+		references?: ManifestReferences,
+		token?: tg.Grant.Token | null,
 	): Promise<number | tg.Template | tg.File | tg.Symlink> {
 		if (manifestExecutable.kind === "content") {
-			return templateFromManifestTemplate(manifestExecutable.value);
+			return templateFromManifestTemplate(
+				manifestExecutable.value,
+				references,
+				token,
+			);
 		} else if (manifestExecutable.kind === "path") {
-			return fileOrSymlinkFromManifestTemplate(manifestExecutable.value);
+			return fileOrSymlinkFromManifestTemplate(
+				manifestExecutable.value,
+				references,
+				token,
+			);
 		} else {
 			return manifestExecutable.value;
 		}
@@ -811,8 +822,9 @@ export namespace wrap {
 
 	export async function manifestEnvFromEnvObject(
 		envObject: std.env.EnvObject,
+		references?: ManifestReferences,
 	): Promise<wrap.Manifest.Mutation | undefined> {
-		const value = await manifestValueFromValue(envObject);
+		const value = await manifestValueFromValue(envObject, references);
 		tg.assert(
 			!Array.isArray(value),
 			`Expected a single value, but got an array: ${value}`,
@@ -848,7 +860,7 @@ export namespace wrap {
 				`Cannot determine needed libraries for ${file.id}: not a binary file (detected ${kind}).`,
 			);
 		}
-		const manifest = await wrap.Manifest.read(file);
+		const manifest = await wrap.Manifest.tryRead(file);
 		if (!manifest) {
 			await file.store();
 			throw new Error(
@@ -874,6 +886,8 @@ export namespace wrap {
 		tg.assert(manifest.executable.kind !== "address");
 		const wrappedExecutableFile = await fileOrSymlinkFromManifestTemplate(
 			manifest.executable.value,
+			undefined,
+			file.state.token,
 		);
 		tg.assert(
 			wrappedExecutableFile instanceof tg.File,
@@ -971,34 +985,45 @@ export namespace wrap {
 			| { kind: "map"; value: { [key: string]: Manifest.Value } }
 			| Array<Manifest.Value>;
 
-		// The non-serializeable type of a normalized env.
-		export type Env = tg.Mutation<std.env.EnvObject>;
-
 		export async function read(
 			file: tg.File,
 		): Promise<wrap.Manifest | undefined> {
+			const manifestFile = await tg
+				.build({
+					executable: workspace.wrap({}),
+					args: ["read", tg`${file}`, "-o", tg.output],
+					env: { RUST_BACKTRACE: "full" },
+				})
+				.named("read manifest")
+				.then(tg.File.expect);
+			const manifestBytes = await manifestFile.bytes;
+			const manifestString = tg.encoding.utf8.decode(manifestBytes);
+			const output = tg.encoding.json.decode(
+				manifestString,
+			) as workspace.WrapOutput;
+
+			return output.manifest;
+		}
+
+		export async function tryRead(
+			file: tg.File,
+		): Promise<wrap.Manifest | undefined> {
 			try {
-				const manifestFile = await tg
-					.build({
-						executable: workspace.wrap({}),
-						args: ["read", tg`${file}`, "-o", tg.output],
-						env: { RUST_BACKTRACE: "full" },
-					})
-					.named("read manifest")
-					.then(tg.File.expect);
-				const manifestBytes = await manifestFile.bytes;
-				const manifestString = tg.encoding.utf8.decode(manifestBytes);
-				const output = tg.encoding.json.decode(
-					manifestString,
-				) as workspace.WrapOutput;
-				return output.manifest;
-			} catch (e) {
+				return await read(file);
+			} catch (_) {
 				return undefined;
 			}
 		}
 
 		/** Write a manifest to a file. */
-		export async function write(file: tg.File, manifest: wrap.Manifest) {
+		export async function write(
+			file: tg.File,
+			manifest: wrap.Manifest,
+			references: ManifestReferences,
+		) {
+			// Validate the manifest references.
+			await validateManifestReferences(manifest, references);
+
 			// Serialize the manifest.
 			const manifestBytes = tg.encoding.utf8.encode(
 				tg.encoding.json.encode(manifest),
@@ -1034,22 +1059,15 @@ export namespace wrap {
 					.then(tg.File.expect);
 			}
 
-			// Collect the manifest references.
-			const dependencies_ = new Set<tg.Object.Id>();
-			for await (const dependencies of manifestDependencies(manifest)) {
-				dependencies_.add(dependencies.id);
-			}
 			const fileDependencies = await file.dependencyObjects;
 			await Promise.all(
-				fileDependencies.map(async (reference) => {
-					await reference.store();
-					dependencies_.add(reference.id);
-				}),
+				fileDependencies.map((reference) =>
+					addManifestReference(references, reference),
+				),
 			);
 			const dependencies: { [reference: string]: tg.Referent<tg.Object> } = {};
-			for (const dependency of dependencies_) {
-				const item = tg.Object.withId(dependency);
-				dependencies[dependency] = { item, options: {} };
+			for (const [id, item] of references) {
+				dependencies[id] = { item, options: {} };
 			}
 
 			// Create the file.
@@ -1062,6 +1080,68 @@ export namespace wrap {
 	}
 }
 
+async function validateManifestReferences(
+	manifest: wrap.Manifest,
+	references: ManifestReferences,
+): Promise<void> {
+	for (const dependency of manifestDependencies(manifest)) {
+		const reference = references.get(dependency.id);
+		if (reference === undefined) {
+			throw new Error(
+				`missing an authorized manifest reference for ${dependency.id}`,
+			);
+		}
+		await reference.store();
+	}
+}
+
+async function addManifestReference(
+	references: ManifestReferences,
+	object: tg.Object,
+): Promise<void> {
+	await object.store();
+	setManifestReference(references, object);
+}
+
+function setManifestReference(
+	references: ManifestReferences,
+	object: tg.Object,
+): void {
+	const existing = references.get(object.id);
+	if (
+		existing === undefined ||
+		(existing.state.token === null && object.state.token !== null)
+	) {
+		references.set(object.id, object);
+	}
+}
+
+function inheritManifestReference<T extends tg.Object>(
+	object: T,
+	references?: ManifestReferences,
+	token?: tg.Grant.Token | null,
+): T {
+	tg.Object.inheritToken(object, token ?? null);
+	if (references !== undefined) {
+		setManifestReference(references, object);
+	}
+	return object;
+}
+
+function existingManifestForWrap(
+	merge: boolean | undefined,
+	existingManifest: wrap.Manifest | undefined,
+): wrap.Manifest | undefined {
+	return merge ? existingManifest : undefined;
+}
+
+function mergeWrapArgs(
+	newArgs: Array<tg.Template.Arg>,
+	existingArgs: Array<tg.Template.Arg>,
+): Array<tg.Template.Arg> {
+	return existingArgs.concat(newArgs);
+}
+
 async function needsCodesign(file: tg.File): Promise<boolean> {
 	const bytes = await file.read({ length: 4 });
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -1069,21 +1149,18 @@ async function needsCodesign(file: tg.File): Promise<boolean> {
 	const magicNumbers = [
 		0xbfbafeca, 0xfeedface, 0xcefaedfe, 0xfeedfacf, 0xcffaedfe,
 	];
-	return magicNumbers.find((num) => num === magic) !== undefined;
+	return magicNumbers.includes(magic);
 }
 
 function isArgObject(arg: unknown): arg is wrap.ArgObject {
 	return (
 		typeof arg === "object" &&
-		!(
-			arg instanceof tg.File ||
-			arg instanceof tg.Symlink ||
-			arg instanceof tg.Template
-		)
+		arg !== null &&
+		!Array.isArray(arg) &&
+		!tg.Object.is(arg) &&
+		!(arg instanceof tg.Template)
 	);
 }
-
-const MANIFEST_VERSION_0 = 0;
 
 async function manifestExecutableFromArg(
 	arg:
@@ -1093,6 +1170,7 @@ async function manifestExecutableFromArg(
 		| tg.File
 		| tg.Symlink
 		| wrap.Manifest.Executable,
+	references?: ManifestReferences,
 ): Promise<wrap.Manifest.Executable> {
 	if (typeof arg === "number") {
 		return {
@@ -1102,7 +1180,7 @@ async function manifestExecutableFromArg(
 	} else if (isManifestExecutable(arg)) {
 		return arg;
 	} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
-		const value = await manifestTemplateFromArg(arg);
+		const value = await manifestTemplateFromArg(arg, references);
 		tg.assert(value);
 		return {
 			kind: "path",
@@ -1111,7 +1189,7 @@ async function manifestExecutableFromArg(
 	} else if (typeof arg === "string" || arg instanceof tg.Template) {
 		return {
 			kind: "content",
-			value: await manifestTemplateFromArg(arg),
+			value: await manifestTemplateFromArg(arg, references),
 		};
 	} else {
 		return tg.unreachable();
@@ -1124,7 +1202,7 @@ function isManifestExecutable(arg: unknown): arg is wrap.Manifest.Executable {
 		arg !== null &&
 		typeof arg === "object" &&
 		"kind" in arg &&
-		(arg.kind === "path" || arg.kind === "content")
+		(arg.kind === "address" || arg.kind === "path" || arg.kind === "content")
 	);
 }
 
@@ -1162,6 +1240,7 @@ async function getBuildToolchain(
 /** Produce the manifest interpreter object given a set of parameters. */
 async function manifestInterpreterFromWrapArgObject(
 	arg: ManifestInterpreterArg,
+	references?: ManifestReferences,
 ): Promise<wrap.Manifest.Interpreter | undefined> {
 	let interpreter = arg.interpreter
 		? await interpreterFromArg(
@@ -1202,13 +1281,14 @@ async function manifestInterpreterFromWrapArgObject(
 	}
 
 	return interpreter
-		? manifestInterpreterFromWrapInterpreter(interpreter)
+		? manifestInterpreterFromWrapInterpreter(interpreter, references)
 		: undefined;
 }
 
 /** Serialize an interpreter into its manifest form. */
 async function manifestInterpreterFromWrapInterpreter(
 	interpreter: wrap.Interpreter,
+	references?: ManifestReferences,
 ): Promise<wrap.Manifest.Interpreter> {
 	// Process each field present in the incoming object.
 	const { kind } = interpreter;
@@ -1217,22 +1297,34 @@ async function manifestInterpreterFromWrapInterpreter(
 	const [path, libraryPaths, preloads, args] = await Promise.all([
 		// Only process executable if it exists
 		"executable" in interpreter
-			? manifestTemplateFromArg(interpreter.executable)
+			? manifestTemplateFromArg(interpreter.executable, references)
 			: Promise.resolve(undefined),
 
 		// Only process libraryPaths if it exists
 		"libraryPaths" in interpreter && interpreter.libraryPaths !== undefined
-			? Promise.all(interpreter.libraryPaths.map(manifestTemplateFromArg))
+			? Promise.all(
+					interpreter.libraryPaths.map((arg) =>
+						manifestTemplateFromArg(arg, references),
+					),
+				)
 			: Promise.resolve(undefined),
 
 		// Only process preloads if it exists
 		"preloads" in interpreter && interpreter.preloads !== undefined
-			? Promise.all(interpreter.preloads.map(manifestTemplateFromArg))
+			? Promise.all(
+					interpreter.preloads.map((arg) =>
+						manifestTemplateFromArg(arg, references),
+					),
+				)
 			: Promise.resolve(undefined),
 
 		// Only process args if it exists
 		"args" in interpreter && interpreter.args !== undefined
-			? Promise.all(interpreter.args.map(manifestTemplateFromArg))
+			? Promise.all(
+					interpreter.args.map((arg) =>
+						manifestTemplateFromArg(arg, references),
+					),
+				)
 			: Promise.resolve(undefined),
 	]);
 
@@ -1300,61 +1392,11 @@ async function interpreterFromArg(
 	tg.assert("kind" in arg);
 	const kind = arg.kind;
 	switch (kind) {
-		case "ld-linux": {
-			const libraryPaths = arg.libraryPaths;
-			const args = arg.args;
-			const preloads = arg.preloads ?? [];
-
-			// Find the artifact for the interpreter executable.
-			const executable =
-				arg.executable instanceof tg.Symlink
-					? await arg.executable.resolve()
-					: arg.executable;
-			if (!executable || executable instanceof tg.Directory) {
-				throw new Error("Could not resolve the symlink to the interpreter.");
-			}
-			tg.File.assert(executable);
-			const interpreterMetadata = await std.file.executableMetadata(executable);
-			if (interpreterMetadata.format !== "elf") {
-				return tg.unreachable(
-					"Cannot build an ld-linux interpreter for a non-ELF executable.",
-				);
-			}
-
-			// If no preload is defined, add the default injection preload.
-			if (preloads.length === 0) {
-				const arch = interpreterMetadata.arch;
-				const host = `${arch}-unknown-linux-gnu`;
-				const detectedBuild = std.triple.host();
-				const build = buildArg ?? detectedBuild;
-				const buildToolchain = await getBuildToolchain(
-					buildToolchainArg,
-					build,
-					host,
-				);
-				const injectionLibrary = await tg
-					.build(injection.injection, {
-						buildToolchain,
-						build,
-						host,
-					})
-					.named("injection");
-
-				preloads.push(injectionLibrary);
-			}
-
-			return {
-				kind,
-				executable,
-				...(libraryPaths !== undefined ? { libraryPaths } : {}),
-				preloads,
-				...(args !== undefined ? { args } : {}),
-			};
-		}
+		case "ld-linux":
 		case "ld-musl": {
 			const libraryPaths = arg.libraryPaths;
 			const args = arg.args;
-			const preloads = arg.preloads ?? [];
+			const preloads = [...(arg.preloads ?? [])];
 
 			// Find the artifact for the interpreter executable.
 			const executable =
@@ -1368,14 +1410,17 @@ async function interpreterFromArg(
 			const interpreterMetadata = await std.file.executableMetadata(executable);
 			if (interpreterMetadata.format !== "elf") {
 				return tg.unreachable(
-					"Cannot build an ld-musl interpreter for a non-ELF executable.",
+					`Cannot build an ${kind} interpreter for a non-ELF executable.`,
 				);
 			}
 
 			// If no preload is defined, add the default injection preload.
 			if (preloads.length === 0) {
 				const arch = interpreterMetadata.arch;
-				const host = `${arch}-linux-musl`;
+				const host =
+					kind === "ld-linux"
+						? `${arch}-unknown-linux-gnu`
+						: `${arch}-linux-musl`;
 				const detectedBuild = std.triple.host();
 				const build = buildArg ?? detectedBuild;
 				const buildToolchain = await getBuildToolchain(
@@ -1403,7 +1448,7 @@ async function interpreterFromArg(
 		}
 		case "dyld": {
 			const libraryPaths = arg.libraryPaths;
-			const preloads = arg.preloads ?? [];
+			const preloads = [...(arg.preloads ?? [])];
 
 			// If no preload is defined, add the default injection preload.
 			if (preloads.length === 0) {
@@ -1645,22 +1690,20 @@ async function optimizeLibraryPaths(
 	let executable = arg.executable;
 
 	// Set up the initial set of paths.
-	const paths = interpreter.libraryPaths ?? [];
-
-	// If there are additional library paths, add them to the interpreter.
-	if (additionalLibraryPaths.length > 0) {
-		paths.push(...additionalLibraryPaths);
-	}
+	const paths = [
+		...(interpreter.libraryPaths ?? []),
+		...additionalLibraryPaths,
+	];
+	const output = { ...interpreter, libraryPaths: paths };
 
 	if (strategy === "none") {
-		interpreter.libraryPaths = paths;
-		return interpreter;
+		return output;
 	}
 
 	// If we're using the default strategy, optimize the paths and return before analyzing the executable.
 	if (strategy === "unfilteredIsolate") {
-		interpreter.libraryPaths = await separateLibraries(paths);
-		return interpreter;
+		output.libraryPaths = await separateLibraries(paths);
+		return output;
 	}
 
 	// Discover the containing directories of all transitively needed libraries.
@@ -1676,64 +1719,60 @@ async function optimizeLibraryPaths(
 		executable = resolvedArg;
 	}
 
-	// Prepare to map needed libraries to their locations.
-	let neededLibraries = executable
-		? await getInitialNeededLibraries(executable)
-		: new Map();
-
 	// Produce a set of the available library paths as directories with optional subpaths.
 	const libraryPathSet = await createLibraryPathSet(paths);
 
 	// Find any transitively needed libraries in the set and record their location.
-	neededLibraries = executable
-		? await findTransitiveNeededLibraries(
-				executable,
-				libraryPathSet,
-				neededLibraries,
-			)
+	const neededLibraries = executable
+		? await findTransitiveNeededLibraries(executable, libraryPathSet)
 		: new Map();
 
 	// All optimization strategies required filtering first.
-	const filtereredNeededLibraries: Map<string, DirWithSubpath> = new Map();
-	neededLibraries.forEach((val, key) => {
-		if (val !== undefined) {
-			filtereredNeededLibraries.set(key, val);
+	const filteredNeededLibraries: Map<string, DirWithSubpath> = new Map();
+	neededLibraries.forEach((referent, name) => {
+		if (referent !== undefined) {
+			filteredNeededLibraries.set(name, referent);
 		}
 	});
+	const filteredLibraryPathSet = new Set(filteredNeededLibraries.values());
 	if (strategy === "filter") {
-		return interpreter;
+		output.libraryPaths = await Promise.all(
+			[...filteredLibraryPathSet].map(templateArgFromDirWithSubpath),
+		);
+		return output;
 	}
 
 	switch (strategy) {
 		case "resolve": {
-			interpreter.libraryPaths = await resolvePaths(libraryPathSet);
+			output.libraryPaths = await resolvePaths(filteredLibraryPathSet);
 			break;
 		}
 		case "isolate": {
 			const isolatedPaths: Array<tg.Directory> = [];
-			for (let [name, referent] of filtereredNeededLibraries.entries()) {
-				let innerDir = await getInner(referent);
-				let libraryFile = await innerDir.tryGet(name);
+			for (const [name, referent] of filteredNeededLibraries) {
+				const innerDir = await getInner(referent);
+				const libraryFile = await innerDir.tryGet(name);
 				if (libraryFile !== undefined) {
 					tg.File.assert(libraryFile);
-					let isolatedDir = await tg.directory({ name: libraryFile });
+					const isolatedDir = await tg.directory({ name: libraryFile });
 					isolatedPaths.push(isolatedDir);
 				}
-				interpreter.libraryPaths = isolatedPaths;
 			}
+			output.libraryPaths = isolatedPaths;
 			break;
 		}
 		case "combine": {
 			const entries: Record<string, tg.Artifact> = {};
-			for (let [name, referent] of filtereredNeededLibraries.entries()) {
-				let innerDir = await getInner(referent);
-				let libraryFile = await innerDir.tryGet(name);
+			for (const [name, referent] of filteredNeededLibraries) {
+				const innerDir = await getInner(referent);
+				const libraryFile = await innerDir.tryGet(name);
 				if (libraryFile !== undefined) {
 					tg.File.assert(libraryFile);
 					entries[name] = libraryFile;
 				}
-				interpreter.libraryPaths = [await tg.directory(entries)];
 			}
+			output.libraryPaths =
+				Object.keys(entries).length === 0 ? [] : [await tg.directory(entries)];
 			break;
 		}
 		default: {
@@ -1741,25 +1780,7 @@ async function optimizeLibraryPaths(
 		}
 	}
 
-	return interpreter;
-}
-
-async function getInitialNeededLibraries(
-	executable: tg.File,
-): Promise<Map<string, DirWithSubpath | undefined>> {
-	const neededLibraries = new Map();
-	const neededLibNames = await getNeededLibraries(executable);
-	if (neededLibNames.length > 0) {
-		for (let libName of neededLibNames) {
-			// On macOS, libSystem is provided by the runtime.
-			if (libName.includes("libSystem")) {
-				continue;
-			}
-			neededLibraries.set(libName, undefined);
-		}
-	}
-
-	return neededLibraries;
+	return output;
 }
 
 async function getNeededLibraries(executable: tg.File): Promise<Array<string>> {
@@ -1889,64 +1910,37 @@ async function tryTemplateToDirWithSubpath(
 async function findTransitiveNeededLibraries(
 	executable: tg.File,
 	libraryPaths: Set<DirWithSubpath>,
-	neededLibraries: Map<string, DirWithSubpath | undefined>,
-) {
-	return findTransitiveNeededLibrariesInner(
-		executable,
-		libraryPaths,
-		neededLibraries,
-		0,
-	);
-}
-
-async function findTransitiveNeededLibrariesInner(
-	executable: tg.File,
-	libraryPaths: Set<DirWithSubpath>,
-	neededLibraries: Map<string, DirWithSubpath | undefined>,
-	depth: number,
-) {
-	const maxDepth = 16;
-
-	// Check if we're done.
-	if (foundAllLibraries(neededLibraries) || depth === maxDepth) {
-		return neededLibraries;
-	}
-
-	// Check for transitive dependencies if we've recurred beyond the initial file.
-	if (depth > 0) {
-		// get new needed libraries. add them to the neededLibraries set.
-		const neededLibNames = await getNeededLibraries(executable);
-		for (let lib of neededLibNames) {
-			if (!neededLibraries.has(lib)) {
-				neededLibraries.set(lib, undefined);
-			}
+	getNeededLibrariesForFile: (
+		file: tg.File,
+	) => Promise<Array<string>> = getNeededLibraries,
+): Promise<Map<string, DirWithSubpath | undefined>> {
+	const neededLibraries = new Map<string, DirWithSubpath | undefined>();
+	const files = [executable];
+	const visited = new Set<tg.File.Id>();
+	while (files.length > 0) {
+		const file = files.shift();
+		tg.assert(file !== undefined);
+		if (visited.has(file.id)) {
+			continue;
 		}
-	}
+		visited.add(file.id);
 
-	// Locate and record found libraries.
-	for (let referent of libraryPaths) {
-		const directory = await getInner(referent);
-		const copiedNeededLibraryNames = Array.from(neededLibraries.keys());
-		// Search dir for names.
-		for (let libName of copiedNeededLibraryNames) {
-			// If already found, skip it.
-			if (neededLibraries.get(libName) !== undefined) {
+		for (const name of await getNeededLibrariesForFile(file)) {
+			// On macOS, libSystem is provided by the runtime.
+			if (name.includes("libSystem")) {
 				continue;
 			}
-			// Otherwise, check if it's here.
-			const maybeLibFile = await directory.tryGet(libName);
-			if (maybeLibFile !== undefined && maybeLibFile instanceof tg.File) {
-				// We found it! Record the location, and recurse.
-				neededLibraries.set(libName, referent);
-				neededLibraries = await findTransitiveNeededLibrariesInner(
-					maybeLibFile,
-					libraryPaths,
-					neededLibraries,
-					depth + 1,
-				);
-				// If we're done now, quit.
-				if (foundAllLibraries(neededLibraries)) {
-					return neededLibraries;
+			if (neededLibraries.get(name) !== undefined) {
+				continue;
+			}
+			neededLibraries.set(name, undefined);
+			for (const referent of libraryPaths) {
+				const directory = await getInner(referent);
+				const artifact = await directory.tryGet(name);
+				if (artifact instanceof tg.File) {
+					neededLibraries.set(name, referent);
+					files.push(artifact);
+					break;
 				}
 			}
 		}
@@ -1955,13 +1949,12 @@ async function findTransitiveNeededLibrariesInner(
 	return neededLibraries;
 }
 
-/** Did we find an entry for every name in the needed libraries set? */
-function foundAllLibraries(
-	neededLibraries: Map<string, DirWithSubpath | undefined>,
-) {
-	return Array.from(neededLibraries.values()).every(
-		(value) => value !== undefined,
-	);
+async function templateArgFromDirWithSubpath(
+	value: DirWithSubpath,
+): Promise<tg.Template.Arg> {
+	return value.subpath === undefined
+		? value.dir
+		: await tg`${value.dir}/${value.subpath}`;
 }
 
 /** Resovle all subpaths to the inner directory. */
@@ -2011,7 +2004,7 @@ async function separateLibraries(
 			continue;
 		}
 		const inner = await getInner(dirWithSubpath);
-		for await (let [name, artifact] of inner) {
+		for await (const [name, artifact] of inner) {
 			if (artifact instanceof tg.File && isDylib(name)) {
 				const metadata = await std.file.tryExecutableMetadata(artifact);
 				if (metadata === undefined) {
@@ -2054,6 +2047,7 @@ function valueIsTemplateLike(
 
 async function manifestMutationFromMutation(
 	mutation: tg.Mutation,
+	references?: ManifestReferences,
 ): Promise<wrap.Manifest.Mutation> {
 	if (mutation.inner.kind === "unset") {
 		return { kind: "unset" };
@@ -2061,7 +2055,7 @@ async function manifestMutationFromMutation(
 		const value = mutation.inner.value;
 		return {
 			kind: "set",
-			value: await manifestValueFromValue(value),
+			value: await manifestValueFromValue(value, references),
 		};
 	} else if (mutation.inner.kind === "set_if_unset") {
 		const value = mutation.inner.value;
@@ -2072,7 +2066,7 @@ async function manifestMutationFromMutation(
 		return {
 			kind: "set_if_unset",
 			value: manifestValueFromManifestTemplate(
-				await manifestTemplateFromArg(value),
+				await manifestTemplateFromArg(value, references),
 			),
 		};
 	} else if (mutation.inner.kind === "prefix") {
@@ -2083,7 +2077,7 @@ async function manifestMutationFromMutation(
 		);
 		return {
 			kind: "prefix",
-			template: await manifestTemplateFromArg(template),
+			template: await manifestTemplateFromArg(template, references),
 			separator: mutation.inner.separator ?? ":",
 		};
 	} else if (mutation.inner.kind === "suffix") {
@@ -2094,14 +2088,16 @@ async function manifestMutationFromMutation(
 		);
 		return {
 			kind: "suffix",
-			template: await manifestTemplateFromArg(template),
+			template: await manifestTemplateFromArg(template, references),
 			separator: mutation.inner.separator ?? ":",
 		};
 	} else if (mutation.inner.kind === "prepend") {
 		tg.assert(mutation.inner.values.every(valueIsTemplateLike));
 		const values = await Promise.all(
 			mutation.inner.values.map(async (arg) =>
-				manifestValueFromManifestTemplate(await manifestTemplateFromArg(arg)),
+				manifestValueFromManifestTemplate(
+					await manifestTemplateFromArg(arg, references),
+				),
 			),
 		);
 		return { kind: "prepend", values };
@@ -2109,14 +2105,16 @@ async function manifestMutationFromMutation(
 		tg.assert(mutation.inner.values.every(valueIsTemplateLike));
 		const values = await Promise.all(
 			mutation.inner.values.map(async (arg) =>
-				manifestValueFromManifestTemplate(await manifestTemplateFromArg(arg)),
+				manifestValueFromManifestTemplate(
+					await manifestTemplateFromArg(arg, references),
+				),
 			),
 		);
 		return { kind: "append", values };
 	} else if (mutation.inner.kind === "merge") {
 		const value = mutation.inner.value;
 		tg.assert(tg.Value.isMap(value), "expected a map");
-		const manifestValue = await manifestValueFromValue(value);
+		const manifestValue = await manifestValueFromValue(value, references);
 		tg.assert(
 			manifestValue !== null &&
 				typeof manifestValue === "object" &&
@@ -2140,8 +2138,14 @@ function manifestValueFromManifestTemplate(
 
 export async function fileOrSymlinkFromManifestTemplate(
 	manifestTemplate: wrap.Manifest.Template,
+	references?: ManifestReferences,
+	token?: tg.Grant.Token | null,
 ): Promise<tg.File | tg.Symlink> {
-	let template = await templateFromManifestTemplate(manifestTemplate);
+	let template = await templateFromManifestTemplate(
+		manifestTemplate,
+		references,
+		token,
+	);
 	if (template.components.length !== 1) {
 		throw new Error(
 			`expected a template with exactly one component, got ${manifestTemplate}`,
@@ -2158,18 +2162,25 @@ export async function fileOrSymlinkFromManifestTemplate(
 
 function templateFromManifestTemplate(
 	manifestTemplate: wrap.Manifest.Template,
+	references?: ManifestReferences,
+	token?: tg.Grant.Token | null,
 ): PromiseLike<tg.Template> {
 	return manifestTemplate.components.reduce<PromiseLike<tg.Template>>(
 		(result, component) => {
 			switch (component.kind) {
 				case "artifact": {
-					return tg`${result}${tg.Artifact.withId(component.value)}`;
+					const artifact = inheritManifestReference(
+						tg.Artifact.withId(component.value),
+						references,
+						token,
+					);
+					return tg`${result}${artifact}`;
 				}
 				case "string": {
 					return tg`${result}${component.value}`;
 				}
-				default: {
-					return tg.unreachable();
+				case "placeholder": {
+					return tg`${result}${tg.placeholder(component.value)}`;
 				}
 			}
 		},
@@ -2179,35 +2190,55 @@ function templateFromManifestTemplate(
 
 function mutationFromManifestMutation(
 	manifestMutation: wrap.Manifest.Mutation,
+	references?: ManifestReferences,
+	token?: tg.Grant.Token | null,
 ): PromiseLike<tg.Mutation> {
 	if (manifestMutation.kind === "unset") {
 		return Promise.resolve(tg.Mutation.unset());
 	} else if (manifestMutation.kind === "set") {
-		return tg.Mutation.set(valueFromManifestValue(manifestMutation.value));
+		return tg.Mutation.set(
+			valueFromManifestValue(manifestMutation.value, references, token),
+		);
 	} else if (manifestMutation.kind === "set_if_unset") {
 		return tg.Mutation.setIfUnset(
-			valueFromManifestValue(manifestMutation.value),
+			valueFromManifestValue(manifestMutation.value, references, token),
 		);
 	} else if (manifestMutation.kind === "prepend") {
-		return tg.Mutation.append(
-			manifestMutation.values.map(valueFromManifestValue),
+		return tg.Mutation.prepend(
+			manifestMutation.values.map((value) =>
+				valueFromManifestValue(value, references, token),
+			),
 		);
 	} else if (manifestMutation.kind === "append") {
 		return tg.Mutation.append(
-			manifestMutation.values.map(valueFromManifestValue),
+			manifestMutation.values.map((value) =>
+				valueFromManifestValue(value, references, token),
+			),
 		);
 	} else if (manifestMutation.kind === "prefix") {
 		return tg.Mutation.prefix(
-			templateFromManifestTemplate(manifestMutation.template),
+			templateFromManifestTemplate(
+				manifestMutation.template,
+				references,
+				token,
+			),
 			manifestMutation.separator,
 		);
 	} else if (manifestMutation.kind === "suffix") {
 		return tg.Mutation.suffix(
-			templateFromManifestTemplate(manifestMutation.template),
+			templateFromManifestTemplate(
+				manifestMutation.template,
+				references,
+				token,
+			),
 			manifestMutation.separator,
 		);
 	} else if (manifestMutation.kind === "merge") {
-		const value = valueFromManifestValue(manifestMutation.value).then((v) => {
+		const value = valueFromManifestValue(
+			manifestMutation.value,
+			references,
+			token,
+		).then((v) => {
 			tg.assert(tg.Value.isMap(v));
 			return v;
 		});
@@ -2219,6 +2250,7 @@ function mutationFromManifestMutation(
 
 async function manifestValueFromValue(
 	value: tg.Value,
+	references?: ManifestReferences,
 ): Promise<wrap.Manifest.Value> {
 	if (value === null) {
 		return null;
@@ -2229,28 +2261,45 @@ async function manifestValueFromValue(
 	} else if (typeof value === "string") {
 		return value;
 	} else if (value instanceof tg.Directory) {
-		await value.store();
+		if (references !== undefined) {
+			await addManifestReference(references, value);
+		} else {
+			await value.store();
+		}
 		return { kind: "directory", value: value.id };
 	} else if (value instanceof tg.File) {
-		await value.store();
+		if (references !== undefined) {
+			await addManifestReference(references, value);
+		} else {
+			await value.store();
+		}
 		return { kind: "file", value: value.id };
 	} else if (value instanceof tg.Symlink) {
-		await value.store();
+		if (references !== undefined) {
+			await addManifestReference(references, value);
+		} else {
+			await value.store();
+		}
 		return { kind: "symlink", value: value.id };
 	} else if (value instanceof tg.Template) {
-		return { kind: "template", value: await manifestTemplateFromArg(value) };
+		return {
+			kind: "template",
+			value: await manifestTemplateFromArg(value, references),
+		};
 	} else if (value instanceof tg.Mutation) {
 		return {
 			kind: "mutation",
-			value: await manifestMutationFromMutation(value),
+			value: await manifestMutationFromMutation(value, references),
 		};
 	} else if (value instanceof Array) {
-		return await Promise.all(value.map(manifestValueFromValue));
+		return await Promise.all(
+			value.map((value) => manifestValueFromValue(value, references)),
+		);
 	} else if (typeof value === "object") {
 		const obj: { [key: string]: wrap.Manifest.Value } = {};
 		const entries = Object.entries(value);
 		const promises = entries.map(async ([key, val]) => {
-			return { key, value: await manifestValueFromValue(val) };
+			return { key, value: await manifestValueFromValue(val, references) };
 		});
 		const resolvedEntries = await Promise.all(promises);
 		for (const entry of resolvedEntries) {
@@ -2264,9 +2313,13 @@ async function manifestValueFromValue(
 
 async function valueFromManifestValue(
 	value: wrap.Manifest.Value,
+	references?: ManifestReferences,
+	token?: tg.Grant.Token | null,
 ): Promise<tg.Value> {
 	if (value instanceof Array) {
-		return await Promise.all(value.map(valueFromManifestValue));
+		return await Promise.all(
+			value.map((value) => valueFromManifestValue(value, references, token)),
+		);
 	} else if (value === null) {
 		return null;
 	} else if (typeof value === "boolean") {
@@ -2276,20 +2329,35 @@ async function valueFromManifestValue(
 	} else if (typeof value === "string") {
 		return value;
 	} else if (value.kind === "directory") {
-		return tg.Directory.withId(value.value);
+		return inheritManifestReference(
+			tg.Directory.withId(value.value),
+			references,
+			token,
+		);
 	} else if (value.kind === "file") {
-		return tg.File.withId(value.value);
+		return inheritManifestReference(
+			tg.File.withId(value.value),
+			references,
+			token,
+		);
 	} else if (value.kind === "symlink") {
-		return tg.Symlink.withId(value.value);
+		return inheritManifestReference(
+			tg.Symlink.withId(value.value),
+			references,
+			token,
+		);
 	} else if (value.kind === "template") {
-		return await templateFromManifestTemplate(value.value);
+		return await templateFromManifestTemplate(value.value, references, token);
 	} else if (value.kind === "mutation") {
-		return mutationFromManifestMutation(value.value);
+		return mutationFromManifestMutation(value.value, references, token);
 	} else if (value.kind === "map") {
 		const ret: tg.Value = {};
 		const entries = Object.entries(value.value);
 		const promises = entries.map(async ([key, val]) => {
-			return { key, value: await valueFromManifestValue(val) };
+			return {
+				key,
+				value: await valueFromManifestValue(val, references, token),
+			};
 		});
 		const resolvedEntries = await Promise.all(promises);
 		for (const entry of resolvedEntries) {
@@ -2304,12 +2372,16 @@ async function valueFromManifestValue(
 /** Yield the key/value pairs this manifest sets once all mutations are applied. */
 export async function* manifestEnvVars(
 	manifest: wrap.Manifest,
+	token: tg.Grant.Token | null,
 ): AsyncGenerator<[string, tg.Template | undefined]> {
-	yield* std.env.envVars(await wrap.envObjectFromManifestEnv(manifest.env));
+	yield* std.env.envVars(
+		await wrap.envObjectFromManifestEnv(manifest.env, undefined, token),
+	);
 }
 
 async function manifestTemplateFromArg(
 	arg: tg.Template.Arg | wrap.Manifest.Template,
+	references?: ManifestReferences,
 ): Promise<wrap.Manifest.Template> {
 	if (isManifestTemplate(arg)) {
 		return arg as wrap.Manifest.Template;
@@ -2322,7 +2394,11 @@ async function manifestTemplateFromArg(
 			} else if (component instanceof tg.Placeholder) {
 				return { kind: "placeholder", value: component.name };
 			} else {
-				await component.store();
+				if (references !== undefined) {
+					await addManifestReference(references, component);
+				} else {
+					await component.store();
+				}
 				return { kind: "artifact", value: component.id };
 			}
 		}),
@@ -2334,6 +2410,8 @@ async function manifestTemplateFromArg(
 
 async function envObjectFromMapValue(
 	value: wrap.Manifest.Value,
+	references?: ManifestReferences,
+	token?: tg.Grant.Token | null,
 ): Promise<std.env.EnvObject> {
 	tg.assert(
 		value !== null &&
@@ -2353,6 +2431,8 @@ async function envObjectFromMapValue(
 		) {
 			ret[key] = (await mutationFromManifestMutation(
 				val.value,
+				references,
+				token,
 			)) as tg.Mutation<tg.Template.Arg>;
 		} else {
 			throw new Error(
@@ -2383,14 +2463,16 @@ function isManifestTemplateComponent(
 		typeof arg === "object" &&
 		arg !== null &&
 		"kind" in arg &&
-		(arg.kind === "string" || arg.kind === "artifact")
+		(arg.kind === "string" ||
+			arg.kind === "artifact" ||
+			arg.kind === "placeholder")
 	);
 }
 
 /** Yield the objects referenced by a manifest. */
-export async function* manifestDependencies(
+export function* manifestDependencies(
 	manifest: wrap.Manifest,
-): AsyncGenerator<tg.Object> {
+): Generator<tg.Object> {
 	// Get the references from the interpreter.
 	switch (manifest.interpreter?.kind) {
 		case undefined: {
@@ -2402,20 +2484,7 @@ export async function* manifestDependencies(
 				yield* manifestTemplateDependencies(arg);
 			}
 			break;
-		case "ld-linux": {
-			yield* manifestTemplateDependencies(manifest.interpreter.path);
-			if (manifest.interpreter.libraryPaths) {
-				for (const libraryPath of manifest.interpreter.libraryPaths) {
-					yield* manifestTemplateDependencies(libraryPath);
-				}
-			}
-			if (manifest.interpreter.preloads) {
-				for (const preload of manifest.interpreter.preloads) {
-					yield* manifestTemplateDependencies(preload);
-				}
-			}
-			break;
-		}
+		case "ld-linux":
 		case "ld-musl": {
 			yield* manifestTemplateDependencies(manifest.interpreter.path);
 			if (manifest.interpreter.libraryPaths) {
@@ -2427,6 +2496,9 @@ export async function* manifestDependencies(
 				for (const preload of manifest.interpreter.preloads) {
 					yield* manifestTemplateDependencies(preload);
 				}
+			}
+			for (const arg of manifest.interpreter.args ?? []) {
+				yield* manifestTemplateDependencies(arg);
 			}
 			break;
 		}
@@ -2464,9 +2536,9 @@ export async function* manifestDependencies(
 }
 
 /** Yield the artifacts prent in the manifest env. */
-async function* manifestMutationDependencies(
+function* manifestMutationDependencies(
 	mutation: wrap.Manifest.Mutation,
-): AsyncGenerator<tg.Object> {
+): Generator<tg.Object> {
 	switch (mutation.kind) {
 		case "unset":
 			break;
@@ -2484,13 +2556,16 @@ async function* manifestMutationDependencies(
 				yield* manifestValueDependencies(value);
 			}
 			break;
+		case "merge":
+			yield* manifestValueDependencies(mutation.value);
+			break;
 	}
 }
 
 /** Yield the artifacts references by an executable. */
-async function* manifestExecutableDependencies(
+function* manifestExecutableDependencies(
 	executable: wrap.Manifest.Executable,
-): AsyncGenerator<tg.Object> {
+): Generator<tg.Object> {
 	if (executable.kind === "address") {
 		return;
 	}
@@ -2498,9 +2573,9 @@ async function* manifestExecutableDependencies(
 }
 
 /** Yield the artifacts referenced by a template. */
-async function* manifestTemplateDependencies(
+function* manifestTemplateDependencies(
 	template: wrap.Manifest.Template,
-): AsyncGenerator<tg.Object> {
+): Generator<tg.Object> {
 	for (const component of template.components) {
 		if (component.kind === "artifact") {
 			yield tg.Artifact.withId(component.value);
@@ -2509,9 +2584,9 @@ async function* manifestTemplateDependencies(
 }
 
 /** Yield the artifacts referenced by a value. */
-export async function* manifestValueDependencies(
+export function* manifestValueDependencies(
 	value: wrap.Manifest.Value,
-): AsyncGenerator<tg.Object> {
+): Generator<tg.Object> {
 	if (value === null) {
 		return;
 	}
@@ -2533,27 +2608,6 @@ export async function* manifestValueDependencies(
 		for (const v of Object.values(value.value)) {
 			yield* manifestValueDependencies(v);
 		}
-	}
-}
-
-export function pushOrSet(
-	obj: { [key: string]: unknown },
-	key: string,
-	value: tg.Value,
-) {
-	if (obj === undefined) {
-		obj = {};
-		obj[key] = value;
-	} else if (obj[key] === undefined) {
-		obj[key] = value;
-	} else {
-		if (!Array.isArray(obj[key])) {
-			obj[key] = [obj[key]];
-		}
-		tg.assert(obj && key in obj && Array.isArray(obj[key]));
-		const a = obj[key] as Array<tg.Value>;
-		a.push(value);
-		obj[key] = a;
 	}
 }
 
@@ -2612,9 +2666,51 @@ export async function test() {
 		}),
 		tg.build(testDependencies, { name: "dependencies" }),
 		tg.build(testDylibPath, { name: "dylib path" }),
+		tg.build(testEnvObjectFromArtifactAuthorization, {
+			name: "env object from artifact authorization",
+		}),
+		tg.build(testFilterLibraryPathsWithoutExecutable, {
+			name: "filter library paths without executable",
+		}),
 		tg.build(testContentExecutable, { name: "content executable" }),
 		tg.build(testContentExecutableVariadic, {
 			name: "content executable variadic",
+		}),
+		tg.build(testManifestDependenciesDynamicInterpreterArgs, {
+			name: "manifest dependencies dynamic interpreter args",
+		}),
+		tg.build(testManifestDependenciesMergeMutation, {
+			name: "manifest dependencies merge mutation",
+		}),
+		tg.build(testManifestMutationPrependRoundTrip, {
+			name: "manifest mutation prepend round trip",
+		}),
+		tg.build(testManifestTemplateAuthorization, {
+			name: "manifest template authorization",
+		}),
+		tg.build(testManifestTemplatePlaceholderRoundTrip, {
+			name: "manifest template placeholder round trip",
+		}),
+		tg.build(testManifestWriteRequiresAuthorizedReferences, {
+			name: "manifest write requires authorized references",
+		}),
+		tg.build(testMergeFalseDoesNotReuseManifest, {
+			name: "merge false does not reuse manifest",
+		}),
+		tg.build(testMergeFalsePreservesWrapperExecutable, {
+			name: "merge false preserves wrapper executable",
+		}),
+		tg.build(testMergedWrapperArgumentOrder, {
+			name: "merged wrapper argument order",
+		}),
+		tg.build(testNeededLibrariesAuthorization, {
+			name: "needed libraries authorization",
+		}),
+		tg.build(testOptimizeLibraryPathsDoesNotMutateInput, {
+			name: "optimize library paths does not mutate input",
+		}),
+		tg.build(testTransitiveNeededLibraries, {
+			name: "transitive needed libraries",
 		}),
 		tg.build(testInterpreterSwappingNormal, {
 			name: "interpreter swapping normal",
@@ -2887,6 +2983,358 @@ export async function testDylibPath() {
 	await libraryPathWrapper.store();
 	console.log("libraryPathWrapper", libraryPathWrapper.id);
 	return libraryPathWrapper;
+}
+
+export async function testManifestTemplateAuthorization() {
+	const directory = await tg.directory({ library: tg.file("library") });
+	await directory.store();
+	tg.assert(directory.state.token !== null);
+
+	const serializedReferences: ManifestReferences = new Map();
+	const manifestTemplate = await manifestTemplateFromArg(
+		directory,
+		serializedReferences,
+	);
+	tg.assert(serializedReferences.get(directory.id) === directory);
+
+	const parsedReferences: ManifestReferences = new Map();
+	const template = await templateFromManifestTemplate(
+		manifestTemplate,
+		parsedReferences,
+		directory.state.token,
+	);
+	const [artifact] = template.components;
+	tg.assert(artifact instanceof tg.Directory);
+	tg.assert(
+		artifact.state.token === directory.state.token,
+		"expected the manifest template artifact to retain its authorization token",
+	);
+	tg.assert(parsedReferences.get(directory.id) === artifact);
+
+	return true;
+}
+
+export async function testManifestMutationPrependRoundTrip() {
+	const mutation = await tg.Mutation.prepend(["first", "second"]);
+	const manifestMutation = await manifestMutationFromMutation(mutation);
+	const roundTrippedMutation =
+		await mutationFromManifestMutation(manifestMutation);
+
+	tg.assert(
+		roundTrippedMutation.inner.kind === "prepend",
+		"expected a prepend mutation to remain a prepend mutation",
+	);
+
+	return true;
+}
+
+export async function testManifestDependenciesDynamicInterpreterArgs() {
+	const dependency = await tg.file("dynamic interpreter argument");
+	const interpreter = await tg.file("interpreter");
+	await dependency.store();
+	const dependencyTemplate = await manifestTemplateFromArg(dependency);
+	const manifest: wrap.Manifest = {
+		executable: {
+			kind: "content",
+			value: await manifestTemplateFromArg("executable"),
+		},
+		interpreter: {
+			args: [dependencyTemplate],
+			kind: "ld-linux",
+			path: await manifestTemplateFromArg(interpreter),
+		},
+	};
+	const dependencyIds = new Set<tg.Object.Id>();
+	for await (const dependency of manifestDependencies(manifest)) {
+		dependencyIds.add(dependency.id);
+	}
+
+	tg.assert(
+		dependencyIds.has(dependency.id),
+		"expected dynamic interpreter arguments to be manifest dependencies",
+	);
+
+	return true;
+}
+
+export async function testManifestDependenciesMergeMutation() {
+	const dependency = await tg.directory({ dependency: tg.file("dependency") });
+	await dependency.store();
+	const manifest: wrap.Manifest = {
+		env: {
+			kind: "merge",
+			value: {
+				kind: "map",
+				value: {
+					DEPENDENCY: {
+						kind: "directory",
+						value: dependency.id,
+					},
+				},
+			},
+		},
+		executable: {
+			kind: "content",
+			value: await manifestTemplateFromArg("executable"),
+		},
+	};
+	const dependencyIds = new Set<tg.Object.Id>();
+	for await (const dependency of manifestDependencies(manifest)) {
+		dependencyIds.add(dependency.id);
+	}
+
+	tg.assert(
+		dependencyIds.has(dependency.id),
+		"expected merge mutation values to be manifest dependencies",
+	);
+
+	return true;
+}
+
+export async function testManifestTemplatePlaceholderRoundTrip() {
+	const manifestTemplate = await manifestTemplateFromArg(
+		await tg.template(tg.placeholder("test")),
+	);
+	const template = await templateFromManifestTemplate(manifestTemplate);
+	const [component] = template.components;
+
+	tg.assert(component instanceof tg.Placeholder);
+	tg.assert(component.name === "test");
+
+	return true;
+}
+
+export async function testManifestWriteRequiresAuthorizedReferences() {
+	const dependency = await tg.file("dependency");
+	await dependency.store();
+	const manifest: wrap.Manifest = {
+		executable: {
+			kind: "path",
+			value: await manifestTemplateFromArg(dependency),
+		},
+	};
+	let error: unknown;
+	try {
+		await validateManifestReferences(manifest, new Map());
+	} catch (caught) {
+		error = caught;
+	}
+
+	tg.assert(
+		error instanceof Error,
+		"expected an incomplete manifest reference graph to be rejected",
+	);
+
+	return true;
+}
+
+export async function testMergeFalsePreservesWrapperExecutable() {
+	const executable = await tg.file("executable", { executable: true });
+	const references: ManifestReferences = new Map();
+	const executableTemplate = await manifestTemplateFromArg(
+		executable,
+		references,
+	);
+	const innerWrapper = await wrap.Manifest.write(
+		await testWrapperBinary(),
+		{
+			executable: {
+				kind: "path",
+				value: executableTemplate,
+			},
+			interpreter: {
+				kind: "normal",
+				path: executableTemplate,
+			},
+		},
+		references,
+	);
+	const outerWrapper = await wrap(innerWrapper, { merge: false });
+	const outerManifest = await wrap.Manifest.read(outerWrapper);
+	tg.assert(outerManifest !== undefined);
+	tg.assert(outerManifest.executable.kind === "path");
+	const outerExecutable = await fileOrSymlinkFromManifestTemplate(
+		outerManifest.executable.value,
+	);
+
+	tg.assert(
+		outerExecutable.id === innerWrapper.id,
+		"expected merge=false to preserve the existing wrapper as the executable",
+	);
+
+	return true;
+}
+
+export async function testMergeFalseDoesNotReuseManifest() {
+	const existingManifest: wrap.Manifest = {
+		executable: {
+			kind: "content",
+			value: await manifestTemplateFromArg("executable"),
+		},
+	};
+	const selectedManifest = existingManifestForWrap(false, existingManifest);
+
+	tg.assert(
+		selectedManifest === undefined,
+		"expected merge=false not to reuse the existing manifest",
+	);
+
+	return true;
+}
+
+export async function testMergedWrapperArgumentOrder() {
+	const args = mergeWrapArgs(["new"], ["existing"]);
+
+	tg.assert(
+		args[0] === "existing" && args[1] === "new",
+		"expected existing bound arguments to precede newly bound arguments",
+	);
+
+	return true;
+}
+
+export async function testEnvObjectFromArtifactAuthorization() {
+	const dependency = await tg.directory({ dependency: tg.file("dependency") });
+	const references: ManifestReferences = new Map();
+	const manifestEnv = await wrap.manifestEnvFromEnvObject(
+		{
+			DEPENDENCY: await tg.Mutation.set(dependency),
+		},
+		references,
+	);
+	tg.assert(manifestEnv !== undefined);
+	const wrapper = await wrap.Manifest.write(
+		await testWrapperBinary(),
+		{
+			env: manifestEnv,
+			executable: {
+				kind: "content",
+				value: await manifestTemplateFromArg("executable"),
+			},
+		},
+		references,
+	);
+	const env = await std.env.arg(wrapper, { utils: false });
+	const mutation = env.DEPENDENCY;
+	tg.assert(mutation instanceof tg.Mutation);
+	tg.assert(mutation.inner.kind === "set");
+	const value = mutation.inner.value;
+	tg.assert(value instanceof tg.Directory);
+
+	tg.assert(
+		value.state.token !== null,
+		"expected envObjectFromArtifact to retain the wrapper authorization token",
+	);
+
+	return true;
+}
+
+export async function testNeededLibrariesAuthorization() {
+	const executable = await testWrapperBinary();
+	const references: ManifestReferences = new Map();
+	const executableTemplate = await manifestTemplateFromArg(
+		executable,
+		references,
+	);
+	const wrapper = await wrap.Manifest.write(
+		executable,
+		{
+			executable: {
+				kind: "path",
+				value: executableTemplate,
+			},
+			interpreter: {
+				kind: "ld-linux",
+				path: executableTemplate,
+			},
+		},
+		references,
+	);
+	const neededLibraries = await wrap.neededLibraries(wrapper);
+
+	tg.assert(Array.isArray(neededLibraries));
+
+	return true;
+}
+
+export async function testFilterLibraryPathsWithoutExecutable() {
+	const first = await tg.directory({ first: tg.file("first") });
+	const second = await tg.directory({ second: tg.file("second") });
+	const interpreter: wrap.DyLdInterpreter = {
+		kind: "dyld",
+		libraryPaths: [first, second],
+	};
+	const optimized = await optimizeLibraryPaths({
+		interpreter,
+		libraryPathStrategy: "filter",
+	});
+
+	tg.assert(
+		optimized.libraryPaths?.length === 0,
+		"expected filter to remove paths containing no needed libraries",
+	);
+
+	return true;
+}
+
+export async function testOptimizeLibraryPathsDoesNotMutateInput() {
+	const first = await tg.directory({ first: tg.file("first") });
+	const second = await tg.directory({ second: tg.file("second") });
+	const libraryPaths = [first];
+	const interpreter: wrap.DyLdInterpreter = {
+		kind: "dyld",
+		libraryPaths,
+	};
+	await optimizeLibraryPaths({
+		interpreter,
+		libraryPaths: [second],
+		libraryPathStrategy: "none",
+	});
+
+	tg.assert(
+		interpreter.libraryPaths === libraryPaths && libraryPaths.length === 1,
+		"expected library path optimization not to mutate its input",
+	);
+
+	return true;
+}
+
+export async function testTransitiveNeededLibraries() {
+	const executable = await tg.file("executable");
+	const direct = await tg.file("direct");
+	const transitive = await tg.file("transitive");
+	const libraryPath = await tg.directory({
+		"libdirect.so": direct,
+		"libtransitive.so": transitive,
+	});
+	const neededLibraries = await findTransitiveNeededLibraries(
+		executable,
+		new Set([{ dir: libraryPath }]),
+		async (file) => {
+			if (file.id === executable.id) {
+				return ["libdirect.so"];
+			} else if (file.id === direct.id) {
+				return ["libtransitive.so"];
+			} else {
+				return [];
+			}
+		},
+	);
+
+	tg.assert(neededLibraries.get("libdirect.so") !== undefined);
+	tg.assert(neededLibraries.get("libtransitive.so") !== undefined);
+
+	return true;
+}
+
+async function testWrapperBinary(): Promise<tg.File> {
+	const host = std.triple.host();
+	const build =
+		std.triple.os(host) === "linux" ? bootstrap.toolchainTriple(host) : host;
+	return tg
+		.build(workspace.wrapper, { build, host })
+		.named("test wrapper binary")
+		.then(tg.File.expect);
 }
 
 export async function testInterpreterSwappingNormal() {
