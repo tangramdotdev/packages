@@ -26,7 +26,7 @@ export type Arg = {
 	embedWrapper?: boolean;
 };
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.args.apply<Arg, Arg>({
 		args,
 		map: async (a) => a,
@@ -49,7 +49,7 @@ export async function build(...args: std.Args<Arg>) {
 		install,
 	};
 
-	let envArgs: std.Args<std.env.Arg> = [sdk(host), { utils: false }];
+	let envArgs: tg.Args<std.env.Arg> = [sdk(host), { utils: false }];
 	if (embedWrapper) {
 		envArgs.push({ TGLD_EMBED_WRAPPER: true });
 	}

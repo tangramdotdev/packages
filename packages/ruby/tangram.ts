@@ -61,7 +61,7 @@ export type Arg = std.autotools.Arg & {
 	};
 };
 
-export async function self(...args: std.Args<Arg>) {
+export async function self(...args: tg.Args<Arg>) {
 	// Extract custom dependency options.
 	const {
 		dependencies: {

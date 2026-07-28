@@ -40,12 +40,12 @@ export function deps() {
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	// Build configure args, including OS-specific flags.
 	const host =
 		(
 			await std.args.apply<Arg, Arg>({
-				args: args as std.Args<Arg>,
+				args: args as tg.Args<Arg>,
 				map: async (arg) => arg,
 				reduce: {},
 			})

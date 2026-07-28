@@ -65,7 +65,7 @@ export type ImageFormat = "docker" | "oci";
 
 export type LayerCompressionFormat = "gz" | "zst";
 
-export async function image(...args: std.Args<Arg>): Promise<tg.File> {
+export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 	const arg = await std.args.apply<Arg, ArgObject>({
 		args,
 		map: async (arg) => {

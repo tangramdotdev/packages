@@ -6,7 +6,7 @@ export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 export type ArgObject = container.Arg;
 
 /** Create an image file comprised of Tangram artifacts. */
-export async function image(...args: std.Args<Arg>): Promise<tg.File> {
+export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 	return container.image(...args);
 }
 

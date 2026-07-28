@@ -40,7 +40,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const {
 		build,
 		python: pythonArg = {},

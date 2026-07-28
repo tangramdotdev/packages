@@ -40,7 +40,7 @@ export function source() {
 
 export type Arg = std.args.BasePackageArg;
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const {
 		build,
 		host,

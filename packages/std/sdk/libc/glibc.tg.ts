@@ -108,7 +108,7 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		install,
 	};
 
-	const env: std.Args<std.env.Arg> = [env_ ?? null];
+	const env: tg.Args<std.env.Arg> = [env_ ?? null];
 
 	env.push({
 		CPATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,

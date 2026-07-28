@@ -74,7 +74,7 @@ export type PhaseArgObject = {
 };
 
 /** Construct a script and run it. */
-export async function run(...args: std.Args<RunArg>) {
+export async function run(...args: tg.Args<RunArg>) {
 	// Merge execution metadata. The reducer for phases calls arg() which returns Phases.
 	const runArg = await std.args.apply<RunArg, RunArg>({
 		args,

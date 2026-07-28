@@ -1,9 +1,5 @@
 import * as std from "./tangram.ts";
 
-export type Args<T extends tg.Value = tg.Value> = Array<
-	tg.Unresolved<ValueOrMaybeMutationMap<T>>
->;
-
 /** Base argument type for packages to extend. Add build-system-specific options (autotools, cmake, cargo, etc.) and package-specific dependencies by intersection. */
 export type BasePackageArg = {
 	build?: string | null;
@@ -36,9 +32,9 @@ export type DependencyArgs = {
 };
 
 type Input<T extends tg.Value, O extends { [key: string]: tg.Value }> = {
-	args: Args<T>;
+	args: tg.Args<T>;
 	map: (
-		arg: ValueOrMaybeMutationMap<T>,
+		arg: tg.ValueOrMaybeMutationMap<T>,
 	) => tg.MaybePromise<tg.MaybeMutationMap<O>>;
 	reduce: {
 		[K in keyof O]?:
@@ -51,35 +47,13 @@ export type MakeArrayKeys<T, K extends keyof T> = {
 	[P in keyof T]: P extends K ? Array<Exclude<T[P], undefined>> : T[P];
 };
 
-type ValueOrMaybeMutationMap<T extends tg.Value = tg.Value> = T extends
-	| null
-	| boolean
-	| number
-	| string
-	| tg.Object
-	| Uint8Array
-	| tg.Mutation
-	| tg.Template
-	| tg.Placeholder
-	| Array<infer _U extends tg.Value>
-	? T
-	: T extends { [key: string]: tg.Value }
-		? string extends keyof T
-			? {
-					[key: string]: tg.MaybeMutation<
-						Exclude<T[string & keyof T], undefined>
-					>;
-				}
-			: { [K in keyof T]?: tg.MaybeMutation<Exclude<T[K], undefined>> }
-		: never;
-
 export async function apply<
 	T extends tg.Value,
 	O extends { [key: string]: tg.Value },
 >(input: Input<T, O>): Promise<O> {
 	let { args, map, reduce } = input;
 	let resolved = (await Promise.all(args.map(tg.resolve))) as Array<
-		ValueOrMaybeMutationMap<T>
+		tg.ValueOrMaybeMutationMap<T>
 	>;
 	let output: { [key: string]: tg.Value } = {};
 	for (let arg of resolved) {

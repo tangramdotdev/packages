@@ -24,13 +24,13 @@ export function source() {
 
 export type Arg = std.autotools.Arg;
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	// Resolve args first to access build/host for cross-compilation.
 	const resolved = await std.autotools.arg({ source: source() }, ...args);
 	const host = resolved.host ?? std.triple.host();
 	const build = resolved.build ?? host;
 
-	const envs: std.Args<std.env.Arg> = [resolved.env ?? null];
+	const envs: tg.Args<std.env.Arg> = [resolved.env ?? null];
 	if (build !== host) {
 		envs.push({ CHOST: host });
 	}

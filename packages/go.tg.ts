@@ -154,7 +154,7 @@ export type ResolvedArg = Omit<Arg, "build" | "host" | "source"> & {
 };
 
 /** Resolve go args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
-export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
+export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 	const collect = await std.args.apply<Arg, Arg>({
 		args,
 		map: async (arg) => arg,
@@ -214,7 +214,7 @@ export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
 	};
 }
 
-export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
+export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	const resolved = await arg(...args);
 	const {
 		build: build_,

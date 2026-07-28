@@ -60,7 +60,7 @@ export type Variant =
 	| "stage2_full"; // Everything enabled.
 
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,

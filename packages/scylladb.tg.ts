@@ -17,7 +17,7 @@ export type Arg = {
 	host?: string;
 };
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const { host: host_ } = await std.packages.applyArgs<Arg>(...args);
 	const host = host_ ?? std.triple.host();
 	std.assert.supportedHost(host, metadata);

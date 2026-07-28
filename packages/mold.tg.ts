@@ -43,7 +43,7 @@ export function deps() {
 
 export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const resolved = await cmake.arg(
 		{
 			source: source(),

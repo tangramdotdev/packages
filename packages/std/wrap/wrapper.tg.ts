@@ -76,7 +76,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		}
 	}
 	console.log("toolchain: ", buildToolchain.id);
-	let env: std.Args<std.env.Arg> = [
+	let env: tg.Args<std.env.Arg> = [
 		{ utils: false },
 		buildToolchain,
 		hostToolchain ?? null,

@@ -34,7 +34,7 @@ export async function source(): Promise<tg.Directory> {
 
 export type Arg = cmake.Arg;
 
-export function build(...args: std.Args<Arg>) {
+export function build(...args: tg.Args<Arg>) {
 	return cmake.build(
 		{
 			source: source(),

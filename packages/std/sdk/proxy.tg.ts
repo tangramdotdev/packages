@@ -31,7 +31,7 @@ export type Arg = {
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export async function env(...args: std.Args<Arg>): Promise<tg.Directory> {
+export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	const arg = await std.args.apply<Arg, Arg>({
 		args,
 		map: async (a) => a,
@@ -425,7 +425,7 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 		await codesign.store();
 	}
 
-	const envs: std.Args<std.env.Arg> = [
+	const envs: tg.Args<std.env.Arg> = [
 		{
 			TGSTRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
 				tg.File | tg.Symlink | tg.Template

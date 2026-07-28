@@ -40,7 +40,7 @@ export type Arg = {
 };
 
 /** A basic set of GNU system utilites. */
-export async function env(...args: std.Args<Arg>) {
+export async function env(...args: tg.Args<Arg>) {
 	const {
 		build,
 		env: env_,
@@ -124,7 +124,7 @@ export async function prerequisites(hostArg?: tg.Unresolved<string>) {
 
 	// Order matters: items later in the array prepend to PATH later, so they appear first.
 	// We want coreutils first, then make. The SDK provides baseline utils (busybox/toybox) at lowest precedence.
-	const components: std.Args<std.env.Arg> = [
+	const components: tg.Args<std.env.Arg> = [
 		bootstrap.sdk.prepareBootstrapUtils(host),
 		makeArtifact,
 		coreutilsArtifact,

@@ -36,7 +36,7 @@ export type Arg = {
 };
 
 /** Build `cmake`. */
-export async function cmake(...args: std.Args<Arg>) {
+export async function cmake(...args: tg.Args<Arg>) {
 	const {
 		build: build_,
 		env: env_,
@@ -65,7 +65,7 @@ export async function cmake(...args: std.Args<Arg>) {
 	const phases = { prepare, configure };
 
 	const bootstrapSdk = await std.sdk(bootstrap.sdk.arg(host));
-	const envs: std.Args<std.env.Arg> = [
+	const envs: tg.Args<std.env.Arg> = [
 		bootstrapSdk,
 		bootstrap.make.build({ host }),
 		{
@@ -170,7 +170,7 @@ export type BuildArg = {
 };
 
 /** Construct a cmake package build target. */
-export async function build(...args: std.Args<BuildArg>) {
+export async function build(...args: tg.Args<BuildArg>) {
 	type Collect = Omit<std.args.MakeArrayKeys<BuildArg, "phases">, "phases"> & {
 		phases: Array<std.phases.Arg>;
 	};
@@ -228,7 +228,7 @@ export async function build(...args: std.Args<BuildArg>) {
 	const os = std.triple.os(host);
 
 	// Set up env.
-	let envs: std.Args<std.env.Arg> = [];
+	let envs: tg.Args<std.env.Arg> = [];
 	if (bootstrap) {
 		// Prevent automatically adding the utils to the env.
 		envs.push({ utils: false });

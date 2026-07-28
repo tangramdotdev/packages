@@ -32,7 +32,7 @@ export type Arg = std.autotools.Arg & {
 	linuxHeaders?: tg.Directory;
 };
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg({ source: source() }, ...args);
 	const { host, build } = arg;
 	std.assert.supportedHost(host, metadata);

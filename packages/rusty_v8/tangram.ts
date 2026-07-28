@@ -182,7 +182,7 @@ export type Arg = {
 };
 
 /** Build librusty_v8.a.gz from source. Returns a tg.File containing the gzipped static library. */
-export async function build(...args: std.Args<Arg>): Promise<tg.File> {
+export async function build(...args: tg.Args<Arg>): Promise<tg.File> {
 	const {
 		build: build_,
 		env: env_,

@@ -49,7 +49,7 @@ export function deps() {
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export function build(...args: std.Args<Arg>) {
+export function build(...args: tg.Args<Arg>) {
 	return std.autotools.build({ source: source(), deps }, ...args);
 }
 

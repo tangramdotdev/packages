@@ -27,7 +27,7 @@ export async function source() {
 	});
 }
 
-export async function proxy(...args: std.Args<cargo.Arg>) {
+export async function proxy(...args: tg.Args<cargo.Arg>) {
 	return cargo.build(
 		{
 			source: source(),
@@ -629,7 +629,7 @@ export function summarizeStats(stats: Array<RustcStats>) {
 	return { hits, misses, totalMs, crates: stats.length };
 }
 
-export function buildWithStats(...args: std.Args<cargo.Arg>) {
+export function buildWithStats(...args: tg.Args<cargo.Arg>) {
 	return cargo.build(...args, {
 		proxy: true,
 		captureStderr: true,
@@ -644,7 +644,7 @@ type CacheTestConfig = {
 	source: tg.Directory;
 	modifyPath: string;
 	expectations: Record<string, boolean>;
-	buildArgs?: std.Args<cargo.Arg>;
+	buildArgs?: tg.Args<cargo.Arg>;
 	tag?: string;
 };
 

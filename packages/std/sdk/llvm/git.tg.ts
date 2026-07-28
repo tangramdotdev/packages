@@ -20,7 +20,7 @@ export async function source() {
 
 export type Arg = std.autotools.Arg;
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const buildPhase = `make NO_GETTEXT=1 -j "$(nproc)"`;
 
 	const configure = {

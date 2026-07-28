@@ -28,7 +28,7 @@ export type Arg = Omit<std.autotools.Arg, "deps"> & {
 };
 
 /** Obtain the GNU binutils. */
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	// First collect args to extract target before passing to autotools.arg.
 	// biome-ignore lint/suspicious/noExplicitAny: Arg contains fields not in autotools.Arg.
 	const collected = await std.args.apply<any, any>({
@@ -82,7 +82,7 @@ export async function build(...args: std.Args<Arg>) {
 		install: makeinfoOverride,
 	};
 
-	const envs: std.Args<std.env.Arg> = [];
+	const envs: tg.Args<std.env.Arg> = [];
 	envs.push({
 		CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " "),
 	});

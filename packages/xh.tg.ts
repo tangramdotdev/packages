@@ -34,11 +34,11 @@ export type Arg = Omit<cargo.Arg, "deps"> & {
 	nativeTls?: boolean;
 };
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	// Extract custom options first.
 	type CustomOptions = { nativeTls?: boolean; host?: string };
 	const customOptions = await std.args.apply<CustomOptions, CustomOptions>({
-		args: args as std.Args<CustomOptions>,
+		args: args as tg.Args<CustomOptions>,
 		map: async (arg) => arg,
 		reduce: {},
 	});

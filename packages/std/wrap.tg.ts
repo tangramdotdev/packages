@@ -14,7 +14,7 @@ export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
 export type ManifestReferences = Map<tg.Object.Id, tg.Object>;
 
 /** Wrap an executable. */
-export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
+export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	const references: ManifestReferences = new Map();
 	const arg = await wrap.argWithReferences(references, ...args);
 	tg.assert(
@@ -293,7 +293,7 @@ export namespace wrap {
 
 	/** Process variadic arguments. */
 	export async function arg(
-		...args: std.Args<wrap.Arg>
+		...args: tg.Args<wrap.Arg>
 	): Promise<wrap.ArgObject> {
 		return argWithReferences(new Map(), ...args);
 	}
@@ -301,7 +301,7 @@ export namespace wrap {
 	/** @internal Process variadic arguments while retaining authorized manifest references. */
 	export async function argWithReferences(
 		references: ManifestReferences,
-		...args: std.Args<wrap.Arg>
+		...args: tg.Args<wrap.Arg>
 	): Promise<wrap.ArgObject> {
 		let {
 			args: args_ = [],
@@ -398,7 +398,7 @@ export namespace wrap {
 		// Determine whether to try to merge this wrapper with an existing one. If the user specified `true`, only honor if an existing manifest was found.
 		const merge = merge_ && existingManifest !== undefined;
 
-		const envs: std.Args<std.env.Arg> = [];
+		const envs: tg.Args<std.env.Arg> = [];
 
 		// If the executable is a file and the behavior is merge, try to read the manifest from it.
 		if (merge) {

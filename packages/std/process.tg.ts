@@ -1,10 +1,10 @@
 import * as std from "./tangram.ts";
 import { buildDefaultBash, defaultEnvArg } from "./command.tg.ts";
 
-export function build(...args: std.Args<tg.Process.Arg>): StdProcessBuilder;
+export function build(...args: tg.Args<tg.Process.Arg>): StdProcessBuilder;
 export function build(
 	strings: TemplateStringsArray,
-	...placeholders: std.Args<tg.Template.Arg>
+	...placeholders: tg.Args<tg.Template.Arg>
 ): StdProcessBuilder;
 export function build(...args: any): any {
 	if (Array.isArray(args[0]) && "raw" in args[0]) {
@@ -16,10 +16,10 @@ export function build(...args: any): any {
 	}
 }
 
-export function run(...args: std.Args<tg.Process.Arg>): StdProcessBuilder;
+export function run(...args: tg.Args<tg.Process.Arg>): StdProcessBuilder;
 export function run(
 	strings: TemplateStringsArray,
-	...placeholders: std.Args<tg.Template.Arg>
+	...placeholders: tg.Args<tg.Template.Arg>
 ): StdProcessBuilder;
 export function run(...args: any): any {
 	if (Array.isArray(args[0]) && "raw" in args[0]) {
@@ -33,10 +33,10 @@ export function run(...args: any): any {
 
 export const $ = run;
 
-export function spawn(...args: std.Args<tg.Process.Arg>): StdProcessBuilder;
+export function spawn(...args: tg.Args<tg.Process.Arg>): StdProcessBuilder;
 export function spawn(
 	strings: TemplateStringsArray,
-	...placeholders: std.Args<tg.Template.Arg>
+	...placeholders: tg.Args<tg.Template.Arg>
 ): StdProcessBuilder;
 export function spawn(...args: any): any {
 	if (Array.isArray(args[0]) && "raw" in args[0]) {
@@ -54,8 +54,8 @@ type Mode = "build" | "run" | "spawn";
 export class StdProcessBuilder {
 	#mode: Mode;
 	#template: TemplateStringsArray | undefined;
-	#placeholders: std.Args<tg.Template.Arg> | undefined;
-	#passthrough: std.Args<tg.Process.Arg> | undefined;
+	#placeholders: tg.Args<tg.Template.Arg> | undefined;
+	#passthrough: tg.Args<tg.Process.Arg> | undefined;
 	#envs: Array<tg.Unresolved<std.env.Arg>>;
 	#bootstrap: boolean;
 	#includeUtils: boolean;
@@ -69,8 +69,8 @@ export class StdProcessBuilder {
 	constructor(
 		mode: Mode,
 		template?: TemplateStringsArray,
-		placeholders?: std.Args<tg.Template.Arg>,
-		passthrough?: std.Args<tg.Process.Arg>,
+		placeholders?: tg.Args<tg.Template.Arg>,
+		passthrough?: tg.Args<tg.Process.Arg>,
 	) {
 		this.#mode = mode;
 		this.#template = template;
@@ -245,7 +245,7 @@ export class StdProcessBuilder {
 		}
 
 		// Resolve user envs through std.env.arg for type compatibility.
-		let envArgs: std.Args<std.env.Arg> = [];
+		let envArgs: tg.Args<std.env.Arg> = [];
 		if (
 			!this.#bootstrap &&
 			this.#includeUtils &&

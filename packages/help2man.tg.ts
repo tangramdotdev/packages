@@ -38,10 +38,10 @@ export function source() {
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	// Get build triple first for texinfo (buildtime only).
 	const options = await std.args.apply<Arg, Arg>({
-		args: args as std.Args<Arg>,
+		args: args as tg.Args<Arg>,
 		map: async (arg) => arg,
 		reduce: {},
 	});

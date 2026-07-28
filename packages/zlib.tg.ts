@@ -25,7 +25,7 @@ export async function source() {
 
 export type Arg = std.autotools.Arg;
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{ source: source(), defaultCrossArgs: false, defaultCrossEnv: false },
 		...args,

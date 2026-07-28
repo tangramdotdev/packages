@@ -63,7 +63,7 @@ export function deps() {
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 /** Build `cmake`. */
-export async function self(...args: std.Args<Arg>) {
+export async function self(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{ source: source(), deps, setRuntimeLibraryPath: true },
 		...args,
@@ -230,7 +230,7 @@ export type ResolvedArg = Omit<
 };
 
 /** Resolve cmake args to a mutable arg object. Returns a BuildArg with build, host, and source guaranteed to be resolved. */
-export async function arg(...args: std.Args<BuildArg>): Promise<ResolvedArg> {
+export async function arg(...args: tg.Args<BuildArg>): Promise<ResolvedArg> {
 	type Collect = Omit<std.args.MakeArrayKeys<BuildArg, "phases">, "phases"> & {
 		phases: Array<std.phases.Arg>;
 	};
@@ -310,7 +310,7 @@ export async function arg(...args: std.Args<BuildArg>): Promise<ResolvedArg> {
 }
 
 /** Construct a cmake package build target. */
-export async function build(...args: std.Args<BuildArg>) {
+export async function build(...args: tg.Args<BuildArg>) {
 	const resolved = await arg(...args);
 	const {
 		build: build_,

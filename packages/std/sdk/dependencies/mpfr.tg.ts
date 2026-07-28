@@ -21,7 +21,7 @@ export async function source() {
 
 export type Arg = std.autotools.Arg;
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	return std.autotools.build(
 		{
 			source: source(),

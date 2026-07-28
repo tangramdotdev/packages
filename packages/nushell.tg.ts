@@ -31,7 +31,7 @@ export function source() {
 
 export type Arg = cargo.Arg;
 
-export function build(...args: std.Args<Arg>) {
+export function build(...args: tg.Args<Arg>) {
 	return cargo.build({ source: source() }, ...args);
 }
 

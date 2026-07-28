@@ -38,7 +38,7 @@ export type Arg = std.autotools.Arg & {
 	libcc?: tg.File;
 };
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	// Extract libcc from raw args since std.autotools.arg doesn't know about it.
 	const libccArg = (await Promise.all(args.map(tg.resolve))).find(
 		(a): a is { libcc?: tg.File } =>

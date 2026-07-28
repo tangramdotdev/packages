@@ -113,7 +113,7 @@ export type Arg = {
 	stripExecutables?: boolean;
 };
 
-export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
+export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	const resolved = await arg(...args);
 
 	// If deps were provided, resolve them to env.
@@ -183,7 +183,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	const hostOs = std.triple.os(host);
 
 	// Set up env.
-	let envs: std.Args<std.env.Arg> = [];
+	let envs: tg.Args<std.env.Arg> = [];
 	if (bootstrap) {
 		envs.push({ utils: false });
 	}
@@ -333,7 +333,7 @@ export type ResolvedArg = Omit<Arg, "build" | "host" | "phases" | "source"> & {
 };
 
 /** Resolve autotools args to a mutable arg object. Returns an arg with build, host, and source guaranteed to be resolved. */
-export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
+export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 	type Collect = Omit<std.args.MakeArrayKeys<Arg, "phases">, "phases"> & {
 		phases: Array<std.phases.Arg>;
 	};

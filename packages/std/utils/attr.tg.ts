@@ -70,7 +70,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 
 	const phases = { configure };
 
-	const env: std.Args<std.env.Arg> = [env_ ?? null];
+	const env: tg.Args<std.env.Arg> = [env_ ?? null];
 	if (usePrerequisites) {
 		env.push(prerequisites(build));
 	}

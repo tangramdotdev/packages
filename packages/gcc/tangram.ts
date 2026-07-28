@@ -34,7 +34,7 @@ export type Arg = std.autotools.Arg & {
 	target?: string;
 };
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg({ source: source() }, ...args);
 
 	const host = std.sdk.canonicalTriple(arg.host);
@@ -127,7 +127,7 @@ export async function build(...args: std.Args<Arg>) {
 
 export default build;
 
-export async function libgcc(...args: std.Args<Arg>) {
+export async function libgcc(...args: tg.Args<Arg>) {
 	// FIXME - write in terms of gcc above, pass phases down.
 	const arg = await std.autotools.arg({ source: source() }, ...args);
 

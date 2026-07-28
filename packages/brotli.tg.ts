@@ -32,7 +32,7 @@ export function source() {
 
 export type Arg = cmake.Arg;
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	let output = await cmake.build(
 		{
 			source: source(),

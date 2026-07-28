@@ -30,7 +30,7 @@ export async function source() {
 	return source;
 }
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -84,7 +84,7 @@ export async function build(...args: std.Args<Arg>) {
 	};
 	const phases = { configure };
 
-	const env: std.Args<std.env.Arg> = [];
+	const env: tg.Args<std.env.Arg> = [];
 	env.push(prerequisites(build));
 	env.push({
 		CFLAGS: tg.Mutation.prefix(

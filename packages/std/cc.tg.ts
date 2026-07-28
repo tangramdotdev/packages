@@ -46,7 +46,7 @@ export type FlagsArg = {
  * - Strip flags for smaller binaries
  * - RELRO for GOT protection on Linux
  */
-export function flags(arg: FlagsArg, envs: std.Args<std.env.Arg>): void {
+export function flags(arg: FlagsArg, envs: tg.Args<std.env.Arg>): void {
 	const {
 		host,
 		fortifySource: fortifySource_ = 2,
@@ -189,7 +189,7 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 	const isCross = build !== host;
 	const detectedHost = std.sdk.canonicalTriple(std.triple.host());
 	const canUsePrebuiltBuildTools = build === detectedHost;
-	const envs: std.Args<std.env.Arg> = [];
+	const envs: tg.Args<std.env.Arg> = [];
 
 	// Add compiler flags.
 	flags(

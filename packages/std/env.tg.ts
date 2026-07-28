@@ -1,7 +1,7 @@
 import * as std from "./tangram.ts";
 import { wrap } from "./wrap.tg.ts";
 
-export async function env(...args: std.Args<env.Arg>) {
+export async function env(...args: tg.Args<env.Arg>) {
 	return await std.wrap(await tg.build(std.buildGnuEnv).named("gnu env"), {
 		env: std.env.arg(...args),
 	});
@@ -28,7 +28,7 @@ export namespace env {
 
 	/** Produce a single env object from one or more env args. */
 	export async function arg(
-		...args: std.Args<env.Arg>
+		...args: tg.Args<env.Arg>
 	): Promise<std.env.EnvObject> {
 		let includeUtils = true;
 		const resolved = await Promise.all(args.map(tg.resolve));

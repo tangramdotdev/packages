@@ -1,9 +1,9 @@
 import * as std from "./tangram.ts";
 
-export function command(...args: std.Args<tg.Command.Arg>): tg.Command.Builder;
+export function command(...args: tg.Args<tg.Command.Arg>): tg.Command.Builder;
 export function command(
 	strings: TemplateStringsArray,
-	...placeholders: std.Args<tg.Template.Arg>
+	...placeholders: tg.Args<tg.Template.Arg>
 ): tg.Command.Builder;
 export function command(...args: any): any {
 	if (Array.isArray(args[0]) && "raw" in args[0]) {
@@ -18,7 +18,7 @@ export function command(...args: any): any {
 /** Resolve std shell and env for a command template literal. */
 async function stdCommandArg(
 	strings: TemplateStringsArray,
-	...placeholders: std.Args<tg.Template.Arg>
+	...placeholders: tg.Args<tg.Template.Arg>
 ) {
 	const host = std.triple.host();
 	const env = await tg
@@ -57,7 +57,7 @@ export type ProcessArgObject = {
 
 /** Merge an array of ProcessArgObjects into a single one. */
 export async function mergeArgs(
-	...args: std.Args<ProcessArgObject>
+	...args: tg.Args<ProcessArgObject>
 ): Promise<ProcessArgObject> {
 	return await std.args.apply<ProcessArgObject, ProcessArgObject>({
 		args,

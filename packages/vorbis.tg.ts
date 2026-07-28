@@ -39,7 +39,7 @@ export function deps() {
 
 export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
 
-export function build(...args: std.Args<Arg>) {
+export function build(...args: tg.Args<Arg>) {
 	return cmake.build(
 		{
 			source: source(),

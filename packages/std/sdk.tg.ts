@@ -21,7 +21,7 @@ export * as proxy from "./sdk/proxy.tg.ts";
 /** An SDK combines a compiler, a linker, a libc, and a set of basic utilities.
  * Normalizes variadic args and delegates to pre-built release SDKs when the
  * resolved arguments match platform defaults, enabling remote cache hits. */
-export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
+export async function sdk(...args: tg.Args<sdk.Arg>): Promise<tg.Directory> {
 	const resolved = await sdk.arg(...args);
 
 	// Delegate to pre-built SDKs when args match defaults for remote cache hits.
@@ -45,7 +45,7 @@ export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 
 /** Inner SDK implementation. Takes already-resolved, canonical arguments so
  * the build ID is stable across all callers. */
-export async function sdkInner(...args: std.Args<sdk.ResolvedArg>) {
+export async function sdkInner(...args: tg.Args<sdk.ResolvedArg>) {
 	const {
 		embedWrapper,
 		host,
@@ -157,7 +157,7 @@ export namespace sdk {
 		toolchain?: sdk.ToolchainKind | null;
 	};
 
-	export async function arg(...args: std.Args<Arg | null>) {
+	export async function arg(...args: tg.Args<Arg | null>) {
 		let {
 			embedWrapper,
 			host: host_,

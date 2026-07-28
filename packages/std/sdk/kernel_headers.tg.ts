@@ -74,7 +74,7 @@ export async function kernelHeaders(arg?: tg.Unresolved<Arg>) {
 	};
 	const order = ["build", "install"];
 
-	const envs: std.Args<std.env.Arg> = [env_ ?? null];
+	const envs: tg.Args<std.env.Arg> = [env_ ?? null];
 	if (!bootstrap_) {
 		// Add the toolchain.
 		const sdkArg =

@@ -41,7 +41,7 @@ export type PkgAArg = std.args.BasePackageArg & {
 	pkgAOption?: string;
 };
 
-export async function pkgABuild(...args: std.Args<PkgAArg>) {
+export async function pkgABuild(...args: tg.Args<PkgAArg>) {
 	const { mockBuilder = {}, pkgAOption } =
 		await std.packages.applyArgs<PkgAArg>(...args);
 	const base = await mockBuilderBuild(mockBuilder);
@@ -59,7 +59,7 @@ export type PkgBArg = std.args.BasePackageArg & {
 	pkgBOption?: string;
 };
 
-export async function pkgBBuild(...args: std.Args<PkgBArg>) {
+export async function pkgBBuild(...args: tg.Args<PkgBArg>) {
 	const { mockBuilder = {}, pkgBOption } =
 		await std.packages.applyArgs<PkgBArg>(...args);
 	const base = await mockBuilderBuild(mockBuilder);
@@ -72,7 +72,7 @@ export async function pkgBBuild(...args: std.Args<PkgBArg>) {
 }
 
 // FullDep: outputs bin/lib/include for kind filtering tests.
-export async function fullDepBuild(...args: std.Args<std.args.BasePackageArg>) {
+export async function fullDepBuild(...args: tg.Args<std.args.BasePackageArg>) {
 	const resolved = await std.packages.applyArgs<std.args.BasePackageArg>(
 		...args,
 	);
@@ -103,7 +103,7 @@ export type ParentArg = std.args.BasePackageArg &
 	std.deps.Arg<typeof leafDeps> & { parentOption?: string };
 
 export async function parentBuild(
-	...args: std.Args<ParentArg>
+	...args: tg.Args<ParentArg>
 ): Promise<tg.Directory> {
 	const resolved = await std.packages.applyArgs<ParentArg>(...args);
 	const libFiles: Record<string, tg.Unresolved<tg.File>> = {};

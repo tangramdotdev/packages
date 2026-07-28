@@ -17,7 +17,7 @@ export type Arg = {
 };
 
 /** Download a pre-compiled binary and wrap it. */
-export async function self(...args: std.Args<Arg>) {
+export async function self(...args: tg.Args<Arg>) {
 	const { host: host_ } = await std.packages.applyArgs<Arg>(...args);
 	const { name, version } = metadata;
 	const tag = `${name}-v${version}`;

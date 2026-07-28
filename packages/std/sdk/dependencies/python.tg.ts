@@ -21,7 +21,7 @@ export async function source() {
 
 export type Arg = std.autotools.Arg;
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	// Resolve args first to access build/host for OS detection.
 	const resolved = await std.autotools.arg({ source: source() }, ...args);
 	const host = resolved.host ?? std.triple.host();
@@ -36,7 +36,7 @@ export async function build(...args: std.Args<Arg>) {
 	];
 	const makeArgs: Array<string> = [];
 
-	const envs: std.Args<std.env.Arg> = [];
+	const envs: tg.Args<std.env.Arg> = [];
 	if (os === "darwin") {
 		envs.push({ MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget });
 		configureArgs.push(

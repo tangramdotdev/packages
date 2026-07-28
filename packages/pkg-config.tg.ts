@@ -36,7 +36,7 @@ export type Arg = std.autotools.Arg &
 		proxy?: boolean;
 	};
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			deps,
@@ -61,7 +61,7 @@ export async function build(...args: std.Args<Arg>) {
 	const proxy =
 		(
 			await std.args.apply<Arg, Arg>({
-				args: args as std.Args<Arg>,
+				args: args as tg.Args<Arg>,
 				map: async (arg) => arg,
 				reduce: {},
 			})

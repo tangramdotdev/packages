@@ -11,7 +11,7 @@ export type Arg = {
 	source?: tg.Directory | null;
 };
 
-export async function injection(...args: std.Args<Arg>) {
+export async function injection(...args: tg.Args<Arg>) {
 	const arg = await std.args.apply<Arg, Arg>({
 		args,
 		map: async (a) => a,
@@ -135,9 +135,7 @@ type DylibArg = {
 	source: tg.Directory;
 };
 
-export async function dylib(
-	...dylibArgs: std.Args<DylibArg>
-): Promise<tg.File> {
+export async function dylib(...dylibArgs: tg.Args<DylibArg>): Promise<tg.File> {
 	const arg = await std.args.apply<DylibArg, DylibArg>({
 		args: dylibArgs,
 		map: async (a) => a,
@@ -186,7 +184,7 @@ export async function dylib(
 		);
 	}
 
-	let args: std.Args<tg.Template.Arg> = [
+	let args: tg.Args<tg.Template.Arg> = [
 		"-shared",
 		"-fPIC",
 		"-ldl",

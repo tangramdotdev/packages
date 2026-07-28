@@ -39,7 +39,7 @@ export type Arg = std.args.BasePackageArg & {
 };
 
 /** Create an environment with poetry installed. */
-export async function self(...args: std.Args<Arg>) {
+export async function self(...args: tg.Args<Arg>) {
 	const {
 		build,
 		host,

@@ -69,7 +69,7 @@ export type RustDependency = {
 	checksum?: tg.Checksum;
 };
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const {
 		crateName: crateName_,
 		crateType: crateType_,

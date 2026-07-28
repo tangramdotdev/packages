@@ -162,7 +162,7 @@ function resolveConfig(arg: BuildToolsArg): ResolvedConfig {
 }
 
 /** An env containing build-time tools. Use presets or individual flags to control which tools are included. */
-export async function buildTools(...args: std.Args<BuildToolsArg>) {
+export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 	const resolved = await std.args.apply<BuildToolsArg, BuildToolsArg>({
 		args,
 		map: async (a) => a,
@@ -190,7 +190,7 @@ export async function buildTools(...args: std.Args<BuildToolsArg>) {
 	}
 
 	// This list collects artifacts to return. It does not include the build toolchain or standard utils.
-	const retEnvs: std.Args<std.env.Arg> = [{ utils: false }];
+	const retEnvs: tg.Args<std.env.Arg> = [{ utils: false }];
 
 	// A running modified build env including pieces we build along the way.
 	let buildEnv = await std.env.arg(buildToolchain);
@@ -536,7 +536,7 @@ export async function hostLibraries(arg: tg.Unresolved<HostLibrariesArg>) {
 	const { host, buildToolchain } = resolved;
 	const config = resolveHostLibrariesConfig(resolved);
 
-	const ret: std.Args<std.env.Arg> = [];
+	const ret: tg.Args<std.env.Arg> = [];
 
 	// zlib - common compression library.
 	if (config.zlib) {

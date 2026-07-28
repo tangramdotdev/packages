@@ -99,7 +99,7 @@ export type ResolvedArg = Omit<Arg, "build" | "host" | "source"> & {
 };
 
 /** Resolve cargo args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
-export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
+export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 	const collect = await std.args.apply<Arg, Arg>({
 		args,
 		map: async (arg) => arg,
@@ -143,7 +143,7 @@ export type ResolvedRunArg = Omit<RunArg, "build" | "host"> & {
 
 /** Resolve run args to a mutable arg object. Returns a RunArg with build and host guaranteed to be resolved. */
 export async function runArg(
-	...args: std.Args<RunArg>
+	...args: tg.Args<RunArg>
 ): Promise<ResolvedRunArg> {
 	const collect = await std.args.apply<RunArg, RunArg>({
 		args,
@@ -190,7 +190,7 @@ async function resolveDepsEnv(
 	});
 }
 
-export async function run(...args: std.Args<RunArg>): Promise<tg.Command> {
+export async function run(...args: tg.Args<RunArg>): Promise<tg.Command> {
 	const resolved = await runArg(...args);
 	const depsEnv = await resolveDepsEnv(resolved);
 
@@ -377,7 +377,7 @@ ${execLine}
 	});
 }
 
-export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
+export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	const resolved = await arg(...args);
 	const depsEnv = await resolveDepsEnv(resolved);
 
@@ -420,7 +420,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		sdkArgs.push({ toolchain: "gnu" });
 	}
 
-	const envs: std.Args<std.env.Arg> = [];
+	const envs: tg.Args<std.env.Arg> = [];
 
 	const sdk = await tg.build(std.sdk, ...sdkArgs);
 	envs.push(sdk);

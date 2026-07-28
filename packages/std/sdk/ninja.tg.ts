@@ -31,7 +31,7 @@ export type Arg = {
 	source?: tg.Directory | null;
 };
 
-export async function ninja(...args: std.Args<Arg>) {
+export async function ninja(...args: tg.Args<Arg>) {
 	const {
 		build: build_,
 		host: host_,

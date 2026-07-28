@@ -47,7 +47,7 @@ export type Arg = {
 	usePrerequisites?: boolean;
 };
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -66,7 +66,7 @@ export async function build(...args: std.Args<Arg>) {
 	const build = build_ ?? host;
 	const os = std.triple.os(host);
 
-	const dependencies: std.Args<std.env.Arg> = [];
+	const dependencies: tg.Args<std.env.Arg> = [];
 
 	if (usePrerequisites) {
 		dependencies.push(prerequisites(build));

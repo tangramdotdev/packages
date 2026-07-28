@@ -52,10 +52,10 @@ export type Arg = std.autotools.Arg &
 		target?: string;
 	};
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	// Extract custom options first.
 	const customOptions = await std.args.apply<Arg, Arg>({
-		args: args as std.Args<Arg>,
+		args: args as tg.Args<Arg>,
 		map: async (arg) => arg,
 		reduce: {},
 	});

@@ -20,7 +20,7 @@ export type Arg = {
 };
 
 /** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
-export async function workspace(...args: std.Args<Arg>): Promise<tg.Directory> {
+export async function workspace(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	const {
 		build: build_,
 		host: host_,
@@ -171,7 +171,7 @@ export async function stripProxy(arg: tg.Unresolved<Arg>) {
 		.then(tg.File.expect);
 }
 
-export async function wrapper(...args: std.Args<Arg>) {
+export async function wrapper(...args: tg.Args<Arg>) {
 	const resolved = await std.args.apply<Arg, Arg>({
 		args,
 		map: async (a) => a,
@@ -192,7 +192,7 @@ export async function wrapper(...args: std.Args<Arg>) {
 		.then(tg.File.expect);
 }
 
-export async function wrapperBinary(...args: std.Args<Arg>) {
+export async function wrapperBinary(...args: tg.Args<Arg>) {
 	const resolved = await std.args.apply<Arg, Arg>({
 		args,
 		map: async (a) => a,
@@ -250,7 +250,7 @@ type ToolchainArg = {
 };
 
 export async function rust(
-	...args: std.Args<ToolchainArg>
+	...args: tg.Args<ToolchainArg>
 ): Promise<tg.Directory> {
 	const { target: target_ } = await std.args.apply<ToolchainArg, ToolchainArg>({
 		args,
@@ -450,7 +450,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	// Set up common environemnt.
 	const certFile = tg`${std.caCertificates()}/cacert.pem`;
 
-	const env: std.Args<std.env.Arg> = [
+	const env: tg.Args<std.env.Arg> = [
 		{ utils: false },
 		buildToolchain,
 		hostToolchain ?? {},

@@ -34,7 +34,7 @@ export type Arg = {
 	sdk?: std.sdk.Arg;
 };
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const {
 		build: build_,
 		env: env_,

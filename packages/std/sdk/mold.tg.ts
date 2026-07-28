@@ -37,7 +37,7 @@ export type Arg = {
 	source?: tg.Directory | null;
 };
 
-export async function mold(...args: std.Args<Arg>) {
+export async function mold(...args: tg.Args<Arg>) {
 	const {
 		build: build_,
 		env: env_,

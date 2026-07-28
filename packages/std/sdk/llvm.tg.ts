@@ -55,7 +55,7 @@ export type LLVMArg = {
 };
 
 /** Produce a complete clang+lld distribution. */
-export async function toolchain(...args: std.Args<LLVMArg>) {
+export async function toolchain(...args: tg.Args<LLVMArg>) {
 	const {
 		build: build_,
 		env: env_,
@@ -398,8 +398,8 @@ export async function wrapArgs(arg: WrapArgsArg) {
 	const { host, target: target_, toolchainDir } = arg;
 	const target = target_ ?? host;
 
-	let clangArgs: std.Args<tg.Template.Arg> = [];
-	let clangxxArgs: std.Args<tg.Template.Arg> = [];
+	let clangArgs: tg.Args<tg.Template.Arg> = [];
+	let clangxxArgs: tg.Args<tg.Template.Arg> = [];
 	let env = {};
 	if (std.triple.os(host) === "darwin") {
 		const targetOs = std.triple.os(target);

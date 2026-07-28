@@ -60,7 +60,7 @@ export function deps() {
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export async function build(...args: std.Args<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),

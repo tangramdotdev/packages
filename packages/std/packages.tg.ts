@@ -12,7 +12,7 @@ export type MinimalPackageArg = {
 
 /** A function that accepts a variable amount of package args and produces a directory. This is the standard type for the default exports of most packages. */
 export type BuildFn<T extends MinimalPackageArg> = (
-	...args: std.Args<T>
+	...args: tg.Args<T>
 ) => PromiseLike<tg.Directory>;
 
 /**
@@ -60,11 +60,11 @@ export type ResolvedDependencyArgs = {
 
 /** Produce a single argument object from a variadic list of arguments with mutation handling. */
 export async function applyArgs<T extends PackageArg>(
-	...args: std.Args<T>
+	...args: tg.Args<T>
 ): Promise<ResolvedPackageArg<T>> {
 	type Collect = std.args.MakeArrayKeys<BasePackageArg, "dependencies">;
 	const arg = (await std.args.apply<BasePackageArg, Collect>({
-		args: args as std.Args<BasePackageArg>,
+		args: args as tg.Args<BasePackageArg>,
 		map: async (arg) => {
 			return {
 				...arg,
