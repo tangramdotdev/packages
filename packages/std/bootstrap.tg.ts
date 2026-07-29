@@ -5,13 +5,13 @@ export * as musl from "./bootstrap/musl.tg.ts";
 export { sdk } from "./bootstrap/sdk.tg.ts";
 
 // Bootstrap release version and GCC version bundled in the Linux toolchain.
-const version = "v2026.01.26";
+const version = "v2026.07.29";
 export const gccVersion = "11.2.1";
 
 // Supported macOS SDK versions. The latest is the default.
-const sdkVersions = ["12.1", "12.3", "14.5", "15.2", "26.2"] as const;
+const sdkVersions = ["12.1", "14.5", "15.2", "15.4", "26.5"] as const;
 export type SdkVersion = (typeof sdkVersions)[number];
-export const LatestSdkVersion: SdkVersion = "26.2";
+export const LatestSdkVersion: SdkVersion = "26.5";
 
 export type Arg = {
 	/** Specify which component to provide. */
@@ -169,25 +169,25 @@ export async function test() {
 
 const checksums: Record<string, tg.Checksum> = {
 	"macos_sdk_12.1":
-		"sha256:69f73de40e06f9d5ee1ec6b79583646fc568d4b2318a24619189469d19068417",
-	"macos_sdk_12.3":
-		"sha256:1c51487fd43c51731862a94dae775620f522320db0dd4818607108ddccd0cc80",
+		"sha256:60cb0bf7c1dfd0d690fbadc58f9e0750a31a4079e3f2ec367d41d3f3f0249aaa",
 	"macos_sdk_14.5":
-		"sha256:93bef003b6dbbfc03456749bec6a571d9fabc0c0480cd39394e2080eb853379e",
+		"sha256:04cceb8affaee0319d3985611e88735fb05a4cd1517b936b77e8d8ee2af69a1c",
 	"macos_sdk_15.2":
-		"sha256:f497d6a7cdaf940af6cd9fdac68b69a5bda1418e4f7e11a4a527bf6f61f17567",
-	"macos_sdk_26.2":
-		"sha256:4fba68b7c7f1b12a3a10672d112059a9adfe94e866912b463055f12fe342e4f7",
+		"sha256:d026cae566358af13c581bfc9bc7e7766048ea2acbdf8d2d5c4ebe880fe3088c",
+	"macos_sdk_15.4":
+		"sha256:db62998e3d1aeaacf631785fe32433e8f74bb7205345ed328e7483e91329ef05",
+	"macos_sdk_26.5":
+		"sha256:5efe322cf20d89d3e2aed633407aa1c85606ec14e6dae5defbee1fee6bb098da",
 	toolchain_aarch64_linux:
-		"sha256:3a7eab3903161eae15cb8f7ff283ea0dcf57c5294f67b4c4306d5fcf7b94e9eb",
+		"sha256:d0d01924d0542cf54b187f7e294fb2f995b4e0ee16815d03ee182f07e16e07e3",
 	toolchain_universal_darwin:
-		"sha256:952bc0fa84feb02a32d2530b425fd7ae82280dec8112edc0e2adfaf7c1f1911e",
+		"sha256:165f267d834d07f07a512c6932776ac4b35e36781c5a3271dafd7c42921797b4",
 	toolchain_x86_64_linux:
-		"sha256:58c1b02ce2c770651b574baf2abdd99fe5de0537072d7a25b4da0b7226652480",
+		"sha256:f688005853cd8c15cb9371e7d320049387b951aca961ebd7be5d724e25d8fb22",
 	utils_aarch64_linux:
-		"sha256:b4724cfba44ea545fb041c61cdd86c0c8fdda1f221bfbe284c23853014faec6d",
+		"sha256:0f5df376109c8c5acd1efc4989e83608cea57d21d8a31d9804f145f2a96cba8b",
 	utils_universal_darwin:
-		"sha256:8e0031b8c5a183e173fe4b7c2d6b038c46b46f390f6ff5e1d23eb0ec403e2abe",
+		"sha256:44649125995ade83db7e4f745876492ca877cfc2ed47aad85e792d4f5bcc27c1",
 	utils_x86_64_linux:
-		"sha256:552e634483b6d118463bff342febc2b72665c48912e0bf90e80c897cf20b16a9",
+		"sha256:de8db84ba59a38b82dd963747b4c466aabd352d81a46d11c405d1ef1379992fd",
 };
