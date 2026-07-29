@@ -8,7 +8,8 @@ type GlibcVersion =
 	| "2.40"
 	| "2.41"
 	| "2.42"
-	| "2.43";
+	| "2.43"
+	| "2.44";
 export const AllGlibcVersions = [
 	"2.37",
 	"2.38",
@@ -17,8 +18,9 @@ export const AllGlibcVersions = [
 	"2.41",
 	"2.42",
 	"2.43",
+	"2.44",
 ];
-export const defaultGlibcVersion: GlibcVersion = "2.43";
+export const defaultGlibcVersion: GlibcVersion = "2.44";
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/libc/",
@@ -78,7 +80,8 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		version === "2.40" ||
 		version === "2.41" ||
 		version === "2.42" ||
-		version === "2.43"
+		version === "2.43" ||
+		version === "2.44"
 	) {
 		// This flag is not available in previous versions. The `-DFORTIFY_SOURCE` macro was already available to users of glibc. This flag additionally uses this macro to build libc itself. It's used to detect buffer overflows at compile time.
 		additionalFlags.push("--enable-fortify-source");
@@ -240,5 +243,9 @@ const checksums: Map<GlibcVersion, tg.Checksum> = new Map([
 	[
 		"2.43",
 		"sha256:d9c86c6b5dbddb43a3e08270c5844fc5177d19442cf5b8df4be7c07cd5fa3831",
+	],
+	[
+		"2.44",
+		"sha256:37f600f2bef3c5e8300147059568b2a2e40a7ad6ccc65ce942556d49429cc667",
 	],
 ]);
