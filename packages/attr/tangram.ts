@@ -19,10 +19,19 @@ function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:6c8a2148a7b85043b68492bce43316b0e2e214fc4e628c7ede078e76e216330b";
-	const base = `https://download.savannah.gnu.org/releases/${name}`;
+	const base = `https://download-mirror.savannah.gnu.org/releases/${name}`;
+	const mirrorBases = [
+		`https://www.mirrorservice.org/sites/download.savannah.gnu.org/releases/${name}`,
+		`https://mirror.csclub.uwaterloo.ca/nongnu/${name}`,
+		`https://mirror.easyname.at/nongnu/${name}`,
+		`https://savannah.c3sl.ufpr.br/${name}`,
+		`https://download.savannah.gnu.org/releases/${name}`,
+	];
 	const extension = ".tar.xz";
+	const archive = std.download.packageArchive({ name, version, extension });
+	const mirrors = mirrorBases.map((mirrorBase) => `${mirrorBase}/${archive}`);
 	return std.download
-		.extractArchive({ checksum, name, base, version, extension })
+		.extractArchive({ checksum, name, base, version, extension, mirrors })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 }

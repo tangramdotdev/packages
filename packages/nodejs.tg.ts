@@ -156,14 +156,18 @@ export type ResolvedArg = Omit<Arg, "deps" | "env"> & {
 /** Resolve nodejs args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
 export async function arg(...args: tg.Args<any>): Promise<ResolvedArg> {
 	// biome-ignore lint/suspicious/noExplicitAny: Arg contains non-Value types (deps).
-	const collect = await std.args.apply<any, any>({
+	const collect = await tg.Args.apply<
+		any,
+		tg.ValueOrMaybeMutationMap<any>,
+		any
+	>({
 		args,
 		map: async (arg) => arg,
 		reduce: {
 			env: (a, b) => std.env.arg(a ?? null, b ?? null),
-			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.mergeArg(a, b),
 			subtreeEnv: (a, b) => std.env.arg(a ?? null, b ?? null),
-			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			subtreeSdk: (a, b) => std.sdk.mergeArg(a, b),
 		},
 	});
 

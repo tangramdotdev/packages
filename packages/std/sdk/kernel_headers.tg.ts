@@ -24,7 +24,6 @@ export async function source() {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -35,7 +34,6 @@ export type Arg = {
 
 export async function kernelHeaders(arg?: tg.Unresolved<Arg>) {
 	const {
-		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -75,18 +73,11 @@ export async function kernelHeaders(arg?: tg.Unresolved<Arg>) {
 	const order = ["build", "install"];
 
 	const envs: tg.Args<std.env.Arg> = [env_ ?? null];
-	if (!bootstrap_) {
+	if (sdk !== "none") {
 		// Add the toolchain.
-		const sdkArg =
-			typeof sdk === "boolean"
-				? { host: buildTriple, target: buildTriple }
-				: sdk;
 		envs.push(
 			await tg
-				.build(
-					std.sdk,
-					...(sdkArg !== undefined && sdkArg !== null ? [sdkArg] : []),
-				)
+				.build(std.sdk, ...(sdk !== undefined && sdk !== null ? [sdk] : []))
 				.named("sdk"),
 		);
 
@@ -94,20 +85,20 @@ export async function kernelHeaders(arg?: tg.Unresolved<Arg>) {
 		const utils = await tg.build(std.buildDefaultEnv).named("default env");
 		envs.push(utils);
 	}
-	const env = std.env.arg(...envs, { utils: false });
+	const env = std.env.compose(...envs);
 
 	const result = tg.Directory.expect(
 		await tg
 			.build(
 				std.phases.run,
 				{
-					bootstrap: bootstrap_,
+					bootstrap: true,
 					env,
 					phases: { build, install },
 					order,
-					command: { host: system },
+					host: system,
 				},
-				...(phasesArg !== null ? [phasesArg] : []),
+				{ phases: phasesArg },
 			)
 			.named("kernel headers"),
 	);
@@ -138,13 +129,12 @@ export async function test() {
 
 export async function testKernelHeaders(host: string, target?: string) {
 	const target_ = target ?? host;
-	const buildEnv = std.env.arg(
+	const buildEnv = std.env.compose(
 		bootstrap.sdk(host),
 		bootstrap.make.default({ host }),
-		{ utils: false },
 	);
 	const headers = await kernelHeaders({
-		bootstrap: true,
+		sdk: "none",
 		build: host,
 		env: buildEnv,
 		host: target_,

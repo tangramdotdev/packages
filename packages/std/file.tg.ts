@@ -144,20 +144,16 @@ export async function testBinary() {
 	});
 
 	// Produce a library and executable.
-	const output = await std.build`
+	const output = await std
+		.build(std.shBootstrap`
 		set -x
 		mkdir -p ${tg.output}
 		cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o ${tg.output}/libgreet.${dylibExt}
 		cc -v -L${tg.output} -I${source} -lgreet -xc ${source}/main.c -o ${tg.output}/exe
-	`
-		.bootstrap(true)
-		.env(
-			bootstrapSDK,
-			{
-				TGLD_PASSTHROUGH: true,
-			},
-			{ utils: false },
-		)
+	`)
+		.env(bootstrapSDK, {
+			TGLD_PASSTHROUGH: true,
+		})
 		.then(tg.Directory.expect);
 
 	// Obtain the output files.

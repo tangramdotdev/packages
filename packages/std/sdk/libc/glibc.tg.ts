@@ -43,7 +43,6 @@ export function source(version?: GlibcVersion) {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -54,7 +53,6 @@ export type Arg = {
 
 export async function build(arg: tg.Unresolved<Arg>) {
 	const {
-		bootstrap = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -88,18 +86,39 @@ export async function build(arg: tg.Unresolved<Arg>) {
 	}
 
 	const configure = {
-		args: [
-			"--disable-nls",
-			"--disable-nscd",
-			"--disable-werror",
-			`--enable-kernel=4.19`,
-			tg`--with-headers="${linuxHeaders}/include"`,
-			`--build=${build}`,
-			`--host=${host}`,
-			"libc_cv_slibdir=/lib",
-			"libc_cv_forced_unwind=yes",
-			...additionalFlags,
-		],
+		pre: `
+			echo "=== TG-DIAG begin ==="
+			echo "--- PATH ---"
+			echo "$PATH" | tr ':' '\\n'
+			echo "--- env ---"
+			env | sort
+			echo "--- which ${host}-gcc ---"
+			command -v ${host}-gcc || echo "TG-DIAG: not found"
+			echo "--- gcc -dumpmachine ---"
+			${host}-gcc -dumpmachine || echo "TG-DIAG: dumpmachine failed"
+			echo "--- gcc -print-search-dirs ---"
+			${host}-gcc -print-search-dirs || echo "TG-DIAG: print-search-dirs failed"
+			echo "--- compile test ---"
+			echo 'int main(void) { return 0; }' > tg-conftest.c
+			status=0
+			${host}-gcc -v -c tg-conftest.c -o tg-conftest.o || status=$?
+			echo "TG-DIAG: compile exited with $status"
+			echo "=== TG-DIAG end ==="
+		`,
+		body: {
+			args: [
+				"--disable-nls",
+				"--disable-nscd",
+				"--disable-werror",
+				`--enable-kernel=4.19`,
+				tg`--with-headers="${linuxHeaders}/include"`,
+				`--build=${build}`,
+				`--host=${host}`,
+				"libc_cv_slibdir=/lib",
+				"libc_cv_forced_unwind=yes",
+				...additionalFlags,
+			],
+		},
 	};
 
 	const install = {
@@ -126,16 +145,15 @@ export async function build(arg: tg.Unresolved<Arg>) {
 	let result = await std.autotools.build({
 		build,
 		host,
-		bootstrap,
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
-		env: std.env.arg(...env, { utils: false }),
+		env: std.env.compose(...env),
 		fortifySource: false,
 		hardeningCFlags: false,
 		opt: "3",
 		phases,
 		prefixPath: "/",
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(version),
 	});
 

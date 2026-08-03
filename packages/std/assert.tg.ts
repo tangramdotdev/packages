@@ -298,10 +298,8 @@ export async function runnableBin(arg: RunnableBinArg) {
 		...testArgs,
 	)} > ${tg.output} 2>&1${exitSuffix}`;
 
-	const stdout = await $`${executable}`
-		.bootstrap(true)
-		.env(arg.env ?? null)
-		.exitOnErr(exitOnErr)
+	const stdout = await $(std.sh({ bootstrap: true, exitOnErr })`${executable}`)
+		.env(arg.env ?? {})
 		.host(arg.host)
 		.then(tg.File.expect)
 		.then((file) => file.text);
@@ -389,8 +387,7 @@ export async function headerCanBeIncluded(arg: HeaderArg) {
 		}`;
 
 	// Compile the program, ensuring the env properly made the header discoverable.
-	const program = await $`cc -xc "${source}" -o ${tg.output}`
-		.bootstrap(true)
+	const program = await $(std.shBootstrap`cc -xc "${source}" -o ${tg.output}`)
 		.env(std.sdk(), arg.directory) // FIXME - tg.build the default sdk here too.
 		.then(tg.File.expect);
 
@@ -404,7 +401,7 @@ type LibraryArg = {
 	env?: std.env.Arg;
 	host: string;
 	library: LibrarySpec;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.ArgObject;
 };
 
 /** Assert the directory contains a library conforming to the provided spec. */
@@ -567,7 +564,7 @@ type TestDylibArg = {
 	env?: std.env.Arg;
 	host: string;
 	runtimeDepDirs: Array<tg.Unresolved<tg.Directory>>;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.ArgObject;
 	testSource?: string;
 };
 
@@ -596,8 +593,11 @@ export async function testDylib(arg: TestDylibArg) {
 			await $`nm ${nmFlags} "${dylibPath}" | grep ' T ' | head -1 > ${tg.output}`
 				.env(std.sdk(...(arg.sdk !== undefined ? [arg.sdk] : [])))
 				.then(tg.File.expect)
-				.then((f) => f.text)
-				.catch(() => null);
+				// `grep` exits nonzero when the library exports no text symbols, failing the build.
+				.then(
+					(f) => f.text,
+					() => null,
+				);
 
 		if (symbols && symbols.trim()) {
 			const symbol = symbols.trim().split(/\s+/).pop() ?? "";
@@ -636,14 +636,11 @@ export async function testDylib(arg: TestDylibArg) {
 	const sdkEnv = std.sdk(...(arg.sdk !== undefined ? [arg.sdk] : []));
 	const pkgConfigEnv = buildTools({ preset: "minimal" });
 	const allEnvDirs = [directory, ...arg.runtimeDepDirs];
-	const compileEnv = std.env.arg(
+	const compileEnv = std.env.compose(
 		sdkEnv,
 		pkgConfigEnv,
 		...allEnvDirs,
 		arg.env ?? null,
-		{
-			utils: false,
-		},
 	);
 
 	// Get pkg-config flags if available
@@ -669,17 +666,16 @@ export async function testDylib(arg: TestDylibArg) {
 	}
 
 	// Compile and link using the flags from pkg-config or fallback
-	const program =
-		await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o ${tg.output}`
-			.bootstrap(true)
-			.env(compileEnv)
-			.host(arg.host)
-			.then(tg.File.expect);
+	const program = await $(
+		std.shBootstrap`cc -xc "${source}" ${compileFlags} ${rpathLink} -o ${tg.output}`,
+	)
+		.env(compileEnv)
+		.host(arg.host)
+		.then(tg.File.expect);
 
 	// Run the program to ensure it's functional
-	await $`${program}`
-		.bootstrap(true)
-		.env(arg.env ?? null)
+	await $(std.shBootstrap`${program}`)
+		.env(arg.env ?? {})
 		.host(arg.host);
 
 	return true;
@@ -692,7 +688,7 @@ type TestStaticlibArg = {
 	env?: std.env.Arg;
 	host: string;
 	runtimeDepDirs?: Array<tg.Unresolved<tg.Directory>>;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.ArgObject;
 	testSource?: string;
 };
 
@@ -716,14 +712,11 @@ export async function testStaticlib(arg: TestStaticlibArg) {
 	const pkgConfigEnv = buildTools({ preset: "minimal" });
 	const runtimeDepDirs = arg.runtimeDepDirs ?? [];
 	const allEnvDirs = [arg.directory, ...runtimeDepDirs];
-	const compileEnv = std.env.arg(
+	const compileEnv = std.env.compose(
 		sdkEnv,
 		pkgConfigEnv,
 		...allEnvDirs,
 		arg.env ?? null,
-		{
-			utils: false,
-		},
 	);
 
 	// Get pkg-config flags if available
@@ -750,17 +743,16 @@ export async function testStaticlib(arg: TestStaticlibArg) {
 	}
 
 	// Compile and link statically against the library
-	const program =
-		await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o ${tg.output}`
-			.bootstrap(true)
-			.env(compileEnv)
-			.host(arg.host)
-			.then(tg.File.expect);
+	const program = await $(
+		std.shBootstrap`cc -xc "${source}" ${compileFlags} ${rpathLink} -o ${tg.output}`,
+	)
+		.env(compileEnv)
+		.host(arg.host)
+		.then(tg.File.expect);
 
 	// Run the program to ensure it's functional
-	await $`${program}`
-		.bootstrap(true)
-		.env(arg.env ?? null)
+	await $(std.shBootstrap`${program}`)
+		.env(arg.env ?? {})
 		.host(arg.host);
 
 	return true;
@@ -803,8 +795,7 @@ export async function stdoutIncludes(
 	file: tg.Unresolved<tg.File>,
 	expected: string,
 ) {
-	const stdout = await $`${file} > ${tg.output}`
-		.bootstrap(true)
+	const stdout = await $(std.shBootstrap`${file} > ${tg.output}`)
 		.env({
 			TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
 		})

@@ -73,7 +73,7 @@ export async function build(...args: tg.Args<Arg>) {
 		// To ensure the cross-compile prefix picks up the correct cross compilers.
 		packageEnv.CC = "cc";
 		packageEnv.CXX = "c++";
-	} else if (arg.sdk?.toolchain === "llvm") {
+	} else if (std.sdk.argObject(arg.sdk)?.toolchain === "llvm") {
 		packageEnv.CC = "clang";
 		packageEnv.CXX = "clang++";
 	}
@@ -88,7 +88,7 @@ export async function build(...args: tg.Args<Arg>) {
 	const perlArtifact = await perl.build({
 		build: arg.build,
 		host: arg.host,
-		sdk: arg.sdk ?? null,
+		...std.args.optional("sdk", arg.sdk),
 	});
 	const perlInterpreter = await tg.symlink({
 		artifact: perlArtifact,

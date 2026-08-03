@@ -6,9 +6,25 @@ export async function sdk(host?: string) {
 	return await tg.build(std.sdk, sdk.arg(host)).named("bootstrap sdk");
 }
 
+/** Produce a std.sdk() consisting of the bootstrap toolchain without the bootstrap utils, with the `ld` proxy enabled. Use this in place of `sdk` once the standard utils have been built, so that the busybox utils from the bootstrap bundle do not shadow them on `PATH`. */
+export async function toolchainSdk(host?: string) {
+	return await tg
+		.build(std.sdk, toolchainSdk.arg(host))
+		.named("bootstrap toolchain sdk");
+}
+
+export namespace toolchainSdk {
+	/** Produce the arg object to create a bootstrap SDK without the bootstrap utils. */
+	export async function arg(hostArg?: string): Promise<std.sdk.ArgObject> {
+		const host = bootstrap.toolchainTriple(hostArg);
+		const toolchain = await sdk.toolchain(host);
+		return { host, toolchain };
+	}
+}
+
 export namespace sdk {
 	/** Produce the arg object to create a bootstrap-only SDK. */
-	export async function arg(hostArg?: string): Promise<std.sdk.Arg> {
+	export async function arg(hostArg?: string): Promise<std.sdk.ArgObject> {
 		const host = bootstrap.toolchainTriple(hostArg);
 		const toolchain = await env(host);
 		return { host, toolchain };

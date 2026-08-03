@@ -39,7 +39,7 @@ export async function plain(arg: tg.Unresolved<Arg>) {
 	const interpreter = await toolchain.get("bin/node").then(tg.File.expect);
 	return wrapScripts({
 		directory: source,
-		env: env ?? null,
+		...std.args.optional("env", env),
 		extension: ".js",
 		interpreter,
 	});

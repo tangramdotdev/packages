@@ -23,7 +23,6 @@ export async function source(os: string) {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -33,7 +32,6 @@ export type Arg = {
 
 export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
-		bootstrap: bootstrap_ = false,
 		build: buildTriple_,
 		env: env_,
 		host: host_,
@@ -64,18 +62,17 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 
 	const phases = { configure };
 
-	const env = await std.env.arg(env_ ?? null, { utils: false });
+	const env = await std.env.compose(env_ ?? null);
 
 	let perlArtifact = await std.utils.autotoolsInternal({
 		build,
 		host,
-		bootstrap: bootstrap_,
 		buildInTree: true,
 		env,
 		phases,
 		prefixArg: "-Dprefix=",
 		processName: metadata.name,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: sourceDir,
 	});
 

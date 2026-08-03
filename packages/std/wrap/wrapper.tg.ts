@@ -66,7 +66,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 				.named("llvm toolchain")
 				.then(tg.Directory.expect);
 			const { directory: targetDirectory } = await std.sdk.toolchainComponents({
-				env: await std.env.arg(hostToolchain, { utils: false }),
+				env: await std.env.compose(hostToolchain),
 				host: host_,
 			});
 			suffix = tg.Template
@@ -77,7 +77,6 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	}
 	console.log("toolchain: ", buildToolchain.id);
 	let env: tg.Args<std.env.Arg> = [
-		{ utils: false },
 		buildToolchain,
 		hostToolchain ?? null,
 		{
@@ -144,17 +143,15 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		echo "built wrapper.bin"
 	`;
 
-	let bin = tg
-		.build(std.phases.run, {
+	let bin = std.phases
+		.run({
 			bootstrap: true,
-			env: std.env.arg(...env),
+			env: std.env.compose(...env),
 			phases: { build: buildPhase },
-			command: {
-				host: system,
-			},
+			host: system,
 			network: false,
+			processName: "compile wrapper",
 		})
-		.named("compile wrapper")
 		.then(tg.Directory.expect);
 	return tg.directory({ bin });
 }
@@ -245,18 +242,14 @@ export async function testCompile() {
 			}
 		`),
 	});
-	return std.run`
+	return std
+		.run(std.shBootstrap`
 		gcc ${source}/main.c -o ${tg.output}
-	`
-		.bootstrap(true)
-		.env(
-			toolchain,
-			{ utils: false },
-			{
-				TANGRAM_TRACING: "true",
-				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-			},
-		)
+	`)
+		.env(toolchain, {
+			TANGRAM_TRACING: "true",
+			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+		})
 		.then(tg.File.expect);
 }
 
@@ -282,7 +275,7 @@ export async function testFull() {
 	let file = std.$`
 		gcc ${source}/main.c -o ${tg.output}
 	`
-		.env(toolchain, { utils: false })
+		.env(toolchain)
 		.then(tg.File.expect);
 	return std.wrap(file, {
 		env: { CUSTOM_ENV: "true", TANGRAM_SUPPRESS_ENV: "true" },
@@ -308,24 +301,20 @@ export async function testStrip() {
 			}
 		`),
 	});
-	return std.run`
+	return std
+		.run(std.shBootstrap`
 		mkdir -p ${tg.output}
 		gcc ${source}/main.c -o ${tg.output}/original
 		echo "Compiled ${tg.output}/original"
 		cp ${tg.output}/original ${tg.output}/stripped
 		strip --keep-section-symbols --verbose ${tg.output}/stripped
 		echo "Stripped ${tg.output}/stripped"
-	`
-		.bootstrap(true)
-		.env(
-			toolchain,
-			{ utils: false },
-			{
-				TANGRAM_TRACING: "true",
-				TGLD_TRACING: "tgld=trace",
-				TGSTRIP_TRACING: "tgstrip=trace",
-			},
-		);
+	`)
+		.env(toolchain, {
+			TANGRAM_TRACING: "true",
+			TGLD_TRACING: "tgld=trace",
+			TGSTRIP_TRACING: "tgstrip=trace",
+		});
 }
 
 export async function testPrintManifest() {
@@ -339,11 +328,11 @@ export async function testPrintManifest() {
 			}
 		`),
 	});
-	const executable = await std.run`
+	const executable = await std
+		.run(std.shBootstrap`
 		gcc ${source}/main.c -o ${tg.output}
-	`
-		.bootstrap(true)
-		.env(toolchain, { utils: false })
+	`)
+		.env(toolchain)
 		.then(tg.File.expect);
 
 	const wrapper = await std.wrap(executable, {
@@ -357,10 +346,9 @@ export async function testPrintManifest() {
 	console.log("testPrintManifest wrapper ID", wrapperId);
 
 	// Run the wrapper with --tangram-print-manifest and capture stdout.
-	const output =
-		await std.build`${wrapper} --tangram-print-manifest > ${tg.output}`
-			.bootstrap(true)
-			.then(tg.File.expect);
+	const output = await std
+		.build(std.shBootstrap`${wrapper} --tangram-print-manifest > ${tg.output}`)
+		.then(tg.File.expect);
 	const text = await output.text;
 	console.log("manifest output", text);
 
@@ -413,20 +401,16 @@ export async function testWrapperValues() {
 			tg.template(["--custom"])
 		]`,
 	});
-	const output = await std.run`
+	const output = await std
+		.run(std.shBootstrap`
 		gcc ${source}/main.c -o main
 		./main > ${tg.output}
-	`
-		.bootstrap(true)
-		.env(
-			toolchain,
-			{ utils: false },
-			{
-				TGLD_TRACING: "tgld=trace",
-				TGLD_WRAPPER_ENV_VALUE_PATH: tg`${valueFiles}/env`,
-				TGLD_WRAPPER_ARG_VALUE_PATH: tg`${valueFiles}/args`,
-			},
-		)
+	`)
+		.env(toolchain, {
+			TGLD_TRACING: "tgld=trace",
+			TGLD_WRAPPER_ENV_VALUE_PATH: tg`${valueFiles}/env`,
+			TGLD_WRAPPER_ARG_VALUE_PATH: tg`${valueFiles}/args`,
+		})
 		.then(tg.File.expect);
 	const text = await output.text;
 	tg.assert(
@@ -442,13 +426,11 @@ export async function testWrapperValues() {
 
 export async function testModify() {
 	let file = await tg.file("nothing to see here\n");
-	return std.run`
+	return std.run(std.shBootstrap`
 		ls -al /.tangram/artifacts
 		echo 'sandbox modification' > ${file}
 		echo 'adfad' > ${tg.output}
-	`
-		.bootstrap(true)
-		.env({ utils: true });
+	`);
 }
 
 export async function testPreloadIsolation() {
@@ -462,7 +444,8 @@ export async function testPreloadIsolation() {
 
 	// Build everything in one shell pass so the test does not pull in the
 	// full SDK. Mirrors the lightweight pattern in testCompile above.
-	const built = await std.run`
+	const built = await std
+		.run(std.shBootstrap`
 		mkdir -p ${tg.output}/outer-lib ${tg.output}/inner-lib
 
 		# Two libdependency.so files with the same SONAME but different MESSAGE.
@@ -483,9 +466,8 @@ export async function testPreloadIsolation() {
 		cc ${sources}/inner.c -L${tg.output}/inner-lib -ldependency \
 			-Wl,-rpath,${tg.output}/inner-lib \
 			-o ${tg.output}/inner
-	`
-		.bootstrap(true)
-		.env(toolchain, { utils: false })
+	`)
+		.env(toolchain)
 		.then(tg.Directory.expect);
 
 	const outerExe = await built.get("outer").then(tg.File.expect);
@@ -501,8 +483,8 @@ export async function testPreloadIsolation() {
 	});
 
 	// outer prints "outer", then fork/execs inner which prints "inner".
-	const output = await std.build`${wrappedOuter} ${innerExe} > ${tg.output}`
-		.bootstrap(true)
+	const output = await std
+		.build(std.shBootstrap`${wrappedOuter} ${innerExe} > ${tg.output}`)
 		.then(tg.File.expect);
 
 	const text = await output.text;

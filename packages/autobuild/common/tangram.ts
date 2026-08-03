@@ -22,7 +22,9 @@ export async function wrapScripts(
 	for await (const [name, artifact] of resolved.directory) {
 		if (name.endsWith(extension) && artifact instanceof tg.File) {
 			ret = await tg.directory(ret, {
-				[`${name}`]: std.wrap(artifact, wrapArg, { env: env ?? null }),
+				[`${name}`]: std.wrap(artifact, wrapArg, {
+					...std.args.optional("env", env),
+				}),
 			});
 		}
 	}

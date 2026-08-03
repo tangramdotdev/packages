@@ -27,7 +27,7 @@ export async function workspace(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		release = true,
 		source: source_,
 		verbose = false,
-	} = await std.args.apply<Arg, Arg>({
+	} = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -172,7 +172,11 @@ export async function stripProxy(arg: tg.Unresolved<Arg>) {
 }
 
 export async function wrapper(...args: tg.Args<Arg>) {
-	const resolved = await std.args.apply<Arg, Arg>({
+	const resolved = await tg.Args.apply<
+		Arg,
+		tg.ValueOrMaybeMutationMap<Arg>,
+		Arg
+	>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -193,7 +197,11 @@ export async function wrapper(...args: tg.Args<Arg>) {
 }
 
 export async function wrapperBinary(...args: tg.Args<Arg>) {
-	const resolved = await std.args.apply<Arg, Arg>({
+	const resolved = await tg.Args.apply<
+		Arg,
+		tg.ValueOrMaybeMutationMap<Arg>,
+		Arg
+	>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -252,7 +260,11 @@ type ToolchainArg = {
 export async function rust(
 	...args: tg.Args<ToolchainArg>
 ): Promise<tg.Directory> {
-	const { target: target_ } = await std.args.apply<ToolchainArg, ToolchainArg>({
+	const { target: target_ } = await tg.Args.apply<
+		ToolchainArg,
+		tg.ValueOrMaybeMutationMap<ToolchainArg>,
+		ToolchainArg
+	>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -306,13 +318,13 @@ export async function rust(
 
 	// Install the packages.
 	const env = bootstrap.sdk.env(host);
-	return await std.build`
+	return await std
+		.build(std.shBootstrap`
 		set -x
 		for package in ${packages}/*/* ; do
 			/bin/sh $package/install.sh --prefix="${tg.output}"
 			chmod -R +w "${tg.output}"
-		done`
-		.bootstrap(true)
+		done`)
 		.host(hostSystem)
 		.env(env)
 		.named("rust toolchain install")
@@ -424,7 +436,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 				.named("llvm toolchain")
 				.then(tg.Directory.expect);
 			const { directory: targetDirectory } = await std.sdk.toolchainComponents({
-				env: await std.env.arg(hostToolchain, { utils: false }),
+				env: await std.env.compose(hostToolchain),
 				host: host,
 			});
 			suffix = tg.Template
@@ -435,7 +447,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	}
 
 	const { directory, ldso, libDir } = await std.sdk.toolchainComponents({
-		env: await std.env.arg(buildToolchain, { utils: false }),
+		env: await std.env.compose(buildToolchain),
 		host: isCross ? standardizedHost : host,
 	});
 	if (setSysroot) {
@@ -451,7 +463,6 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	const certFile = tg`${std.caCertificates()}/cacert.pem`;
 
 	const env: tg.Args<std.env.Arg> = [
-		{ utils: false },
 		buildToolchain,
 		hostToolchain ?? {},
 		rustToolchain,
@@ -518,7 +529,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	if (hostOs === "darwin" && isCross) {
 		const hostFlag = tg`--sysroot ${bootstrap.macOsSdk()}/MacOSX.sdk`;
 		const { directory: targetDirectory } = await std.sdk.toolchainComponents({
-			env: await std.env.arg(hostToolchain ?? null, { utils: false }),
+			env: await std.env.compose(hostToolchain ?? null),
 			host: host,
 		});
 		suffix = tg.Template
@@ -578,18 +589,16 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	};
 
 	// Build and install all the crates/
-	const crates = await tg
-		.build(std.phases.run, {
+	const crates = await std.phases
+		.run({
 			bootstrap: true,
-			env: std.env.arg(...env),
+			env: std.env.compose(...env),
 			phases: { prepare, build, install },
-			command: {
-				host: system,
-			},
+			host: system,
 			checksum: "sha256:any",
 			network: true,
+			processName: "workspace cargo build",
 		})
-		.named("workspace cargo build")
 		.then(tg.Directory.expect);
 
 	// Build the wrapper.

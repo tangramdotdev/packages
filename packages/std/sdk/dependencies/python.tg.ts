@@ -48,9 +48,7 @@ export async function build(...args: tg.Args<Arg>) {
 		);
 	}
 
-	const env = await std.env.arg(...envs, resolved.env ?? null, {
-		utils: false,
-	});
+	const env = await std.env.compose(...envs, resolved.env ?? null);
 	const providedCc = await std.env.tryGetKey({ env, key: "CC" });
 	if (providedCc) {
 		configureArgs.push(`CC="$CC"`);

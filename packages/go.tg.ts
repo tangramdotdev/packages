@@ -155,14 +155,18 @@ export type ResolvedArg = Omit<Arg, "build" | "host" | "source"> & {
 
 /** Resolve go args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
 export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
-	const collect = await std.args.apply<Arg, Arg>({
+	const collect = await tg.Args.apply<
+		Arg,
+		tg.ValueOrMaybeMutationMap<Arg>,
+		Arg
+	>({
 		args,
 		map: async (arg) => arg,
 		reduce: {
 			env: (a, b) => std.env.arg(a ?? null, b ?? null),
-			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.mergeArg(a, b),
 			subtreeEnv: (a, b) => std.env.arg(a ?? null, b ?? null),
-			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			subtreeSdk: (a, b) => std.sdk.mergeArg(a, b),
 		},
 	});
 
@@ -191,14 +195,10 @@ export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 		? await std.deps.env(depsConfig, {
 				build,
 				host,
-				...(rest.sdk !== undefined && rest.sdk !== null
-					? { sdk: rest.sdk }
-					: {}),
-				env: userEnv ?? null,
-				subtreeEnv: rest.subtreeEnv ?? null,
-				...(rest.subtreeSdk !== undefined && rest.subtreeSdk !== null
-					? { subtreeSdk: rest.subtreeSdk }
-					: {}),
+				...std.args.optional("sdk", rest.sdk),
+				...std.args.optional("env", userEnv),
+				...std.args.optional("subtreeEnv", rest.subtreeEnv),
+				...std.args.optional("subtreeSdk", rest.subtreeSdk),
 			})
 		: undefined;
 
@@ -234,9 +234,11 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	const system = std.triple.archAndOs(host);
 	const target = target_ ?? host;
 
+	// A Go build always needs a C toolchain for cgo, so an `sdk: "none"` argument contributes no arguments rather than suppressing the SDK.
+	const sdkArgObject = std.sdk.argObject(sdkArg);
 	const sdk = std.sdk(
 		{ host, target },
-		...(sdkArg !== undefined && sdkArg !== null ? [sdkArg] : []),
+		...(sdkArgObject !== undefined ? [sdkArgObject] : []),
 	);
 
 	// Determine if we should vendor and which method to use.

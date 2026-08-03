@@ -42,7 +42,11 @@ export type Arg = std.autotools.Arg &
 
 export async function build(...args: tg.Args<Arg>) {
 	// Extract custom options first.
-	const customOptions = await std.args.apply<Arg, Arg>({
+	const customOptions = await tg.Args.apply<
+		Arg,
+		tg.ValueOrMaybeMutationMap<Arg>,
+		Arg
+	>({
 		args: args as tg.Args<Arg>,
 		map: async (arg) => arg,
 		reduce: {},

@@ -93,17 +93,7 @@ export async function build(...args: tg.Args<Arg>) {
 		zlib: zlibArtifact,
 		xz: xzArtifact,
 		bzip2: bzip2Artifact,
-	} = await std.deps.artifacts(deps, {
-		build: arg.build,
-		host: arg.host,
-		...(arg.dependencies !== undefined && arg.dependencies !== null
-			? { dependencies: arg.dependencies }
-			: {}),
-		subtreeEnv: arg.subtreeEnv ?? null,
-		...(arg.subtreeSdk !== undefined && arg.subtreeSdk !== null
-			? { subtreeSdk: arg.subtreeSdk }
-			: {}),
-	});
+	} = await std.deps.artifacts(deps, arg);
 	tg.assert(zlibArtifact !== undefined);
 	tg.assert(xzArtifact !== undefined);
 	tg.assert(bzip2Artifact !== undefined);

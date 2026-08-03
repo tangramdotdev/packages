@@ -13,15 +13,23 @@ export async function source() {
 	const extension = ".tar.xz";
 	const checksum =
 		"sha256:6c8a2148a7b85043b68492bce43316b0e2e214fc4e628c7ede078e76e216330b";
-	const base = `https://download.savannah.gnu.org/releases/${name}`;
+	const base = `https://download-mirror.savannah.gnu.org/releases/${name}`;
+	const mirrorBases = [
+		`https://www.mirrorservice.org/sites/download.savannah.gnu.org/releases/${name}`,
+		`https://mirror.csclub.uwaterloo.ca/nongnu/${name}`,
+		`https://mirror.easyname.at/nongnu/${name}`,
+		`https://savannah.c3sl.ufpr.br/${name}`,
+		`https://download.savannah.gnu.org/releases/${name}`,
+	];
+	const archive = std.download.packageArchive({ name, version, extension });
+	const mirrors = mirrorBases.map((mirrorBase) => `${mirrorBase}/${archive}`);
 	return await std.download
-		.extractArchive({ base, checksum, name, version, extension })
+		.extractArchive({ base, checksum, name, version, extension, mirrors })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -33,7 +41,6 @@ export type Arg = {
 
 export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
-		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -81,12 +88,11 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 	return autotoolsInternal({
 		build,
 		host,
-		bootstrap: bootstrap_,
-		env: std.env.arg(...env, { utils: false }),
+		env: std.env.compose(...env),
 		phases,
 		processName: metadata.name,
 		...(staticBuild ? { opt: "s" as const } : {}),
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: sourceDir,
 	});
 }
@@ -96,5 +102,5 @@ export default build;
 export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
-	return build({ host, bootstrap: true, env: sdk });
+	return build({ host, sdk: "none", env: sdk });
 }

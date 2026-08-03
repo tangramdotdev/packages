@@ -1,3 +1,4 @@
+import * as libiconv from "libiconv" with { source: "./libiconv.tg.ts" };
 import * as python from "python" with { source: "./python" };
 import * as std from "std" with { source: "./std" };
 
@@ -32,6 +33,11 @@ export async function source(): Promise<tg.Directory> {
 
 export function deps() {
 	return std.deps({
+		libiconv: {
+			build: libiconv.build,
+			kind: "runtime",
+			when: { hostOs: "darwin" },
+		},
 		python: { build: python.self, kind: "buildtime" },
 	});
 }
@@ -60,6 +66,16 @@ export function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
-	const spec = std.assert.defaultSpec(metadata);
+	const os = std.triple.os(std.triple.host());
+	const runtimeDeps: Array<tg.Unresolved<tg.Directory>> = [];
+	if (os === "darwin") {
+		runtimeDeps.push(libiconv.build());
+	}
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		libraries: std.assert.allLibraries(metadata.provides.libraries, {
+			runtimeDeps,
+		}),
+	};
 	return await std.assert.pkg(build, spec);
 }

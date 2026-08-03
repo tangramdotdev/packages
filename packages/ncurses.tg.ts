@@ -82,7 +82,10 @@ export async function build(...args: tg.Args<Arg>) {
 		});
 	}
 
-	let output = await std.autotools.build({ ...arg, phases: phases ?? null });
+	let output = await std.autotools.build({
+		...arg,
+		...std.args.optional("phases", phases),
+	});
 
 	// Postprocess: create widechar symlinks and fix pkgconfig files.
 	const libNames = ["form", "menu", "ncurses", "ncurses++", "panel"];

@@ -62,7 +62,6 @@ export type Variant =
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
 export async function build(...args: tg.Args<Arg>) {
 	const {
-		bootstrap: bootstrap_ = false,
 		build: build_,
 		bundledSources = false,
 		crossNative = false,
@@ -75,10 +74,10 @@ export async function build(...args: tg.Args<Arg>) {
 		targetBinutils,
 		variant,
 		...autotoolsRest
-	} = await std.args.apply<Arg, Arg>({
+	} = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (a) => a,
-		reduce: {},
+		reduce: { sysroot: "set", targetBinutils: "set", variant: "set" },
 	});
 
 	// Finalize triples.
@@ -225,14 +224,13 @@ export async function build(...args: tg.Args<Arg>) {
 		build,
 		host,
 		...autotoolsRest,
-		bootstrap: bootstrap_,
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
-		env: env ?? null,
+		...std.args.optional("env", env),
 		fortifySource: shouldFortify,
 		phases,
 		opt: "3",
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(bundledSources),
 	});
 
@@ -270,7 +268,7 @@ export async function wrapArgs(arg: WrapArgsArg) {
 	const { host, target: target_, toolchainDir } = arg;
 	const target = target_ ?? host;
 	const hostOs = std.triple.os(host);
-	const toolchainEnv = await std.env.arg(toolchainDir, { utils: false });
+	const toolchainEnv = await std.env.compose(toolchainDir);
 	const gccVersion = await getGccVersion(toolchainEnv, host, target);
 	const isCross = host !== target;
 	const sysroot =
@@ -306,12 +304,11 @@ async function getGccVersion(
 	const targetPrefix = host === targetTriple ? `` : `${targetTriple}-`;
 	await std.env.assertProvides({ env, name: `${targetPrefix}gcc` });
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.
-	const result =
-		await std.build`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > ${tg.output}`
-			.bootstrap(true)
-			.env(bootstrap.sdk.prepareBootstrapUtils(), env, {
-				utils: false,
-			})
-			.then(tg.File.expect);
+	const result = await std
+		.build(
+			std.shBootstrap`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > ${tg.output}`,
+		)
+		.env(bootstrap.sdk.prepareBootstrapUtils(), env)
+		.then(tg.File.expect);
 	return (await result.text).trim();
 }

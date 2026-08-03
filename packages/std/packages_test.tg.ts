@@ -96,6 +96,40 @@ const mockDeps = std.deps({
 
 type MockDepsArg = std.args.BasePackageArg & std.deps.Arg<typeof mockDeps>;
 
+// Deps carrying conditions, for testing which dependencies are included by default.
+const conditionalDeps = std.deps({
+	always: fullDepBuild,
+	linuxOnly: { build: fullDepBuild, when: { hostOs: "linux" } },
+	nativeOnly: { build: fullDepBuild, when: { not: { cross: true } } },
+});
+
+type ConditionalDepsArg = std.args.BasePackageArg &
+	std.deps.Arg<typeof conditionalDeps>;
+
+// Deps carrying configure flags, exercising every supported flag shape.
+const flaggedDeps = std.deps({
+	lz4: { build: fullDepBuild, flag: "with" },
+	nls: { build: fullDepBuild, flag: "enable" },
+	renamed: { build: fullDepBuild, flag: { with: "other-name" } },
+	positiveOnly: { build: fullDepBuild, flag: { with: "icu", disabled: [] } },
+	literal: {
+		build: fullDepBuild,
+		flag: { enabled: ["--with-a", "--with-b"], disabled: ["--without-a"] },
+	},
+	unflagged: fullDepBuild,
+	linuxFlag: {
+		build: fullDepBuild,
+		flag: "with",
+		when: { hostOs: "linux" },
+	},
+});
+
+type FlaggedDepsArg = std.args.BasePackageArg &
+	std.deps.Arg<typeof flaggedDeps>;
+
+const darwin = "aarch64-apple-darwin";
+const linux = "x86_64-unknown-linux-gnu";
+
 // Parent/leaf for transitive dependency testing.
 const leafDeps = std.deps({ leaf: pkgABuild });
 
@@ -173,7 +207,9 @@ async function testOptionsPassToArtifacts() {
 
 async function testBaseFieldsPreserved() {
 	// Verify sdk, env, and source fields on dep args are preserved through applyArgs.
-	const overrideSource = tg.directory({ "test.txt": tg.file("override") });
+	const overrideSource = await tg.directory({
+		"test.txt": tg.file("override"),
+	});
 	const resolved = await std.packages.applyArgs<MockDepsArg>(
 		{ host: "aarch64-apple-darwin" },
 		{
@@ -188,7 +224,11 @@ async function testBaseFieldsPreserved() {
 	);
 
 	const pkgAArg = resolved.dependencies?.pkgA;
-	tg.assert(pkgAArg !== undefined && typeof pkgAArg !== "boolean");
+	tg.assert(
+		pkgAArg !== undefined &&
+			typeof pkgAArg !== "boolean" &&
+			!(pkgAArg instanceof tg.Directory),
+	);
 	tg.assert(pkgAArg.sdk !== undefined, "sdk preserved");
 	tg.assert(pkgAArg.env !== undefined, "env preserved");
 	tg.assert(pkgAArg.source !== undefined, "source preserved");
@@ -312,6 +352,380 @@ async function testBooleanFlags() {
 	tg.assert(
 		resolved3.dependencies?.runtimeDep === false,
 		"later false overrides true",
+	);
+}
+
+async function testConditionEvaluation() {
+	const native = { build: linux, host: linux };
+	const cross = { build: linux, host: darwin };
+
+	// Operating system and architecture, in both the single and the set form.
+	tg.assert(std.deps.evaluateCondition({ hostOs: "linux" }, native), "hostOs");
+	tg.assert(
+		!std.deps.evaluateCondition({ hostOs: "darwin" }, native),
+		"hostOs negative",
+	);
+	tg.assert(
+		std.deps.evaluateCondition({ hostOs: ["darwin", "linux"] }, native),
+		"hostOs set",
+	);
+	tg.assert(
+		std.deps.evaluateCondition({ hostArch: "aarch64" }, cross),
+		"hostArch",
+	);
+	tg.assert(
+		std.deps.evaluateCondition({ buildOs: "linux" }, cross),
+		"buildOs reads build, not host",
+	);
+	tg.assert(
+		std.deps.evaluateCondition({ buildArch: "x86_64" }, cross),
+		"buildArch",
+	);
+
+	// Cross compilation.
+	tg.assert(std.deps.evaluateCondition({ cross: true }, cross), "cross true");
+	tg.assert(
+		std.deps.evaluateCondition({ cross: false }, native),
+		"cross false when build matches host",
+	);
+
+	// Combinators.
+	tg.assert(
+		std.deps.evaluateCondition({ not: { hostOs: "darwin" } }, native),
+		"not",
+	);
+	tg.assert(
+		std.deps.evaluateCondition(
+			{ all: [{ hostOs: "linux" }, { cross: false }] },
+			native,
+		),
+		"all",
+	);
+	tg.assert(
+		!std.deps.evaluateCondition(
+			{ all: [{ hostOs: "linux" }, { cross: true }] },
+			native,
+		),
+		"all requires every condition",
+	);
+	tg.assert(
+		std.deps.evaluateCondition(
+			{ any: [{ hostOs: "darwin" }, { hostOs: "linux" }] },
+			native,
+		),
+		"any",
+	);
+}
+
+async function testWhenExcludesDependency() {
+	// The condition excludes the dependency on a host it does not name.
+	const onDarwin = await std.packages.applyArgs<ConditionalDepsArg>({
+		host: darwin,
+	});
+	const darwinArtifacts = await std.deps.artifacts(conditionalDeps, onDarwin);
+	tg.assert(
+		darwinArtifacts.linuxOnly === undefined,
+		"a linux only dependency should not build for a darwin host",
+	);
+	tg.assert(
+		darwinArtifacts.always !== undefined,
+		"a dependency without a condition should still build",
+	);
+
+	// The condition includes the dependency on a host it does name.
+	const onLinux = await std.packages.applyArgs<ConditionalDepsArg>({
+		host: linux,
+	});
+	const linuxArtifacts = await std.deps.artifacts(conditionalDeps, onLinux);
+	tg.assert(
+		linuxArtifacts.linuxOnly !== undefined,
+		"a linux only dependency should build for a linux host",
+	);
+}
+
+async function testCrossCondition() {
+	const native = await std.packages.applyArgs<ConditionalDepsArg>({
+		build: linux,
+		host: linux,
+	});
+	const nativeArtifacts = await std.deps.artifacts(conditionalDeps, native);
+	tg.assert(
+		nativeArtifacts.nativeOnly !== undefined,
+		"a native only dependency should build when the build matches the host",
+	);
+
+	const cross = await std.packages.applyArgs<ConditionalDepsArg>({
+		build: linux,
+		host: darwin,
+	});
+	const crossArtifacts = await std.deps.artifacts(conditionalDeps, cross);
+	tg.assert(
+		crossArtifacts.nativeOnly === undefined,
+		"a native only dependency should not build for a cross build",
+	);
+}
+
+async function testExplicitArgOverridesWhen() {
+	// An explicit `true` includes a dependency its condition would exclude.
+	const forced = await std.packages.applyArgs<ConditionalDepsArg>({
+		host: darwin,
+		dependencies: { linuxOnly: true },
+	});
+	const forcedArtifacts = await std.deps.artifacts(conditionalDeps, forced);
+	tg.assert(
+		forcedArtifacts.linuxOnly !== undefined,
+		"an explicit true should override the condition",
+	);
+
+	// An argument object also counts as an explicit request.
+	const withOptions = await std.packages.applyArgs<ConditionalDepsArg>({
+		host: darwin,
+		dependencies: { linuxOnly: {} },
+	});
+	const withOptionsArtifacts = await std.deps.artifacts(
+		conditionalDeps,
+		withOptions,
+	);
+	tg.assert(
+		withOptionsArtifacts.linuxOnly !== undefined,
+		"an explicit argument object should override the condition",
+	);
+
+	// An explicit `false` excludes a dependency its condition would include.
+	const disabled = await std.packages.applyArgs<ConditionalDepsArg>({
+		host: linux,
+		dependencies: { linuxOnly: false },
+	});
+	const disabledArtifacts = await std.deps.artifacts(conditionalDeps, disabled);
+	tg.assert(
+		disabledArtifacts.linuxOnly === undefined,
+		"an explicit false should override the condition",
+	);
+}
+
+async function testEnabledPredicate() {
+	const onDarwin = await std.packages.applyArgs<ConditionalDepsArg>({
+		host: darwin,
+	});
+	tg.assert(
+		!(await std.deps.enabled(conditionalDeps, onDarwin, "linuxOnly")),
+		"the condition should exclude the dependency",
+	);
+	tg.assert(
+		await std.deps.enabled(conditionalDeps, onDarwin, "always"),
+		"a dependency without a condition should be enabled",
+	);
+
+	const forced = await std.packages.applyArgs<ConditionalDepsArg>({
+		host: darwin,
+		dependencies: { linuxOnly: true },
+	});
+	tg.assert(
+		await std.deps.enabled(conditionalDeps, forced, "linuxOnly"),
+		"an explicit true should enable the dependency",
+	);
+}
+
+async function testConfigureArgsShorthands() {
+	const enabled = await std.packages.applyArgs<FlaggedDepsArg>({
+		host: linux,
+	});
+	const args = await std.deps.configureArgs(flaggedDeps, enabled);
+	tg.assert(args.includes("--with-lz4"), `expected --with-lz4 in ${args}`);
+	tg.assert(args.includes("--enable-nls"), `expected --enable-nls in ${args}`);
+
+	const disabled = await std.packages.applyArgs<FlaggedDepsArg>({
+		host: linux,
+		dependencies: { lz4: false, nls: false },
+	});
+	const disabledArgs = await std.deps.configureArgs(flaggedDeps, disabled);
+	tg.assert(
+		disabledArgs.includes("--without-lz4"),
+		`expected --without-lz4 in ${disabledArgs}`,
+	);
+	tg.assert(
+		disabledArgs.includes("--disable-nls"),
+		`expected --disable-nls in ${disabledArgs}`,
+	);
+}
+
+async function testConfigureArgsExplicitForms() {
+	const enabled = await std.packages.applyArgs<FlaggedDepsArg>({
+		host: linux,
+	});
+	const args = await std.deps.configureArgs(flaggedDeps, enabled);
+
+	// An explicit name replaces the dependency key.
+	tg.assert(
+		args.includes("--with-other-name") && !args.includes("--with-renamed"),
+		`expected the explicit name in ${args}`,
+	);
+
+	// A literal list is emitted verbatim.
+	tg.assert(
+		args.includes("--with-a") && args.includes("--with-b"),
+		`expected the literal enabled list in ${args}`,
+	);
+
+	// A dependency without a flag contributes nothing.
+	tg.assert(
+		!args.some((a) => a.includes("unflagged")),
+		`an unflagged dependency should contribute nothing, got ${args}`,
+	);
+
+	const disabled = await std.packages.applyArgs<FlaggedDepsArg>({
+		host: linux,
+		dependencies: { positiveOnly: false, literal: false },
+	});
+	const disabledArgs = await std.deps.configureArgs(flaggedDeps, disabled);
+
+	// An empty disabled list suppresses the negative form.
+	tg.assert(
+		!disabledArgs.includes("--without-icu"),
+		`an empty disabled list should suppress the negative form, got ${disabledArgs}`,
+	);
+	tg.assert(
+		disabledArgs.includes("--without-a"),
+		`expected the literal disabled list in ${disabledArgs}`,
+	);
+}
+
+async function testConfigureArgsRespectWhen() {
+	// A dependency excluded by its condition emits its negative form.
+	const onDarwin = await std.packages.applyArgs<FlaggedDepsArg>({
+		host: darwin,
+	});
+	const args = await std.deps.configureArgs(flaggedDeps, onDarwin);
+	tg.assert(
+		args.includes("--without-linuxFlag"),
+		`a condition should drive the flag, got ${args}`,
+	);
+
+	// An explicit request flips it back.
+	const forced = await std.packages.applyArgs<FlaggedDepsArg>({
+		host: darwin,
+		dependencies: { linuxFlag: true },
+	});
+	const forcedArgs = await std.deps.configureArgs(flaggedDeps, forced);
+	tg.assert(
+		forcedArgs.includes("--with-linuxFlag"),
+		`an explicit request should flip the flag, got ${forcedArgs}`,
+	);
+}
+
+async function testConfigureArgsIgnoreUndeclaredFlags() {
+	// This is the blast radius guarantee for the packages that have not opted in.
+	const resolved = await std.packages.applyArgs<MockDepsArg>({ host: linux });
+	const args = await std.deps.configureArgs(mockDeps, resolved);
+	tg.assert(
+		args.length === 0,
+		`a config without flags should contribute no arguments, got ${args}`,
+	);
+}
+
+async function testDepsContextNormalizesNulls() {
+	const ctx = std.deps.context({
+		build: linux,
+		dependencies: null,
+		env: null,
+		host: linux,
+		sdk: null,
+		subtreeEnv: null,
+		subtreeSdk: null,
+	});
+	tg.assert(
+		ctx.build === linux && ctx.host === linux,
+		"build and host are set",
+	);
+	tg.assert(!("sdk" in ctx), "a null sdk is dropped");
+	tg.assert(!("env" in ctx), "a null env is dropped");
+	tg.assert(!("dependencies" in ctx), "null dependencies are dropped");
+	tg.assert(!("subtreeEnv" in ctx), "a null subtreeEnv is dropped");
+	tg.assert(!("subtreeSdk" in ctx), "a null subtreeSdk is dropped");
+
+	// A resolved builder argument may be passed directly.
+	const artifacts = await std.deps.artifacts(mockDeps, {
+		build: linux,
+		dependencies: null,
+		env: null,
+		host: linux,
+		sdk: null,
+		subtreeEnv: null,
+		subtreeSdk: null,
+	});
+	tg.assert(
+		artifacts.pkgA !== undefined,
+		"a resolved argument should be accepted as a context",
+	);
+}
+
+async function testDependencySourceOverride() {
+	// A caller may supply their own source for a dependency.
+	const source = await tg.directory({
+		"marker.txt": tg.file("caller supplied"),
+	});
+	const resolved = await std.packages.applyArgs<MockDepsArg>({
+		host: linux,
+		dependencies: { pkgA: { source } },
+	});
+	const pkgAArg = resolved.dependencies?.pkgA;
+	tg.assert(
+		pkgAArg !== undefined &&
+			typeof pkgAArg !== "boolean" &&
+			!(pkgAArg instanceof tg.Directory),
+	);
+	const resolvedSource = pkgAArg.source;
+	tg.assert(
+		resolvedSource instanceof tg.Directory,
+		"the source should survive as a directory",
+	);
+	const marker = await resolvedSource.tryGet("marker.txt");
+	tg.assert(marker !== null, "the caller's source should be the one carried");
+}
+
+async function testDependencyArtifactOverride() {
+	// A caller may substitute a prebuilt artifact for a dependency's build.
+	const prebuilt = await tg.directory({
+		bin: tg.directory({ tool: tg.file("prebuilt") }),
+		lib: tg.directory({ "lib.a": tg.file("prebuilt") }),
+	});
+	const resolved = await std.packages.applyArgs<MockDepsArg>({
+		host: linux,
+		dependencies: { fullDep: prebuilt },
+	});
+	const artifacts = await std.deps.artifacts(mockDeps, resolved);
+	const fullDep = artifacts.fullDep;
+	tg.assert(fullDep !== undefined, "the injected artifact should be used");
+	const tool = await fullDep
+		.get("bin/tool")
+		.then(tg.File.expect)
+		.then((f) => f.text);
+	tg.assert(
+		tool === "prebuilt",
+		`the injected artifact should not be rebuilt, got ${tool}`,
+	);
+}
+
+async function testDependencyArtifactOverrideFiltersByKind() {
+	// The kind still selects the subdirectories, so an injected artifact contributes the same shape as a built one.
+	const prebuilt = await tg.directory({
+		bin: tg.directory({ tool: tg.file("prebuilt") }),
+		lib: tg.directory({ "lib.a": tg.file("prebuilt") }),
+	});
+	const resolved = await std.packages.applyArgs<MockDepsArg>({
+		host: linux,
+		dependencies: { buildtimeDep: prebuilt },
+	});
+	const artifacts = await std.deps.artifacts(mockDeps, resolved);
+	const buildtimeDep = artifacts.buildtimeDep;
+	tg.assert(buildtimeDep !== undefined, "the injected artifact should be used");
+	tg.assert(
+		(await buildtimeDep.tryGet("bin")) !== null,
+		"a buildtime dependency keeps bin",
+	);
+	tg.assert(
+		(await buildtimeDep.tryGet("lib")) === null,
+		"a buildtime dependency drops lib",
 	);
 }
 
@@ -515,6 +929,19 @@ export async function test() {
 		testBuildtimeKindSetsBuildAsHost(),
 		testDepsEnv(),
 		testBooleanFlags(),
+		testConditionEvaluation(),
+		testWhenExcludesDependency(),
+		testCrossCondition(),
+		testExplicitArgOverridesWhen(),
+		testEnabledPredicate(),
+		testConfigureArgsShorthands(),
+		testConfigureArgsExplicitForms(),
+		testConfigureArgsRespectWhen(),
+		testConfigureArgsIgnoreUndeclaredFlags(),
+		testDepsContextNormalizesNulls(),
+		testDependencySourceOverride(),
+		testDependencyArtifactOverride(),
+		testDependencyArtifactOverrideFiltersByKind(),
 		testMergeOrder(),
 		testBuildDefaultsToHost(),
 		testTopLevelPhases(),

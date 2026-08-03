@@ -69,7 +69,7 @@ export async function toolchain(arg?: LLVMArg) {
 		.then((d) => d.get(host))
 		.then(tg.Directory.expect);
 
-	const env = await std.env.arg(...deps, env_ ?? null, { utils: false });
+	const env = await std.env.compose(...deps, env_ ?? null);
 
 	const ldsoName = glibc.interpreterName(host);
 	// Ensure that stage2 unproxied binaries are runnable during the build, before we have a chance to wrap them post-install.
@@ -117,7 +117,7 @@ export async function toolchain(arg?: LLVMArg) {
 		target: host,
 		env,
 		phases,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: tg`${sourceDir}/llvm`,
 	});
 
@@ -289,7 +289,7 @@ export async function libclang(arg?: LLVMArg) {
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: tg`${sourceDir}/llvm`,
 	});
 }
@@ -333,7 +333,7 @@ export async function lld(arg?: LLVMArg) {
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: tg`${sourceDir}/llvm`,
 	});
 }
@@ -399,10 +399,9 @@ export async function test() {
 			printf("Hello, world!\\n");
 			return 0;
 		}`;
-	const cOut = await $`
+	const cOut = await $(std.shBootstrap`
 		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o ${tg.output}
-	`
-		.bootstrap(true)
+	`)
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);
@@ -433,10 +432,9 @@ export async function test() {
 			return 0;
 		}
 	`;
-	const cxxOut = await $`
+	const cxxOut = await $(std.shBootstrap`
 		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ -fuse-ld=lld -unwindlib=libunwind -o ${tg.output}
-	`
-		.bootstrap(true)
+	`)
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);

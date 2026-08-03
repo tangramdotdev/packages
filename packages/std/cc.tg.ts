@@ -1,7 +1,15 @@
 /** C/C++ compiler environment setup utilities. */
 
 import * as std from "./tangram.ts";
-import { buildTools, type Preset } from "./sdk/dependencies.tg.ts";
+import {
+	autotoolsPresetConfig,
+	buildTools,
+	buildToolsConfigEquals,
+	type BuildToolsOverrides,
+	type Preset,
+	type ResolvedConfig,
+	resolveBuildToolsConfig,
+} from "./sdk/dependencies.tg.ts";
 
 /** Arguments for compiler flags setup. */
 export type FlagsArg = {
@@ -132,9 +140,6 @@ export function flags(arg: FlagsArg, envs: tg.Args<std.env.Arg>): void {
 
 /** Arguments for complete C/C++ environment setup. */
 export type EnvArg = FlagsArg & {
-	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explicitly provided via `env`. Default: false. */
-	bootstrap?: boolean;
-
 	/** The machine performing the compilation. */
 	build?: string;
 
@@ -147,12 +152,88 @@ export type EnvArg = FlagsArg & {
 	/** Should the build environment include pkg-config? Default: true. */
 	pkgConfig?: boolean;
 
-	/** Arguments to use for the SDK. */
+	/** Granular control over the individual build tools. A `preset` given here replaces the preset implied by `pkgConfig`, `extended`, and `developmentTools`, and the individual tool flags then override that preset. */
+	buildTools?: BuildToolsOverrides;
+
+	/** Arguments for the SDK, or `"none"` to add no toolchain, build tools, or standard utilities, in which case the caller must provide everything the build needs. Default: the default SDK for the build machine. */
 	sdk?: std.sdk.Arg;
 
 	/** Any environment to merge with lower precedence than the C/C++ flags. */
 	env?: std.env.Arg;
 };
+
+/** The arguments that determine which build tools an environment receives. */
+export type BuildToolsSelectionArg = {
+	/** Granular control over the individual build tools. */
+	buildTools?: BuildToolsOverrides;
+
+	/** Should the development environment include `texinfo`, `help2man`, `autoconf` and `automake`? Default: false. */
+	developmentTools?: boolean;
+
+	/** Should the build environment include `m4`, `bison`, `perl`, and `gettext`? Default: true. */
+	extended?: boolean;
+
+	/** Should the build environment include pkg-config? Default: true. */
+	pkgConfig?: boolean;
+};
+
+/** The outcome of resolving a build tools selection. */
+export type BuildToolsSelection = {
+	/** The argument to forward to `buildTools`, excluding `host` and `buildToolchain`. */
+	arg: BuildToolsOverrides;
+
+	/** The fully resolved set of tools the argument produces. */
+	config: ResolvedConfig;
+
+	/** Is the resolved set identical to the one the `autotools` preset produces? When it is, and the build machine is the detected host, the released prebuilt artifact may be used instead of building the tools. */
+	matchesAutotoolsPreset: boolean;
+
+	/** Are any build tools required? When this is false the environment omits the SDK, the build tools, and the cross SDK entirely. */
+	required: boolean;
+};
+
+/**
+ * Decide which build tools an environment requires.
+ *
+ * The three coarse flags select a preset, in increasing order of breadth. An explicit `buildTools.preset` replaces that choice, and the individual tool flags then override the preset. This is a pure function of the argument and performs no builds.
+ */
+export function selectBuildTools(
+	arg: BuildToolsSelectionArg,
+): BuildToolsSelection {
+	const {
+		buildTools: overrides = {},
+		developmentTools = false,
+		extended = true,
+		pkgConfig = true,
+	} = arg;
+
+	// Determine the preset implied by the coarse flags. These are deliberately not exclusive: each one that is set widens the selection.
+	let implied: Preset | undefined = undefined;
+	if (pkgConfig) {
+		implied = "minimal";
+	}
+	if (extended) {
+		implied = "autotools";
+	}
+	if (developmentTools) {
+		implied = "autotools-dev";
+	}
+
+	// An override may request tools even when every coarse flag is off.
+	const hasOverrides = Object.keys(overrides).length > 0;
+	const required = implied !== undefined || hasOverrides;
+	const preset = overrides.preset ?? implied ?? "minimal";
+	const selectionArg: BuildToolsOverrides = { ...overrides, preset };
+	const config = resolveBuildToolsConfig(selectionArg);
+
+	// Compare the resolved sets rather than the preset names, so that an override which does not actually change the selection still reaches the prebuilt artifact.
+	const matchesAutotoolsPreset = buildToolsConfigEquals(
+		config,
+		autotoolsPresetConfig(),
+	);
+
+	return { arg: selectionArg, config, matchesAutotoolsPreset, required };
+}
 
 /**
  * Returns a complete C/C++ build environment with SDK, build tools, and compiler flags.
@@ -166,8 +247,8 @@ export type EnvArg = FlagsArg & {
  */
 export async function env(arg: EnvArg): Promise<std.env.Arg> {
 	const {
-		bootstrap = false,
 		build: build_,
+		buildTools: buildToolsArg,
 		developmentTools = false,
 		env: userEnv,
 		extended = true,
@@ -207,59 +288,189 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 		envs,
 	);
 
-	if (!bootstrap) {
-		// Determine preset based on flags.
-		let preset: Preset | undefined = undefined;
-		if (pkgConfig) {
-			preset = "minimal";
-		}
-		if (extended) {
-			preset = "autotools";
-		}
-		if (developmentTools) {
-			preset = "autotools-dev";
-		}
+	// `"none"` is the only way to obtain an environment without a compiler. The build tools selection below decides which tools accompany the SDK, never whether an SDK is added at all.
+	if (sdkArg !== "none") {
+		// Set up the native SDK for the build machine. A resolved `sdkArg` always
+		// carries a concrete `target`, so pin it alongside the host - otherwise the
+		// incoming target leaks through and produces an unwanted cross SDK.
+		const sdkHost = canUsePrebuiltBuildTools ? detectedHost : build;
+		const sdk =
+			sdkArg !== undefined
+				? await tg
+						.build(std.sdk, sdkArg, { host: sdkHost, target: sdkHost })
+						.named("sdk")
+				: await tg.build(std.sdk, { host: sdkHost }).named("sdk");
+		envs.push(sdk);
 
-		if (preset !== undefined) {
-			// Set up the native SDK for the build machine.
-			const sdkHost = canUsePrebuiltBuildTools ? detectedHost : build;
-			const sdk =
-				sdkArg !== undefined
-					? await tg.build(std.sdk, sdkArg, { host: sdkHost }).named("sdk")
-					: await tg.build(std.sdk, { host: sdkHost }).named("sdk");
-
+		const selection = selectBuildTools({
+			...(buildToolsArg !== undefined ? { buildTools: buildToolsArg } : {}),
+			developmentTools,
+			extended,
+			pkgConfig,
+		});
+		if (selection.required) {
 			let buildToolsEnv: tg.Unresolved<std.env.Arg>;
-			// Use the pre-built std.buildAutotoolsBuildTools for the "autotools" preset.
-			if (preset === "autotools" && canUsePrebuiltBuildTools) {
+			// Use the pre-built std.buildAutotoolsBuildTools whenever the selection resolves to the same set of tools that preset produces.
+			if (selection.matchesAutotoolsPreset && canUsePrebuiltBuildTools) {
 				buildToolsEnv = await tg
 					.build(std.buildAutotoolsBuildTools)
 					.named("autotools build tools");
 			} else {
-				// For other presets or when build machine differs, build with explicit parameters.
+				// For other selections or when build machine differs, build with explicit parameters.
 				buildToolsEnv = await tg
 					.build(buildTools, {
 						host: build,
 						buildToolchain: sdk,
-						preset,
+						...selection.arg,
 					})
 					.named("build tools");
 			}
-			envs.push(sdk, buildToolsEnv);
+			envs.push(buildToolsEnv);
+		}
 
-			// Add a cross SDK if necessary.
-			if (isCross) {
-				// SDK runs on `build`, produces code for `host`.
-				const crossSdk = await tg
-					.build(std.sdk, ...(sdkArg !== undefined ? [sdkArg] : []), {
-						host: build,
-						target: host,
-					})
-					.named("cross sdk");
-				envs.push(crossSdk);
-			}
+		// Add a cross SDK if necessary.
+		if (isCross) {
+			// SDK runs on `build`, produces code for `host`.
+			const crossSdk = await tg
+				.build(std.sdk, ...(sdkArg !== undefined ? [sdkArg] : []), {
+					host: build,
+					target: host,
+				})
+				.named("cross sdk");
+			envs.push(crossSdk);
 		}
 	}
 
 	// Include any user-defined env with higher precedence.
-	return std.env.arg(...envs, userEnv ?? null, { utils: false });
+	return std.env.compose(...envs, userEnv ?? null);
+}
+
+export async function testBuildToolsPresets() {
+	// The preset table itself, so that a change to it is visible here first.
+	const autotools = resolveBuildToolsConfig({ preset: "autotools" });
+	tg.assert(
+		autotools.m4 &&
+			autotools.bison &&
+			autotools.flex &&
+			autotools.perl &&
+			autotools.gettext,
+		"the autotools preset provides the autotools prerequisites",
+	);
+	tg.assert(
+		!autotools.libtool &&
+			!autotools.texinfo &&
+			!autotools.autoconf &&
+			!autotools.help2man &&
+			!autotools.automake,
+		"the autotools preset omits the development tools",
+	);
+
+	const toolchain = resolveBuildToolsConfig({ preset: "toolchain" });
+	tg.assert(toolchain.python, "the toolchain preset provides python");
+	tg.assert(!toolchain.gettext, "the toolchain preset omits gettext");
+
+	const minimal = resolveBuildToolsConfig({ preset: "minimal" });
+	tg.assert(minimal.pkgConfig, "the minimal preset provides pkg-config");
+	tg.assert(!minimal.m4, "the minimal preset provides nothing else");
+
+	return true;
+}
+
+export async function testBuildToolsOverridesBeatPreset() {
+	const config = resolveBuildToolsConfig({
+		preset: "autotools-dev",
+		texinfo: false,
+	});
+	tg.assert(!config.texinfo, "an individual flag overrides the preset");
+	tg.assert(config.automake, "the rest of the preset is untouched");
+	return true;
+}
+
+export async function testBuildToolsSelectionPresets() {
+	// The coarse flags widen the selection in order, and are deliberately not exclusive.
+	tg.assert(
+		selectBuildTools({}).arg.preset === "autotools",
+		"the default selection is the autotools preset",
+	);
+	tg.assert(
+		selectBuildTools({ developmentTools: true }).arg.preset === "autotools-dev",
+		"development tools select the autotools-dev preset",
+	);
+	tg.assert(
+		selectBuildTools({ extended: false }).arg.preset === "minimal",
+		"disabling the extended tools falls back to the minimal preset",
+	);
+
+	// Disabling pkg-config alone does not narrow the selection, because a wider flag is still set. The preset then turns pkg-config back on.
+	const pkgConfigOff = selectBuildTools({ pkgConfig: false });
+	tg.assert(
+		pkgConfigOff.arg.preset === "autotools" && pkgConfigOff.config.pkgConfig,
+		"disabling pkg-config alone has no effect while the extended tools are requested",
+	);
+
+	// With every coarse flag off and no overrides, no build tools are required at all.
+	tg.assert(
+		!selectBuildTools({ pkgConfig: false, extended: false }).required,
+		"no build tools are required when every flag is off",
+	);
+
+	return true;
+}
+
+export async function testBuildToolsSelectionKeepsPrebuilt() {
+	tg.assert(
+		selectBuildTools({}).matchesAutotoolsPreset,
+		"the default selection uses the prebuilt artifact",
+	);
+	tg.assert(
+		selectBuildTools({ buildTools: { preset: "autotools" } })
+			.matchesAutotoolsPreset,
+		"requesting the autotools preset explicitly still uses the prebuilt artifact",
+	);
+
+	// An override that does not change the resolved set must not cost a rebuild. texinfo is already absent from the autotools preset.
+	tg.assert(
+		selectBuildTools({ buildTools: { texinfo: false } }).matchesAutotoolsPreset,
+		"an override that changes nothing still uses the prebuilt artifact",
+	);
+
+	tg.assert(
+		!selectBuildTools({ developmentTools: true }).matchesAutotoolsPreset,
+		"a wider selection cannot use the prebuilt artifact",
+	);
+
+	return true;
+}
+
+export async function testBuildToolsSelectionOverrides() {
+	// The granular escape hatch: the autotools preset plus one development tool, without the rest.
+	const selection = selectBuildTools({ buildTools: { autoconf: true } });
+	tg.assert(selection.config.autoconf, "the requested tool is selected");
+	tg.assert(
+		!selection.config.texinfo &&
+			!selection.config.automake &&
+			!selection.config.libtool &&
+			!selection.config.help2man,
+		"the other development tools are not dragged in",
+	);
+	tg.assert(
+		selection.arg.autoconf === true,
+		"the override is forwarded to buildTools",
+	);
+	tg.assert(
+		!selection.matchesAutotoolsPreset,
+		"a selection that adds a tool cannot use the prebuilt artifact",
+	);
+	return true;
+}
+
+export async function test() {
+	await Promise.all([
+		testBuildToolsPresets(),
+		testBuildToolsOverridesBeatPreset(),
+		testBuildToolsSelectionPresets(),
+		testBuildToolsSelectionKeepsPrebuilt(),
+		testBuildToolsSelectionOverrides(),
+	]);
+	return true;
 }

@@ -35,7 +35,7 @@ export function deps() {
 		libseccomp: {
 			build: libseccomp.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "linux",
+			when: { hostOs: "linux" },
 		},
 		zlib: zlib.build,
 	});

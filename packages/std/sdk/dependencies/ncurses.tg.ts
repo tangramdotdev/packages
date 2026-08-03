@@ -69,7 +69,7 @@ export async function build(...args: tg.Args<Arg>) {
 
 	let output = await std.autotools.build({
 		...arg,
-		phases: phases ?? null,
+		...std.args.optional("phases", phases),
 	});
 
 	// Postprocess: create widechar symlinks and fix pkgconfig files.

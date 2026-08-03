@@ -64,7 +64,11 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 		sdk,
 		source: source_,
 		target: target_,
-	} = await std.args.apply<LLVMArg, LLVMArg>({
+	} = await tg.Args.apply<
+		LLVMArg,
+		tg.ValueOrMaybeMutationMap<LLVMArg>,
+		LLVMArg
+	>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -127,7 +131,7 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 	const zlibArtifact = dependencies.zlib.build({
 		host,
 		env: buildTools,
-		bootstrap: true,
+		sdk: "none",
 	});
 	const gitArtifact = git({
 		host,
@@ -139,7 +143,7 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 
 	// Obtain a sysroot for the requested host.
 	const sysroot = await constructSysroot({
-		bootstrap: true,
+		sdk: "none",
 		env: buildTools,
 		host,
 	})
@@ -189,7 +193,7 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 	let llvmArtifact = await cmake.build({
 		host: build,
 		target: host,
-		env: std.env.arg(...env, { utils: false }),
+		env: std.env.compose(...env),
 		phases,
 		...(sdk !== undefined ? { sdk } : {}),
 		source: tg`${sourceDir}/llvm`,
@@ -294,7 +298,7 @@ export async function buildLld(arg?: LLVMArg) {
 	});
 	const zlibArtifact = await dependencies.zlib.build({
 		env: buildToolchain,
-		bootstrap: true,
+		sdk: "none",
 	});
 	const deps = [buildTools, zlibArtifact];
 
@@ -316,7 +320,7 @@ export async function buildLld(arg?: LLVMArg) {
 	let output = await cmake.build({
 		host: build,
 		target: host,
-		bootstrap: true,
+		sdk: "none",
 		env,
 		phases,
 		...(sdk !== undefined ? { sdk } : {}),
@@ -364,7 +368,7 @@ export async function linuxToDarwin(arg?: LinuxToDarwinArg) {
 	const cctoolsForTarget = await cctools(std.triple.arch(target));
 
 	// Return the combined environment.
-	return await std.env.arg(clangToolchain, cctoolsForTarget, { utils: false });
+	return await std.env.compose(clangToolchain, cctoolsForTarget);
 }
 
 export async function testLinuxToDarwin(arg?: LinuxToDarwinArg) {
@@ -477,10 +481,9 @@ export async function test() {
 			printf("Hello, world!\\n");
 			return 0;
 		}`;
-	const cOut = await $`
+	const cOut = await $(std.shBootstrap`
 		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o ${tg.output}
-	`
-		.bootstrap(true)
+	`)
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);
@@ -512,10 +515,9 @@ export async function test() {
 			return 0;
 		}
 	`;
-	const cxxOut = await $`
+	const cxxOut = await $(std.shBootstrap`
 		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ -fuse-ld=lld -unwindlib=libunwind -o ${tg.output}
-	`
-		.bootstrap(true)
+	`)
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);

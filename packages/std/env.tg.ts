@@ -11,7 +11,6 @@ export namespace env {
 	export type Arg =
 		| tg.Artifact
 		| tg.Command<[], tg.Artifact>
-		| UtilsToggle
 		| tg.MaybeMutation<ArgObject>
 		| null;
 
@@ -23,21 +22,18 @@ export namespace env {
 	/** An object containing values or mutations for a set of environment variables, ready to pass to `tg.target`. */
 	export type EnvObject = tg.MaybeMutationMap<Record<string, tg.Template.Arg>>;
 
-	/** An object containing only a `utils` boolean field and no other members. */
-	export type UtilsToggle = { utils: boolean } & Record<string, never>;
-
-	/** Produce a single env object from one or more env args. */
-	export async function arg(
+	/**
+	 * Produce a single env object from one or more env args. This is pure composition: the result contains exactly what the caller passed and nothing more.
+	 *
+	 * Most callers want `env.arg` instead, which adds the standard utilities. Reach for this one only when the caller is supplying every tool the build needs, as the bootstrap chain does.
+	 */
+	export async function compose(
 		...args: tg.Args<env.Arg>
 	): Promise<std.env.EnvObject> {
-		let includeUtils = true;
 		const resolved = await Promise.all(args.map(tg.resolve));
 		const envObjects = await Promise.all(
 			resolved.map(async (arg) => {
 				if (arg === undefined || arg === null) {
-					return {};
-				} else if (isUtilsToggle(arg)) {
-					includeUtils = arg.utils;
 					return {};
 				} else if (arg instanceof tg.Command) {
 					const artifact = await tg.build(arg);
@@ -50,15 +46,27 @@ export namespace env {
 				}
 			}),
 		);
-		const originalEnv = await env.mergeArgObjects(...envObjects);
-		if (includeUtils && !(await env.providesUtils(originalEnv))) {
-			return await env.mergeArgObjects(
-				originalEnv,
-				await tg.build(std.buildDefaultEnv).named("default env"),
-			);
-		} else {
-			return originalEnv;
+		return await env.mergeArgObjects(...envObjects);
+	}
+
+	/**
+	 * Compose an env for a process to run in, appending the standard utilities when the composed result does not already provide them.
+	 *
+	 * The utilities are appended last, so they take precedence on `PATH` over everything the caller passed. Use `env.compose` to skip them.
+	 */
+	export async function arg(
+		...args: tg.Args<env.Arg>
+	): Promise<std.env.EnvObject> {
+		const composed = await env.compose(...args);
+		if (await env.providesUtils(composed)) {
+			return composed;
 		}
+		return await env.mergeArgObjects(composed, await env.defaultUtils());
+	}
+
+	/** The standard utils env. This is the exact artifact `std.buildDefaultEnv` produces, so every call site shares one build and it is never rebuilt. */
+	export async function defaultUtils(): Promise<std.env.EnvObject> {
+		return await tg.build(std.buildDefaultEnv).named("default env");
 	}
 
 	/** Merge a list of `env.ArgObject` values into a single `env.EnvObject`. */
@@ -634,16 +642,6 @@ export namespace env {
 	}
 }
 
-function isUtilsToggle(arg: unknown): arg is env.UtilsToggle {
-	return (
-		typeof arg === "object" &&
-		arg !== null &&
-		"utils" in arg &&
-		typeof arg.utils === "boolean" &&
-		Object.keys(arg).length === 1
-	);
-}
-
 function* separateTemplate(
 	template: tg.Template,
 	separator: string,
@@ -722,7 +720,7 @@ export async function envObjectFromArtifact(
 }
 
 export async function test() {
-	const envObject = await env.arg({ FOO: "bar" }, { utils: false });
+	const envObject = await env.compose({ FOO: "bar" });
 	const foundFooVal = await env.tryGetKey({ env: envObject, key: "FOO" });
 	tg.assert(
 		foundFooVal instanceof tg.Template,

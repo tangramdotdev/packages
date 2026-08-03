@@ -22,7 +22,6 @@ export async function source() {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -33,7 +32,6 @@ export type Arg = {
 
 export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
-		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -93,13 +91,12 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 	return std.autotools.build({
 		build,
 		host,
-		bootstrap: bootstrap_,
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
 		env: std.env.arg(...env),
 		phases,
 		prefixPath: "/", // It's going in a sysroot.
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(),
 	});
 }

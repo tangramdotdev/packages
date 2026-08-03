@@ -73,7 +73,7 @@ export async function self(...args: tg.Args<Arg>) {
 			readline: readlineArg = {},
 			zlib: zlibArg = {},
 		} = {},
-	} = await std.args.apply<Arg, Arg>({
+	} = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (arg) => arg,
 		reduce: {},

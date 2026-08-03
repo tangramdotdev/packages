@@ -97,7 +97,11 @@ export type Arg = std.autotools.Arg &
 /** Build and create a python environment. */
 export async function self(...args: tg.Args<Arg>) {
 	// Extract custom options first.
-	const customOptions = await std.args.apply<Arg, Arg>({
+	const customOptions = await tg.Args.apply<
+		Arg,
+		tg.ValueOrMaybeMutationMap<Arg>,
+		Arg
+	>({
 		args: args as tg.Args<Arg>,
 		map: async (arg) => arg,
 		reduce: {},
@@ -125,9 +129,7 @@ export async function self(...args: tg.Args<Arg>) {
 	const artifacts = await std.deps.artifacts(deps, {
 		build,
 		host,
-		...(customOptions.sdk !== undefined && customOptions.sdk !== null
-			? { sdk: customOptions.sdk }
-			: {}),
+		...std.args.optional("sdk", customOptions.sdk),
 	});
 
 	// Build configure args.
@@ -368,7 +370,11 @@ export async function build(...args: tg.Args<BuildArg>) {
 		pyprojectToml: pyprojectToml_,
 		source,
 		version: versionOverride,
-	} = await std.args.apply<BuildArg, BuildArg>({
+	} = await tg.Args.apply<
+		BuildArg,
+		tg.ValueOrMaybeMutationMap<BuildArg>,
+		BuildArg
+	>({
 		args,
 		map: async (arg) => arg,
 		reduce: { source: "set" },
@@ -412,7 +418,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 	const baseEnv = await self({
 		...pythonArg,
 		build: buildTriple,
-		env: env ?? null,
+		...std.args.optional("env", env),
 		host,
 	});
 

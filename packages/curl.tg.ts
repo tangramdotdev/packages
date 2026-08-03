@@ -1,3 +1,4 @@
+import * as libiconv from "libiconv" with { source: "./libiconv.tg.ts" };
 import * as libpsl from "libpsl" with { source: "./libpsl.tg.ts" };
 import * as openssl from "openssl" with { source: "./openssl.tg.ts" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
@@ -37,6 +38,11 @@ export function source() {
 
 export function deps() {
 	return std.deps({
+		libiconv: {
+			build: libiconv.build,
+			kind: "runtime",
+			when: { hostOs: "darwin" },
+		},
 		libpsl: libpsl.build,
 		openssl: openssl.build,
 		zlib: zlib.build,
@@ -71,16 +77,19 @@ export function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
+	const os = std.triple.os(std.triple.host());
+	const runtimeDeps: Array<tg.Unresolved<tg.Directory>> = [
+		openssl.build(),
+		zlib.build(),
+		zstd.build(),
+		libpsl.build(),
+	];
+	if (os === "darwin") {
+		runtimeDeps.push(libiconv.build());
+	}
 	const spec: std.assert.PackageSpec = {
 		...std.assert.defaultSpec(metadata),
-		libraries: std.assert.allLibraries(["curl"], {
-			runtimeDeps: [
-				openssl.build(),
-				zlib.build(),
-				zstd.build(),
-				libpsl.build(),
-			],
-		}),
+		libraries: std.assert.allLibraries(["curl"], { runtimeDeps }),
 	};
 	await std.assert.pkg(build, spec);
 

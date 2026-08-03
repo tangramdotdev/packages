@@ -98,9 +98,9 @@ export async function compileUtil(arg: tg.Unresolved<UtilArg>) {
 	const host = build;
 
 	// Compile the util using std.build with bootstrap mode.
-	const util = await std.build`
-			cc -Oz ${tg.Template.join(" ", ...extraArgs)} -o ${tg.output} ${utilSource}/${fileName}`
-		.bootstrap(true)
+	const util = await std
+		.build(std.shBootstrap`
+			cc -Oz ${tg.Template.join(" ", ...extraArgs)} -o ${tg.output} ${utilSource}/${fileName}`)
 		.env(resolved.env)
 		.host(host)
 		.then(tg.File.expect);

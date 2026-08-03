@@ -59,7 +59,9 @@ export async function runProcMacroDeps() {
 	const host = std.triple.host();
 	const rustHost = rustTriple(host);
 	const sandboxToolchain = await self({ host: rustHost, channel: "stable" });
-	const sdkArgs: Array<std.sdk.Arg> = [{ host: rustHost, target: rustHost }];
+	const sdkArgs: Array<std.sdk.ArgObject> = [
+		{ host: rustHost, target: rustHost },
+	];
 	if (std.triple.os(rustHost) === "linux") {
 		sdkArgs.push({ toolchain: "gnu" });
 	}

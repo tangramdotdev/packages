@@ -36,7 +36,7 @@ export function deps() {
 		zstd: {
 			build: zstd.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "linux",
+			when: { hostOs: "linux" },
 		},
 	});
 }

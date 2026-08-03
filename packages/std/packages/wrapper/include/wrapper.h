@@ -179,9 +179,6 @@ int main (int argc, char** argv) {
 	int nphdr = -1;
 	int nphnum = -1;
 	for (int i = 0; i < stack.auxc; i++) {
-		if (nentry >= 0 && nbase >= 0) {
-			break;
-		}
 		switch(stack.auxv[i].a_type) {
 			case AT_PHDR: {
 				ABORT_IF(nphdr >= 0, "duplicate AT_PHDR");
@@ -485,11 +482,13 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 			data	= alloc(arena, section_itr->sh_size, 1);
 			size	= section_itr->sh_size;
 			offset	= section_itr->sh_offset;
+			ABORT_IF(size < sizeof(Footer), "manifest section too small");
 			if (options->enable_tracing) {
 				trace("reading manifest at offset: %ld, size: %ld\n", offset, size);
 			}
 			read_all(options->enable_tracing, fd, data, size, offset);
 			memcpy((void*)&executable.footer, (void*)(data + (size - sizeof(Footer))), sizeof(Footer));
+			ABORT_IF(executable.footer.size > size - sizeof(Footer), "invalid footer");
 			break;
 		}
 	}
@@ -1079,7 +1078,7 @@ TG_VISIBILITY void* prepare_executable_stack (
 	}
 
 	// Push aux vector in reverse order.
-	int x = stack->auxc;
+	int x = stack->auxc - 1;
 	for (; x >= 0; x--) {
 		Elf64_auxv_t* v = &stack->auxv[x];
 		push_auxv(&sp, v);

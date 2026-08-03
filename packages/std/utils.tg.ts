@@ -34,9 +34,9 @@ export * as xz from "./utils/xz.tg.ts";
 
 export type Arg = {
 	build?: string | null;
+	/** The environment carrying the toolchain these utilities are built with. These builds add no SDK of their own, so it must provide a compiler. */
 	env?: std.env.Arg | null;
 	host?: string | null;
-	sdk?: std.sdk.Arg | null;
 };
 
 /** A basic set of GNU system utilites. */
@@ -45,34 +45,28 @@ export async function env(...args: tg.Args<Arg>) {
 		build,
 		env: env_,
 		host: host_,
-		sdk: sdk_,
-	} = await std.args.apply<Arg, Arg>({
+	} = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (arg) => arg,
 		reduce: {},
 	});
-	const bootstrap = true;
 	const host = host_ ?? std.triple.host();
 
-	// If no env or SDK is provided, use bootstrap SDK as default.
-	const sdk = sdk_ ?? (env_ ? undefined : await bootstrapSdk.sdk.arg(host));
+	// These are the utilities a managed SDK itself depends on, so none of them may ask for one. The compiler comes from the given environment, which falls back to the bootstrap toolchain.
+	const toolchainEnv = env_ ?? (await bootstrapSdk.sdk(host));
 
 	const shellArtifact = await bash.build({
-		bootstrap,
 		build: build ?? null,
-		env: env_ ?? null,
+		env: toolchainEnv,
 		host,
-		sdk: sdk ?? null,
+		sdk: "none",
 	});
-	const env = await std.env.arg(env_ ?? null, {
-		utils: false,
-	});
+	const env = await std.env.compose(toolchainEnv);
 	const commonArg = {
-		bootstrap,
 		build: build ?? null,
 		env,
 		host,
-		sdk: sdk ?? null,
+		sdk: "none" as const,
 	};
 
 	let utils = [shellArtifact];
@@ -92,7 +86,7 @@ export async function env(...args: tg.Args<Arg>) {
 			xz(commonArg),
 		]),
 	);
-	return await std.env.arg(...utils, { utils: false });
+	return await std.env.compose(...utils);
 }
 
 export default env;
@@ -130,7 +124,7 @@ export async function prerequisites(hostArg?: tg.Unresolved<string>) {
 		coreutilsArtifact,
 	];
 
-	return std.env.arg(...components, { utils: false });
+	return std.env.compose(...components);
 }
 
 export type BuildUtilArg = Omit<std.autotools.Arg, "deps"> & {
@@ -141,7 +135,6 @@ export type BuildUtilArg = Omit<std.autotools.Arg, "deps"> & {
 /** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and disabling extra tools. */
 export async function autotoolsInternal(arg: tg.Unresolved<BuildUtilArg>) {
 	const {
-		bootstrap = false,
 		extended = false,
 		pkgConfig = false,
 		wrapBashScriptPaths,
@@ -149,10 +142,8 @@ export async function autotoolsInternal(arg: tg.Unresolved<BuildUtilArg>) {
 	} = await tg.resolve(arg);
 	let output = await std.autotools.build({
 		...rest,
-		bootstrap,
 		extended,
-		// For non-bootstrap builds, ensure at least minimal preset to trigger SDK injection
-		pkgConfig: pkgConfig || !bootstrap,
+		pkgConfig,
 	});
 	for (const path of wrapBashScriptPaths ?? []) {
 		const file = tg.File.expect(await output.get(path));

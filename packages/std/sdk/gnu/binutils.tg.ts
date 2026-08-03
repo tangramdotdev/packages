@@ -23,7 +23,6 @@ export async function source(build: string) {
 }
 
 export type Arg = Omit<std.autotools.Arg, "deps"> & {
-	bootstrap?: boolean;
 	target?: string;
 };
 
@@ -31,12 +30,16 @@ export type Arg = Omit<std.autotools.Arg, "deps"> & {
 export async function build(...args: tg.Args<Arg>) {
 	// First collect args to extract target before passing to autotools.arg.
 	// biome-ignore lint/suspicious/noExplicitAny: Arg contains fields not in autotools.Arg.
-	const collected = await std.args.apply<any, any>({
+	const collected = await tg.Args.apply<
+		any,
+		tg.ValueOrMaybeMutationMap<any>,
+		any
+	>({
 		args,
 		map: async (arg) => arg,
 		reduce: {
 			env: (a, b) => std.env.arg(a ?? null, b ?? null),
-			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.mergeArg(a, b),
 		},
 	});
 	const { target: target_, fortifySource: fortifySource_, ...rest } = collected;
@@ -45,14 +48,7 @@ export async function build(...args: tg.Args<Arg>) {
 		{ source: source(std.triple.host()) },
 		rest,
 	);
-	const {
-		bootstrap: bootstrap_ = false,
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = arg;
+	const { build, env: env_, host, sdk, source: source_ } = arg;
 	const target = target_ ?? host;
 	const fortifySource = fortifySource_ ?? host === target;
 
@@ -91,14 +87,13 @@ export async function build(...args: tg.Args<Arg>) {
 	const output = await std.autotools.build({
 		build,
 		host,
-		bootstrap: bootstrap_,
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
 		fortifySource,
 		env,
 		opt: "3",
 		phases,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_,
 	});
 

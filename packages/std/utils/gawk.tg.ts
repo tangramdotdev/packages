@@ -20,7 +20,6 @@ export function source() {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -30,7 +29,6 @@ export type Arg = {
 
 export async function build(arg?: Arg) {
 	const {
-		bootstrap = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -45,18 +43,15 @@ export async function build(arg?: Arg) {
 		args: ["--disable-dependency-tracking", "--disable-rpath"],
 	};
 
-	const env = std.env.arg(env_ ?? null, prerequisites(build), {
-		utils: false,
-	});
+	const env = std.env.compose(env_ ?? null, prerequisites(build));
 
 	const output = autotoolsInternal({
 		build,
 		host,
-		bootstrap,
 		env,
 		phases: { configure },
 		processName: metadata.name,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(),
 		wrapBashScriptPaths: ["bin/gawkbug"],
 	});
@@ -71,5 +66,5 @@ import * as bootstrap from "../bootstrap.tg.ts";
 export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
-	return build({ host, bootstrap: true, env: sdk });
+	return build({ host, sdk: "none", env: sdk });
 }

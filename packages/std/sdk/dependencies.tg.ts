@@ -69,8 +69,14 @@ export type BuildToolsArg = {
  */
 export type Preset = "minimal" | "toolchain" | "autotools" | "autotools-dev";
 
+/** The tools that `buildTools` may include, without the environment parameters. This is the granular escape hatch the higher level builders expose. */
+export type BuildToolsOverrides = Omit<
+	BuildToolsArg,
+	"buildToolchain" | "host"
+>;
+
 /** Resolved configuration after applying preset and individual overrides */
-type ResolvedConfig = {
+export type ResolvedConfig = {
 	pkgConfig: boolean;
 	m4: boolean;
 	bison: boolean;
@@ -85,8 +91,8 @@ type ResolvedConfig = {
 	automake: boolean;
 };
 
-/** Apply preset defaults, then override with individual flags */
-function resolveConfig(arg: BuildToolsArg): ResolvedConfig {
+/** Apply preset defaults, then override with individual flags. This is a pure function of the argument and performs no builds. */
+export function resolveBuildToolsConfig(arg: BuildToolsArg): ResolvedConfig {
 	// Base defaults - everything off except pkgConfig
 	let config: ResolvedConfig = {
 		pkgConfig: true,
@@ -161,9 +167,28 @@ function resolveConfig(arg: BuildToolsArg): ResolvedConfig {
 	return config;
 }
 
+/** The resolved configuration produced by the `autotools` preset. A configuration equal to this one is satisfied by the released prebuilt artifact. */
+export function autotoolsPresetConfig(): ResolvedConfig {
+	return resolveBuildToolsConfig({ preset: "autotools" });
+}
+
+/** Determine whether two resolved configurations select the same tools. */
+export function buildToolsConfigEquals(
+	a: ResolvedConfig,
+	b: ResolvedConfig,
+): boolean {
+	return (Object.keys(a) as Array<keyof ResolvedConfig>).every(
+		(key) => a[key] === b[key],
+	);
+}
+
 /** An env containing build-time tools. Use presets or individual flags to control which tools are included. */
 export async function buildTools(...args: tg.Args<BuildToolsArg>) {
-	const resolved = await std.args.apply<BuildToolsArg, BuildToolsArg>({
+	const resolved = await tg.Args.apply<
+		BuildToolsArg,
+		tg.ValueOrMaybeMutationMap<BuildToolsArg>,
+		BuildToolsArg
+	>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -171,7 +196,7 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 	const { host: host_, buildToolchain: buildToolchain_ } = resolved;
 
 	// Resolve configuration from preset + individual overrides
-	const config = resolveConfig(resolved);
+	const config = resolveBuildToolsConfig(resolved);
 
 	// Default values
 	const host = host_ ?? std.triple.host();
@@ -190,7 +215,7 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 	}
 
 	// This list collects artifacts to return. It does not include the build toolchain or standard utils.
-	const retEnvs: tg.Args<std.env.Arg> = [{ utils: false }];
+	const retEnvs: tg.Args<std.env.Arg> = [];
 
 	// A running modified build env including pieces we build along the way.
 	let buildEnv = await std.env.arg(buildToolchain);
@@ -211,68 +236,68 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 		const artifact = await pkgConfig({
 			bashExe,
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildEnv,
 		});
 		retEnvs.push(artifact);
-		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+		buildEnv = await std.env.compose(buildEnv, artifact);
 	}
 
 	// m4 - required by bison, flex, autoconf.
 	if (config.m4 || config.bison || config.flex || config.autoconf) {
 		m4Artifact = await m4({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildEnv,
 		});
 		if (config.m4) {
 			retEnvs.push(m4Artifact);
 		}
-		buildEnv = await std.env.arg(buildEnv, m4Artifact, { utils: false });
+		buildEnv = await std.env.compose(buildEnv, m4Artifact);
 	}
 
 	// bison - uses m4.
 	if (config.bison) {
 		const artifact = await bison({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildEnv,
 		});
 		retEnvs.push(artifact);
-		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+		buildEnv = await std.env.compose(buildEnv, artifact);
 	}
 
 	// libiconv - Darwin only, needed for gettext.
 	if (os === "darwin" && config.gettext) {
 		const artifact = await libiconv({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildEnv,
 		});
 		retEnvs.push(artifact);
-		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+		buildEnv = await std.env.compose(buildEnv, artifact);
 	}
 
 	// gettext - i18n support for autotools packages.
 	if (config.gettext) {
 		const artifact = await gettext({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildEnv,
 		});
 		retEnvs.push(artifact);
-		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+		buildEnv = await std.env.compose(buildEnv, artifact);
 	}
 
 	// flex - uses m4.
 	if (config.flex) {
 		const artifact = await flex({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildEnv,
 		});
 		retEnvs.push(artifact);
-		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+		buildEnv = await std.env.compose(buildEnv, artifact);
 	}
 
 	// perl - required by autoconf, automake, texinfo, help2man.
@@ -285,33 +310,33 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 	) {
 		perlArtifact = await perl({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildEnv,
 		});
 		if (config.perl) {
 			retEnvs.push(perlArtifact);
 		}
-		buildEnv = await std.env.arg(buildEnv, perlArtifact, { utils: false });
+		buildEnv = await std.env.compose(buildEnv, perlArtifact);
 	}
 
 	// python - requires libxcrypt.
 	if (config.python) {
 		const libxcryptArtifact = await libxcrypt({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildEnv,
 		});
-		buildEnv = await std.env.arg(buildEnv, libxcryptArtifact, { utils: false });
+		buildEnv = await std.env.compose(buildEnv, libxcryptArtifact);
 
 		const artifact = await tg
 			.build(python, {
 				host,
-				bootstrap: true,
+				sdk: "none",
 				env: buildEnv,
 			})
 			.named("python");
 		retEnvs.push(artifact);
-		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+		buildEnv = await std.env.compose(buildEnv, artifact);
 	}
 
 	// Development tools - these require perl and m4 to already be built.
@@ -326,12 +351,12 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 		// grep and sed are needed by libtool and autoconf.
 		grepArtifact = await grep({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildEnv,
 		});
 		const sedArtifact = await sed({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildEnv,
 		});
 
@@ -343,23 +368,23 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 				grepExe,
 				sedExe,
 				host,
-				bootstrap: true,
+				sdk: "none",
 				env: buildEnv,
 			});
 			retEnvs.push(artifact);
-			buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+			buildEnv = await std.env.compose(buildEnv, artifact);
 		}
 
 		if (config.texinfo) {
 			tg.assert(perlArtifact, "texinfo requires perl");
 			const artifact = await texinfo({
 				host,
-				bootstrap: true,
+				sdk: "none",
 				env: buildEnv,
 				perlArtifact,
 			});
 			retEnvs.push(artifact);
-			buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+			buildEnv = await std.env.compose(buildEnv, artifact);
 		}
 
 		if (config.autoconf || config.automake) {
@@ -369,7 +394,7 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 			autoconfArtifact = await tg
 				.build(autoconf, {
 					host,
-					bootstrap: true,
+					sdk: "none",
 					env: buildEnv,
 					grepArtifact,
 					m4Artifact,
@@ -379,9 +404,7 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 			if (config.autoconf) {
 				retEnvs.push(autoconfArtifact);
 			}
-			buildEnv = await std.env.arg(buildEnv, autoconfArtifact, {
-				utils: false,
-			});
+			buildEnv = await std.env.compose(buildEnv, autoconfArtifact);
 		}
 
 		if (config.help2man) {
@@ -389,13 +412,13 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 			const artifact = await tg
 				.build(help2man, {
 					host,
-					bootstrap: true,
+					sdk: "none",
 					env: buildEnv,
 					perlArtifact,
 				})
 				.named("help2man");
 			retEnvs.push(artifact);
-			buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+			buildEnv = await std.env.compose(buildEnv, artifact);
 		}
 
 		if (config.automake) {
@@ -404,18 +427,18 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 			const artifact = await tg
 				.build(automake, {
 					host,
-					bootstrap: true,
+					sdk: "none",
 					env: buildEnv,
 					autoconfArtifact,
 					perlArtifact,
 				})
 				.named("automake");
 			retEnvs.push(artifact);
-			buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+			buildEnv = await std.env.compose(buildEnv, artifact);
 		}
 	}
 
-	return std.env.arg(...retEnvs);
+	return std.env.compose(...retEnvs);
 }
 
 /** The autotools build tools built with the default SDK and utils for the detected host. This version uses the default SDK to ensure cache hits when used in autotools.build and the package automation script. */
@@ -542,7 +565,7 @@ export async function hostLibraries(arg: tg.Unresolved<HostLibrariesArg>) {
 	if (config.zlib) {
 		const zlibArtifact = zlib({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildToolchain,
 		});
 		ret.push(zlibArtifact);
@@ -552,7 +575,7 @@ export async function hostLibraries(arg: tg.Unresolved<HostLibrariesArg>) {
 	if (config.zstd) {
 		const zstdArtifact = zstd({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildToolchain,
 		});
 		ret.push(zstdArtifact);
@@ -562,7 +585,7 @@ export async function hostLibraries(arg: tg.Unresolved<HostLibrariesArg>) {
 	if (config.ncurses) {
 		const ncursesArtifact = ncurses({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildToolchain,
 		});
 		ret.push(ncursesArtifact);
@@ -573,30 +596,30 @@ export async function hostLibraries(arg: tg.Unresolved<HostLibrariesArg>) {
 	if (config.gmp || config.isl || config.mpfr || config.mpc) {
 		const gmpArtifact = gmp({
 			host,
-			bootstrap: true,
+			sdk: "none",
 			env: buildToolchain,
 		});
 		if (config.gmp) {
 			ret.push(gmpArtifact);
 		}
-		let gmpEnv = std.env.arg(buildToolchain, gmpArtifact, { utils: false });
+		let gmpEnv = std.env.compose(buildToolchain, gmpArtifact);
 
 		if (config.isl) {
-			const islArtifact = isl({ host, bootstrap: true, env: gmpEnv });
+			const islArtifact = isl({ host, sdk: "none", env: gmpEnv });
 			ret.push(islArtifact);
 		}
 
 		if (config.mpfr || config.mpc) {
-			const mpfrArtifact = mpfr({ host, bootstrap: true, env: gmpEnv });
+			const mpfrArtifact = mpfr({ host, sdk: "none", env: gmpEnv });
 			if (config.mpfr) {
 				ret.push(mpfrArtifact);
 			}
-			gmpEnv = std.env.arg(gmpEnv, mpfrArtifact, { utils: false });
+			gmpEnv = std.env.compose(gmpEnv, mpfrArtifact);
 
 			if (config.mpc) {
 				const mpcArtifact = mpc({
 					host,
-					bootstrap: true,
+					sdk: "none",
 					env: gmpEnv,
 				});
 				ret.push(mpcArtifact);
@@ -604,5 +627,5 @@ export async function hostLibraries(arg: tg.Unresolved<HostLibrariesArg>) {
 		}
 	}
 
-	return await std.env.arg(...ret, { utils: false });
+	return await std.env.compose(...ret);
 }

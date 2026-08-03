@@ -100,15 +100,19 @@ export type ResolvedArg = Omit<Arg, "build" | "host" | "source"> & {
 
 /** Resolve cargo args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
 export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
-	const collect = await std.args.apply<Arg, Arg>({
+	const collect = await tg.Args.apply<
+		Arg,
+		tg.ValueOrMaybeMutationMap<Arg>,
+		Arg
+	>({
 		args,
 		map: async (arg) => arg,
 		reduce: {
 			env: (a, b) => std.env.arg(a ?? null, b ?? null),
 			features: "append",
-			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.mergeArg(a, b),
 			subtreeEnv: (a, b) => std.env.arg(a ?? null, b ?? null),
-			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			subtreeSdk: (a, b) => std.sdk.mergeArg(a, b),
 		},
 	});
 
@@ -145,15 +149,19 @@ export type ResolvedRunArg = Omit<RunArg, "build" | "host"> & {
 export async function runArg(
 	...args: tg.Args<RunArg>
 ): Promise<ResolvedRunArg> {
-	const collect = await std.args.apply<RunArg, RunArg>({
+	const collect = await tg.Args.apply<
+		RunArg,
+		tg.ValueOrMaybeMutationMap<RunArg>,
+		RunArg
+	>({
 		args,
 		map: async (arg) => arg,
 		reduce: {
 			env: (a, b) => std.env.arg(a ?? null, b ?? null),
 			features: "append",
-			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.mergeArg(a, b),
 			subtreeEnv: (a, b) => std.env.arg(a ?? null, b ?? null),
-			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			subtreeSdk: (a, b) => std.sdk.mergeArg(a, b),
 		},
 	});
 
@@ -178,8 +186,8 @@ async function resolveDepsEnv(
 	return std.deps.env(depsConfig, {
 		build: resolved.build,
 		host: resolved.host,
-		env: resolved.env ?? null,
-		subtreeEnv: resolved.subtreeEnv ?? null,
+		...std.args.optional("env", resolved.env),
+		...std.args.optional("subtreeEnv", resolved.subtreeEnv),
 		...(resolved.sdk !== undefined ? { sdk: resolved.sdk } : {}),
 		...(resolved.dependencies !== undefined
 			? { dependencies: resolved.dependencies }
@@ -283,7 +291,9 @@ VENDORCFG`;
 	if (proxy) {
 		const proxyDir = proxy_.proxy();
 
-		const sdkArgs: Array<std.sdk.Arg> = [{ host: rustHost, target: rustHost }];
+		const sdkArgs: Array<std.sdk.ArgObject> = [
+			{ host: rustHost, target: rustHost },
+		];
 		if (std.triple.os(rustHost) === "linux") {
 			sdkArgs.push({ toolchain: "gnu" });
 		}
@@ -411,8 +421,14 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 
 	const crossCompiling = target !== rustHost;
 
-	// Forces GCC on Linux — rustc expects libgcc_s.
-	const sdkArgs: Array<std.sdk.Arg> = [{ host: rustHost, target }, sdk_];
+	// Forces GCC on Linux — rustc expects libgcc_s. A cargo build always needs a
+	// toolchain, so an `sdk: "none"` argument contributes no arguments rather
+	// than suppressing the SDK.
+	const sdkArgs: Array<std.sdk.ArgObject> = [{ host: rustHost, target }];
+	const sdkArgObject = std.sdk.argObject(sdk_);
+	if (sdkArgObject !== undefined) {
+		sdkArgs.push(sdkArgObject);
+	}
 	if (
 		os === "linux" &&
 		sdkArgs.filter((arg) => arg?.toolchain === "llvm").length > 0

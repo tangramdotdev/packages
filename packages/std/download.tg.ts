@@ -17,6 +17,7 @@ export async function download(arg: Arg): Promise<tg.Blob | tg.Artifact> {
 	for (const url of urls) {
 		try {
 			output = await tg.download(url, checksum, { mode });
+			break;
 		} catch (e) {
 			lastError = e as Error;
 			continue;
@@ -131,7 +132,7 @@ export namespace download {
 		const mirrors = gnuHosts.slice(1).map(gnuUrl);
 
 		const outer = await download
-			.extractArchive({ checksum, url })
+			.extractArchive({ checksum, url, mirrors })
 			.then(tg.Directory.expect);
 		return download.unwrapDirectory(outer);
 	}

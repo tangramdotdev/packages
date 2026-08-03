@@ -70,7 +70,7 @@ export async function build(...args: tg.Args<Arg>) {
 	};
 
 	const deps = [python({ host: build }), texinfo({ host: build })];
-	const env = std.env.arg(
+	const env = std.env.compose(
 		...deps,
 		{
 			CPATH: tg.Mutation.unset(),
@@ -78,7 +78,6 @@ export async function build(...args: tg.Args<Arg>) {
 			TGLD_PASSTHROUGH: true,
 		},
 		arg.env ?? null,
-		{ utils: false },
 	);
 
 	let result = await std.autotools.build({
@@ -92,7 +91,7 @@ export async function build(...args: tg.Args<Arg>) {
 		opt: "3",
 		phases,
 		prefixPath: "/",
-		sdk: arg.sdk ?? null,
+		...std.args.optional("sdk", arg.sdk),
 		source: arg.source,
 	});
 

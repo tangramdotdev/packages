@@ -50,7 +50,7 @@ export function deps() {
 		libiconv: {
 			build: libiconv.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "darwin",
+			when: { hostOs: "darwin" },
 		},
 		libpsl: libpsl.build,
 		ncurses: ncurses.build,
@@ -75,11 +75,9 @@ export async function self(...args: tg.Args<Arg>) {
 	const artifacts = await std.deps.artifacts(deps, {
 		build: build_,
 		host,
-		...(arg.sdk !== undefined && arg.sdk !== null ? { sdk: arg.sdk } : {}),
-		subtreeEnv: arg.subtreeEnv ?? null,
-		...(arg.subtreeSdk !== undefined && arg.subtreeSdk !== null
-			? { subtreeSdk: arg.subtreeSdk }
-			: {}),
+		...std.args.optional("sdk", arg.sdk),
+		...std.args.optional("subtreeEnv", arg.subtreeEnv),
+		...std.args.optional("subtreeSdk", arg.subtreeSdk),
 	});
 	const artifactList = Object.values(artifacts).filter(
 		(v): v is tg.Directory => v !== undefined,
@@ -126,9 +124,6 @@ export async function self(...args: tg.Args<Arg>) {
 export default self;
 
 export type BuildArg = {
-	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explicitly provided via `env`. Default: false. */
-	bootstrap?: boolean;
-
 	/** The machine performing the compilation. */
 	build?: string | null;
 
@@ -231,10 +226,10 @@ export type ResolvedArg = Omit<
 
 /** Resolve cmake args to a mutable arg object. Returns a BuildArg with build, host, and source guaranteed to be resolved. */
 export async function arg(...args: tg.Args<BuildArg>): Promise<ResolvedArg> {
-	type Collect = Omit<std.args.MakeArrayKeys<BuildArg, "phases">, "phases"> & {
+	type MergedArg = Omit<BuildArg, "phases"> & {
 		phases: Array<std.phases.Arg>;
 	};
-	const collect = await std.args.apply<BuildArg, Collect>({
+	const merged = await tg.Args.apply<BuildArg, MergedArg, MergedArg>({
 		args,
 		map: async (arg) => {
 			const phases = Array.isArray(arg.phases)
@@ -245,14 +240,14 @@ export async function arg(...args: tg.Args<BuildArg>): Promise<ResolvedArg> {
 			return {
 				...arg,
 				phases,
-			} as Collect;
+			} as MergedArg;
 		},
 		reduce: {
 			env: (a, b) => std.env.arg(a ?? null, b ?? null),
 			phases: "append",
-			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.mergeArg(a, b),
 			subtreeEnv: (a, b) => std.env.arg(a ?? null, b ?? null),
-			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			subtreeSdk: (a, b) => std.sdk.mergeArg(a, b),
 		},
 	});
 
@@ -264,7 +259,7 @@ export async function arg(...args: tg.Args<BuildArg>): Promise<ResolvedArg> {
 		phases: userPhaseArgs = [],
 		source: source_,
 		...rest
-	} = collect;
+	} = merged;
 
 	tg.assert(
 		source_ !== undefined && source_ !== null,
@@ -282,14 +277,10 @@ export async function arg(...args: tg.Args<BuildArg>): Promise<ResolvedArg> {
 		? await std.deps.env(depsConfig, {
 				build,
 				host,
-				...(rest.sdk !== undefined && rest.sdk !== null
-					? { sdk: rest.sdk }
-					: {}),
-				env: userEnv ?? null,
-				subtreeEnv: rest.subtreeEnv ?? null,
-				...(rest.subtreeSdk !== undefined && rest.subtreeSdk !== null
-					? { subtreeSdk: rest.subtreeSdk }
-					: {}),
+				...std.args.optional("sdk", rest.sdk),
+				...std.args.optional("env", userEnv),
+				...std.args.optional("subtreeEnv", rest.subtreeEnv),
+				...std.args.optional("subtreeSdk", rest.subtreeSdk),
 			})
 		: undefined;
 
@@ -314,7 +305,6 @@ export async function build(...args: tg.Args<BuildArg>) {
 	const resolved = await arg(...args);
 	const {
 		build: build_,
-		bootstrap = false,
 		buildDir = "build",
 		checksum,
 		debug = false,
@@ -352,17 +342,16 @@ export async function build(...args: tg.Args<BuildArg>) {
 	const ccEnv = await std.cc.env({
 		host,
 		build: build_,
-		bootstrap,
 		extended,
 		fortifySource: fortifySource_ ?? 2,
 		fullRelro,
 		hardeningCFlags,
-		...(march !== undefined && march !== null ? { march } : {}),
+		...std.args.optional("march", march),
 		mtune: mtune ?? "generic",
 		opt: opt ?? "2",
 		pipe,
 		pkgConfig,
-		...(sdkArg !== undefined && sdkArg !== null ? { sdk: sdkArg } : {}),
+		...std.args.optional("sdk", sdkArg),
 		stripExecutables,
 	});
 	envs.push(ccEnv);
@@ -433,13 +422,13 @@ export async function build(...args: tg.Args<BuildArg>) {
 	const mergedPhases = await std.phases.arg(defaultPhases, ...userPhasesArray);
 
 	const system = std.triple.archAndOs(host);
-	let output = await tg
-		.build(std.phases.run, {
+	let output = await std.phases
+		.run({
 			bootstrap: true,
 			debug,
 			phases: mergedPhases,
 			env,
-			command: { host: system },
+			host: system,
 			checksum: checksum ?? null,
 			network,
 			...(order !== undefined ? { order } : {}),

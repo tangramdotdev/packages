@@ -12,7 +12,7 @@ export type Arg = {
 };
 
 export async function injection(...args: tg.Args<Arg>) {
-	const arg = await std.args.apply<Arg, Arg>({
+	const arg = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -42,7 +42,7 @@ export async function injection(...args: tg.Args<Arg>) {
 			.build(dylib, {
 				build,
 				buildToolchain,
-				env: env ?? null,
+				...std.args.optional("env", env),
 				host,
 				source,
 				additionalArgs,
@@ -52,7 +52,7 @@ export async function injection(...args: tg.Args<Arg>) {
 	} else if (os === "darwin") {
 		const injection = macOsInjection({
 			buildToolchain,
-			env: env ?? null,
+			...std.args.optional("env", env),
 			host,
 			source,
 		});
@@ -83,12 +83,11 @@ export async function macOsInjection(arg: MacOsInjectionArg) {
 
 	// Define common options.
 	const additionalArgs = ["-Wno-nonnull", "-Wno-nullability-completeness"];
-	const env = await std.env.arg(
+	const env = await std.env.compose(
 		{
 			SDKROOT: tg`${bootstrap.macOsSdk()}/MacOSX.sdk`,
 		},
 		arg.env ?? null,
-		{ utils: false },
 	);
 
 	// Compile arm64 dylib.
@@ -115,14 +114,15 @@ export async function macOsInjection(arg: MacOsInjectionArg) {
 
 	// Combine into universal dylib.
 	const system = std.triple.archAndOs(host);
-	const injection =
-		await std.build`lipo -create ${arm64injection} ${amd64injection} -output ${tg.output}`
-			.bootstrap(true)
-			.host(system)
-			.env(buildToolchain)
-			.env(env)
-			.named("universal injection")
-			.then(tg.File.expect);
+	const injection = await std
+		.build(
+			std.shBootstrap`lipo -create ${arm64injection} ${amd64injection} -output ${tg.output}`,
+		)
+		.host(system)
+		.env(buildToolchain)
+		.env(env)
+		.named("universal injection")
+		.then(tg.File.expect);
 	return injection;
 }
 
@@ -136,10 +136,14 @@ type DylibArg = {
 };
 
 export async function dylib(...dylibArgs: tg.Args<DylibArg>): Promise<tg.File> {
-	const arg = await std.args.apply<DylibArg, DylibArg>({
+	const arg = await tg.Args.apply<
+		DylibArg,
+		tg.ValueOrMaybeMutationMap<DylibArg>,
+		DylibArg
+	>({
 		args: dylibArgs,
 		map: async (a) => a,
-		reduce: {},
+		reduce: { additionalArgs: "set", source: "set" },
 	});
 	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
@@ -148,9 +152,7 @@ export async function dylib(...dylibArgs: tg.Args<DylibArg>): Promise<tg.File> {
 
 	// Get the build toolchain. If not provided, use bootstrap SDK.
 	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(host));
-	const toolchainEnv = await std.env.arg(buildToolchain, {
-		utils: false,
-	});
+	const toolchainEnv = await std.env.compose(buildToolchain);
 
 	// Find the compiler. Try clang first, then cc, then prefixed cc variants.
 	let executable: string | undefined;
@@ -224,20 +226,20 @@ export async function dylib(...dylibArgs: tg.Args<DylibArg>): Promise<tg.File> {
 	}
 
 	const system = std.triple.archAndOs(build);
-	const output =
-		std.build`${executable} -xc ${arg.source}/${os}/lib.c -o ${tg.output} ${tg.Template.join(" ", ...args)}`
-			.bootstrap(true)
-			.env(
-				buildToolchain,
-				{
-					// Ensure the linker proxy is always skipped, whether or not the toolchain is proxied.
-					TGLD_PASSTHROUGH: true,
-				},
-				arg.env ?? null,
-				{ utils: false },
-			)
-			.host(system)
-			.then(tg.File.expect);
+	const output = std
+		.build(
+			std.shBootstrap`${executable} -xc ${arg.source}/${os}/lib.c -o ${tg.output} ${tg.Template.join(" ", ...args)}`,
+		)
+		.env(
+			buildToolchain,
+			{
+				// Ensure the linker proxy is always skipped, whether or not the toolchain is proxied.
+				TGLD_PASSTHROUGH: true,
+			},
+			...(arg.env !== undefined ? [arg.env] : []),
+		)
+		.host(system)
+		.then(tg.File.expect);
 	return output;
 }
 

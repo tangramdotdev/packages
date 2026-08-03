@@ -2,20 +2,38 @@ import * as std from "./tangram.ts";
 
 /** Helper for constructing multi-phase build targets. */
 
-/** Argument type for arg() - purely phases. Symmetric with std.sdk.Arg, std.env.Arg, etc. */
+/** Argument type for arg() - purely phases. Symmetric with std.sdk.ArgObject, std.env.Arg, etc. */
 export type Arg = PhasesArg;
 
-/** Argument type for run() - execution metadata plus phases. */
+/** Argument type for run() - execution metadata plus phases. Every field must be a `tg.Value`, because `run` is passed to `tg.build` as a function. */
 export type RunArg = {
+	/** Run the script under the bootstrap shell and utils rather than the std ones. */
 	bootstrap?: boolean;
+	checksum?: tg.Checksum | null;
+	/** Trace the script and write per-phase logs to `.tangram_logs` in the output. */
 	debug?: boolean;
 	env?: std.env.Arg | null;
+	/** The host to run on. */
+	host?: string | null;
+	network?: boolean;
+	/** The phases to run, and the order to run them in. Phases absent from the order are skipped. */
 	order?: Array<string> | null;
 	phases?: PhasesArg | null;
+	/** The name to display for the process. */
 	processName?: string | null;
+};
+
+/** The result of merging `RunArg`s. Envs accumulate into a list so the process builder merges them, and the phases are resolved. */
+type MergedRunArg = {
+	bootstrap?: boolean;
 	checksum?: tg.Checksum | null;
+	debug?: boolean;
+	env?: Array<std.env.Arg> | null;
+	host?: string | null;
 	network?: boolean;
-	command?: tg.Command.Arg.Object | null;
+	order?: Array<string> | null;
+	phases?: Phases;
+	processName?: string | null;
 };
 
 /** Resolved phases after merging. */
@@ -75,34 +93,28 @@ export type PhaseArgObject = {
 
 /** Construct a script and run it. */
 export async function run(...args: tg.Args<RunArg>) {
-	// Merge execution metadata. The reducer for phases calls arg() which returns Phases.
-	const runArg = await std.args.apply<RunArg, RunArg>({
-		args,
-		map: async (a) => a ?? {},
-		reduce: {
-			command: "merge",
-			env: (a, b) =>
-				std.env.arg(a ?? null, b ?? null, {
-					utils: false,
-				}),
-			phases: (a, b) => arg(a ?? null, b ?? null),
-		},
-	});
-
 	const {
 		bootstrap = false,
 		checksum,
 		network = false,
 		debug,
-		env: env_,
+		env: envs,
+		host,
 		order: order_,
+		phases,
 		processName,
-		command: commandArg,
-	} = runArg;
-
-	// The reducer for phases calls arg() which returns Phases.
-	// TypeScript doesn't track this, so we need a helper to safely convert.
-	const phases = resolvePhases(runArg.phases ?? undefined);
+	} = await tg.Args.apply<
+		RunArg,
+		tg.ValueOrMaybeMutationMap<RunArg>,
+		MergedRunArg
+	>({
+		args,
+		map: (a) => a ?? {},
+		reduce: {
+			env: (a, b) => [...(a ?? []), b ?? null],
+			phases: (a, b) => arg(a ?? null, b ?? null),
+		},
+	});
 
 	// Construct the phases in order.
 	let empty = tg.template();
@@ -163,17 +175,15 @@ export async function run(...args: tg.Args<RunArg>) {
 		`;
 	}
 
-	let builder = std.run`${script}`.env(env_ ?? null);
-	if (bootstrap) {
-		builder = builder.bootstrap(bootstrap);
+	// The shell must be chosen before the template, so select it here rather than toggling it on the constructed builder.
+	const shell = bootstrap ? std.shBootstrap : std.sh;
+	let builder = std.build(shell`${script}`);
+	// The shell contributes the utils env, so an absent env must not be forwarded as `null`, which would clear it.
+	for (const env of envs ?? []) {
+		builder = builder.env(env);
 	}
-	if (commandArg !== undefined && commandArg !== null) {
-		if (commandArg.host !== undefined && commandArg.host !== null) {
-			builder = builder.host(commandArg.host);
-		}
-		if (commandArg.env !== undefined && commandArg.env !== null) {
-			builder = builder.env(commandArg.env as std.env.Arg);
-		}
+	if (host !== undefined && host !== null) {
+		builder = builder.host(host);
 	}
 	if (checksum) {
 		builder = builder.checksum(checksum);
@@ -185,40 +195,6 @@ export async function run(...args: tg.Args<RunArg>) {
 		builder = builder.network(network);
 	}
 	return await builder;
-}
-
-/**
- * Type guard to check if a value is a resolved Phase.
- * A Phase has a body field that is a Template (ScriptBody) or has a command field (CommandBody).
- */
-function isPhase(value: unknown): value is Phase {
-	if (typeof value !== "object" || value === null) return false;
-	if (!("body" in value)) return false;
-	const valueWithBody = value;
-	const body = valueWithBody.body;
-	// ScriptBody is a Template, CommandBody has a command field that is a Template.
-	if (body instanceof tg.Template) return true;
-	if (typeof body !== "object" || body === null) return false;
-	if (!("command" in body)) return false;
-	const bodyWithCommand = body;
-	return bodyWithCommand.command instanceof tg.Template;
-}
-
-/**
- * Convert PhasesArg to Phases.
- * After std.args.apply with the phases reducer, the phases field contains resolved Phases,
- * but TypeScript still types it as PhasesArg. This helper safely converts the type.
- */
-function resolvePhases(phasesArg: PhasesArg | undefined): Phases {
-	if (phasesArg === undefined) return {};
-	const phases: Phases = {};
-	for (const key of Object.keys(phasesArg)) {
-		const value = phasesArg[key];
-		if (isPhase(value)) {
-			phases[key] = value;
-		}
-	}
-	return phases;
 }
 
 /**

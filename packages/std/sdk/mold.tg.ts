@@ -44,7 +44,7 @@ export async function mold(...args: tg.Args<Arg>) {
 		host: host_,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg, Arg>({
+	} = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -62,16 +62,14 @@ export async function mold(...args: tg.Args<Arg>) {
 		sourceDir = await std.patch(sourceDir, blake3DisableNeonFlag);
 	}
 
-	const env = await std.env.arg(zstd({ build, host }), env_ ?? null, {
-		utils: false,
-	});
+	const env = await std.env.compose(zstd({ build, host }), env_ ?? null);
 
 	const result = cmake.build({
 		host: build,
 		target: host,
 		env,
 		phases: { configure },
-		...(sdk !== undefined && sdk !== null ? { sdk } : {}),
+		...std.args.optional("sdk", sdk),
 		source: sourceDir,
 	});
 

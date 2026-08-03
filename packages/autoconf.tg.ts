@@ -55,22 +55,16 @@ export async function build(...args: tg.Args<Arg>) {
 		...args,
 	);
 
-	const ctx = {
-		build: arg.build,
-		host: arg.host,
-		...(arg.sdk !== undefined && arg.sdk !== null ? { sdk: arg.sdk } : {}),
-	};
-
 	// Get the perl artifact for wrapping scripts later.
-	const { perl: perlArtifact } = await std.deps.artifacts(deps, ctx);
+	const { perl: perlArtifact } = await std.deps.artifacts(deps, arg);
 	tg.assert(perlArtifact !== undefined);
 
 	let autoconf = await std.autotools.build(arg);
 
 	// Patch the autom4te.cfg file.
 	autoconf = await patchAutom4teCfg(autoconf, {
-		env: arg.env ?? null,
-		...(arg.sdk !== undefined && arg.sdk !== null ? { sdk: arg.sdk } : {}),
+		...std.args.optional("env", arg.env),
+		...std.args.optional("sdk", arg.sdk),
 	});
 
 	const shellSripts = ["autoconf"];
@@ -102,8 +96,8 @@ export async function build(...args: tg.Args<Arg>) {
 			interpreter,
 			args: ["-B", await tg`${shareDirectory}/autoconf`],
 			env: std.env.arg(
-				grep({ build: ctx.build, host: ctx.host }),
-				m4.build({ build: ctx.build, host: ctx.host }),
+				grep({ build: arg.build, host: arg.host }),
+				m4.build({ build: arg.build, host: arg.host }),
 				{
 					autom4te_perllibdir: tg`${shareDirectory}/autoconf`,
 					AC_MACRODIR: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
@@ -178,6 +172,9 @@ export async function patchAutom4teCfg(
 
 	const lines = (await autom4teCfg.text).split("\n");
 
+	// This patch step needs a real compiler, so an `sdk: "none"` argument contributes nothing here.
+	const sdkArg = std.sdk.argObject(arg?.sdk);
+
 	let contents = tg``;
 	for (const line of lines) {
 		let newLine: PromiseLike<tg.Template> | string = line;
@@ -191,8 +188,8 @@ export async function patchAutom4teCfg(
 			cat <<'EOF' | tee ${tg.output}
 			${contents}
 		`
-		.env(arg?.env ?? null)
-		.env(std.sdk(...(arg?.sdk !== undefined ? [arg.sdk] : [])))
+		.env(arg?.env ?? {})
+		.env(std.sdk(...(sdkArg !== undefined ? [sdkArg] : [])))
 		.then(tg.File.expect);
 
 	return tg.directory(autoconf, {

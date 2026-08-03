@@ -56,22 +56,22 @@ export function deps() {
 		acl: {
 			build: acl.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "linux",
+			when: { hostOs: "linux" },
 		},
 		attr: {
 			build: attr.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "linux",
+			when: { hostOs: "linux" },
 		},
 		libcap: {
 			build: libcap.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "linux",
+			when: { hostOs: "linux" },
 		},
 		libiconv: {
 			build: libiconv.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "darwin",
+			when: { hostOs: "darwin" },
 		},
 	});
 }

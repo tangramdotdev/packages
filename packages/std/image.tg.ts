@@ -29,9 +29,7 @@ export async function test() {
 }
 
 export async function bootstrapBuildToolchain() {
-	return await std.env.arg(bootstrap.sdk(), bootstrap.make.build(), {
-		utils: false,
-	});
+	return await std.env.compose(bootstrap.sdk(), bootstrap.make.build());
 }
 
 export async function testWrappedEntrypoint() {
@@ -105,11 +103,7 @@ export async function testBasicRootfsWithEnvAndEntrypoint() {
 export async function testBootstrapEnv() {
 	const utils = bootstrap.sdk.prepareBootstrapUtils();
 	const buildToolchain = await bootstrapBuildToolchain();
-	const bootstrapEnvArg = await std.env.arg(
-		utils,
-		{ NAME: "Tangram" },
-		{ utils: false },
-	);
+	const bootstrapEnvArg = await std.env.compose(utils, { NAME: "Tangram" });
 	const bootstrapEnv = await std.wrap(
 		await tg.build(std.buildGnuEnv).named("gnu env"),
 		{
@@ -208,11 +202,7 @@ export async function testBasicEnv() {
 		env: bootstrap.sdk(),
 	});
 	const buildToolchain = await bootstrapBuildToolchain();
-	const basicEnvArg = await std.env.arg(
-		utils,
-		{ NAME: "Tangram" },
-		{ utils: false },
-	);
+	const basicEnvArg = await std.env.compose(utils, { NAME: "Tangram" });
 	const basicEnv = await std.wrap(
 		await tg.build(std.buildGnuEnv).named("gnu env"),
 		{

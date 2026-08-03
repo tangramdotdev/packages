@@ -37,7 +37,7 @@ export async function ninja(...args: tg.Args<Arg>) {
 		host: host_,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg, Arg>({
+	} = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -54,7 +54,7 @@ export async function ninja(...args: tg.Args<Arg>) {
 		target: host,
 		generator: "Unix Makefiles",
 		phases: { configure },
-		...(sdk !== undefined && sdk !== null ? { sdk } : {}),
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(),
 	});
 

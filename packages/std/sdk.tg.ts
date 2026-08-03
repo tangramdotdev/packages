@@ -21,7 +21,9 @@ export * as proxy from "./sdk/proxy.tg.ts";
 /** An SDK combines a compiler, a linker, a libc, and a set of basic utilities.
  * Normalizes variadic args and delegates to pre-built release SDKs when the
  * resolved arguments match platform defaults, enabling remote cache hits. */
-export async function sdk(...args: tg.Args<sdk.Arg>): Promise<tg.Directory> {
+export async function sdk(
+	...args: tg.Args<sdk.ArgObject>
+): Promise<tg.Directory> {
 	const resolved = await sdk.arg(...args);
 
 	// Delegate to pre-built SDKs when args match defaults for remote cache hits.
@@ -55,10 +57,23 @@ export async function sdkInner(...args: tg.Args<sdk.ResolvedArg>) {
 		target,
 		toolchain: toolchain_,
 		linker,
-	} = await std.args.apply<sdk.ResolvedArg, sdk.ResolvedArg>({
+	} = await tg.Args.apply<
+		sdk.ResolvedArg,
+		tg.ValueOrMaybeMutationMap<sdk.ResolvedArg>,
+		sdk.ResolvedArg
+	>({
 		args,
 		map: async (a) => a,
-		reduce: {},
+		// Every argument is already resolved, so each required field is replaced by
+		// the last argument that provides it.
+		reduce: {
+			host: "set",
+			proxyCompiler: "set",
+			proxyLinker: "set",
+			proxyStrip: "set",
+			target: "set",
+			toolchain: "set",
+		},
 	});
 	const hostOs = std.triple.os(host);
 
@@ -80,7 +95,7 @@ export async function sdkInner(...args: tg.Args<sdk.ResolvedArg>) {
 	tg.assert(toolchain);
 
 	const { flavor } = await std.sdk.toolchainComponents({
-		env: await std.env.arg(toolchain, { utils: false }),
+		env: await std.env.compose(toolchain),
 		host,
 		target,
 	});
@@ -136,8 +151,41 @@ export namespace sdk {
 	/** The minimum macOS version that produced binaries should support. */
 	export const macOsDeploymentTarget = "11.0";
 
-	/** The possible types to pass to `std.sdk()`. Pass `undefined` or `true` to get the default SDK, `false` for an empty env, or use the `ArgObject` to configure the provided env. */
-	export type Arg = ArgObject;
+	/**
+	 * The `sdk` field of a builder argument.
+	 *
+	 * Either arguments for the SDK, or `"none"` to add no toolchain, no build tools, and no standard utilities, in which case `env` must provide everything the build needs. `"none"` is what the bootstrap chain uses, because the tools a managed SDK depends on do not exist yet at that point.
+	 *
+	 * `std.sdk` itself takes an `ArgObject`, because `"none"` says not to build an SDK at all rather than how to build one.
+	 */
+	export type Arg = ArgObject | "none";
+
+	/** The argument object of a builder `sdk` field, or undefined when the field asks for no SDK or gives no arguments. Use this to inspect an `sdk` field that may be `"none"`. */
+	export const argObject = (sdk?: Arg | null): ArgObject | undefined =>
+		sdk === undefined || sdk === null || sdk === "none" ? undefined : sdk;
+
+	/**
+	 * Merge two builder `sdk` fields, with `b` taking precedence.
+	 *
+	 * This is the reducer for the `sdk` key. Two argument sets merge. `"none"` is not an argument set, so it replaces whatever came before it, and a later argument set replaces an earlier `"none"`.
+	 *
+	 * Following the argument convention, an absent field contributes nothing and a null field clears back to the default, which each builder supplies for itself. A null therefore means "use the default SDK", not "use no SDK".
+	 */
+	export async function mergeArg(
+		a?: Arg | null,
+		b?: Arg | null,
+	): Promise<Arg | undefined> {
+		if (b === undefined) {
+			return a ?? undefined;
+		}
+		if (b === null) {
+			return undefined;
+		}
+		if (a === undefined || a === null || a === "none" || b === "none") {
+			return b;
+		}
+		return await arg(a, b);
+	}
 
 	export type ArgObject = {
 		embedWrapper?: boolean;
@@ -157,7 +205,7 @@ export namespace sdk {
 		toolchain?: sdk.ToolchainKind | null;
 	};
 
-	export async function arg(...args: tg.Args<Arg | null>) {
+	export async function arg(...args: tg.Args<ArgObject | null>) {
 		let {
 			embedWrapper,
 			host: host_,
@@ -167,7 +215,11 @@ export namespace sdk {
 			proxyStrip = true,
 			target,
 			toolchain: toolchain_,
-		} = await std.args.apply<sdk.Arg | null, sdk.ArgObject>({
+		} = await tg.Args.apply<
+			sdk.ArgObject | null,
+			tg.MaybeMutationMap<sdk.ArgObject>,
+			sdk.ArgObject
+		>({
 			args,
 			map: async (arg) => {
 				if (arg === undefined || arg === null) {
@@ -213,7 +265,7 @@ export namespace sdk {
 			target,
 			toolchain: toolchain_,
 			...(embedWrapper !== undefined ? { embedWrapper } : {}),
-			...(linker !== undefined && linker !== null ? { linker } : {}),
+			...std.args.optional("linker", linker),
 		};
 	}
 
@@ -815,8 +867,8 @@ export namespace sdk {
 		if (isCross) {
 			return detectedHost;
 		} else {
-			const output = await std.build`${cmd} -dumpmachine > ${tg.output}`
-				.bootstrap(true)
+			const output = await std
+				.build(std.shBootstrap`${cmd} -dumpmachine > ${tg.output}`)
 				.env(env_)
 				.host(std.triple.archAndOs(detectedHost))
 				.then(tg.File.expect);
@@ -904,14 +956,13 @@ export namespace sdk {
 		if (lang === "fortran") {
 			langStr = "f95";
 		}
-		const compiledProgram =
-			await std.build`echo "testing ${title}, proxied linker: ${proxiedLinker.toString()}"
+		const compiledProgram = await std
+			.build(std.shBootstrap`echo "testing ${title}, proxied linker: ${proxiedLinker.toString()}"
 				set -x
-				${cmd} -v -x${langStr} ${testProgram} -o ${tg.output}`
-				.bootstrap(true)
-				.env(arg.sdkEnv, { utils: false })
-				.host(std.triple.archAndOs(expectedHost))
-				.then(tg.File.expect);
+				${cmd} -v -x${langStr} ${testProgram} -o ${tg.output}`)
+			.env(arg.sdkEnv)
+			.host(std.triple.archAndOs(expectedHost))
+			.then(tg.File.expect);
 
 		// Assert the resulting program was compiled for the expected target.
 		const expectedArch = std.triple.arch(expectedTarget);
@@ -951,8 +1002,8 @@ export namespace sdk {
 
 		// If we are not cross-compiling, assert we can execute the program and recieve the expected result, without providing the SDK env at runtime.
 		if (!isCross && proxiedLinker) {
-			const testOutput = await std.build`${compiledProgram} > ${tg.output}`
-				.bootstrap(true)
+			const testOutput = await std
+				.build(std.shBootstrap`${compiledProgram} > ${tg.output}`)
 				.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 				.host(std.triple.archAndOs(expectedHost))
 				.then(tg.File.expect);
@@ -963,9 +1014,12 @@ export namespace sdk {
 	}
 
 	/** Assert the given env provides everything it should for a particuar arg. */
-	export async function assertValid(toolchainDir: tg.Directory, arg: sdk.Arg) {
+	export async function assertValid(
+		toolchainDir: tg.Directory,
+		arg: sdk.ArgObject,
+	) {
 		const expected = await resolveHostAndTarget(arg);
-		const env = await std.env.arg(toolchainDir, { utils: false });
+		const env = await std.env.compose(toolchainDir);
 
 		// Assert we can determine a host and it matches the expected.
 		const actualHost = await sdk.determineToolchainHost({
@@ -1052,13 +1106,9 @@ export namespace sdk {
 						...linkerFlavorArg,
 						parameters: testCParameters,
 						proxiedLinker: false,
-						sdkEnv: await std.env.arg(
-							env,
-							{
-								TGLD_PASSTHROUGH: true,
-							},
-							{ utils: false },
-						),
+						sdkEnv: await std.env.compose(env, {
+							TGLD_PASSTHROUGH: true,
+						}),
 						host: expected.host,
 						target,
 					});
@@ -1081,13 +1131,9 @@ export namespace sdk {
 						...linkerFlavorArg,
 						parameters: testCxxParameters,
 						proxiedLinker: false,
-						sdkEnv: await std.env.arg(
-							env,
-							{
-								TGLD_PASSTHROUGH: true,
-							},
-							{ utils: false },
-						),
+						sdkEnv: await std.env.compose(env, {
+							TGLD_PASSTHROUGH: true,
+						}),
 						host: expected.host,
 						target,
 					});
@@ -1118,13 +1164,9 @@ export namespace sdk {
 						...linkerFlavorArg,
 						parameters: testCxxAtomicParameters,
 						proxiedLinker: false,
-						sdkEnv: await std.env.arg(
-							env,
-							{
-								TGLD_PASSTHROUGH: true,
-							},
-							{ utils: false },
-						),
+						sdkEnv: await std.env.compose(env, {
+							TGLD_PASSTHROUGH: true,
+						}),
 						host: expected.host,
 						target,
 					});
@@ -1152,13 +1194,9 @@ export namespace sdk {
 							...linkerFlavorArg,
 							parameters: testFortranParameters,
 							proxiedLinker: false,
-							sdkEnv: await std.env.arg(
-								env,
-								{
-									TGLD_PASSTHROUGH: true,
-								},
-								{ utils: false },
-							),
+							sdkEnv: await std.env.compose(env, {
+								TGLD_PASSTHROUGH: true,
+							}),
 							host: expected.host,
 							target,
 						});
@@ -1301,13 +1339,12 @@ export async function assertComment(
 	toolchain: std.env.Arg,
 	textToMatch: string,
 ) {
-	const elfComment =
-		await std.build`readelf -p .comment ${exe} | grep ${textToMatch} > ${tg.output}`
-			.bootstrap(true)
-			.env(toolchain, bootstrap.sdk.prepareBootstrapUtils(), {
-				utils: false,
-			})
-			.then(tg.File.expect);
+	const elfComment = await std
+		.build(
+			std.shBootstrap`readelf -p .comment ${exe} | grep ${textToMatch} > ${tg.output}`,
+		)
+		.env(toolchain, bootstrap.sdk.prepareBootstrapUtils())
+		.then(tg.File.expect);
 	const text = await elfComment.text;
 	tg.assert(text.includes(textToMatch));
 }
@@ -1523,7 +1560,7 @@ export async function testCrossLLVM() {
 	const crossTarget = sdk.canonicalTriple(
 		std.triple.create(detectedHost, { arch: crossArch }),
 	);
-	const sdkArg: sdk.Arg = {
+	const sdkArg: sdk.ArgObject = {
 		host: detectedHost,
 		target: crossTarget,
 		toolchain: "llvm",
@@ -1580,7 +1617,9 @@ export async function testAllNativeProxied() {
 	return true;
 }
 
-export async function allNativeProxiedArgs(): Promise<Array<std.sdk.Arg>> {
+export async function allNativeProxiedArgs(): Promise<
+	Array<std.sdk.ArgObject>
+> {
 	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 
@@ -1593,7 +1632,7 @@ export async function allNativeProxiedArgs(): Promise<Array<std.sdk.Arg>> {
 	return [{}, { toolchain: "llvm" }, { linker: "mold" }];
 }
 
-export async function allSdkArgs(): Promise<Array<std.sdk.Arg>> {
+export async function allSdkArgs(): Promise<Array<std.sdk.ArgObject>> {
 	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 

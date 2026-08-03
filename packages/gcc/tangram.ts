@@ -104,7 +104,7 @@ export async function build(...args: tg.Args<Arg>) {
 		fortifySource: false,
 		phases,
 		opt: "3",
-		sdk: arg.sdk ?? null,
+		...std.args.optional("sdk", arg.sdk),
 		source: arg.source,
 	});
 
@@ -208,7 +208,7 @@ export async function libgcc(...args: tg.Args<Arg>) {
 		fortifySource: false,
 		phases,
 		opt: "3",
-		sdk: arg.sdk ?? null,
+		...std.args.optional("sdk", arg.sdk),
 		source: arg.source,
 	});
 

@@ -26,7 +26,6 @@ export function source() {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	bashExe: tg.File;
 	grepExe: tg.File;
 	sedExe: tg.File;
@@ -39,7 +38,6 @@ export type Arg = {
 
 export async function build(arg: tg.Unresolved<Arg>) {
 	const {
-		bootstrap = false,
 		bashExe,
 		grepExe,
 		sedExe,
@@ -50,14 +48,13 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		source: source_,
 	} = await tg.resolve(arg);
 
-	const env = std.env.arg(env_ ?? null, { utils: false });
+	const env = std.env.compose(env_ ?? null);
 	let output = await std.utils.autotoolsInternal({
 		build: build ?? null,
 		host: host ?? null,
-		bootstrap,
 		env,
 		processName: metadata.name,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(),
 	});
 

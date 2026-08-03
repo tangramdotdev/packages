@@ -44,7 +44,7 @@ export async function build(...args: tg.Args<Arg>) {
 	// Build configure args, including OS-specific flags.
 	const host =
 		(
-			await std.args.apply<Arg, Arg>({
+			await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 				args: args as tg.Args<Arg>,
 				map: async (arg) => arg,
 				reduce: {},

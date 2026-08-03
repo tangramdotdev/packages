@@ -68,21 +68,25 @@ export async function kernelHeaders(arg?: tg.Unresolved<Arg>) {
 	const order = ["build", "install"];
 
 	const envs: tg.Unresolved<Array<std.env.Arg>> = [];
-	// Add the toolchain.
-	envs.push(await tg.build(std.sdk, ...(sdkArg !== null ? [sdkArg] : [])));
+	// Add the toolchain, unless the caller asked for none and supplied its own.
+	if (sdkArg !== "none") {
+		envs.push(await tg.build(std.sdk, ...(sdkArg !== null ? [sdkArg] : [])));
+	}
 
-	const env = std.env.arg(...envs, env_ ?? null);
+	const env =
+		sdkArg === "none"
+			? std.env.compose(...envs, env_ ?? null)
+			: std.env.arg(...envs, env_ ?? null);
 
 	const result = tg.Directory.expect(
-		await tg.build(
-			std.phases.run,
+		await std.phases.run(
 			{
 				env,
 				phases: { build, install },
 				order,
-				command: { host: system },
+				host: system,
 			},
-			phasesArg,
+			{ phases: phasesArg },
 		),
 	);
 

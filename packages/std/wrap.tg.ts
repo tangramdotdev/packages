@@ -76,16 +76,12 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 				build: buildTriple,
 				host,
 				interpreter: arg.interpreter,
-				...(arg.libraryPaths !== undefined && arg.libraryPaths !== null
-					? { libraryPaths: arg.libraryPaths }
-					: {}),
+				...std.args.optional("libraryPaths", arg.libraryPaths),
 				...(arg.libraryPathStrategy !== undefined &&
 				arg.libraryPathStrategy !== null
 					? { libraryPathStrategy: arg.libraryPathStrategy }
 					: {}),
-				...(arg.preloads !== undefined && arg.preloads !== null
-					? { preloads: arg.preloads }
-					: {}),
+				...std.args.optional("preloads", arg.preloads),
 			},
 			references,
 		);
@@ -100,16 +96,12 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 				build: buildTriple,
 				host,
 				executable: arg.executable,
-				...(arg.libraryPaths !== undefined && arg.libraryPaths !== null
-					? { libraryPaths: arg.libraryPaths }
-					: {}),
+				...std.args.optional("libraryPaths", arg.libraryPaths),
 				...(arg.libraryPathStrategy !== undefined &&
 				arg.libraryPathStrategy !== null
 					? { libraryPathStrategy: arg.libraryPathStrategy }
 					: {}),
-				...(arg.preloads !== undefined && arg.preloads !== null
-					? { preloads: arg.preloads }
-					: {}),
+				...std.args.optional("preloads", arg.preloads),
 			},
 			references,
 		);
@@ -315,7 +307,7 @@ export namespace wrap {
 			libraryPaths = [],
 			libraryPathStrategy,
 			preloads = [],
-		} = await std.args.apply<wrap.Arg, wrap.ArgObject>({
+		} = await tg.Args.apply<wrap.Arg, wrap.ArgObject, wrap.ArgObject>({
 			args,
 			map: async (arg) => {
 				if (arg === undefined) {
@@ -328,13 +320,13 @@ export namespace wrap {
 						executable: arg,
 					};
 				} else if (isArgObject(arg)) {
-					return { ...arg, env: arg.env ?? null };
+					return { ...arg };
 				} else {
 					return tg.unreachable(`Unsupported argument: ${arg}`);
 				}
 			},
 			reduce: {
-				env: (a, b) => std.env.arg(a ?? null, b ?? null, { utils: false }),
+				env: (a, b) => std.env.compose(a ?? null, b ?? null),
 				libraryPaths: "append",
 				preloads: "append",
 				args: "append",
@@ -455,7 +447,7 @@ export namespace wrap {
 			args_ = mergeWrapArgs(args_ ?? [], existingArgs);
 		}
 
-		const env = await std.env.arg(...envs, env_, { utils: false });
+		const env = await std.env.compose(...envs, env_);
 
 		// If the executable is a content executable, make sure there is a normal interpreter for it.
 		if (executable instanceof tg.Template || typeof executable === "string") {
@@ -517,20 +509,20 @@ export namespace wrap {
 		const host = host_ ?? std.triple.host();
 		const build = build_ ?? host;
 
-		// Provide bash for the detected host system.
+		// Provide bash for the detected host system. The toolchain is always explicit here, so the build adds no SDK of its own.
 		let buildArg: {
 			build: string;
 			host: string;
-			bootstrap?: boolean;
 			env?: tg.Unresolved<std.env.Arg>;
+			sdk?: std.sdk.Arg;
 		} = { build, host };
 		if (buildToolchain_) {
-			buildArg = { ...buildArg, bootstrap: true, env: buildToolchain_ };
+			buildArg = { ...buildArg, env: buildToolchain_, sdk: "none" };
 		} else {
 			buildArg = {
 				...buildArg,
-				bootstrap: true,
 				env: await tg.build(std.sdk).named("sdk"), // FIXME - common export.
+				sdk: "none",
 			};
 		}
 		const shellExecutable = await std.utils.bash
@@ -1228,11 +1220,10 @@ async function getBuildToolchain(
 		return buildToolchain;
 	}
 	return std.triple.os(host) === "linux"
-		? await std.env.arg(
+		? await std.env.compose(
 				await tg
 					.build(gnu.toolchain, { host: build, target: host })
 					.named("gnu toolchain"),
-				{ utils: false },
 			)
 		: await tg.build(std.buildBootstrapSdkEnv).named("bootstrap sdk env");
 }
@@ -1376,7 +1367,7 @@ async function interpreterFromArg(
 		arg instanceof tg.Template
 	) {
 		const executable = await tg.build(std.wrap, {
-			buildToolchain: buildToolchainArg ?? null,
+			...std.args.optional("buildToolchain", buildToolchainArg),
 			build: buildTriple,
 			host,
 			executable: arg,
@@ -1430,7 +1421,7 @@ async function interpreterFromArg(
 				);
 				const injectionLibrary = await tg
 					.build(injection.injection, {
-						buildToolchain,
+						...std.args.optional("buildToolchain", buildToolchain),
 						build,
 						host,
 					})
@@ -1468,7 +1459,7 @@ async function interpreterFromArg(
 					);
 					const injectionLibrary = await tg
 						.build(injection.injection, {
-							buildToolchain,
+							...std.args.optional("buildToolchain", buildToolchain),
 							build: buildArg ?? null,
 							host,
 						})
@@ -1552,7 +1543,7 @@ async function interpreterFromExecutableArg(
 				);
 				const injectionDylib = await tg
 					.build(injection.injection, {
-						buildToolchain,
+						...std.args.optional("buildToolchain", buildToolchain),
 						build: buildTriple,
 						host,
 					})
@@ -1569,7 +1560,7 @@ async function interpreterFromExecutableArg(
 				const buildTriple = buildArg ?? host;
 				return interpreterFromArg(
 					await wrap.defaultShell({
-						buildToolchain: buildToolchainArg ?? null,
+						...std.args.optional("buildToolchain", buildToolchainArg),
 						build: buildTriple,
 						host,
 					}),
@@ -1613,13 +1604,10 @@ async function interpreterFromElf(
 		? buildToolchainArg
 		: libc === "musl"
 			? bootstrap.sdk.env(host)
-			: await std.env.arg(
+			: await std.env.compose(
 					await tg
 						.build(gnu.toolchain, { host: buildTriple, target: host })
 						.named("gnu toolchain"),
-					{
-						utils: false,
-					},
 				);
 
 	// Obtain injection library.
@@ -1635,7 +1623,7 @@ async function interpreterFromElf(
 	if (metadata.interpreter?.includes("ld-linux")) {
 		// Handle an ld-linux interpreter. Reuse buildToolchain for toolchain components.
 		const { ldso, libDir } = await std.sdk.toolchainComponents({
-			env: await std.env.arg(buildToolchain, { utils: false }),
+			env: await std.env.compose(buildToolchain),
 			host: buildTriple,
 			target: host,
 		});
@@ -2627,16 +2615,14 @@ export async function argAndEnvDump(arg?: BuildAndHostArg) {
 		: bootstrap.sdk(bootstrap.toolchainTriple(host));
 
 	const targetPrefix = isCross ? `${host}-` : "";
-	return await std.build`${targetPrefix}cc -xc ${inspectProcessSource} -o ${tg.output}`
-		.bootstrap(true)
-		.env(
-			buildToolchain,
-			{
-				TGLD_TRACING: "tgld=trace",
-				TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
-			},
-			{ utils: false },
+	return await std
+		.build(
+			std.shBootstrap`${targetPrefix}cc -xc ${inspectProcessSource} -o ${tg.output}`,
 		)
+		.env(buildToolchain, {
+			TGLD_TRACING: "tgld=trace",
+			TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
+		})
 		.then(tg.File.expect);
 }
 
@@ -2755,8 +2741,8 @@ export async function testSingleArgObjectNoMutations() {
 	tg.assert(manifest.interpreter);
 
 	// Check the output matches the expected output.
-	const output = await std.build`${wrapper} > ${tg.output}`
-		.bootstrap(true)
+	const output = await std
+		.build(std.shBootstrap`${wrapper} > ${tg.output}`)
 		.then(tg.File.expect);
 	const text = await output.text;
 	console.log("text", text);
@@ -2872,8 +2858,8 @@ export async function testContentExecutable() {
 	await wrapper.store();
 	console.log("wrapper", wrapper.id);
 	// Check the output matches the expected output.
-	const output = await std.build`set -x; ${wrapper} > ${tg.output}`
-		.bootstrap(true)
+	const output = await std
+		.build(std.shBootstrap`set -x; ${wrapper} > ${tg.output}`)
 		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 		.then(tg.File.expect);
 	const text = await output.text.then((t) => t.trim());
@@ -2895,8 +2881,8 @@ export async function testContentExecutableVariadic() {
 	await wrapper.store();
 	console.log("wrapper", wrapper.id);
 	// Check the output matches the expected output.
-	const output = await std.build`set -x; ${wrapper} > ${tg.output}`
-		.bootstrap(true)
+	const output = await std
+		.build(std.shBootstrap`set -x; ${wrapper} > ${tg.output}`)
 		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 		.then(tg.File.expect);
 	const text = await output.text.then((t) => t.trim());
@@ -2927,6 +2913,7 @@ export async function testDependencies() {
 
 	const wrapper = await std.wrap({
 		buildToolchain,
+		executable: "foo",
 		env: {
 			PATH: tg`${binDir}/bin`,
 		},
@@ -2951,17 +2938,18 @@ export async function testDylibPath() {
 	const bootstrapSdk = bootstrap.sdk(host);
 
 	// Compile the greet library
-	const sharedLibraryDir =
-		await std.build`mkdir -p ${tg.output}/lib && cc -shared -fPIC -xc -o ${tg.output}/lib/libgreet.${dylibExt} ${libGreetSource}`
-			.bootstrap(true)
-			.env(bootstrapSdk)
-			.then(tg.Directory.expect);
+	const sharedLibraryDir = await std
+		.build(
+			std.shBootstrap`mkdir -p ${tg.output}/lib && cc -shared -fPIC -xc -o ${tg.output}/lib/libgreet.${dylibExt} ${libGreetSource}`,
+		)
+		.env(bootstrapSdk)
+		.then(tg.Directory.expect);
 	await sharedLibraryDir.store();
 	console.log("sharedLibraryDir", sharedLibraryDir.id);
 
 	// Compile the driver.
-	const driver = await std.build`cc -xc -o ${tg.output} ${driverSource} -ldl`
-		.bootstrap(true)
+	const driver = await std
+		.build(std.shBootstrap`cc -xc -o ${tg.output} ${driverSource} -ldl`)
 		.env(bootstrapSdk)
 		.then(tg.File.expect);
 	await driver.store();
@@ -3214,7 +3202,7 @@ export async function testEnvObjectFromArtifactAuthorization() {
 		},
 		references,
 	);
-	const env = await std.env.arg(wrapper, { utils: false });
+	const env = await std.env.compose(wrapper);
 	const mutation = env.DEPENDENCY;
 	tg.assert(mutation instanceof tg.Mutation);
 	tg.assert(mutation.inner.kind === "set");
@@ -3342,7 +3330,7 @@ export async function testInterpreterSwappingNormal() {
 
 	// Create a simple bash interpreter wrapper for testing
 	const bashExecutable = await std.utils.bash
-		.build({ bootstrap: true, env: buildToolchain })
+		.build({ sdk: "none", env: buildToolchain })
 		.then((artifact) => artifact.get("bin/bash"))
 		.then(tg.File.expect);
 
@@ -3419,8 +3407,8 @@ export async function testInterpreterWrappingPreloads() {
 		}
 	`);
 
-	const testExecutable = await std.build`cc -xc -o ${tg.output} ${testSource}`
-		.bootstrap(true)
+	const testExecutable = await std
+		.build(std.shBootstrap`cc -xc -o ${tg.output} ${testSource}`)
 		.env(bootstrapSdk)
 		.then(tg.File.expect);
 
@@ -3432,11 +3420,12 @@ export async function testInterpreterWrappingPreloads() {
 		}
 	`);
 
-	const customPreloadLib =
-		await std.build`cc -shared -fPIC -xc -o ${tg.output} ${preloadSource}`
-			.bootstrap(true)
-			.env(bootstrapSdk)
-			.then(tg.File.expect);
+	const customPreloadLib = await std
+		.build(
+			std.shBootstrap`cc -shared -fPIC -xc -o ${tg.output} ${preloadSource}`,
+		)
+		.env(bootstrapSdk)
+		.then(tg.File.expect);
 
 	// First, create a wrapper with the default interpreter (will have injection preload)
 	const originalWrapper = await wrap(testExecutable, {
@@ -3523,15 +3512,17 @@ export async function testLoadThroughEnvLdLibraryPath() {
 	const expectedKind = os === "darwin" ? "dyld" : "ld-musl";
 
 	const toolchain = await bootstrap.sdk(host);
-	const libHello = await std.run`
+	const libHello = await std
+		.run(std.shBootstrap`
 		mkdir -p ${tg.output}/lib
 		cp ${helloSource} libhello.c
 		gcc -fPIC -shared -Wl,-soname,libhello.so -o ${tg.output}/lib/libhello.so libhello.c
-	`
-		.bootstrap(true)
-		.env(toolchain, { utils: true })
+	`)
+		.env(toolchain)
 		.then(tg.Directory.expect);
-	const output = await std.run`
+	// The inner `sh` must be a wrapped shell, which the bootstrap utils do not provide.
+	const output = await std
+		.run(std.sh({ bootstrap: true, utils: "shell" })`
 		cp ${callHelloSource} callhello.c
 		cp ${dlopenSource} dlopen.c
 		gcc -fPIC -shared callhello.c -lhello -L${libHello}/lib -o call_hello
@@ -3539,9 +3530,8 @@ export async function testLoadThroughEnvLdLibraryPath() {
 
 		export LD_LIBRARY_PATH=${libHello}/lib
 		sh -c 'TANGRAM_TRACING=1 ./dlopen > ${tg.output}'
-	`
-		.bootstrap(true)
-		.env(toolchain, { utils: true })
+	`)
+		.env(toolchain)
 		.then(tg.File.expect);
 	const string = await output.text;
 	const result = string === "hello, world!\n";
@@ -3569,16 +3559,18 @@ export async function testLdLibraryPathPreservedThroughNestedWrapping() {
 	const toolchain = await bootstrap.sdk(host);
 
 	// Build libhello.so in its own directory (simulates a transitive dependency).
-	const libHello = std.run`
+	const libHello = std
+		.run(std.shBootstrap`
 		mkdir -p ${tg.output}/lib
 		cp ${helloSource} libhello.c
 		gcc -fPIC -shared -Wl,-soname,libhello.so -o ${tg.output}/lib/libhello.so libhello.c
-	`
-		.bootstrap(true)
-		.env(toolchain, { utils: true })
+	`)
+		.env(toolchain)
 		.then(tg.Directory.expect);
 
-	const output = await std.run`
+	// The inner `sh` must be a wrapped shell, which is the whole point of this test, and the bootstrap utils do not provide one.
+	const output = await std
+		.run(std.sh({ bootstrap: true, utils: "shell" })`
 		cp ${callHelloSource} callhello.c
 		cp ${printEnvSource} print_env.c
 		gcc -fPIC -shared callhello.c -lhello -L${libHello}/lib -o call_hello.so
@@ -3593,9 +3585,8 @@ export async function testLdLibraryPathPreservedThroughNestedWrapping() {
 			# Level 2: wrapped print_env (simulates python loading a module)
 			TANGRAM_TRACING=1 ./print_env ./call_hello.so > ${tg.output}
 		'
-	`
-		.bootstrap(true)
-		.env(toolchain, { utils: true })
+	`)
+		.env(toolchain)
 		.then(tg.File.expect);
 	const string = await output.text;
 	console.log("test output:", string);

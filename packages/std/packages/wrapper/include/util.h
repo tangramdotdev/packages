@@ -123,8 +123,8 @@ TG_VISIBILITY bool streq (String a, String b) {
 }
 
 TG_VISIBILITY bool cstreq (String s, const char* cstr) {
-	for (int i = 0; i < s.len; i++) {
-		if (s.ptr[i] != cstr[i]) {
+	for (size_t i = 0; i < s.len; i++) {
+		if (cstr[i] == 0 || s.ptr[i] != cstr[i]) {
 			return false;
 		}
 	}
@@ -173,7 +173,7 @@ TG_VISIBILITY void read_all (int tracing, int fd, char* dst, size_t length, off_
 		trace("read_all length:%ld offset:%ld\n", length, offset);
 	}
 	while(length) {
-		int result = pread(fd, (void*)dst, length, offset);
+		int64_t result = pread(fd, (void*)dst, length, offset);
 		if (tracing) {
 			trace("read_all result = %d\n", result);
 		}

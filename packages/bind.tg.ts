@@ -61,12 +61,12 @@ export function deps() {
 		libcap: {
 			build: libcap.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "linux",
+			when: { hostOs: "linux" },
 		},
 		libiconv: {
 			build: libiconv.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "darwin",
+			when: { hostOs: "darwin" },
 		},
 		liburcu: liburcu.build,
 		libuv: libuv.build,

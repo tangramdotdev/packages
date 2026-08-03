@@ -37,7 +37,6 @@ export async function source(os: string) {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -49,7 +48,6 @@ export type Arg = {
 
 export async function build(...args: tg.Args<Arg>) {
 	const {
-		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -57,7 +55,7 @@ export async function build(...args: tg.Args<Arg>) {
 		source: source_,
 		staticBuild = false,
 		usePrerequisites = true,
-	} = await std.args.apply<Arg, Arg>({
+	} = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -75,11 +73,10 @@ export async function build(...args: tg.Args<Arg>) {
 	let attrArtifact;
 	if (os === "linux") {
 		attrArtifact = attr({
-			bootstrap: bootstrap_,
 			build,
-			env: env_ ?? null,
+			...std.args.optional("env", env_),
 			host,
-			sdk: sdk ?? null,
+			...std.args.optional("sdk", sdk),
 			staticBuild,
 			usePrerequisites,
 		});
@@ -87,11 +84,10 @@ export async function build(...args: tg.Args<Arg>) {
 	} else if (os === "darwin") {
 		dependencies.push(
 			libiconv({
-				bootstrap: bootstrap_,
 				build,
-				env: env_ ?? null,
+				...std.args.optional("env", env_),
 				host,
-				sdk: sdk ?? null,
+				...std.args.optional("sdk", sdk),
 				usePrerequisites,
 			}),
 		);
@@ -136,12 +132,11 @@ export async function build(...args: tg.Args<Arg>) {
 	let output = await autotoolsInternal({
 		build,
 		host,
-		bootstrap: bootstrap_,
-		env: std.env.arg(...env, { utils: false }),
+		env: std.env.compose(...env),
 		phases,
 		processName: metadata.name,
 		...(staticBuild ? { opt: "s" as const } : {}),
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(os),
 	});
 
@@ -162,16 +157,15 @@ export default build;
 /** Build bootstrap coreutils with consistent, normalized args. This is the shared entry point used by both gnuEnv() and prerequisites() to ensure cache hits. */
 export async function bootstrapBuild(hostArg?: string) {
 	const host = bootstrap.toolchainTriple(hostArg ?? std.triple.host());
-	const env = std.env.arg(
+	const env = std.env.compose(
 		bootstrap.sdk(host),
 		tg.build(bootstrap.make.build, { host }),
-		{ utils: false },
 	);
 	return tg
 		.build(build, {
 			host,
 			env,
-			bootstrap: true,
+			sdk: "none",
 			usePrerequisites: false,
 		})
 		.named("bootstrap coreutils");
@@ -194,7 +188,7 @@ export async function test() {
 	const os = std.triple.os(system);
 	const sdk = await bootstrap.sdk(host);
 
-	const coreutils = await build({ host, bootstrap: true, env: sdk });
+	const coreutils = await build({ host, sdk: "none", env: sdk });
 
 	let expected;
 	let script;
@@ -260,13 +254,11 @@ export async function test() {
 	// Run the script.
 	const platformSupportLib =
 		os === "darwin"
-			? libiconv({ host, bootstrap: true, env: sdk })
-			: attr({ host, bootstrap: true, env: sdk });
-	const output = await std.build`${script}`
-		.bootstrap(true)
-		.env({ SHELL: "/bin/sh" }, platformSupportLib, coreutils, {
-			utils: false,
-		})
+			? libiconv({ host, sdk: "none", env: sdk })
+			: attr({ host, sdk: "none", env: sdk });
+	const output = await std
+		.build(std.shBootstrap`${script}`)
+		.env({ SHELL: "/bin/sh" }, platformSupportLib, coreutils)
 		.then(tg.File.expect);
 
 	const contents = (await output.text).trim();

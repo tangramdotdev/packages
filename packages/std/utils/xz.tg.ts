@@ -21,7 +21,6 @@ export async function source() {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -31,7 +30,6 @@ export type Arg = {
 
 export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
-		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -50,18 +48,15 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		],
 	};
 
-	const env = std.env.arg(env_ ?? null, prerequisites(build), {
-		utils: false,
-	});
+	const env = std.env.compose(env_ ?? null, prerequisites(build));
 
 	return autotoolsInternal({
 		build,
 		host,
-		bootstrap: bootstrap_,
 		env,
 		phases: { configure },
 		processName: metadata.name,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(),
 		wrapBashScriptPaths: [
 			"bin/xzdiff",
@@ -77,5 +72,5 @@ export default build;
 export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
-	return build({ host, bootstrap: true, env: sdk });
+	return build({ host, sdk: "none", env: sdk });
 }

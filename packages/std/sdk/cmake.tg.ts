@@ -42,7 +42,7 @@ export async function cmake(...args: tg.Args<Arg>) {
 		env: env_,
 		host: host_,
 		source: source_,
-	} = await std.args.apply<Arg, Arg>({
+	} = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -78,12 +78,12 @@ export async function cmake(...args: tg.Args<Arg>) {
 			CXX: "c++ -static",
 		});
 	}
-	const env = std.env.arg(...envs, env_ ?? null, { utils: false });
+	const env = std.env.compose(...envs, env_ ?? null);
 
 	const result = std.autotools.build({
 		build,
 		host,
-		bootstrap: true,
+		sdk: "none",
 		buildInTree: true,
 		env,
 		phases,
@@ -96,14 +96,17 @@ export async function cmake(...args: tg.Args<Arg>) {
 export default cmake;
 
 export type BuildArg = {
-	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explitily provided via `env`. Default: false. */
-	bootstrap?: boolean;
-
 	/** Path to use for the build directory. Default: "build". */
 	buildDir?: string;
 
+	/** Granular control over the individual build tools. A `preset` given here replaces the preset implied by `pkgConfig`, `extended`, and `developmentTools`, and the individual tool flags then override that preset. */
+	buildTools?: std.dependencies.BuildToolsOverrides;
+
 	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at ${tg.output}/.tangram_logs. Default: false */
 	debug?: boolean;
+
+	/** Should the development environment include `texinfo`, `help2man`, `autoconf` and `automake`? Default: false. */
+	developmentTools?: boolean;
 
 	/** Any environment to add to the target. */
 	env?: std.env.Arg;
@@ -171,13 +174,14 @@ export type BuildArg = {
 
 /** Construct a cmake package build target. */
 export async function build(...args: tg.Args<BuildArg>) {
-	type Collect = Omit<std.args.MakeArrayKeys<BuildArg, "phases">, "phases"> & {
+	type MergedArg = Omit<BuildArg, "phases"> & {
 		phases: Array<std.phases.Arg>;
 	};
 	const {
-		bootstrap = false,
 		buildDir = "build",
+		buildTools,
 		debug = false,
+		developmentTools = false,
 		env: userEnv,
 		extended = true,
 		fortifySource: fortifySource_ = 2,
@@ -199,7 +203,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 		source,
 		stripExecutables = true,
 		target: target_,
-	} = await std.args.apply<BuildArg, Collect>({
+	} = await tg.Args.apply<BuildArg, MergedArg, MergedArg>({
 		args,
 		map: async (arg) => {
 			const phases = Array.isArray(arg.phases)
@@ -210,12 +214,12 @@ export async function build(...args: tg.Args<BuildArg>) {
 			return {
 				...arg,
 				phases,
-			} as Collect;
+			} as MergedArg;
 		},
 		reduce: {
-			env: (a, b) => std.env.arg(a ?? null, b ?? null, { utils: false }),
+			env: (a, b) => std.env.compose(a ?? null, b ?? null),
 			phases: "append",
-			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.mergeArg(a, b),
 		},
 	});
 
@@ -229,15 +233,12 @@ export async function build(...args: tg.Args<BuildArg>) {
 
 	// Set up env.
 	let envs: tg.Args<std.env.Arg> = [];
-	if (bootstrap) {
-		// Prevent automatically adding the utils to the env.
-		envs.push({ utils: false });
-	}
 
 	// Add C/C++ compiler environment (flags, SDK, build tools).
 	const ccEnv = await std.cc.env({
 		host,
-		bootstrap,
+		...(buildTools !== undefined ? { buildTools } : {}),
+		developmentTools,
 		extended,
 		fortifySource: fortifySource_,
 		fullRelro,
@@ -268,8 +269,11 @@ export async function build(...args: tg.Args<BuildArg>) {
 		});
 	}
 
-	// Include any user-defined env with higher precedence than the SDK and cmake settings.
-	const env = await std.env.arg(...envs, userEnv ?? null);
+	// Include any user-defined env with higher precedence than the SDK and cmake settings. A build that brings its own toolchain also brings its own utilities, so only a build with an SDK gets the standard set.
+	const env =
+		sdkArg === "none"
+			? await std.env.compose(...envs, userEnv ?? null)
+			: await std.env.arg(...envs, userEnv ?? null);
 
 	// Define default phases.
 	const configureArgs = [
@@ -320,13 +324,13 @@ export async function build(...args: tg.Args<BuildArg>) {
 	const mergedPhases = await std.phases.arg(defaultPhases, ...userPhaseArgs);
 
 	const system = std.triple.archAndOs(host);
-	return await tg
-		.build(std.phases.run, {
+	return await std.phases
+		.run({
 			bootstrap: true,
 			debug,
 			phases: mergedPhases,
 			env,
-			command: { host: system },
+			host: system,
 			...(order !== undefined ? { order } : {}),
 		})
 		.then(tg.Directory.expect);

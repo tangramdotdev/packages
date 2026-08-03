@@ -26,7 +26,6 @@ export async function source() {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -36,7 +35,6 @@ export type Arg = {
 
 export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
-		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -59,19 +57,16 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 		install,
 	};
 
-	const env = std.env.arg(env_ ?? null, prerequisites(build), {
-		utils: false,
-	});
+	const env = std.env.compose(env_ ?? null, prerequisites(build));
 
 	return await autotoolsInternal({
 		build,
 		host,
-		bootstrap: bootstrap_,
 		buildInTree: true,
 		env,
 		phases,
 		processName: metadata.name,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: sourceDir,
 		wrapBashScriptPaths: ["bin/bzdiff", "bin/bzgrep", "bin/bzmore"],
 	});
@@ -84,7 +79,7 @@ export async function test() {
 	const sdk = await bootstrap.sdk(host);
 	return build({
 		host,
-		bootstrap: true,
-		env: std.env.arg(sdk, { utils: false }),
+		sdk: "none",
+		env: std.env.compose(sdk),
 	});
 }

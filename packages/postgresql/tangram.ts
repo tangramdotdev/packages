@@ -104,15 +104,11 @@ export async function build(...args: tg.Args<Arg>) {
 	const artifacts = await std.deps.artifacts(deps, {
 		build: arg.build,
 		host: arg.host,
-		...(arg.sdk !== undefined && arg.sdk !== null ? { sdk: arg.sdk } : {}),
-		...(arg.dependencies !== undefined && arg.dependencies !== null
-			? { dependencies: arg.dependencies }
-			: {}),
-		env: arg.env ?? null,
-		subtreeEnv: arg.subtreeEnv ?? null,
-		...(arg.subtreeSdk !== undefined && arg.subtreeSdk !== null
-			? { subtreeSdk: arg.subtreeSdk }
-			: {}),
+		...std.args.optional("sdk", arg.sdk),
+		...std.args.optional("dependencies", arg.dependencies),
+		...std.args.optional("env", arg.env),
+		...std.args.optional("subtreeEnv", arg.subtreeEnv),
+		...std.args.optional("subtreeSdk", arg.subtreeSdk),
 	});
 	const runtimeArtifacts = [
 		artifacts.icu,

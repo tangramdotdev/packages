@@ -32,7 +32,7 @@ export function deps() {
 		libiconv: {
 			build: libiconv.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "darwin",
+			when: { hostOs: "darwin" },
 		},
 	});
 }

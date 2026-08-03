@@ -66,7 +66,11 @@ export type ImageFormat = "docker" | "oci";
 export type LayerCompressionFormat = "gz" | "zst";
 
 export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
-	const arg = await std.args.apply<Arg, ArgObject>({
+	const arg = await tg.Args.apply<
+		Arg,
+		tg.MaybeMutationMap<ArgObject>,
+		ArgObject
+	>({
 		args,
 		map: async (arg) => {
 			if (arg === undefined) {
@@ -151,8 +155,8 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 			args: "append",
 			buildToolchain: "set",
 			cmd: "append",
-			entrypoint: "set",
-			env: (a, b) => std.env.arg(a ?? null, b ?? null, { utils: false }),
+			...std.args.optional("entrypoint", "set"),
+			env: (a, b) => std.env.compose(a ?? null, b ?? null),
 			expose: "append",
 			format: "set",
 			labels: "set",
@@ -180,7 +184,7 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 		users,
 		workdir,
 	} = arg;
-	const env = await std.env.arg(envArg ?? null, { utils: false });
+	const env = await std.env.compose(envArg ?? null);
 
 	// Fill in defaults.
 	const system = std.triple.archAndOs(system_ ?? std.triple.host());
@@ -199,7 +203,7 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 			// Add the env to the entrypoint.
 			envApplied = true;
 			entrypointArtifact = await std.wrap(entrypoint_, {
-				buildToolchain: buildToolchain ?? null,
+				...std.args.optional("buildToolchain", buildToolchain),
 				env,
 			});
 		}
@@ -234,7 +238,7 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 		let envEntrypoint = await std.wrap(
 			await tg.build(std.buildGnuEnv).named("gnu env"),
 			{
-				buildToolchain: buildToolchain ?? null,
+				...std.args.optional("buildToolchain", buildToolchain),
 				env,
 			},
 		);

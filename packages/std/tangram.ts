@@ -4,7 +4,7 @@ export * as autotools from "./autotools.tg.ts";
 export * as cc from "./cc.tg.ts";
 export { build } from "./process.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
-export { command } from "./command.tg.ts";
+export { command, sh, shBootstrap } from "./command.tg.ts";
 export * as dependencies from "./sdk/dependencies.tg.ts";
 export { deps } from "./packages.tg.ts";
 export { image } from "./image.tg.ts";
@@ -29,6 +29,7 @@ import * as bootstrap from "./bootstrap.tg.ts";
 import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
 import * as process_ from "./process.tg.ts";
 import caCertificates from "./certificates.tg.ts";
+import * as cc from "./cc.tg.ts";
 import * as command_ from "./command.tg.ts";
 import * as dependencies from "./sdk/dependencies.tg.ts";
 import * as directory from "./directory.tg.ts";
@@ -83,6 +84,7 @@ function testActions(): Record<string, () => any> {
 		phases: phases.test,
 		pkgconfig: pkgconfig.test,
 		packages: packages.test,
+		cc: cc.test,
 		certificates: caCertificates,
 		bootstrapUtils: bootstrap.utils,
 		bootstrapToolchain: bootstrap.toolchain,
@@ -204,6 +206,7 @@ const defaultTests = [
 	"triple",
 	"phases",
 	"packages",
+	"cc",
 	"certificates",
 	"proxy",
 	"file",

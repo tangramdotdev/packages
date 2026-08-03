@@ -38,7 +38,7 @@ export async function build(...args: tg.Args<Arg>) {
 
 	// On Linux with LLVM, we need to add -Wl,-undefined-version to CFLAGS to build the shared library.
 	// https://github.com/zlib-ng/zlib-ng/issues/1427
-	if (os === "linux" && arg.sdk?.toolchain === "llvm") {
+	if (os === "linux" && std.sdk.argObject(arg.sdk)?.toolchain === "llvm") {
 		packageEnv.CFLAGS = await tg.Mutation.prefix("-Wl,-undefined-version", " ");
 	}
 

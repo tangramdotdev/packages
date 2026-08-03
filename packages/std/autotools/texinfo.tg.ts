@@ -34,7 +34,6 @@ export function source() {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -45,7 +44,6 @@ export type Arg = {
 
 export async function build(arg: tg.Unresolved<Arg>) {
 	const {
-		bootstrap = false,
 		build,
 		env: env_,
 		host,
@@ -53,7 +51,7 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		sdk,
 		source: source_,
 	} = await tg.resolve(arg);
-	const env = std.env.arg(env_ ?? null, { utils: false });
+	const env = std.env.compose(env_ ?? null);
 
 	const shellScripts = [
 		"bin/pdftexi2dvi",
@@ -64,10 +62,9 @@ export async function build(arg: tg.Unresolved<Arg>) {
 	const output = await std.utils.autotoolsInternal({
 		build: build ?? null,
 		host: host ?? null,
-		bootstrap,
 		env,
 		processName: metadata.name,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(),
 		wrapBashScriptPaths: shellScripts,
 	});
@@ -97,16 +94,12 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		tg`${output}/share/texinfo`,
 	];
 
-	return std.env.arg(
-		binDir,
-		{
-			PERL5LIB: tg.Mutation.suffix(tg.Template.join(":", ...perlLibPaths), ":"),
-			TEXINDEX_SCRIPT: tg.Mutation.setIfUnset(
-				tg`${output}/share/texinfo/texindex.awk`,
-			),
-		},
-		{ utils: false },
-	);
+	return std.env.compose(binDir, {
+		PERL5LIB: tg.Mutation.suffix(tg.Template.join(":", ...perlLibPaths), ":"),
+		TEXINDEX_SCRIPT: tg.Mutation.setIfUnset(
+			tg`${output}/share/texinfo/texindex.awk`,
+		),
+	});
 }
 
 export default build;

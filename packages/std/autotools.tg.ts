@@ -1,9 +1,6 @@
 import * as std from "./tangram.ts";
 
 export type Arg = {
-	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explicitly provided via `env`. Default: false. */
-	bootstrap?: boolean;
-
 	/** The machine performing the compilation. */
 	build?: string | null;
 
@@ -15,6 +12,9 @@ export type Arg = {
 
 	/** By default, autotools builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
 	buildInTree?: boolean;
+
+	/** Granular control over the individual build tools. A `preset` given here replaces the preset implied by `pkgConfig`, `extended`, and `developmentTools`, and the individual tool flags then override that preset. */
+	buildTools?: std.dependencies.BuildToolsOverrides | null;
 
 	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
 	checksum?: tg.Checksum | null;
@@ -94,7 +94,7 @@ export type Arg = {
 	/** Should we remove all Libtool archives from the output directory? The presence of these files can cause downstream builds to depend on absolute paths which may no longer be valid, and can interfere with cross-compilation. Tangram uses other methods for library resolution, rendering these files unnecessary, and in some cases detrimental. Default: true. */
 	removeLibtoolArchives?: boolean;
 
-	/** Arguments to use for the SDK. */
+	/** Arguments for the SDK. Pass `"none"` to add no toolchain, build tools, or standard utilities, in which case `env` must provide everything the build needs. A null clears any arguments merged from earlier args and falls back to the default SDK. */
 	sdk?: std.sdk.Arg | null;
 
 	/** Should we mirror the contents `LIBRARY_PATH` in `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`? Default: false */
@@ -120,33 +120,24 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	let depsEnv = resolved.env;
 	const depsConfig = await std.deps.resolveConfig(resolved.deps);
 	if (depsConfig) {
+		// The resolved argument already satisfies `ContextArg`, and `deps.context` drops the
+		// fields that are null or unset, so it may be forwarded directly.
 		depsEnv = await std.deps.env(depsConfig, {
-			build: resolved.build,
-			host: resolved.host,
-			...(resolved.sdk !== undefined && resolved.sdk !== null
-				? { sdk: resolved.sdk }
-				: {}),
-			...(resolved.dependencies !== undefined && resolved.dependencies !== null
-				? { dependencies: resolved.dependencies }
-				: {}),
-			env: depsEnv ?? null,
-			subtreeEnv: resolved.subtreeEnv ?? null,
-			...(resolved.subtreeSdk !== undefined && resolved.subtreeSdk !== null
-				? { subtreeSdk: resolved.subtreeSdk }
-				: {}),
+			...resolved,
+			...std.args.optional("env", depsEnv),
 		});
 	}
 
-	// For top-level package, merge subtreeSdk with sdk (sdk takes precedence).
-	const effectiveSdk = await std.sdk.arg(
-		resolved.subtreeSdk ?? null,
-		resolved.sdk ?? null,
+	// For the top-level package, the subtree SDK applies to this build as well, and the build's own argument takes precedence.
+	const effectiveSdk = await std.sdk.mergeArg(
+		resolved.subtreeSdk,
+		resolved.sdk,
 	);
 
 	const {
-		bootstrap = false,
 		build,
 		buildInTree = false,
+		buildTools,
 		checksum,
 		debug = false,
 		defaultCrossArgs = true,
@@ -177,39 +168,37 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		source,
 		stripExecutables = true,
 	} = { ...resolved, env: depsEnv };
-	// Use the effective SDK that merges subtreeSdk with sdk.
-	const sdkArg_ = effectiveSdk;
 	const isCross = build !== host;
 	const hostOs = std.triple.os(host);
 
 	// Set up env.
 	let envs: tg.Args<std.env.Arg> = [];
-	if (bootstrap) {
-		envs.push({ utils: false });
-	}
 
 	// Add C/C++ compiler environment (flags, SDK, build tools).
 	const ccEnv = await std.cc.env({
 		host,
 		build,
-		bootstrap,
+		...std.args.optional("buildTools", buildTools),
 		developmentTools,
 		extended,
 		fortifySource: fortifySource_ ?? 2,
 		fullRelro,
 		hardeningCFlags,
-		...(march !== undefined && march !== null ? { march } : {}),
+		...std.args.optional("march", march),
 		mtune: mtune ?? "generic",
 		opt: opt ?? "2",
 		pipe,
 		pkgConfig,
-		sdk: sdkArg_,
+		...(effectiveSdk !== undefined ? { sdk: effectiveSdk } : {}),
 		stripExecutables,
 	});
 	envs.push(ccEnv);
 
-	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	const env = await std.env.arg(...envs, userEnv ?? null);
+	// Include any user-defined env with higher precedence than the SDK and autotools settings. A build that brings its own toolchain also brings its own utilities, so only a build with an SDK gets the standard set.
+	const env =
+		effectiveSdk === "none"
+			? await std.env.compose(...envs, userEnv ?? null)
+			: await std.env.arg(...envs, userEnv ?? null);
 
 	// Define default phases.
 	const configureArgs =
@@ -303,23 +292,17 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	// Merge default phases with user phases.
 	const mergedPhases = await std.phases.arg(defaultPhases, ...userPhasesArray);
 
-	let result = tg.build(std.phases.run, {
+	const result = std.phases.run({
 		bootstrap: true,
 		debug,
 		phases: mergedPhases,
 		env,
-		command: { host: system },
+		host: system,
 		checksum: checksum ?? null,
 		network,
 		order: order ?? null,
-		processName:
-			processName !== undefined && processName !== null
-				? `${processName} build`
-				: null,
+		processName: processName ?? null,
 	});
-	if (processName !== undefined && processName !== null) {
-		result = result.named(processName);
-	}
 	return await result.then(tg.Directory.expect);
 }
 
@@ -334,10 +317,10 @@ export type ResolvedArg = Omit<Arg, "build" | "host" | "phases" | "source"> & {
 
 /** Resolve autotools args to a mutable arg object. Returns an arg with build, host, and source guaranteed to be resolved. */
 export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
-	type Collect = Omit<std.args.MakeArrayKeys<Arg, "phases">, "phases"> & {
+	type MergedArg = Omit<Arg, "phases"> & {
 		phases: Array<std.phases.Arg>;
 	};
-	const collect = await std.args.apply<Arg, Collect>({
+	const merged = await tg.Args.apply<Arg, MergedArg, MergedArg>({
 		args,
 		map: async (arg) => {
 			// Normalize phases to array, flattening if already an array.
@@ -349,20 +332,14 @@ export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 			return {
 				...arg,
 				phases,
-			} as Collect;
+			} as MergedArg;
 		},
 		reduce: {
-			env: (a, b) =>
-				std.env.arg(a ?? null, b ?? null, {
-					utils: false,
-				}),
+			env: (a, b) => std.env.compose(a ?? null, b ?? null),
 			phases: "append",
-			sdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
-			subtreeEnv: (a, b) =>
-				std.env.arg(a ?? null, b ?? null, {
-					utils: false,
-				}),
-			subtreeSdk: (a, b) => std.sdk.arg(a ?? null, b ?? null),
+			sdk: (a, b) => std.sdk.mergeArg(a, b),
+			subtreeEnv: (a, b) => std.env.compose(a ?? null, b ?? null),
+			subtreeSdk: (a, b) => std.sdk.mergeArg(a, b),
 		},
 	});
 
@@ -372,7 +349,7 @@ export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 		phases: phaseArgs = [],
 		source,
 		...rest
-	} = collect;
+	} = merged;
 
 	tg.assert(source !== undefined && source !== null, `source must be defined`);
 

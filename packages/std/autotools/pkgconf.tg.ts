@@ -26,7 +26,6 @@ export async function source() {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	bashExe: tg.File;
 	build?: string | null;
 	env?: std.env.Arg | null;
@@ -37,7 +36,6 @@ export type Arg = {
 
 export async function build(arg: tg.Unresolved<Arg>) {
 	const {
-		bootstrap: bootstrap_ = false,
 		bashExe,
 		build,
 		env: env_,
@@ -45,7 +43,7 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		sdk,
 		source: source_,
 	} = await tg.resolve(arg);
-	const env = std.env.arg(env_ ?? null, { utils: false });
+	const env = std.env.compose(env_ ?? null);
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],
@@ -55,11 +53,10 @@ export async function build(arg: tg.Unresolved<Arg>) {
 	const output = await std.utils.autotoolsInternal({
 		build: build ?? null,
 		host: host ?? null,
-		bootstrap: bootstrap_,
 		env,
 		phases,
 		processName: metadata.name,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(),
 	});
 

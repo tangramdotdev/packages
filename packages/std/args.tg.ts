@@ -1,6 +1,6 @@
 import * as std from "./tangram.ts";
 
-/** Base argument type for packages to extend. Add build-system-specific options (autotools, cmake, cargo, etc.) and package-specific dependencies by intersection. */
+/** Base argument type for packages to extend. Add build-system-specific options (autotools, cmake, cargo, etc.) and package-specific dependencies by intersection. An absent field contributes nothing when arguments merge, and a null field clears whatever an earlier argument set. To forward a field that may be absent, use `std.args.optional`. */
 export type BasePackageArg = {
 	build?: string | null;
 	dependencies?: DependencyArgs | null;
@@ -23,9 +23,11 @@ export type DependencyArg<T extends BasePackageArg> =
 	| Omit<T, "build" | "host">
 	| true;
 
+/** A dependency override. `false` disables the dependency, `true` builds it with the defaults, a directory replaces its build with an artifact the caller supplies, and an object supplies arguments for its build. */
 export type OptionalDependencyArg<T extends BasePackageArg> =
 	| Omit<T, "build" | "host">
-	| boolean;
+	| boolean
+	| tg.Directory;
 
 export type DependencyArgs = {
 	[key: string]: OptionalDependencyArg<PackageArg>;
@@ -43,10 +45,7 @@ type Input<T extends tg.Value, O extends { [key: string]: tg.Value }> = {
 	};
 };
 
-export type MakeArrayKeys<T, K extends keyof T> = {
-	[P in keyof T]: P extends K ? Array<Exclude<T[P], undefined>> : T[P];
-};
-
+/** Reduce a list of arguments into a single object. Matches `tg.Args.apply`, except that every key of `reduce` is optional. Delete this in favor of `tg.Args.apply` once the `host` branch lands. */
 export async function apply<
 	T extends tg.Value,
 	O extends { [key: string]: tg.Value },
@@ -59,8 +58,12 @@ export async function apply<
 	for (let arg of resolved) {
 		let object = await map(arg);
 		for (let [key, value] of Object.entries(object)) {
-			if (value instanceof tg.Mutation) {
-				await value.apply(output, key);
+			if (value === undefined) {
+				continue;
+			} else if (value === null) {
+				output[key] = null;
+			} else if (value instanceof tg.Mutation) {
+				applyMutation(output, key, await value.apply(output[key]));
 			} else if (reduce[key] !== undefined) {
 				if (typeof reduce[key] === "string") {
 					let mutation: tg.Mutation;
@@ -102,7 +105,7 @@ export async function apply<
 						default:
 							return tg.unreachable(`unknown mutation kind "${reduce[key]}"`);
 					}
-					await mutation.apply(output, key);
+					applyMutation(output, key, await mutation.apply(output[key]));
 				} else {
 					output[key] = await reduce[key](
 						output[key] as O[typeof key] | undefined,
@@ -115,6 +118,29 @@ export async function apply<
 		}
 	}
 	return output as O;
+}
+
+/** Store the result of a mutation, treating an undefined result as removing the key. */
+function applyMutation(
+	output: { [key: string]: tg.Value },
+	key: string,
+	value: tg.Value | undefined,
+) {
+	if (value === undefined) {
+		delete output[key];
+	} else {
+		output[key] = value;
+	}
+}
+
+/** Produce an object carrying `key` when `value` is present, and an empty one otherwise. Spread it into an argument literal to forward a field the caller may not have. A null is dropped alongside `undefined`, as a fresh argument carries nothing for a null to clear. */
+export function optional<K extends string, V>(
+	key: K,
+	value: V | null | undefined,
+): { [P in K]?: V } {
+	return value === undefined || value === null
+		? ({} as { [P in K]?: V })
+		: ({ [key]: value } as { [P in K]?: V });
 }
 
 /** Determine whether a value is a `tg.Template.Arg`. */

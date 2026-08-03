@@ -55,7 +55,10 @@ export async function build(...args: tg.Args<Arg>) {
 		});
 	}
 
-	return std.autotools.build({ ...arg, phases: phases ?? null });
+	return std.autotools.build({
+		...arg,
+		...std.args.optional("phases", phases),
+	});
 }
 
 export default build;

@@ -13,7 +13,6 @@ export const metadata = {
 };
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -32,13 +31,12 @@ export async function source() {
 
 export async function build(...args: tg.Args<Arg>) {
 	const {
-		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg, Arg>({
+	} = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -50,16 +48,16 @@ export async function build(...args: tg.Args<Arg>) {
 	const configureArgs = ["--without-bash-malloc", "--disable-nls"];
 
 	// If the provided env has ncurses in the library path, use it instead of termcap.
-	const envArg = await std.env.arg(env_ ?? null, { utils: false });
+	const envArg = await std.env.compose(env_ ?? null);
 	if (await providesNcurses(envArg)) {
 		configureArgs.push("--with-curses");
 	}
 
-	// DIAGNOSTIC: When built with bootstrap=true, cc.env will NOT inject a
-	// toolchain, so the caller must supply one via env_ or sdk. Detect the
-	// common regression where the caller passes utils-only into bash. Emit a
-	// stack trace to identify the offending call site.
-	if (bootstrap_) {
+	// DIAGNOSTIC: With `sdk: "none"` no toolchain is added, so the caller must
+	// supply one in `env`. Detect the common regression where the caller passes
+	// utils-only into bash. Emit a stack trace to identify the offending call
+	// site.
+	if (sdk === "none") {
 		let hasCompiler = false;
 		for (const name of ["cc", "gcc", "clang", "c99"]) {
 			try {
@@ -70,9 +68,9 @@ export async function build(...args: tg.Args<Arg>) {
 				// not found, try next.
 			}
 		}
-		if (!hasCompiler && (sdk === undefined || sdk === null)) {
+		if (!hasCompiler) {
 			const diag = new Error(
-				"std.utils.bash.build invoked with bootstrap=true but env_ contains no C compiler and no sdk was provided. This will fail at configure time with 'no acceptable C compiler found'.",
+				`std.utils.bash.build invoked with sdk: "none" but env contains no C compiler. This will fail at configure time with 'no acceptable C compiler found'.`,
 			);
 			console.error(diag.stack ?? diag.message);
 			throw diag;
@@ -96,11 +94,10 @@ export async function build(...args: tg.Args<Arg>) {
 	let output: PromiseLike<tg.Directory> = autotoolsInternal({
 		build,
 		host,
-		bootstrap: bootstrap_,
-		env: std.env.arg(env_ ?? null, ...env, { utils: false }),
+		env: std.env.compose(env_ ?? null, ...env),
 		phases,
 		processName: metadata.name,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(),
 	});
 
@@ -131,7 +128,7 @@ export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 
-	const bashDir = await build({ host, bootstrap: true, env: sdk });
+	const bashDir = await build({ host, sdk: "none", env: sdk });
 	// Inspect dependencies
 	const bashFile = await bashDir.get("bin/bash").then(tg.File.expect);
 	const deps = await bashFile.dependencies;

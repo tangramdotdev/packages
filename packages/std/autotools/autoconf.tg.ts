@@ -34,7 +34,6 @@ export function source() {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -48,7 +47,6 @@ export type Arg = {
 export async function build(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const {
-		bootstrap = false,
 		build,
 		env: env_,
 		host,
@@ -59,15 +57,14 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		source: source_,
 	} = resolved;
 
-	const env = std.env.arg(env_ ?? null, { utils: false });
+	const env = std.env.compose(env_ ?? null);
 
 	let autoconf = await std.utils.autotoolsInternal({
 		build: build ?? null,
 		host: host ?? null,
-		bootstrap,
 		env,
 		processName: metadata.name,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(),
 	});
 
@@ -102,18 +99,13 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		{
 			interpreter,
 			args: ["-B", await tg`${shareDirectory}/autoconf`],
-			env: std.env.arg(
-				grepArtifact,
-				m4Artifact,
-				{
-					autom4te_perllibdir: tg`${shareDirectory}/autoconf`,
-					AC_MACRODIR: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
-					M4PATH: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
-					PERL5LIB: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
-					AUTOM4TE_CFG: tg`${shareDirectory}/autoconf/autom4te.cfg`,
-				},
-				{ utils: false },
-			),
+			env: std.env.compose(grepArtifact, m4Artifact, {
+				autom4te_perllibdir: tg`${shareDirectory}/autoconf`,
+				AC_MACRODIR: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+				M4PATH: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+				PERL5LIB: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+				AUTOM4TE_CFG: tg`${shareDirectory}/autoconf/autom4te.cfg`,
+			}),
 		},
 	);
 
@@ -193,7 +185,7 @@ export async function patchAutom4teCfg(
 			cat <<'EOF' | tee ${tg.output}
 			${contents}
 		`
-		.env(arg.env ?? null)
+		.env(arg.env ?? {})
 		.then(tg.File.expect);
 
 	return tg.directory(autoconf, {

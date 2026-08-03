@@ -2,7 +2,7 @@ import * as std from "./tangram.ts";
 
 export * as make from "./bootstrap/make.tg.ts";
 export * as musl from "./bootstrap/musl.tg.ts";
-export { sdk } from "./bootstrap/sdk.tg.ts";
+export { sdk, toolchainSdk } from "./bootstrap/sdk.tg.ts";
 
 // Bootstrap release version and GCC version bundled in the Linux toolchain.
 const version = "v2026.07.29";
@@ -99,14 +99,14 @@ export async function patch(
 		"\n",
 		...patches_.map((p) => tg`patch -p1 < ${p}`),
 	);
-	return std.build`
+	return std
+		.build(std.shBootstrap`
 		cp -R ${source_} ${tg.output}
 		chmod -R +w ${tg.output}
 		cd ${tg.output}
 		${patchScript}
-	`
-		.bootstrap(true)
-		.env(utils(host), { utils: false })
+	`)
+		.env(utils(host))
 		.then(tg.Directory.expect);
 }
 

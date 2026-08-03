@@ -24,7 +24,6 @@ export async function source() {
 }
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | null;
 	env?: std.env.Arg | null;
 	host?: string | null;
@@ -34,7 +33,6 @@ export type Arg = {
 
 export async function build(arg?: Arg) {
 	const {
-		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -52,26 +50,24 @@ export async function build(arg?: Arg) {
 	if (std.triple.os(host) === "linux") {
 		dependencies.push(
 			attr({
-				bootstrap: bootstrap_,
 				build,
-				env: env_ ?? null,
+				...std.args.optional("env", env_),
 				host,
-				sdk: sdk ?? null,
+				...std.args.optional("sdk", sdk),
 				staticBuild: false,
 				usePrerequisites: true,
 			}),
 		);
 	}
-	const env = std.env.arg(env_ ?? null, ...dependencies, { utils: false });
+	const env = std.env.compose(env_ ?? null, ...dependencies);
 
 	const output = autotoolsInternal({
 		build,
 		host,
-		bootstrap: bootstrap_,
 		env,
 		phases: { configure },
 		processName: metadata.name,
-		sdk: sdk ?? null,
+		...std.args.optional("sdk", sdk),
 		source: source_ ?? source(),
 	});
 
@@ -85,7 +81,7 @@ export async function test() {
 	const sdk = await bootstrapSdk(host);
 	const system = std.triple.archAndOs(host);
 	const os = std.triple.os(system);
-	const patchArtifact = await build({ host, bootstrap: true, env: sdk });
+	const patchArtifact = await build({ host, sdk: "none", env: sdk });
 
 	// Ensure the installed command preserves xattrs.
 	let expected;
@@ -155,17 +151,16 @@ export async function test() {
 	// Run the script.
 	const platformSupportLib =
 		os === "darwin"
-			? libiconv({ host, bootstrap: true, env: sdk })
-			: attr({ host, bootstrap: true, env: sdk });
+			? libiconv({ host, sdk: "none", env: sdk })
+			: attr({ host, sdk: "none", env: sdk });
 	const output = tg.File.expect(
 		await (
 			await tg.command(script, {
-				env: std.env.arg(
-					coreutils({ host, bootstrap: true, env: sdk }),
-					diffutils({ host, bootstrap: true, env: sdk }),
+				env: std.env.compose(
+					coreutils({ host, sdk: "none", env: sdk }),
+					diffutils({ host, sdk: "none", env: sdk }),
 					platformSupportLib,
 					patchArtifact,
-					{ utils: false },
 				),
 			})
 		).build(),

@@ -32,17 +32,17 @@ export type Arg = {
 
 /** Add a proxy to an env that provides a toolchain. */
 export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
-	const arg = await std.args.apply<Arg, Arg>({
+	const arg = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (a) => a,
-		reduce: {},
+		reduce: { toolchain: "set" },
 	});
 
 	const proxyCompiler = arg.compiler ?? false;
 	const proxyLinker = arg.linker ?? true;
 	const proxyStrip = arg.strip ?? true;
 	const buildToolchainDir = arg.toolchain;
-	const buildToolchain = await std.env.arg(buildToolchainDir, { utils: false });
+	const buildToolchain = await std.env.compose(buildToolchainDir);
 
 	if (!proxyCompiler && !proxyLinker && !proxyStrip) {
 		return buildToolchainDir;
@@ -444,7 +444,7 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 
 	return await std.wrap(stripProxy, {
 		buildToolchain,
-		env: std.env.arg(...envs, { utils: false }),
+		env: std.env.compose(...envs),
 	});
 }
 
@@ -513,7 +513,7 @@ export async function testLdProxyDependencies() {
 	const host = std.triple.host();
 	const buildToolchain = await bootstrap.sdk();
 	const { ld } = await std.sdk.toolchainComponents({
-		env: await std.env.arg(buildToolchain, { utils: false }),
+		env: await std.env.compose(buildToolchain),
 		host,
 		target: host,
 	});
@@ -569,22 +569,18 @@ export async function testBasic(target?: string) {
 			return 0;
 		}`;
 	const cmd = target ? `cc -target ${target}` : `cc`;
-	const output = await std.build`
+	const output = await std
+		.build((target ? std.sh : std.shBootstrap)`
 				set -x
 				/usr/bin/env
 				${cmd} -v -xc ${helloSource} -o ${tg.output}
-				echo "done"`
-		.bootstrap(target ? false : true)
+				echo "done"`)
 		.env(
-			std.env.arg(
-				buildToolchain,
-				{
-					TGLD_TRACING: "tgld=trace,tangram_std=trace",
-					TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
-					TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
-				},
-				{ utils: false },
-			),
+			std.env.compose(buildToolchain, {
+				TGLD_TRACING: "tgld=trace,tangram_std=trace",
+				TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
+				TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
+			}),
 		)
 		.then(tg.File.expect);
 
@@ -627,16 +623,16 @@ async function makeShared(arg: tg.Unresolved<MakeSharedArg>) {
 	const targetTriple = target ?? std.triple.host();
 	const dylibExt = std.triple.os(targetTriple) === "darwin" ? "dylib" : "so";
 	const cmd = target ? `cc -target ${target}` : `cc`;
-	return await std.build`set -x && mkdir -p ${tg.output}/lib && ${cmd} -v -shared -xc ${source} -o ${tg.output}/lib/${libName}.${dylibExt} ${flags} && ls -al ${tg.output}/lib`
-		.bootstrap(target ? false : true)
+	return await std
+		.build(
+			(target
+				? std.sh
+				: std.shBootstrap)`set -x && mkdir -p ${tg.output}/lib && ${cmd} -v -shared -xc ${source} -o ${tg.output}/lib/${libName}.${dylibExt} ${flags} && ls -al ${tg.output}/lib`,
+		)
 		.env(
-			std.env.arg(
-				sdk,
-				{
-					TGLD_TRACING: "tgld=trace",
-				},
-				{ utils: false },
-			),
+			std.env.compose(sdk, {
+				TGLD_TRACING: "tgld=trace",
+			}),
 		)
 		.then(tg.Directory.expect);
 }
@@ -679,7 +675,8 @@ export async function testSharedLibraryWithDep(target?: string) {
 	});
 
 	const cmd = target ? `cc -target ${target}` : `cc`;
-	const output = await std.build`
+	const output = await std
+		.build((target ? std.sh : std.shBootstrap)`
 		set -x
 		mkdir -p ${tg.output}/bin
 		mkdir -p ${tg.output}/lib
@@ -693,16 +690,11 @@ export async function testSharedLibraryWithDep(target?: string) {
 		cp libconstants.${dylibExt} ${tg.output}/lib
 		cp libprinter.${dylibExt} ${tg.output}/lib
 		cp main ${tg.output}/bin
-	`
-		.bootstrap(target ? false : true)
+	`)
 		.env(
-			std.env.arg(
-				testSDK,
-				{
-					TGLD_TRACING: "tgld=trace",
-				},
-				{ utils: false },
-			),
+			std.env.compose(testSDK, {
+				TGLD_TRACING: "tgld=trace",
+			}),
 		)
 		.then(tg.Directory.expect);
 
@@ -892,20 +884,19 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 	const uselessLibDir = tg.directory({ lib: tg.directory() });
 
 	// Compile the executable.
-	const output =
-		await std.build`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o ${tg.output}`
-			.bootstrap(target ? false : true)
-			.env(
-				std.env.arg(
-					testSDK,
-					{
-						TGLD_TRACING: "tgld=trace",
-						TGLD_LIBRARY_PATH_OPT_LEVEL: opt,
-					},
-					{ utils: false },
-				),
-			)
-			.then(tg.File.expect);
+	const output = await std
+		.build(
+			(target
+				? std.sh
+				: std.shBootstrap)`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o ${tg.output}`,
+		)
+		.env(
+			std.env.compose(testSDK, {
+				TGLD_TRACING: "tgld=trace",
+				TGLD_LIBRARY_PATH_OPT_LEVEL: opt,
+			}),
+		)
+		.then(tg.File.expect);
 
 	// Assert the library paths of the wrapper are set appropriately.
 	const manifest = await std.wrap.Manifest.read(output);
@@ -1069,7 +1060,8 @@ export async function testSamePrefix(target?: string) {
 		"greet.h": greetHeader,
 	});
 
-	const output = await std.build`
+	const output = await std
+		.build((target ? std.sh : std.shBootstrap)`
 			set -x
 			env
 			mkdir -p .bins
@@ -1078,17 +1070,12 @@ export async function testSamePrefix(target?: string) {
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o libgreet.${dylibExt}
 			cd ../.bins
 			cc -v -L../.libs -I${source} -lgreet -xc ${source}/main.c -o ${tg.output}
-			`
-		.bootstrap(target ? false : true)
+			`)
 		.env(
-			std.env.arg(
-				testSDK,
-				{
-					TGLD_TRACING: "tgld=trace",
-					TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
-				},
-				{ utils: false },
-			),
+			std.env.compose(testSDK, {
+				TGLD_TRACING: "tgld=trace",
+				TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
+			}),
 		)
 		.then(tg.File.expect);
 	await output.store();
@@ -1129,7 +1116,8 @@ export async function testSamePrefixDirect(target?: string) {
 		"greet.h": greetHeader,
 	});
 
-	const output = await std.build`
+	const output = await std
+		.build((target ? std.sh : std.shBootstrap)`
 			set -x
 			mkdir -p .bins
 			mkdir -p .libs
@@ -1137,17 +1125,12 @@ export async function testSamePrefixDirect(target?: string) {
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o libgreet.${dylibExt}
 			cd ../.bins
 			cc -v ../.libs/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o ${tg.output}
-			`
-		.bootstrap(target ? false : true)
+			`)
 		.env(
-			std.env.arg(
-				testSDK,
-				{
-					TGLD_TRACING: "tgld=trace",
-					TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
-				},
-				{ utils: false },
-			),
+			std.env.compose(testSDK, {
+				TGLD_TRACING: "tgld=trace",
+				TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
+			}),
 		)
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
@@ -1186,38 +1169,30 @@ export async function testDifferentPrefixDirect(target?: string) {
 		"greet.h": greetHeader,
 	});
 
-	const libgreetArtifact = await std.build`
+	const libgreetArtifact = await std
+		.build((target ? std.sh : std.shBootstrap)`
 			set -x
 			mkdir -p ${tg.output}
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o ${tg.output}/libgreet.${dylibExt}
-			`
-		.bootstrap(target ? false : true)
+			`)
 		.env(
-			std.env.arg(
-				testSDK,
-				{
-					TGLD_TRACING: "tgld=trace",
-					TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
-				},
-				{ utils: false },
-			),
+			std.env.compose(testSDK, {
+				TGLD_TRACING: "tgld=trace",
+				TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
+			}),
 		)
 		.then(tg.Directory.expect);
 
-	const output = await std.build`
+	const output = await std
+		.build((target ? std.sh : std.shBootstrap)`
 			set -x
 			cc -v ${libgreetArtifact}/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o ${tg.output}
-			`
-		.bootstrap(target ? false : true)
+			`)
 		.env(
-			std.env.arg(
-				testSDK,
-				{
-					TGLD_TRACING: "tgld=trace",
-					TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
-				},
-				{ utils: false },
-			),
+			std.env.compose(testSDK, {
+				TGLD_TRACING: "tgld=trace",
+				TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
+			}),
 		)
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
@@ -1232,20 +1207,16 @@ export async function testStrip(target?: string) {
 	const toolchain = target
 		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
 		: await bootstrap.sdk();
-	const output = await std.build`
+	const output = await std
+		.build((target ? std.sh : std.shBootstrap)`
 		set -x
 		cc -g -o main -xc ${inspectProcessSource}
 		strip main
-		mv main ${tg.output}`
-		.bootstrap(target ? false : true)
+		mv main ${tg.output}`)
 		.env(
-			std.env.arg(
-				toolchain,
-				{
-					TGSTRIP_TRACING: "tgstrip=trace",
-				},
-				{ utils: false },
-			),
+			std.env.compose(toolchain, {
+				TGSTRIP_TRACING: "tgstrip=trace",
+			}),
 		)
 		.then(tg.File.expect);
 	return output;
@@ -1279,7 +1250,8 @@ export async function testStripMultipleFiles() {
 		}
 	`;
 
-	const output = await std.build`
+	const output = await std
+		.build(std.shBootstrap`
 		set -x
 		# Compile three separate executables with debug symbols.
 		cc -g -o progA -xc ${sourceA}
@@ -1291,16 +1263,11 @@ export async function testStripMultipleFiles() {
 		mkdir -p ${tg.output}
 		mv progA ${tg.output}/progA
 		mv progB ${tg.output}/progB
-		mv progC ${tg.output}/progC`
-		.bootstrap(true)
+		mv progC ${tg.output}/progC`)
 		.env(
-			std.env.arg(
-				toolchain,
-				{
-					TGSTRIP_TRACING: "tgstrip=trace",
-				},
-				{ utils: false },
-			),
+			std.env.compose(toolchain, {
+				TGSTRIP_TRACING: "tgstrip=trace",
+			}),
 		)
 		.then(tg.Directory.expect);
 
@@ -1385,20 +1352,19 @@ export async function testTransitiveDiscovery(target?: string) {
 	// TGLD must discover bottom by analyzing top's dependencies.
 	// On Linux, we need -rpath-link to help the linker find transitive dependencies at link time.
 	const rpathLink = os === "linux" ? tg`-Wl,-rpath-link,${combined}/lib` : "";
-	const output =
-		await std.build`set -x && cc -v -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output}`
-			.bootstrap(target ? false : true)
-			.env(
-				std.env.arg(
-					testSDK,
-					{
-						TGLD_TRACING: "tgld=trace",
-						TGLD_LIBRARY_PATH_OPT_LEVEL: "isolate",
-					},
-					{ utils: false },
-				),
-			)
-			.then(tg.File.expect);
+	const output = await std
+		.build(
+			(target
+				? std.sh
+				: std.shBootstrap)`set -x && cc -v -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output}`,
+		)
+		.env(
+			std.env.compose(testSDK, {
+				TGLD_TRACING: "tgld=trace",
+				TGLD_LIBRARY_PATH_OPT_LEVEL: "isolate",
+			}),
+		)
+		.then(tg.File.expect);
 
 	// Verify the manifest includes both libraries.
 	const manifest = await std.wrap.Manifest.read(output);
@@ -1439,38 +1405,54 @@ export async function benchLdProxy() {
 			return 0;
 		}`;
 
-	return await std.build`
+	return await std
+		.build(std.shBootstrap`
 		set -e
 		cp ${source} conftest.c
+
+		# A real configure links a distinct binary every time, so repeating one identical link would
+		# measure a warm cache rather than the proxy. These variants mint a unique translation unit
+		# per iteration; the fixed_* ones keep the identical-input case for comparison, and the gap
+		# between the two is how much of the cost caching is currently hiding.
+		uniq_src() {
+			printf 'int marker_%s(void){return %s;}\nint main(void){return 0;}\n' "$1" "$1" > "u_$1.c"
+		}
+		uniq_compile()     { uniq_src "$1"; cc -c "u_$1.c" -o "u_$1.o"; }
+		uniq_passthrough() { uniq_src "$1"; cc "u_$1.c" -o "u_$1.bin" -Wl,--tg-passthrough; }
+		uniq_full()        { uniq_src "$1"; cc "u_$1.c" -o "u_$1.bin"; }
+		fixed_passthrough() { cc conftest.o -o conftest -Wl,--tg-passthrough; }
+		fixed_full()        { cc conftest.o -o conftest; }
 
 		# The build shell is POSIX sh, so time whole seconds over as many iterations as fit in the
 		# window rather than relying on sub-second formats it does not implement.
 		bench() {
 			label="$1"
-			shift
-			"$@" >/dev/null 2>&1 || true
+			fn="$2"
 			start=$(date +%s)
 			n=0
 			while [ $(( $(date +%s) - start )) -lt 6 ]; do
-				"$@" >/dev/null 2>&1
 				n=$(( n + 1 ))
+				"$fn" "$n" >/dev/null 2>&1 || true
 			done
 			elapsed=$(( $(date +%s) - start ))
-			echo "$label: $(( elapsed * 1000 / n )) ms/iter ($n iters in ${elapsed}s)"
+			echo "$label: $(( elapsed * 1000 / n )) ms/iter ($n iters in \${elapsed}s)"
 		}
 
-		bench "compile only (-c)          " cc -c conftest.c -o conftest.o
+		# Fail loudly if the toolchain cannot do the thing at all, rather than benchmarking errors.
+		uniq_full 0
 		cc -c conftest.c -o conftest.o
-		bench "link, proxy passthrough    " cc conftest.o -o conftest -Wl,--tg-passthrough
-		bench "link, full proxy           " cc conftest.o -o conftest
-		bench "compile+link, full proxy   " cc conftest.c -o conftest
+
+		bench "compile only, unique       " uniq_compile
+		bench "compile+link, passthrough  " uniq_passthrough
+		bench "compile+link, full proxy   " uniq_full
+		bench "link only, fixed input     " fixed_full
+		bench "link only, fixed, passthru " fixed_passthrough
 
 		echo "=== one traced link ==="
 		TGLD_TRACING=tgld=trace,tangram_std=trace cc conftest.o -o conftest 2>&1 | tail -200
 
 		echo done > ${tg.output}
-	`
-		.bootstrap(true)
-		.env(std.env.arg(buildToolchain, { utils: false }))
+	`)
+		.env(std.env.compose(buildToolchain))
 		.then(tg.File.expect);
 }

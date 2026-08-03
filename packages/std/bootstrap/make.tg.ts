@@ -27,7 +27,7 @@ export type Arg = {
 };
 
 export async function build(...args: tg.Args<Arg>) {
-	const arg = await std.args.apply<Arg, Arg>({
+	const arg = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
 		args,
 		map: async (a) => a,
 		reduce: {},
@@ -49,14 +49,14 @@ export async function build(...args: tg.Args<Arg>) {
 		install,
 	};
 
-	let envArgs: tg.Args<std.env.Arg> = [sdk(host), { utils: false }];
+	let envArgs: tg.Args<std.env.Arg> = [sdk(host)];
 	if (embedWrapper) {
 		envArgs.push({ TGLD_EMBED_WRAPPER: true });
 	}
-	const env = std.env.arg(...envArgs);
+	const env = std.env.compose(...envArgs);
 
 	const output = await autotoolsInternal({
-		bootstrap: true,
+		sdk: "none",
 		env,
 		host,
 		opt: "s",

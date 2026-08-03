@@ -73,17 +73,17 @@ export function deps() {
 		acl: {
 			build: acl.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "linux",
+			when: { hostOs: "linux" },
 		},
 		attr: {
 			build: attr.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "linux",
+			when: { hostOs: "linux" },
 		},
 		libiconv: {
 			build: libiconv.build,
 			kind: "runtime",
-			when: (ctx) => std.triple.os(ctx.host) === "darwin",
+			when: { hostOs: "darwin" },
 		},
 		ncurses: ncurses.build,
 		xz: { build: xz.build, kind: "buildtime" },
@@ -156,15 +156,11 @@ export async function build(...args: tg.Args<Arg>) {
 			{
 				build: arg.build,
 				host: arg.host,
-				...(arg.sdk !== undefined && arg.sdk !== null ? { sdk: arg.sdk } : {}),
-				...(arg.dependencies !== undefined && arg.dependencies !== null
-					? { dependencies: arg.dependencies }
-					: {}),
-				env: arg.env ?? null,
-				subtreeEnv: arg.subtreeEnv ?? null,
-				...(arg.subtreeSdk !== undefined && arg.subtreeSdk !== null
-					? { subtreeSdk: arg.subtreeSdk }
-					: {}),
+				...std.args.optional("sdk", arg.sdk),
+				...std.args.optional("dependencies", arg.dependencies),
+				...std.args.optional("env", arg.env),
+				...std.args.optional("subtreeEnv", arg.subtreeEnv),
+				...std.args.optional("subtreeSdk", arg.subtreeSdk),
 			},
 		);
 		const recodeBin = tg.File.expect(await output.get("bin/recode-sr-latin"));

@@ -34,7 +34,7 @@ export async function build(...args: tg.Args<Arg>) {
 	if (build !== host) {
 		envs.push({ CHOST: host });
 	}
-	const env = await std.env.arg(...envs, { utils: false });
+	const env = await std.env.compose(...envs);
 
 	return std.autotools.build({
 		...resolved,
