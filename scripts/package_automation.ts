@@ -98,14 +98,12 @@ class TangramClient {
 		options: { lazy?: boolean; commands?: boolean; remote?: string } = {},
 	): Promise<void> {
 		const args = [target];
-		if (options.lazy ?? true) {
-			args.push("--lazy");
-		}
+		args.push((options.lazy ?? true) ? "--lazy" : "--eager");
 		if (options.commands) {
 			args.push("--commands");
 		}
 		if (options.remote) {
-			args.push("--remote", options.remote);
+			args.push(`--remote=${options.remote}`);
 		}
 		await $`${this.exe} push ${args}`.quiet();
 	}
@@ -128,7 +126,7 @@ class TangramClient {
 	): Promise<void> {
 		const args = [path];
 		if (options.remote) {
-			args.push("--remote", options.remote);
+			args.push(`--remote=${options.remote}`);
 		}
 		await $`${this.exe} publish ${args}`;
 	}
