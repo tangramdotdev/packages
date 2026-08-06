@@ -108,6 +108,21 @@ class TangramClient {
 		await $`${this.exe} push ${args}`.quiet();
 	}
 
+	async pushGroup(
+		specifier: string,
+		options: { remote?: string } = {},
+	): Promise<void> {
+		const args = [specifier, "--tag-items=false"];
+		if (options.remote) {
+			args.push(`--remote=${options.remote}`);
+		}
+		await $`${this.exe} push ${args}`.quiet();
+	}
+
+	async createGroup(specifier: string): Promise<void> {
+		await $`${this.exe} group create --parents ${specifier}`.quiet();
+	}
+
 	async cancel(processId: string, token: string): Promise<void> {
 		await $`${this.exe} cancel ${processId} ${token}`.quiet();
 	}
@@ -664,6 +679,11 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		// Construct tag
 		const tag = `${ctx.packageName}/builds/${version}/${tagPath}/${ctx.platform}`;
 
+		// Tagging a build does not create the tag's parent groups, so they are created first. The
+		// call is idempotent, and it creates the whole chain.
+		const components = tag.split("/");
+		await ctx.tangram.createGroup(components.slice(0, -1).join("/"));
+
 		// Build with tag
 		const result = await executeBuild(ctx, "release", buildSource, { tag });
 		if (!result.ok) {
@@ -676,9 +696,16 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		}
 		const processId = result.value;
 
-		// Push the tag (which also pushes the underlying artifact).
+		// Push the tag (which also pushes the underlying artifact). The remote rejects a tag whose
+		// parent groups are absent, and pushing a tag does not create them, so each ancestor group is
+		// pushed first, parents before children.
 		try {
 			log(`[release] Pushing ${tag}${ctx.lazy ? " (lazy)" : ""}`);
+			for (let index = 1; index < components.length; index++) {
+				await ctx.tangram.pushGroup(components.slice(0, index).join("/"), {
+					remote: ctx.remote,
+				});
+			}
 			await ctx.tangram.push(tag, { lazy: ctx.lazy, remote: ctx.remote });
 			log(`[release] Pushed ${tag}`);
 			uploadedTags.push(tag);
