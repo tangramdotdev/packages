@@ -410,9 +410,6 @@ export namespace sdk {
 		const detectedHost = std.triple.host();
 		const host__ = host_ ?? detectedHost;
 		const standardizedHost = std.sdk.canonicalTriple(host__);
-		// Compare canonical forms on both sides. A two-part triple such as `aarch64-linux` carries no
-		// environment, so comparing it against a canonicalized host reads as a cross-compilation even
-		// when the caller passed the same string for both.
 		const isCross = isCrossCompilation(
 			standardizedHost,
 			std.sdk.canonicalTriple(target),
