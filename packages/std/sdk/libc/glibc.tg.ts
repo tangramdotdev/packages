@@ -86,25 +86,6 @@ export async function build(arg: tg.Unresolved<Arg>) {
 	}
 
 	const configure = {
-		pre: `
-			echo "=== TG-DIAG begin ==="
-			echo "--- PATH ---"
-			echo "$PATH" | tr ':' '\\n'
-			echo "--- env ---"
-			env | sort
-			echo "--- which ${host}-gcc ---"
-			command -v ${host}-gcc || echo "TG-DIAG: not found"
-			echo "--- gcc -dumpmachine ---"
-			${host}-gcc -dumpmachine || echo "TG-DIAG: dumpmachine failed"
-			echo "--- gcc -print-search-dirs ---"
-			${host}-gcc -print-search-dirs || echo "TG-DIAG: print-search-dirs failed"
-			echo "--- compile test ---"
-			echo 'int main(void) { return 0; }' > tg-conftest.c
-			status=0
-			${host}-gcc -v -c tg-conftest.c -o tg-conftest.o || status=$?
-			echo "TG-DIAG: compile exited with $status"
-			echo "=== TG-DIAG end ==="
-		`,
 		body: {
 			args: [
 				"--disable-nls",
@@ -121,15 +102,6 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		},
 	};
 
-	const install = {
-		args: [tg`DESTDIR="${tg.output}/${host}"`],
-	};
-
-	const phases = {
-		configure,
-		install,
-	};
-
 	const env: tg.Args<std.env.Arg> = [env_ ?? null];
 
 	env.push({
@@ -142,19 +114,55 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		),
 	});
 
-	let result = await std.autotools.build({
-		build,
-		host,
-		defaultCrossArgs: false,
-		defaultCrossEnv: false,
-		env: std.env.compose(...env),
-		fortifySource: false,
-		hardeningCFlags: false,
-		opt: "3",
-		phases,
-		prefixPath: "/",
-		...std.args.optional("sdk", sdk),
-		source: source_ ?? source(version),
+	const buildOnce = async (gconvDir?: tg.Directory) => {
+		const gconvArgs = gconvDir !== undefined ? [tg`gconvdir=${gconvDir}`] : [];
+		const phases = {
+			configure,
+			...(gconvDir !== undefined ? { build: { args: gconvArgs } } : {}),
+			install: {
+				args: [tg`DESTDIR="${tg.output}/${host}"`, ...gconvArgs],
+			},
+		};
+		return await std.autotools.build({
+			build,
+			host,
+			defaultCrossArgs: false,
+			defaultCrossEnv: false,
+			env: std.env.compose(...env),
+			fortifySource: false,
+			hardeningCFlags: false,
+			opt: "3",
+			phases,
+			prefixPath: "/",
+			...std.args.optional("sdk", sdk),
+			source: source_ ?? source(version),
+		});
+	};
+
+	// glibc compiles its gconv module path in from `gconvdir`, defaulting to the
+	// absolute `/lib/gconv`, which never exists in a sandbox. The path can only
+	// name the modules once they are addressable, so pass 1 produces them and pass
+	// 2 compiles in where they landed.
+	const pass1 = await buildOnce();
+	const gconvModules = await pass1
+		.get(`${host}/lib/gconv`)
+		.then(tg.Directory.expect);
+
+	let result = await buildOnce(gconvModules);
+
+	result = await tg.directory(result, {
+		[`${host}/opt`]: null,
+		[`${host}/lib/gconv`]: gconvModules,
+	});
+
+	await gconvModules.store();
+	const libcPath = `${host}/lib/libc.so.6`;
+	const libc = await result.get(libcPath).then(tg.File.expect);
+	result = await tg.directory(result, {
+		[libcPath]: tg.file(libc, {
+			executable: true,
+			dependencies: { [gconvModules.id]: gconvModules },
+		}),
 	});
 
 	// Fix libc.so.

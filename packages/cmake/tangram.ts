@@ -88,7 +88,7 @@ export async function self(...args: tg.Args<Arg>) {
 		"--system-curl",
 		"--",
 		`-DCMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ';')"`,
-		`-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
+		`-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';');$(echo | cc -E -Wp,-v - 2>&1 >/dev/null | sed -n 's|^ /|/|p' | tr '\\n' ';')"`,
 	];
 	const prepare = {
 		command: tg.Mutation.prefix("mkdir work && cd work", "\n"),
@@ -370,6 +370,8 @@ export async function build(...args: tg.Args<BuildArg>) {
 	// Include any user-defined env with higher precedence than the SDK and cmake settings.
 	const env = await std.env.arg(...envs, userEnv ?? null);
 
+	const ccName = host !== target ? `${target}-cc` : `cc`;
+
 	// Define default phases.
 	const configureArgs = [
 		`-S`,
@@ -378,6 +380,8 @@ export async function build(...args: tg.Args<BuildArg>) {
 		`"${generator}"`,
 		tg`-DCMAKE_INSTALL_PREFIX=${prefixPath}`,
 		`-DCMAKE_INSTALL_LIBDIR=lib`,
+		`-DCMAKE_LIBRARY_PATH="$(printenv LIBRARY_PATH | tr ':' ';')"`,
+		`-DCMAKE_INCLUDE_PATH="$(printenv CPATH | tr ':' ';');$(echo | ${ccName} -E -Wp,-v - 2>&1 >/dev/null | sed -n 's|^ /|/|p' | tr '\\n' ';')"`,
 		`-B`,
 		buildDir,
 	];

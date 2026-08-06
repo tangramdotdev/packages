@@ -275,6 +275,12 @@ export async function build(...args: tg.Args<BuildArg>) {
 			? await std.env.compose(...envs, userEnv ?? null)
 			: await std.env.arg(...envs, userEnv ?? null);
 
+	const ccName = host !== target ? `${target}-cc` : `cc`;
+	const searchPathArgs = [
+		`-DCMAKE_LIBRARY_PATH="$(printenv LIBRARY_PATH | tr ':' ';')"`,
+		`-DCMAKE_INCLUDE_PATH="$(printenv CPATH | tr ':' ';');$(echo | ${ccName} -E -Wp,-v - 2>&1 >/dev/null | sed -n 's|^ /|/|p' | tr '\\n' ';')"`,
+	];
+
 	// Define default phases.
 	const configureArgs = [
 		`-S`,
@@ -282,6 +288,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 		`-G`,
 		`"${generator}"`,
 		tg`-DCMAKE_INSTALL_PREFIX=${prefixPath}`,
+		...searchPathArgs,
 		`-B`,
 		buildDir,
 	];

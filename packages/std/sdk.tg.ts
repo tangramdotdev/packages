@@ -410,7 +410,13 @@ export namespace sdk {
 		const detectedHost = std.triple.host();
 		const host__ = host_ ?? detectedHost;
 		const standardizedHost = std.sdk.canonicalTriple(host__);
-		const isCross = isCrossCompilation(standardizedHost, target);
+		// Compare canonical forms on both sides. A two-part triple such as `aarch64-linux` carries no
+		// environment, so comparing it against a canonicalized host reads as a cross-compilation even
+		// when the caller passed the same string for both.
+		const isCross = isCrossCompilation(
+			standardizedHost,
+			std.sdk.canonicalTriple(target),
+		);
 
 		// Detect compilers and determine flavor and prefix
 		const compilerInfo = await detectCompilers(env, os, target, isCross);
@@ -1013,6 +1019,47 @@ export namespace sdk {
 		return true;
 	}
 
+	/** Assert that glibc's iconv can perform a real charset conversion with no `GCONV_PATH` set, proving the module path compiled into libc resolves. */
+	export async function assertIconv(sdkEnv: std.env.Arg, host: string) {
+		const testProgram = tg.file`
+			#include <stdio.h>
+			#include <string.h>
+			#include <iconv.h>
+
+			int main() {
+				iconv_t cd = iconv_open("ISO-8859-1", "UTF-8");
+				if (cd == (iconv_t)-1) {
+					printf("iconv_open failed\\n");
+					return 1;
+				}
+				char in[] = "caf\\xc3\\xa9";
+				char out[16];
+				char *ip = in, *op = out;
+				size_t il = strlen(in), ol = sizeof(out);
+				if (iconv(cd, &ip, &il, &op, &ol) == (size_t)-1) {
+					printf("iconv failed\\n");
+					return 1;
+				}
+				iconv_close(cd);
+				printf("%d %02x\\n", (int)(op - out), (unsigned char)out[3]);
+				return 0;
+			}`;
+		const output = await std
+			.build(std.shBootstrap`echo "testing iconv"
+				set -x
+				cc -xc ${testProgram} -o iconv-test
+				unset GCONV_PATH
+				./iconv-test > ${tg.output}`)
+			.env(sdkEnv)
+			.host(std.triple.archAndOs(host))
+			.then(tg.File.expect);
+		const text = (await output.text).trim();
+		tg.assert(
+			text === "4 e9",
+			`iconv produced "${text}" instead of a correct UTF-8 to ISO-8859-1 conversion, expected "4 e9"`,
+		);
+	}
+
 	/** Assert the given env provides everything it should for a particuar arg. */
 	export async function assertValid(
 		toolchainDir: tg.Directory,
@@ -1204,6 +1251,14 @@ export namespace sdk {
 				}
 			}),
 		);
+
+		// Only glibc resolves charsets through external gconv modules. musl and darwin's libiconv carry their conversions internally, so they have nothing to wire up.
+		const hostEnvironment = std.triple.environment(expected.host);
+		const isGlibc =
+			hostEnvironment === undefined || hostEnvironment.includes("gnu");
+		if (actualHostOs === "linux" && isGlibc) {
+			await assertIconv(env, expected.host);
+		}
 	}
 
 	export function canonicalTriple(triple: string): string {
