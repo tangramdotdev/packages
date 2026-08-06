@@ -410,7 +410,10 @@ export namespace sdk {
 		const detectedHost = std.triple.host();
 		const host__ = host_ ?? detectedHost;
 		const standardizedHost = std.sdk.canonicalTriple(host__);
-		const isCross = isCrossCompilation(standardizedHost, target);
+		const isCross = isCrossCompilation(
+			standardizedHost,
+			std.sdk.canonicalTriple(target),
+		);
 
 		// Detect compilers and determine flavor and prefix
 		const compilerInfo = await detectCompilers(env, os, target, isCross);
@@ -997,8 +1000,18 @@ export namespace sdk {
 			throw new Error(`Unexpected executable format ${metadata.format}.`);
 		}
 
-		// Assert the result contains a Tangram manifest, meaning it got automatically wrapped.
-		tg.assert((await std.wrap.Manifest.read(compiledProgram)) !== undefined);
+		const manifest = await std.wrap.Manifest.read(compiledProgram);
+		if (proxiedLinker) {
+			tg.assert(
+				manifest !== undefined,
+				`Expected the linker proxy to wrap the output of ${title}, but it contains no manifest.`,
+			);
+		} else {
+			tg.assert(
+				manifest === undefined,
+				`Expected a bypassed linker proxy to leave the output of ${title} unwrapped, but it contains a manifest.`,
+			);
+		}
 
 		// If we are not cross-compiling, assert we can execute the program and recieve the expected result, without providing the SDK env at runtime.
 		if (!isCross && proxiedLinker) {
@@ -1011,6 +1024,47 @@ export namespace sdk {
 			tg.assert(outputText === expectedOutput);
 		}
 		return true;
+	}
+
+	/** Assert that glibc's iconv can perform a real charset conversion with no `GCONV_PATH` set, proving the module path compiled into libc resolves. */
+	export async function assertIconv(sdkEnv: std.env.Arg, host: string) {
+		const testProgram = tg.file`
+			#include <stdio.h>
+			#include <string.h>
+			#include <iconv.h>
+
+			int main() {
+				iconv_t cd = iconv_open("ISO-8859-1", "UTF-8");
+				if (cd == (iconv_t)-1) {
+					printf("iconv_open failed\\n");
+					return 1;
+				}
+				char in[] = "caf\\xc3\\xa9";
+				char out[16];
+				char *ip = in, *op = out;
+				size_t il = strlen(in), ol = sizeof(out);
+				if (iconv(cd, &ip, &il, &op, &ol) == (size_t)-1) {
+					printf("iconv failed\\n");
+					return 1;
+				}
+				iconv_close(cd);
+				printf("%d %02x\\n", (int)(op - out), (unsigned char)out[3]);
+				return 0;
+			}`;
+		const output = await std
+			.build(std.shBootstrap`echo "testing iconv"
+				set -x
+				cc -xc ${testProgram} -o iconv-test
+				unset GCONV_PATH
+				./iconv-test > ${tg.output}`)
+			.env(sdkEnv)
+			.host(std.triple.archAndOs(host))
+			.then(tg.File.expect);
+		const text = (await output.text).trim();
+		tg.assert(
+			text === "4 e9",
+			`iconv produced "${text}" instead of a correct UTF-8 to ISO-8859-1 conversion, expected "4 e9"`,
+		);
 	}
 
 	/** Assert the given env provides everything it should for a particuar arg. */
@@ -1051,7 +1105,9 @@ export namespace sdk {
 		// Assert it can compile and wrap for all requested targets.
 		const allTargets = await sdk.supportedTargets(env);
 		// If there is an un-prefixed CC, add the host to the list.
-		if (await std.env.tryWhich({ env, name: "cc" })) {
+		const hasNativeCc =
+			(await std.env.tryWhich({ env, name: "cc" })) !== undefined;
+		if (hasNativeCc) {
 			allTargets.push(actualHost);
 		}
 		await Promise.all(
@@ -1204,6 +1260,18 @@ export namespace sdk {
 				}
 			}),
 		);
+
+		const hostEnvironment = std.triple.environment(expected.host);
+		const isGlibc =
+			hostEnvironment === undefined || hostEnvironment.includes("gnu");
+		if (
+			actualHostOs === "linux" &&
+			isGlibc &&
+			hasNativeCc &&
+			(arg?.proxyLinker ?? true)
+		) {
+			await assertIconv(env, expected.host);
+		}
 	}
 
 	export function canonicalTriple(triple: string): string {
