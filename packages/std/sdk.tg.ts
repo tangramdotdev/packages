@@ -1000,8 +1000,18 @@ export namespace sdk {
 			throw new Error(`Unexpected executable format ${metadata.format}.`);
 		}
 
-		// Assert the result contains a Tangram manifest, meaning it got automatically wrapped.
-		tg.assert((await std.wrap.Manifest.read(compiledProgram)) !== undefined);
+		const manifest = await std.wrap.Manifest.read(compiledProgram);
+		if (proxiedLinker) {
+			tg.assert(
+				manifest !== undefined,
+				`Expected the linker proxy to wrap the output of ${title}, but it contains no manifest.`,
+			);
+		} else {
+			tg.assert(
+				manifest === undefined,
+				`Expected a bypassed linker proxy to leave the output of ${title} unwrapped, but it contains a manifest.`,
+			);
+		}
 
 		// If we are not cross-compiling, assert we can execute the program and recieve the expected result, without providing the SDK env at runtime.
 		if (!isCross && proxiedLinker) {
@@ -1095,7 +1105,9 @@ export namespace sdk {
 		// Assert it can compile and wrap for all requested targets.
 		const allTargets = await sdk.supportedTargets(env);
 		// If there is an un-prefixed CC, add the host to the list.
-		if (await std.env.tryWhich({ env, name: "cc" })) {
+		const hasNativeCc =
+			(await std.env.tryWhich({ env, name: "cc" })) !== undefined;
+		if (hasNativeCc) {
 			allTargets.push(actualHost);
 		}
 		await Promise.all(
@@ -1249,11 +1261,15 @@ export namespace sdk {
 			}),
 		);
 
-		// Only glibc resolves charsets through external gconv modules. musl and darwin's libiconv carry their conversions internally, so they have nothing to wire up.
 		const hostEnvironment = std.triple.environment(expected.host);
 		const isGlibc =
 			hostEnvironment === undefined || hostEnvironment.includes("gnu");
-		if (actualHostOs === "linux" && isGlibc) {
+		if (
+			actualHostOs === "linux" &&
+			isGlibc &&
+			hasNativeCc &&
+			(arg?.proxyLinker ?? true)
+		) {
 			await assertIconv(env, expected.host);
 		}
 	}
