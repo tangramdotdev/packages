@@ -51,12 +51,18 @@ export async function build(...args: tg.Args<Arg>) {
 	});
 	const build_ = options.build ?? options.host ?? std.triple.host();
 
+	// The texinfo source archive cannot be extracted on a case-insensitive file system.
+	const texinfoEnv =
+		std.triple.os(build_) === "darwin"
+			? undefined
+			: texinfo.build({ build: build_, host: build_ });
+
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
 			deps,
 			// texinfo returns an env file, not a directory, so add it manually.
-			env: texinfo.build({ build: build_, host: build_ }),
+			...std.args.optional("env", texinfoEnv),
 		},
 		...args,
 	);

@@ -3,6 +3,7 @@ import * as texinfo from "texinfo" with { source: "./texinfo.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/binutils/",
+	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "GPL-3.0-or-later",
 	name: "binutils",
 	repository: "https://sourceware.org/git/gitweb.cgi?p=binutils-gdb.git",
@@ -65,6 +66,7 @@ export async function build(...args: tg.Args<Arg>) {
 	});
 
 	const host = customOptions.host ?? std.triple.host();
+	std.assert.supportedHost(host, metadata);
 	const build_ = customOptions.build ?? host;
 	const target = customOptions.target ?? host;
 	const staticBuild = customOptions.staticBuild ?? false;

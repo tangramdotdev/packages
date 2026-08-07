@@ -375,7 +375,8 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 			buildEnv = await std.env.compose(buildEnv, artifact);
 		}
 
-		if (config.texinfo) {
+		// The texinfo source archive cannot be extracted on a case-insensitive file system.
+		if (config.texinfo && std.triple.os(host) !== "darwin") {
 			tg.assert(perlArtifact, "texinfo requires perl");
 			const artifact = await texinfo({
 				host,

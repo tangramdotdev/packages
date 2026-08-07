@@ -69,12 +69,16 @@ export async function env(arg: tg.Unresolved<EnvArg>) {
 	const { build: build_, host: host_ } = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
+	// The texinfo source archive cannot be extracted on a case-insensitive file system.
+	const texinfoEnv =
+		std.triple.os(build) === "darwin" ? null : texinfo({ build, host: build });
+
 	return std.env(
 		autoconf({ build, host: build }),
 		automake({ build, host: build }),
 		gettext({ build, host: build }),
 		help2man({ build, host: build }),
 		perl({ build, host: build }),
-		texinfo({ build, host: build }),
+		texinfoEnv,
 	);
 }
