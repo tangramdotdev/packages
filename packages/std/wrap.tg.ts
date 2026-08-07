@@ -63,9 +63,11 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	// Construct the interpreter.
 	// Cases:
 	// - the user provided an interpreter argument.
+	// - the user passed `null`, suppressing detection.
 	// - the interpreter argument is incomplete, and we need to infer the interpreter.
 	// - there was an interpreter in the original manifest.
 	// - there is no interpreter arg and no original manifest.
+	const interpreterSuppressed = arg.interpreter === null;
 	let manifestInterpreter = undefined;
 	if (arg.interpreter) {
 		manifestInterpreter = await manifestInterpreterFromWrapArgObject(
@@ -85,9 +87,14 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			},
 			references,
 		);
-	} else if (existingManifest?.interpreter) {
+	} else if (!interpreterSuppressed && existingManifest?.interpreter) {
 		manifestInterpreter = existingManifest?.interpreter;
-	} else if (arg.executable && typeof arg.executable !== "number") {
+	} else if (
+		!interpreterSuppressed &&
+		arg.executable &&
+		typeof arg.executable !== "number" &&
+		!isExecutablePath(arg.executable)
+	) {
 		manifestInterpreter = await manifestInterpreterFromWrapArgObject(
 			{
 				...(arg.buildToolchain !== undefined
@@ -177,12 +184,19 @@ export namespace wrap {
 		env?: std.env.Arg | null;
 
 		/** The executable to wrap. */
-		executable?: string | tg.Template | tg.File | tg.Symlink | number | null;
+		executable?:
+			| string
+			| tg.Template
+			| tg.File
+			| tg.Symlink
+			| ExecutablePath
+			| number
+			| null;
 
 		/** The host system to produce a wrapper for. */
 		host?: string | null;
 
-		/** The interpreter to run the executable with. If not provided, a default is detected. */
+		/** The interpreter to run the executable with. If not provided, a default is detected. Pass `null` to suppress detection and invoke the executable directly. */
 		interpreter?: tg.File | tg.Symlink | tg.Template | Interpreter | null;
 
 		/** Library paths to include. If the executable is wrapped, they will be merged. */
@@ -256,6 +270,14 @@ export namespace wrap {
 		/** Additional preloads to load. */
 		preloads?: Array<tg.Template.Arg>;
 	};
+
+	/** A path to an executable within an artifact.
+	 *
+	 * Unlike a `tg.File`, which resolves to a loose blob in the artifacts directory, this retains the surrounding directory structure, so the wrapped program observes itself at this location. The template is stored unrendered in the manifest and resolved by the wrapper at exec time, so the result remains relocatable.
+	 *
+	 * Use this for programs that derive resources from their own location, such as `clang` locating its resource directory relative to `/proc/self/exe`.
+	 */
+	export type ExecutablePath = { path: tg.Template.Arg };
 
 	/** Wrappers for dynamically linked executables can employ one of these strategies to optimize the set of library paths.
 	 * This strategy is only used to produce the manifest, and is not retained as a property once complete.
@@ -426,7 +448,7 @@ export namespace wrap {
 					existingInterpreter,
 					newInterpreter,
 				);
-			} else {
+			} else if (interpreter === undefined) {
 				interpreter = existingInterpreter;
 			}
 
@@ -683,7 +705,8 @@ export namespace wrap {
 			| string
 			| tg.Template
 			| tg.File
-			| tg.Symlink,
+			| tg.Symlink
+			| wrap.ExecutablePath,
 	): Promise<wrap.Manifest | undefined> {
 		let ret = undefined;
 		if (executable instanceof tg.File || executable instanceof tg.Symlink) {
@@ -794,7 +817,9 @@ export namespace wrap {
 		manifestExecutable: wrap.Manifest.Executable,
 		references?: ManifestReferences,
 		token?: tg.Grant.Token | null,
-	): Promise<number | tg.Template | tg.File | tg.Symlink> {
+	): Promise<
+		number | tg.Template | tg.File | tg.Symlink | wrap.ExecutablePath
+	> {
 		if (manifestExecutable.kind === "content") {
 			return templateFromManifestTemplate(
 				manifestExecutable.value,
@@ -802,11 +827,19 @@ export namespace wrap {
 				token,
 			);
 		} else if (manifestExecutable.kind === "path") {
-			return fileOrSymlinkFromManifestTemplate(
+			const template = await templateFromManifestTemplate(
 				manifestExecutable.value,
 				references,
 				token,
 			);
+			const component = template.components[0];
+			if (
+				template.components.length === 1 &&
+				(component instanceof tg.File || component instanceof tg.Symlink)
+			) {
+				return component;
+			}
+			return { path: template };
 		} else {
 			return manifestExecutable.value;
 		}
@@ -1154,6 +1187,17 @@ function isArgObject(arg: unknown): arg is wrap.ArgObject {
 	);
 }
 
+function isExecutablePath(arg: unknown): arg is wrap.ExecutablePath {
+	return (
+		typeof arg === "object" &&
+		arg !== null &&
+		!Array.isArray(arg) &&
+		!tg.Object.is(arg) &&
+		!(arg instanceof tg.Template) &&
+		"path" in arg
+	);
+}
+
 async function manifestExecutableFromArg(
 	arg:
 		| number
@@ -1161,6 +1205,7 @@ async function manifestExecutableFromArg(
 		| tg.Template
 		| tg.File
 		| tg.Symlink
+		| wrap.ExecutablePath
 		| wrap.Manifest.Executable,
 	references?: ManifestReferences,
 ): Promise<wrap.Manifest.Executable> {
@@ -1171,6 +1216,13 @@ async function manifestExecutableFromArg(
 		};
 	} else if (isManifestExecutable(arg)) {
 		return arg;
+	} else if (isExecutablePath(arg)) {
+		const value = await manifestTemplateFromArg(arg.path, references);
+		tg.assert(value);
+		return {
+			kind: "path",
+			value,
+		};
 	} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
 		const value = await manifestTemplateFromArg(arg, references);
 		tg.assert(value);
@@ -2662,6 +2714,7 @@ export async function test() {
 		tg.build(testContentExecutableVariadic, {
 			name: "content executable variadic",
 		}),
+		tg.build(testPathExecutable, { name: "path executable" }),
 		tg.build(testManifestDependenciesDynamicInterpreterArgs, {
 			name: "manifest dependencies dynamic interpreter args",
 		}),
@@ -2888,6 +2941,67 @@ export async function testContentExecutableVariadic() {
 	const text = await output.text.then((t) => t.trim());
 	console.log("text", text);
 	tg.assert(text.includes("Tangram"));
+
+	return true;
+}
+
+export async function testPathExecutable() {
+	const host = std.triple.host();
+	if (std.triple.os(host) !== "linux") {
+		return true;
+	}
+	const buildToolchain = await bootstrap.sdk.env(host);
+
+	// Busybox is static, so it needs no interpreter, and it reports the path it was
+	// actually exec'd from rather than its argv[0].
+	const busybox = await bootstrap
+		.utils(host)
+		.then(tg.Directory.expect)
+		.then((dir) => dir.get("bin/busybox"))
+		.then(tg.File.expect);
+	const dir = await tg.directory({ "bin/busybox": busybox });
+
+	const wrapper = await std.wrap({
+		buildToolchain,
+		executable: { path: tg`${dir}/bin/busybox` },
+		interpreter: null,
+	});
+	await wrapper.store();
+	console.log("wrapper", wrapper.id);
+
+	// The manifest must retain the artifact and the subpath separately, so the wrapper
+	// resolves the path against the artifacts directory it finds at runtime.
+	const manifest = await wrap.Manifest.read(wrapper);
+	tg.assert(manifest !== undefined);
+	tg.assert(
+		manifest.interpreter === undefined,
+		"expected `interpreter: null` to suppress interpreter detection",
+	);
+	tg.assert(manifest.executable.kind === "path");
+	const components = manifest.executable.value.components;
+	tg.assert(
+		components.length === 2,
+		`expected an artifact and a subpath, got ${JSON.stringify(components)}`,
+	);
+	tg.assert(components[0]?.kind === "artifact");
+	tg.assert(
+		components[1]?.kind === "string" && components[1].value === "/bin/busybox",
+		`expected the subpath component, got ${JSON.stringify(components[1])}`,
+	);
+
+	// Invoke it under a name busybox recognizes as an applet.
+	const binDir = await tg.directory({ "bin/readlink": wrapper });
+	const output = await std
+		.build(
+			std.shBootstrap`${binDir}/bin/readlink /proc/self/exe > ${tg.output}`,
+		)
+		.then(tg.File.expect);
+	const text = await output.text.then((t) => t.trim());
+	console.log("/proc/self/exe", text);
+	tg.assert(
+		text.endsWith("/bin/busybox"),
+		`expected the executable path to end with /bin/busybox, got ${text}`,
+	);
 
 	return true;
 }

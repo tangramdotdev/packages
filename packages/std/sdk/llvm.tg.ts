@@ -249,17 +249,16 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 		}
 	}
 
-	// Replace clang and clang++ with shell scripts that exec the unwrapped clang binary.
-	// This allows the proxy to wrap shell scripts (which have no ELF dependencies) instead
-	// of wrapped binaries, enabling the toolchain to work in bootstrap mode.
-	// Use /bin/sh directly since PATH may not include /bin in bootstrap mode.
+	// Point clang and clang++ at the unwrapped clang binary by path, so `/proc/self/exe`
+	// resolves to it and it can find its resource directory. Suppress interpreter
+	// detection to leave the binary's own $ORIGIN RPATH intact.
+	const clangExecutable = await std.wrap({
+		executable: { path: tg`${llvmArtifact}/bin/${clangBinaryName}` },
+		interpreter: null,
+	});
 	llvmArtifact = await tg.directory(llvmArtifact, {
-		"bin/clang": tg.file(`#!/bin/sh\nexec ${clangBinaryName} "$@"\n`, {
-			executable: true,
-		}),
-		"bin/clang++": tg.file(`#!/bin/sh\nexec ${clangBinaryName} "$@"\n`, {
-			executable: true,
-		}),
+		"bin/clang": clangExecutable,
+		"bin/clang++": clangExecutable,
 	});
 
 	return llvmArtifact;

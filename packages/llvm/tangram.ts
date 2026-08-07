@@ -170,16 +170,16 @@ export async function toolchain(arg?: LLVMArg) {
 		}
 	}
 
-	// Replace clang and clang++ with shell scripts that exec the unwrapped clang binary.
-	// This allows the toolchain to work correctly since /proc/self/exe will point to the
-	// real clang binary, enabling it to find its resource directory.
+	// Point clang and clang++ at the unwrapped clang binary by path, so `/proc/self/exe`
+	// resolves to it and it can find its resource directory. Suppress interpreter
+	// detection to leave the binary's own $ORIGIN RPATH intact.
+	const clangExecutable = await std.wrap({
+		executable: { path: tg`${llvmArtifact}/bin/${clangBinaryName}` },
+		interpreter: null,
+	});
 	llvmArtifact = await tg.directory(llvmArtifact, {
-		"bin/clang": tg.file(`#!/bin/sh\nexec ${clangBinaryName} "$@"\n`, {
-			executable: true,
-		}),
-		"bin/clang++": tg.file(`#!/bin/sh\nexec ${clangBinaryName} "$@"\n`, {
-			executable: true,
-		}),
+		"bin/clang": clangExecutable,
+		"bin/clang++": clangExecutable,
 	});
 
 	return llvmArtifact;
