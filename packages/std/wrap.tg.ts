@@ -43,7 +43,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						inheritManifestReference(dependency, references, f.state.token);
 					}
 				}
-				if (detectedManifest && kind === "elf") {
+				if (arg.merge && detectedManifest && kind === "elf") {
 					binary = f;
 				}
 			}
