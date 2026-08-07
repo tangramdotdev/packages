@@ -2808,7 +2808,7 @@ export async function testSingleArgObjectNoMutations() {
 			"Expected /proc/self/exe to be set to the artifact ID of the wrapper",
 		);
 		tg.assert(
-			text.includes(`argv[0]: /.tangram/artifacts/${wrapperID}`),
+			text.includes(`argv[0]: /opt/tangram/artifacts/${wrapperID}`),
 			"Expected argv[0] to be set to the wrapper that was invoked",
 		);
 	} else if (os === "darwin") {
@@ -3007,7 +3007,9 @@ export async function testPathExecutable() {
 }
 
 export async function testDependencies() {
-	const buildToolchain = await bootstrap.sdk.env(std.triple.host());
+	// A content executable needs a shell built, which requires the proxied SDK rather
+	// than the raw bootstrap env.
+	const buildToolchain = bootstrap.sdk();
 	const transitiveDependency = await tg.file("I'm a transitive reference");
 	await transitiveDependency.store();
 	const transitiveDependencyId = transitiveDependency.id;
@@ -3320,11 +3322,16 @@ export async function testEnvObjectFromArtifactAuthorization() {
 	const mutation = env.DEPENDENCY;
 	tg.assert(mutation instanceof tg.Mutation);
 	tg.assert(mutation.inner.kind === "set");
+
+	// `env.compose` normalizes every value to a template.
 	const value = mutation.inner.value;
-	tg.assert(value instanceof tg.Directory);
+	tg.assert(value instanceof tg.Template);
+	tg.assert(value.components.length === 1);
+	const component = value.components[0];
+	tg.assert(component instanceof tg.Directory);
 
 	tg.assert(
-		value.state.token !== null,
+		component.state.token !== null,
 		"expected envObjectFromArtifact to retain the wrapper authorization token",
 	);
 
