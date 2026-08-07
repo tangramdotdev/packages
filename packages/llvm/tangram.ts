@@ -352,18 +352,15 @@ type WrapArgsArg = {
 export async function wrapArgs(arg: WrapArgsArg) {
 	const { host, target: target_, toolchainDir } = arg;
 	const target = target_ ?? host;
-	const version = llvmMajorVersion();
 
 	let clangArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
 	let clangxxArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
 	let env = {};
 	// If the target is darwin, set sysroot and target flags.
 
-	// Define common flags.
-	const commonFlags = [
-		tg`-resource-dir=${toolchainDir}/lib/clang/${version ?? null}`,
-		tg`-L${toolchainDir}/lib/${target}`,
-	];
+	// Define common flags. The resource directory resolves from `/proc/self/exe`, which
+	// points at the real clang binary alongside `lib/clang`.
+	const commonFlags = [tg`-L${toolchainDir}/lib/${target}`];
 
 	// Set C flags.
 	clangArgs = clangArgs.concat(commonFlags);
