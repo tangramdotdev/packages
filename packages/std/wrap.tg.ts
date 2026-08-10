@@ -43,7 +43,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						inheritManifestReference(dependency, references, f.state.token);
 					}
 				}
-				if (detectedManifest && kind === "elf") {
+				if (arg.merge && detectedManifest && kind === "elf") {
 					binary = f;
 				}
 			}
@@ -63,9 +63,11 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	// Construct the interpreter.
 	// Cases:
 	// - the user provided an interpreter argument.
+	// - the user passed `null`, suppressing detection.
 	// - the interpreter argument is incomplete, and we need to infer the interpreter.
 	// - there was an interpreter in the original manifest.
 	// - there is no interpreter arg and no original manifest.
+	const interpreterSuppressed = arg.interpreter === null;
 	let manifestInterpreter = undefined;
 	if (arg.interpreter) {
 		manifestInterpreter = await manifestInterpreterFromWrapArgObject(
@@ -85,9 +87,13 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			},
 			references,
 		);
-	} else if (existingManifest?.interpreter) {
+	} else if (!interpreterSuppressed && existingManifest?.interpreter) {
 		manifestInterpreter = existingManifest?.interpreter;
-	} else if (arg.executable && typeof arg.executable !== "number") {
+	} else if (
+		!interpreterSuppressed &&
+		arg.executable &&
+		typeof arg.executable !== "number"
+	) {
 		manifestInterpreter = await manifestInterpreterFromWrapArgObject(
 			{
 				...(arg.buildToolchain !== undefined
@@ -182,7 +188,7 @@ export namespace wrap {
 		/** The host system to produce a wrapper for. */
 		host?: string | null;
 
-		/** The interpreter to run the executable with. If not provided, a default is detected. */
+		/** The interpreter to run the executable with. If not provided, a default is detected. Pass `null` to suppress detection and invoke the executable directly. */
 		interpreter?: tg.File | tg.Symlink | tg.Template | Interpreter | null;
 
 		/** Library paths to include. If the executable is wrapped, they will be merged. */
@@ -426,7 +432,7 @@ export namespace wrap {
 					existingInterpreter,
 					newInterpreter,
 				);
-			} else {
+			} else if (interpreter === undefined) {
 				interpreter = existingInterpreter;
 			}
 
@@ -2701,6 +2707,9 @@ export async function test() {
 		tg.build(testInterpreterSwappingNormal, {
 			name: "interpreter swapping normal",
 		}),
+		tg.build(testInterpreterNull, {
+			name: "interpreter null",
+		}),
 		tg.build(testInterpreterWrappingPreloads, {
 			name: "interpreter wrapping preloads",
 		}),
@@ -2755,7 +2764,7 @@ export async function testSingleArgObjectNoMutations() {
 			"Expected /proc/self/exe to be set to the artifact ID of the wrapper",
 		);
 		tg.assert(
-			text.includes(`argv[0]: /.tangram/artifacts/${wrapperID}`),
+			text.includes(`argv[0]: /opt/tangram/artifacts/${wrapperID}`),
 			"Expected argv[0] to be set to the wrapper that was invoked",
 		);
 	} else if (os === "darwin") {
@@ -2893,7 +2902,7 @@ export async function testContentExecutableVariadic() {
 }
 
 export async function testDependencies() {
-	const buildToolchain = await bootstrap.sdk.env(std.triple.host());
+	const buildToolchain = bootstrap.sdk();
 	const transitiveDependency = await tg.file("I'm a transitive reference");
 	await transitiveDependency.store();
 	const transitiveDependencyId = transitiveDependency.id;
@@ -3207,10 +3216,13 @@ export async function testEnvObjectFromArtifactAuthorization() {
 	tg.assert(mutation instanceof tg.Mutation);
 	tg.assert(mutation.inner.kind === "set");
 	const value = mutation.inner.value;
-	tg.assert(value instanceof tg.Directory);
+	tg.assert(value instanceof tg.Template);
+	tg.assert(value.components.length === 1);
+	const component = value.components[0];
+	tg.assert(component instanceof tg.Directory);
 
 	tg.assert(
-		value.state.token !== null,
+		component.state.token !== null,
 		"expected envObjectFromArtifact to retain the wrapper authorization token",
 	);
 
@@ -3390,6 +3402,45 @@ export async function testInterpreterSwappingNormal() {
 	);
 
 	return secondWrapper;
+}
+
+export async function testInterpreterNull() {
+	const host = std.triple.host();
+	const buildToolchain = await bootstrap.sdk.env(host);
+	const executable = await argAndEnvDump();
+
+	const detected = await wrap(executable, { buildToolchain });
+	const detectedManifest = await wrap.Manifest.read(detected);
+	tg.assert(detectedManifest !== undefined);
+	tg.assert(
+		detectedManifest.interpreter !== undefined,
+		"expected an interpreter to be detected from the executable",
+	);
+
+	const suppressed = await wrap(executable, {
+		buildToolchain,
+		interpreter: null,
+	});
+	const suppressedManifest = await wrap.Manifest.read(suppressed);
+	tg.assert(suppressedManifest !== undefined);
+	tg.assert(
+		suppressedManifest.interpreter === undefined,
+		"expected `interpreter: null` to suppress detection",
+	);
+
+	const merged = await wrap(detected, {
+		buildToolchain,
+		interpreter: null,
+		merge: true,
+	});
+	const mergedManifest = await wrap.Manifest.read(merged);
+	tg.assert(mergedManifest !== undefined);
+	tg.assert(
+		mergedManifest.interpreter === undefined,
+		"expected `interpreter: null` to drop the interpreter from the existing manifest",
+	);
+
+	return true;
 }
 
 export async function testInterpreterWrappingPreloads() {
