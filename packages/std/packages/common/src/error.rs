@@ -6,7 +6,7 @@ use tangram_either::Either;
 
 /// Print an error with all its rich information including source chain, locations, diagnostics, etc.
 pub fn print_error(error: tg::Error) {
-	let error = tg::Referent::with_item(error);
+	let error = tg::Referent::with_node(error);
 	print_error_referent(error);
 }
 
@@ -15,7 +15,7 @@ pub fn print_error_referent(error: tg::Referent<tg::Error>) {
 	let mut stack = vec![error];
 
 	while let Some(error_referent) = stack.pop() {
-		let error_handle = &error_referent.item;
+		let error_handle = &error_referent.node;
 
 		// Get the object from the handle.
 		let Some(error) = error_handle.state().object().map(|o| o.unwrap_error()) else {
@@ -74,12 +74,12 @@ pub fn print_error_referent(error: tg::Referent<tg::Error>) {
 
 		// Add the source to the stack.
 		if let Some(source) = &error.source {
-			let source_handle = match &source.item {
+			let source_handle = match &source.node {
 				Either::Left(object) => tg::Error::with_object(object.as_ref().clone()),
 				Either::Right(handle) => (**handle).clone(),
 			};
 			let mut source_referent = tg::Referent {
-				item: source_handle,
+				node: source_handle,
 				options: source.options.clone(),
 			};
 			source_referent.inherit(&error_referent);
@@ -105,8 +105,8 @@ fn print_error_location(location: &tg::error::Location) {
 }
 
 fn print_location(module: &tg::Module, range: &tg::Range) {
-	match &module.referent.item {
-		tg::module::Item::Path(path) => {
+	match &module.referent.node {
+		tg::module::Source::Path(path) => {
 			eprint!(
 				"   {}:{}:{}",
 				path.display(),
@@ -115,7 +115,7 @@ fn print_location(module: &tg::Module, range: &tg::Range) {
 			);
 			eprintln!();
 		},
-		tg::module::Item::Edge(_edge) => {
+		tg::module::Source::Edge(_edge) => {
 			let mut title = String::new();
 			if let Some(tag) = module.referent.tag() {
 				write!(title, "{tag}").unwrap();

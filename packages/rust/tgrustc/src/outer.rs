@@ -243,7 +243,7 @@ pub(crate) async fn checkout_artifact_entries(
 		let dest = target.join(&name);
 		set.spawn(async move {
 			tg::checkout(tg::checkout::Arg {
-				artifact: tg::Referent::with_item(artifact.id()),
+				artifact: tg::Referent::with_node(artifact.id()),
 				dependencies: false,
 				extension: None,
 				force: true,

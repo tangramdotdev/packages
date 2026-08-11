@@ -225,7 +225,7 @@ async fn run_proxy(
 				.await
 				.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
 
-			let artifact = tg::Referent::with_item(tg::Artifact::from(new_wrapper).id());
+			let artifact = tg::Referent::with_node(tg::Artifact::from(new_wrapper).id());
 			tg::checkout(tg::checkout::Arg {
 				artifact,
 				dependencies: false,

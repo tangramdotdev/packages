@@ -19,7 +19,7 @@ result_large_err = "allow"
 
 [dependencies]
 rustix = { version = "1", features = ["stdio"] }
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "241bb5787aba84a7c79e7b7613d64e03437426eb" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "28a36e8e4080f376feb88a67180a7633272d7f31" }
 tokio = { version = "1", default-features = false, features = ["rt", "fs"] }
 
 [profile.release]

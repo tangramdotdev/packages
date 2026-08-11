@@ -209,7 +209,7 @@ impl Manifest {
 	pub async fn read_from_file(file: tg::File) -> tg::Result<Option<Self>> {
 		tracing::debug!(?file, "Reading manifest from file");
 		let path = tg::checkout(tg::checkout::Arg {
-			artifact: tg::Referent::with_item(file.id().into()),
+			artifact: tg::Referent::with_node(file.id().into()),
 			dependencies: false,
 			extension: None,
 			force: false,
@@ -247,7 +247,7 @@ impl Manifest {
 
 		// Cache the input file, which is not a dependency of this executable.
 		tg::cache::cache(tg::cache::Arg {
-			artifacts: vec![tg::Referent::with_item(file.id().into())],
+			artifacts: vec![tg::Referent::with_node(file.id().into())],
 		})
 		.await
 		.map_err(|error| tg::error!(!error, "failed to cache artifacts"))?;
@@ -525,7 +525,7 @@ pub fn collect_dependencies_from_value_data(
 	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
 	match value {
-		tg::value::Data::Object(id) => match &id.item {
+		tg::value::Data::Object(id) => match &id.node {
 			tg::object::Id::File(id) => {
 				let id = tg::object::Id::from(id.clone());
 				dependencies.insert(
@@ -575,7 +575,7 @@ pub fn collect_dependencies_from_template_data(
 ) {
 	for component in &value.components {
 		if let tg::template::data::Component::Artifact(id) = component {
-			let id = &id.item;
+			let id = &id.node;
 			let id = tg::object::Id::from(id.clone());
 			dependencies.insert(
 				tg::Reference::with_object(id.clone()),
@@ -613,7 +613,7 @@ pub fn collect_dependencies_from_mutation_data(
 
 #[allow(clippy::unnecessary_wraps)]
 fn dependency_from_object_id(id: &tg::object::Id) -> Option<tg::file::Dependency> {
-	Some(tg::file::Dependency(tg::Referent::with_item(Some(
+	Some(tg::file::Dependency(tg::Referent::with_node(Some(
 		tg::Object::with_id(id.clone()),
 	))))
 }

@@ -631,7 +631,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				|dir_with_subpath| async {
 					let key = tg::Reference::with_object(dir_with_subpath.id.clone().into());
 					let item = tg::Directory::with_id(dir_with_subpath.id).into();
-					let value = tg::file::Dependency(tg::Referent::with_item(Some(item)));
+					let value = tg::file::Dependency(tg::Referent::with_node(Some(item)));
 					Ok::<_, tg::Error>((key, Some(value)))
 				},
 			))
@@ -664,7 +664,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_path = cwd.join(&options.output_path);
 		let output_file_id = output_file.id();
 		tracing::debug!(?output_file_id, ?output_path, "checking out output file");
-		let artifact = tg::Referent::with_item(tg::Artifact::from(output_file).id());
+		let artifact = tg::Referent::with_node(tg::Artifact::from(output_file).id());
 		tg::checkout(tg::checkout::Arg {
 			artifact,
 			dependencies: false,
@@ -1171,7 +1171,7 @@ async fn cache_library_paths<H: BuildHasher + Default>(
 	let artifacts = library_paths
 		.iter()
 		.map(|dir_with_subpath| {
-			tg::Referent::with_item_and_token(
+			tg::Referent::with_node_and_token(
 				dir_with_subpath.id.clone().into(),
 				dir_with_subpath.token.clone(),
 			)
