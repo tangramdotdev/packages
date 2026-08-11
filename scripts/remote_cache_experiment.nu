@@ -88,6 +88,9 @@ def cleanup [] {
     # too. The pattern is scoped to this script's temp directory.
     ^bash -c $"pkill -f '($ROOT)' 2>/dev/null || true" | ignore
     sleep 500ms
+    # A server checks its artifacts out read only, so the tree has to be made writable before it can
+    # be removed.
+    ^bash -c $"chmod -R u+w ($ROOT) 2>/dev/null || true" | ignore
     rm -rf $ROOT
     # Remove only the remote this script added, so an unrelated `default` survives untouched.
     # `complete` captures stderr as well, since this is expected to fail on the first run.
