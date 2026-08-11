@@ -30,10 +30,12 @@ export function source() {
 
 export type Arg = std.autotools.Arg;
 
-export function build(...args: tg.Args<Arg>) {
-	return std.autotools.build(
+export async function build(...args: tg.Args<Arg>) {
+	const arg = await std.autotools.arg(
 		{
 			source: source(),
+			defaultCrossArgs: false,
+			defaultCrossEnv: false,
 			phases: {
 				configure: {
 					args: ["--zlib-compat"],
@@ -42,6 +44,21 @@ export function build(...args: tg.Args<Arg>) {
 		},
 		...args,
 	);
+
+	const os = std.triple.os(arg.host);
+
+	// Build package-specific env defaults (lower precedence than user env).
+	const packageEnv: std.env.Arg = {};
+
+	// Zlib-ng does not pick up the cross toolchain automatically, set CC.
+	if (os === "linux" && arg.build !== arg.host) {
+		packageEnv.CC = `${arg.host}-cc`;
+	}
+
+	return std.autotools.build({
+		...arg,
+		env: std.env.arg(packageEnv, arg.env ?? null),
+	});
 }
 
 export default build;
