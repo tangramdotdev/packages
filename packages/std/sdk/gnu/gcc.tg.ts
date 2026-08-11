@@ -199,10 +199,16 @@ export async function build(...args: tg.Args<Arg>) {
 	}
 
 	if (variant === "stage2_full") {
-		const sysrootLibDir = `${prefixSysrootPath}/lib`;
 		preConfigureHook = tg`
 			${preConfigureHook}
 			unset LD_PRELOAD
+		`;
+	}
+
+	if (variant === "stage2_full" && !isCross) {
+		const sysrootLibDir = `${prefixSysrootPath}/lib`;
+		preConfigureHook = tg`
+			${preConfigureHook}
 			export LD_LIBRARY_PATH=${sysrootLibDir}
 			export CFLAGS="$CFLAGS --sysroot=${prefixSysrootPath}"
 			export CXXFLAGS="$CXXFLAGS --sysroot=${prefixSysrootPath}"
