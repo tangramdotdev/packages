@@ -1,4 +1,5 @@
 import * as bootstrap from "../bootstrap.tg.ts";
+import * as gnu from "../sdk/gnu.tg.ts";
 import * as llvm from "../sdk/llvm.tg.ts";
 import * as std from "../tangram.ts";
 import source from "../packages/wrapper";
@@ -55,8 +56,8 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host_);
 			hostToolchain = await tg
-				.build(llvm.toolchain, { host: host_, target })
-				.named("llvm toolchain");
+				.build(gnu.toolchain, { host: system, target })
+				.named("gnu toolchain");
 		}
 	} else {
 		if (isCross) {
@@ -75,7 +76,6 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 			buildToolchain = await bootstrap.sdk.env(host_);
 		}
 	}
-	console.log("toolchain: ", buildToolchain.id);
 	let env: tg.Args<std.env.Arg> = [
 		buildToolchain,
 		hostToolchain ?? null,
@@ -119,7 +119,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		...osArgs,
 	];
 	const wrapFlags = ["-static", ...releaseArgs, ...verboseArgs];
-	const objcopy = os === "linux" ? "objcopy -O binary" : "cp";
+	const objcopy = os === "linux" ? `${prefix}objcopy -O binary` : "cp";
 	let buildPhase = tg`
 		set +x
 
