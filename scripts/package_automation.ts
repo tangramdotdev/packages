@@ -65,11 +65,14 @@ class TangramClient {
 
 	async build(
 		target: string,
-		options: { tag?: string; retry?: boolean } = {},
+		options: { tag?: string; retry?: boolean; public?: boolean } = {},
 	): Promise<{ id: string; token?: string }> {
 		const args = [target, "-d", "-v"];
 		if (options.tag) {
-			args.push(`--tag=${options.tag}`);
+			args.push(`--tag=${options.tag}`, "--create-tag-ancestors");
+		}
+		if (options.public) {
+			args.push("--public");
 		}
 		if (options.retry) {
 			args.push("--retry");
@@ -98,14 +101,12 @@ class TangramClient {
 		options: { lazy?: boolean; commands?: boolean; remote?: string } = {},
 	): Promise<void> {
 		const args = [target];
-		if (options.lazy ?? true) {
-			args.push("--lazy");
-		}
+		args.push((options.lazy ?? true) ? "--lazy" : "--eager");
 		if (options.commands) {
 			args.push("--commands");
 		}
 		if (options.remote) {
-			args.push("--remote", options.remote);
+			args.push(`--remote=${options.remote}`);
 		}
 		await $`${this.exe} push ${args}`.quiet();
 	}
@@ -128,7 +129,7 @@ class TangramClient {
 	): Promise<void> {
 		const args = [path];
 		if (options.remote) {
-			args.push("--remote", options.remote);
+			args.push(`--remote=${options.remote}`);
 		}
 		await $`${this.exe} publish ${args}`;
 	}
@@ -451,7 +452,7 @@ async function executeBuild(
 	ctx: Context,
 	actionName: string,
 	buildPath: string,
-	options: { tag?: string } = {},
+	options: { tag?: string; public?: boolean } = {},
 ): Promise<Result<string>> {
 	let processId: string | undefined;
 	try {
@@ -667,7 +668,10 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		const tag = `${ctx.packageName}/builds/${version}/${tagPath}/${ctx.platform}`;
 
 		// Build with tag
-		const result = await executeBuild(ctx, "release", buildSource, { tag });
+		const result = await executeBuild(ctx, "release", buildSource, {
+			tag,
+			public: true,
+		});
 		if (!result.ok) {
 			// Fail for the first export, skip subsequent exports
 			if (index === 0) {
@@ -678,7 +682,7 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		}
 		const processId = result.value;
 
-		// Push the tag (which also pushes the underlying artifact).
+		// Push the tag (which also pushes the underlying artifact and the tag's missing ancestors).
 		try {
 			log(`[release] Pushing ${tag}${ctx.lazy ? " (lazy)" : ""}`);
 			await ctx.tangram.push(tag, { lazy: ctx.lazy, remote: ctx.remote });
