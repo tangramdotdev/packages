@@ -1064,8 +1064,8 @@ export namespace wrap {
 				),
 			);
 			const dependencies: { [reference: string]: tg.Referent<tg.Object> } = {};
-			for (const [id, item] of references) {
-				dependencies[id] = { item, options: {} };
+			for (const [id, node] of references) {
+				dependencies[id] = { node, options: {} };
 			}
 
 			// Create the file.
@@ -2912,7 +2912,7 @@ export async function testDependencies() {
 			foo: tg.file("hi", {
 				executable: true,
 				dependencies: {
-					transitiveDependencyId: { item: transitiveDependency, options: {} },
+					transitiveDependencyId: { node: transitiveDependency, options: {} },
 				},
 			}),
 		},
