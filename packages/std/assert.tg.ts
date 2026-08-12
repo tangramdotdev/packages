@@ -175,6 +175,11 @@ async function singlePackageArg(
 	return true;
 }
 
+/** Can a binary built for `host` be executed on the machine running this build? Compares only the arch and OS, so a build for a different libc on the same machine still runs. */
+export function canRun(host: string): boolean {
+	return std.triple.archAndOs(host) === std.triple.archAndOs(std.triple.host());
+}
+
 /** Assert the provided directory has contents. */
 export async function nonEmpty(dir: tg.Directory) {
 	const entries = await dir.entries;
@@ -223,12 +228,9 @@ type RunnableBinArg = {
 
 /** Assert the directory contains a binary conforming to the provided spec. */
 export async function runnableBin(arg: RunnableBinArg) {
-	if (std.triple.archAndOs(std.triple.host()) !== arg.host) {
-		return true;
-	}
 	let name: string | undefined;
 	let pre: tg.Template.Arg | undefined;
-	let skipRun = false;
+	let skipRun = !canRun(arg.host);
 	let snapshot: string | undefined;
 	let testArgs = ["--version"];
 	let exitOnErr = true;
@@ -447,7 +449,7 @@ export async function linkableLib(arg: LibraryArg) {
 	// Collect tests.
 	const tests = [];
 
-	const hostOs = std.triple.os(std.triple.host());
+	const hostOs = std.triple.os(host);
 	const dylibExtension = hostOs === "darwin" ? "dylib" : "so";
 
 	function dylibName(name: string) {
@@ -570,8 +572,8 @@ type TestDylibArg = {
 
 /** Compile, link, and run a program against a dynamic library. */
 export async function testDylib(arg: TestDylibArg) {
-	if (arg.host !== std.triple.host()) {
-		throw new Error("unsupported");
+	if (!canRun(arg.host)) {
+		return true;
 	}
 
 	const directory = arg.directory;
@@ -694,8 +696,8 @@ type TestStaticlibArg = {
 
 /** Compile, link, and run a program against a static library. */
 export async function testStaticlib(arg: TestStaticlibArg) {
-	if (arg.host !== std.triple.host()) {
-		throw new Error("unsupported");
+	if (!canRun(arg.host)) {
+		return true;
 	}
 
 	let source: tg.Unresolved<tg.File>;

@@ -104,8 +104,10 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 			host,
 		});
 		if (isLlvm) {
-			cc = tg.File.expect(await directory.get(`bin/clang`));
-			cxx = cc;
+			cc = tg.File.expect(await directory.get(`bin/${prefix}clang`));
+			cxx = isCross
+				? tg.File.expect(await directory.get(`bin/${prefix}clang++`))
+				: cc;
 		}
 
 		// Construct wrappers that always pass the ld proxy.

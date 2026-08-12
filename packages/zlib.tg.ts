@@ -27,7 +27,7 @@ export type Arg = std.autotools.Arg;
 
 export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
-		{ source: source(), defaultCrossArgs: false, defaultCrossEnv: false },
+		{ source: source(), defaultCrossArgs: false },
 		...args,
 	);
 
@@ -40,11 +40,6 @@ export async function build(...args: tg.Args<Arg>) {
 	// https://github.com/zlib-ng/zlib-ng/issues/1427
 	if (os === "linux" && std.sdk.argObject(arg.sdk)?.toolchain === "llvm") {
 		packageEnv.CFLAGS = await tg.Mutation.prefix("-Wl,-undefined-version", " ");
-	}
-
-	// Zlib does not pick up the cross toolchain automatically, set CC.
-	if (os === "linux" && arg.build !== arg.host) {
-		packageEnv.CC = `${arg.host}-cc`;
 	}
 
 	return std.autotools.build({

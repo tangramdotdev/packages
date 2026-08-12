@@ -224,10 +224,14 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 	// With $ORIGIN-based RPATH embedded during build, binaries can find libraries
 	// relative to their location. We still wrap to ensure the interpreter is correct.
 
-	// Collect library paths for non-clang binaries that may not have RPATH set.
-	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
-	const hostLibDir = libDir.then((d) => d.get(host)).then(tg.Directory.expect);
-	const libraryPaths = [libDir, hostLibDir];
+	// Collect library paths for non-clang binaries that may not have RPATH set. The C++ runtimes live in `lib/<triple>`, found by shape rather than by name.
+	const libDir = await llvmArtifact.get("lib").then(tg.Directory.expect);
+	const libraryPaths: Array<tg.Directory> = [libDir];
+	for await (const [name, artifact] of libDir) {
+		if (artifact instanceof tg.Directory && std.triple.tryComponents(name)) {
+			libraryPaths.push(artifact);
+		}
+	}
 
 	// Wrap all ELF binaries in the bin directory, except clang-XX which has
 	// $ORIGIN RPATH and must not be wrapped to preserve /proc/self/exe for -cc1.
@@ -254,15 +258,74 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 	// of wrapped binaries, enabling the toolchain to work in bootstrap mode.
 	// Use /bin/sh directly since PATH may not include /bin in bootstrap mode.
 	llvmArtifact = await tg.directory(llvmArtifact, {
-		"bin/clang": tg.file(`#!/bin/sh\nexec ${clangBinaryName} "$@"\n`, {
-			executable: true,
-		}),
-		"bin/clang++": tg.file(`#!/bin/sh\nexec ${clangBinaryName} "$@"\n`, {
-			executable: true,
-		}),
+		"bin/clang": driverShim(clangBinaryName),
+		// `clang-22` reads argv[0] to pick a driver mode, and POSIX sh cannot set it, so ask for C++ mode explicitly. Without it the driver compiles C++ but links no C++ standard library.
+		"bin/clang++": driverShim(clangBinaryName, "--driver-mode=g++"),
 	});
 
+	if (target !== host) {
+		llvmArtifact = await addCrossTarget(llvmArtifact, target);
+	}
+
 	return llvmArtifact;
+}
+
+/** A shell script that execs a sibling driver, falling back to `PATH` when there is no sibling to find.
+ *
+ * `$0` is the script's own path when it is invoked directly or found on `PATH`, but `std.wrap` re-roots it to a standalone file artifact with no siblings. Preferring the sibling keeps a checked-out toolchain from picking up a foreign compiler; the fallback keeps the wrapped case working. `${var%pattern}` and `[` are shell builtins, so the shim needs nothing on `PATH` to decide.
+ */
+function driverShim(driver: string, args?: string) {
+	const script = [
+		`#!/bin/sh`,
+		`dir=\${0%/*}`,
+		`if [ ! -x "\${dir}/${driver}" ]; then`,
+		`\tdir=$(command -v ${driver})`,
+		`\tdir=\${dir%/*}`,
+		`fi`,
+		`exec "\${dir}/${driver}"${args !== undefined ? ` ${args}` : ""} "$@"`,
+		``,
+	].join("\n");
+	return tg.file(script, { executable: true });
+}
+
+/** Add a target sysroot and the prefixed drivers that select it.
+ *
+ * This clang is configured with `CLANG_DEFAULT_RTLIB=compiler-rt` and `CLANG_DEFAULT_CXX_STDLIB=libc++`, but those runtimes are only built for the host. The prebuilt target sysroots ship libgcc and libstdc++ instead, so the cross drivers ask for those explicitly.
+ */
+async function addCrossTarget(toolchainDir: tg.Directory, target: string) {
+	const targetOs = std.triple.os(target);
+	if (targetOs !== "linux") {
+		return tg.unimplemented(`unrecognized cross target OS: ${targetOs}`);
+	}
+
+	// The sysroot lands at `${target}`, matching where the GNU toolchain puts its cross sysroot.
+	const sysroot = await getLinuxSysroot(target);
+	let result = await tg.directory(toolchainDir, { [target]: sysroot });
+
+	const commonFlags = `-target ${target} --sysroot="\${dir}/../${target}" -rtlib=libgcc -unwindlib=libgcc`;
+	const drivers: Record<string, string> = {
+		clang: commonFlags,
+		"clang++": `${commonFlags} --stdlib=libstdc++`,
+	};
+	for (const [driver, flags] of Object.entries(drivers)) {
+		result = await tg.directory(result, {
+			[`bin/${target}-${driver}`]: driverShim(driver, flags),
+		});
+	}
+
+	// The remaining tools are target-agnostic, but the prefixed names are how an SDK advertises which target it serves. The unprefixed `cc` and `c++` go away: a cross SDK gets a linker for its target only, so a native compile through them could not link. The GNU toolchains never define them either.
+	return await tg.directory(result, {
+		"bin/cc": null,
+		"bin/c++": null,
+		[`bin/${target}-cc`]: tg.symlink(`${target}-clang`),
+		[`bin/${target}-c++`]: tg.symlink(`${target}-clang++`),
+		[`bin/${target}-ar`]: tg.symlink("llvm-ar"),
+		[`bin/${target}-ld.lld`]: tg.symlink("ld.lld"),
+		[`bin/${target}-nm`]: tg.symlink("llvm-nm"),
+		[`bin/${target}-objcopy`]: tg.symlink("llvm-objcopy"),
+		[`bin/${target}-ranlib`]: tg.symlink("llvm-ar"),
+		[`bin/${target}-strip`]: tg.symlink("llvm-strip"),
+	});
 }
 
 /** Grab the LLD linker from the toolchain. */
@@ -423,9 +486,9 @@ export async function wrapArgs(arg: WrapArgsArg) {
 			return tg.unimplemented(`unrecognized target OS: ${targetOs}`);
 		}
 		clangxxArgs = [...clangArgs];
+	} else if (host !== target) {
+		// The `${target}-` drivers already carry the target, its sysroot, and the runtime flags that go with it.
 	} else {
-		// If the target is darwin, set sysroot and target flags.
-
 		// Define common flags.
 		const commonFlags = ["-rtlib=compiler-rt", tg`--sysroot=${toolchainDir}`];
 

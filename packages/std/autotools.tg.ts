@@ -25,7 +25,7 @@ export type Arg = {
 	/** Should we automatically add configure flags to support cross compilation when build !== host? If false, you must provide the necessary configuration manually. Default: true. */
 	defaultCrossArgs?: boolean;
 
-	/** Should we automatically set environment variables pointing to a cross toolchain when build !== host? If false, you must provide the necessary environment manually. Default: true. */
+	/** Should we automatically set `CC`, `CXX`, and `AR` to the cross toolchain when build !== host? These are defaults - anything given in `env` takes precedence. If false, you must provide the necessary environment manually. Default: true. */
 	defaultCrossEnv?: boolean;
 
 	/** Should the development environment include `texinfo`, `help2man`, `autoconf` and `automake`? Default: false. */
@@ -194,6 +194,16 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	});
 	envs.push(ccEnv);
 
+	// When cross-compiling, point the standard tool variables at the cross toolchain. The toolchain prefix is the canonical host triple, where the output runs.
+	if (defaultCrossEnv && isCross) {
+		const hostPrefix = `${std.sdkModule.sdk.canonicalTriple(host)}-`;
+		envs.push({
+			CC: `${hostPrefix}cc`,
+			CXX: `${hostPrefix}c++`,
+			AR: `${hostPrefix}ar`,
+		});
+	}
+
 	// Include any user-defined env with higher precedence than the SDK and autotools settings. A build that brings its own toolchain also brings its own utilities, so only a build with an SDK gets the standard set.
 	const env =
 		effectiveSdk === "none"
@@ -243,15 +253,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 			export ${runtimeLibEnvVar}=$LIBRARY_PATH
 		`;
 	}
-	if (defaultCrossEnv && isCross) {
-		// Toolchain prefix is the canonical host triple (where output runs).
-		const canonicalHost = std.sdkModule.sdk.canonicalTriple(host);
-		const hostPrefix = `${canonicalHost}-`;
-		defaultPrepareCommand = tg`
-			${defaultPrepareCommand}
-			export CC=${hostPrefix}cc && export CXX=${hostPrefix}c++ && export AR=${hostPrefix}ar`;
-	}
-	const needsPrepare = buildInTree || setRuntimeLibraryPath || defaultCrossEnv;
+	const needsPrepare = buildInTree || setRuntimeLibraryPath;
 
 	// Build fixup phase command if needed.
 	let defaultFixupCommand = tg.template();

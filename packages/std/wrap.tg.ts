@@ -1646,9 +1646,7 @@ async function interpreterFromElf(
 	} else if (metadata.interpreter?.includes("ld-musl")) {
 		// Handle an ld-musl interpreter.
 		host = std.triple.create(host, { environment: "musl" });
-		const muslArtifact = await bootstrap.musl.build({ host });
-		const libDir = await muslArtifact.get("lib").then(tg.Directory.expect);
-		const ldso = await libDir.get("libc.so").then(tg.File.expect);
+		const { ldso, libDir } = await muslLoader(metadata.interpreter, host);
 		return {
 			kind: "ld-musl",
 			executable: ldso,
@@ -1658,6 +1656,32 @@ async function interpreterFromElf(
 	} else {
 		throw new Error(`Unsupported interpreter: "${metadata.interpreter}".`);
 	}
+}
+
+/** Locate the musl loader an executable asks for. Two musl builds are not interchangeable as loaders, so honor the one named in the interpreter path, falling back to the bootstrap musl when that path does not point into an artifact. */
+async function muslLoader(
+	interpreterPath: string,
+	host: string,
+): Promise<{ ldso: tg.File; libDir: tg.Directory }> {
+	const match = interpreterPath.match(/\/(dir_[0-9a-z]+)\/(.*)\/([^/]+)$/);
+	const [, directoryId, libSubpath, ldsoName] = match ?? [];
+	if (directoryId !== undefined && libSubpath && ldsoName !== undefined) {
+		const libDir = await tg.Directory.withId(directoryId)
+			.get(libSubpath)
+			.then(tg.Directory.expect);
+		let ldso = await libDir.get(ldsoName);
+		if (ldso instanceof tg.Symlink) {
+			ldso = await ldso.resolve().then((resolved) => {
+				tg.assert(resolved, `dangling musl loader symlink ${ldsoName}`);
+				return resolved;
+			});
+		}
+		return { ldso: tg.File.expect(ldso), libDir };
+	}
+	const muslArtifact = await bootstrap.musl.build({ host });
+	const libDir = await muslArtifact.get("lib").then(tg.Directory.expect);
+	const ldso = await libDir.get("libc.so").then(tg.File.expect);
+	return { ldso, libDir };
 }
 
 type OptimizeLibraryPathsArg = {

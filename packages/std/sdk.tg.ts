@@ -296,26 +296,24 @@ export namespace sdk {
 		const target = canonicalTriple(target_ ?? host);
 		const os = std.triple.os(target);
 		const isCross = host !== target;
+		const compilerComponents = requiredCompilerComponents(
+			os,
+			llvm ? "llvm" : "gnu",
+		);
 
-		// For cross-compilation, require prefixed tools
-		if (isCross && !llvm) {
+		// For cross-compilation, require prefixed tools from either flavor.
+		if (isCross) {
 			const targetPrefix = `${target}-`;
 			await std.env.assertProvides({
 				env,
 				names: requiredUtils.map((name) => `${targetPrefix}${name}`),
 			});
-			const compilerComponents = requiredCompilerComponents(os, "gnu");
 			await std.env.assertProvides({
 				env,
 				names: compilerComponents.map((name) => `${targetPrefix}${name}`),
 			});
 		} else {
-			// For native or LLVM, try without prefix first, then with prefix
-			const compilerComponents = requiredCompilerComponents(
-				os,
-				llvm ? "llvm" : "gnu",
-			);
-
+			// For native, try without prefix first, then with prefix
 			try {
 				await std.env.assertProvides({
 					env,
@@ -357,15 +355,15 @@ export namespace sdk {
 			llvm ? "llvm" : "gnu",
 		);
 
-		// For cross-compilation with GNU, require prefixed tools
-		if (isCross && !llvm) {
+		// For cross-compilation, require prefixed tools
+		if (isCross) {
 			const targetPrefix = `${target}-`;
 			return std.env.provides({
 				env,
 				names: compilerComponents.map((name) => `${targetPrefix}${name}`),
 			});
 		} else {
-			// For native or LLVM, try without prefix first
+			// For native, try without prefix first
 			const hasUnprefixed = await std.env.provides({
 				env,
 				names: compilerComponents,
@@ -496,17 +494,16 @@ export namespace sdk {
 	): Promise<CompilerInfo> {
 		const preferredFlavor: "gnu" | "llvm" = os === "linux" ? "gnu" : "llvm";
 
-		// For cross-compilation, require prefixed tools.
+		// For cross-compilation, require prefixed tools, from either flavor.
 		if (isCross) {
 			const targetPrefix = `${target}-`;
-			const result = await tryDetectCompilerFlavor(
-				env,
-				preferredFlavor,
-				targetPrefix,
-			);
+			const fallbackFlavor = preferredFlavor === "gnu" ? "llvm" : "gnu";
+			const result =
+				(await tryDetectCompilerFlavor(env, preferredFlavor, targetPrefix)) ??
+				(await tryDetectCompilerFlavor(env, fallbackFlavor, targetPrefix));
 			if (!result) {
 				throw new Error(
-					`No suitable cross-compiler found for ${target} (tried ${preferredFlavor} toolchain)`,
+					`No suitable cross-compiler found for ${target} (tried both GNU and LLVM toolchains)`,
 				);
 			}
 			return { ...result, targetPrefix };
@@ -558,7 +555,7 @@ export namespace sdk {
 		if (flavor === "gnu") {
 			return await tryDetectGnuCompilers(env, targetPrefix);
 		} else {
-			return await tryDetectLlvmCompilers(env);
+			return await tryDetectLlvmCompilers(env, targetPrefix);
 		}
 	}
 
@@ -591,15 +588,21 @@ export namespace sdk {
 
 	async function tryDetectLlvmCompilers(
 		env: std.env.EnvObject,
+		targetPrefix: string,
 	): Promise<Omit<CompilerInfo, "targetPrefix"> | undefined> {
-		const clang = await std.env.tryWhich({ env, name: "clang" });
+		const clang = await std.env.tryWhich({ env, name: `${targetPrefix}clang` });
 		if (!clang) {
 			return undefined;
 		}
 
-		const clangxx = await std.env.tryWhich({ env, name: "clang++" });
+		const clangxx = await std.env.tryWhich({
+			env,
+			name: `${targetPrefix}clang++`,
+		});
 		if (!clangxx) {
-			throw new Error("Found clang but not clang++.");
+			throw new Error(
+				`Found ${targetPrefix}clang but not ${targetPrefix}clang++.`,
+			);
 		}
 
 		return {
@@ -636,10 +639,10 @@ export namespace sdk {
 		cxx: tg.Symlink;
 		fortran?: tg.Symlink;
 	}> {
-		const compiler =
-			compilerInfo.flavor === "gnu" ? `${targetPrefix}gcc` : "clang";
-		const cxxCompiler =
-			compilerInfo.flavor === "gnu" ? `${targetPrefix}g++` : "clang++";
+		const [ccName, cxxName] =
+			compilerInfo.flavor === "gnu" ? ["gcc", "g++"] : ["clang", "clang++"];
+		const compiler = `${targetPrefix}${ccName}`;
+		const cxxCompiler = `${targetPrefix}${cxxName}`;
 
 		const cc = await tg.symlink(tg`${directory}/bin/${compiler}`);
 		const cxx = await tg.symlink(tg`${directory}/bin/${cxxCompiler}`);
@@ -932,10 +935,15 @@ export namespace sdk {
 		const expectedTarget = expected.target;
 		tg.assert(expectedTarget);
 
-		// Determine compiler target prefix, if any. For LLVM, instead add a -target flag.
+		// Determine compiler target prefix, if any. A toolchain that does not advertise a prefixed driver for this target gets a -target flag instead.
 		const isCross = expectedHost !== expectedTarget;
-		const targetPrefix =
-			flavor === "gnu" && isCross ? `${expectedTarget}-` : ``;
+		const hasPrefixedCc =
+			isCross &&
+			(await std.env.provides({
+				env: await std.env.compose(arg.sdkEnv),
+				name: `${expectedTarget}-cc`,
+			}));
+		const targetPrefix = hasPrefixedCc ? `${expectedTarget}-` : ``;
 
 		// Set up test parameters.
 		const { lang, testProgram, expectedOutput, title } = arg.parameters;
@@ -949,7 +957,7 @@ export namespace sdk {
 		} else {
 			throw new Error(`Unexpected language ${lang}.`);
 		}
-		if (flavor === "llvm") {
+		if (flavor === "llvm" && !hasPrefixedCc) {
 			cmd = `${cmd} -target ${sdk.canonicalTriple(expectedTarget)}`;
 		}
 		tg.assert(cmd);
