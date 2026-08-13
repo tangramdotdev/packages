@@ -33,7 +33,11 @@ export async function source() {
 export function deps() {
 	return std.deps({
 		bzip2: bzip2.build,
-		libiconv: libiconv.build,
+		libiconv: {
+			build: libiconv.build,
+			kind: "runtime",
+			when: { hostOs: "darwin" },
+		},
 		openssl: openssl.build,
 		xz: xz.build,
 		zlib: zlib.build,
@@ -64,17 +68,19 @@ export function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
+	const os = std.triple.os(std.triple.host());
+	const runtimeDeps: Array<tg.Unresolved<tg.Directory>> = [
+		openssl.build(),
+		zlib.build(),
+		bzip2.build(),
+		xz.build(),
+	];
+	if (os === "darwin") {
+		runtimeDeps.push(libiconv.build());
+	}
 	const spec: std.assert.PackageSpec = {
 		...std.assert.defaultSpec(metadata),
-		libraries: std.assert.allLibraries(["archive"], {
-			runtimeDeps: [
-				openssl.build(),
-				zlib.build(),
-				bzip2.build(),
-				libiconv.build(),
-				xz.build(),
-			],
-		}),
+		libraries: std.assert.allLibraries(["archive"], { runtimeDeps }),
 	};
 	return await std.assert.pkg(build, spec);
 }

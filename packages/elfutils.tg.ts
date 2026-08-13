@@ -88,18 +88,14 @@ export async function build(...args: tg.Args<Arg>) {
 		...args,
 	);
 
-	// The linker needs rpath-link to find transitive .so deps (zlib, lzma, bz2) referenced by the internal libelf.so and libdw.so during the build.
-	const {
-		zlib: zlibArtifact,
-		xz: xzArtifact,
-		bzip2: bzip2Artifact,
-	} = await std.deps.artifacts(deps, arg);
-	tg.assert(zlibArtifact !== undefined);
-	tg.assert(xzArtifact !== undefined);
-	tg.assert(bzip2Artifact !== undefined);
+	// The linker needs rpath-link to find the transitive .so deps referenced by libarchive.so and by the internal libelf.so and libdw.so during the build.
+	const artifacts = await std.deps.artifacts(deps, arg);
+	const libDirs = Object.values(artifacts)
+		.filter((artifact): artifact is tg.Directory => artifact !== undefined)
+		.map((artifact) => tg`${artifact}/lib`);
 	const env = std.env.arg(arg.env ?? null, {
 		LDFLAGS: tg.Mutation.suffix(
-			tg`-Wl,-rpath-link,${zlibArtifact}/lib:${xzArtifact}/lib:${bzip2Artifact}/lib`,
+			tg`-Wl,-rpath-link,${tg.Template.join(":", ...libDirs)}`,
 			" ",
 		),
 	});

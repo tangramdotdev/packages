@@ -32,7 +32,11 @@ export function deps() {
 	return std.deps({
 		gmp: gmp.build,
 		gnutls: gnutls.build,
-		libiconv: libiconv.build,
+		libiconv: {
+			build: libiconv.build,
+			kind: "runtime",
+			when: { hostOs: "darwin" },
+		},
 		libpsl: libpsl.build,
 		nettle: nettle.build,
 		pcre2: pcre2.build,

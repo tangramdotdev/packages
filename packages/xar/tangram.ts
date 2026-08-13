@@ -43,7 +43,11 @@ async function source() {
 
 export function deps() {
 	return std.deps({
-		libiconv: libiconv.build,
+		libiconv: {
+			build: libiconv.build,
+			kind: "runtime",
+			when: { hostOs: "darwin" },
+		},
 		libxml2: { build: libxml2.build, kind: "full" },
 		openssl: openssl.build,
 		xz: xz.build,

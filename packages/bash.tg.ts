@@ -23,7 +23,11 @@ export function source() {
 
 export function deps() {
 	return std.deps({
-		libiconv: libiconv.build,
+		libiconv: {
+			build: libiconv.build,
+			kind: "runtime",
+			when: { hostOs: "darwin" },
+		},
 		ncurses: ncurses.build,
 	});
 }
