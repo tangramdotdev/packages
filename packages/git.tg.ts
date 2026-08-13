@@ -2,6 +2,7 @@ import * as curl from "curl" with { source: "./curl.tg.ts" };
 import * as libpsl from "libpsl" with { source: "./libpsl.tg.ts" };
 import * as libiconv from "libiconv" with { source: "./libiconv.tg.ts" };
 import * as openssl from "openssl" with { source: "./openssl.tg.ts" };
+import * as rust from "rust" with { source: "./rust" };
 import * as std from "std" with { source: "./std" };
 import { $ } from "std" with { source: "./std" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
@@ -34,7 +35,7 @@ export async function source() {
 // Define dependencies - libiconv is only needed on darwin.
 export function deps() {
 	return std.deps({
-		curl: curl.build,
+		curl: { build: curl.build, kind: "full" },
 		libpsl: libpsl.build,
 		libiconv: {
 			build: libiconv.build,
@@ -42,6 +43,7 @@ export function deps() {
 			when: { hostOs: "darwin" },
 		},
 		openssl: openssl.build,
+		rust: { build: rust.self, kind: "buildtime" },
 		zlib: zlib.build,
 		zstd: zstd.build,
 	});
