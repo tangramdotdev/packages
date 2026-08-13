@@ -167,7 +167,7 @@ export async function self(...args: tg.Args<Arg>) {
 	const output = await std.autotools.build(arg);
 
 	// The python interpreter does not itself depend on these libraries, but submodules do. As a result, they were not automatically added during compilation. Explicitly add all the required library paths to the interpreter wrapper.
-	const libraryPaths = [
+	const libraryPaths: Array<tg.Unresolved<tg.Directory>> = [
 		artifacts.libffi,
 		artifacts.mpdecimal,
 		artifacts.openssl,
@@ -176,6 +176,17 @@ export async function self(...args: tg.Args<Arg>) {
 	]
 		.filter((v): v is tg.Directory => v !== undefined)
 		.map((dir) => dir.get("lib").then(tg.Directory.expect));
+
+	// Extension modules from manylinux wheels carry DT_NEEDED entries for libraries glibc has since absorbed into libc, such as libpthread.so.0. Those stubs live in the toolchain's libc directory, which the interpreter itself never references, so add it explicitly.
+	if (os === "linux") {
+		const { libDir } = await std.sdk.toolchainComponents({
+			env: await std.env.compose(
+				await std.sdk({ host, ...std.args.optional("sdk", customOptions.sdk) }),
+			),
+			host,
+		});
+		libraryPaths.push(libDir);
+	}
 
 	const pythonInterpreter = await std.wrap(
 		tg.symlink(tg`${output}/bin/python${versionString(pythonVersionString)}`),
@@ -399,11 +410,11 @@ export async function build(...args: tg.Args<BuildArg>) {
 	// Try src/${name} first (PEP 517/518 src-layout), then fall back to ${name} (flat layout).
 	let packageDir: tg.Directory;
 	const srcLayoutPath = await source.tryGet(`src/${name}`);
-	if (srcLayoutPath !== undefined) {
+	if (srcLayoutPath) {
 		packageDir = tg.Directory.expect(srcLayoutPath);
 	} else {
 		const flatLayoutPath = await source.tryGet(name);
-		if (flatLayoutPath === undefined) {
+		if (!flatLayoutPath) {
 			throw new Error(
 				`Could not locate package source at ${name} or src/${name}`,
 			);
