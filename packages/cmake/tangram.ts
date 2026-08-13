@@ -5,7 +5,7 @@ import * as libpsl from "libpsl" with { source: "../libpsl.tg.ts" };
 import * as make from "gnumake" with { source: "../gnumake.tg.ts" };
 import * as ncurses from "ncurses" with { source: "../ncurses.tg.ts" };
 import * as openssl from "openssl" with { source: "../openssl.tg.ts" };
-import * as zlib from "zlib" with { source: "../zlib.tg.ts" };
+import * as zlib from "zlib-ng" with { source: "../zlib-ng.tg.ts" };
 import * as zstd from "zstd" with { source: "../zstd.tg.ts" };
 
 import patches from "./patches" with { type: "directory" };
@@ -18,8 +18,8 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "cmake",
 	repository: "https://gitlab.kitware.com/cmake/cmake",
-	version: "4.4.0",
-	tag: "cmake/4.4.0",
+	version: "4.4.2",
+	tag: "cmake/4.4.2",
 	provides: {
 		binaries: ["cmake"],
 	},
@@ -28,7 +28,7 @@ export const metadata = {
 export async function source() {
 	const { version } = metadata;
 	const checksum =
-		"sha256:65757f442fdd242e27f1728fc26dc0cba4164f7a0791a5c788631c00080369bc";
+		"sha256:1db9e61e60b6e0874c86386340b910382f3c5e75b9fbfb44d122063129a2789d";
 	const owner = "Kitware";
 	const repo = "CMake";
 	const tag = `v${version}`;
