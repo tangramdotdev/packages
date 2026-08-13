@@ -144,8 +144,28 @@ export async function sdkInner(...args: tg.Args<sdk.ResolvedArg>) {
 	if (linkerExe) {
 		proxyArg = { ...proxyArg, linkerExe };
 	}
-	return await tg.build(proxy.env, proxyArg).named("proxy sdk");
+	const proxiedSdk = await tg.build(proxy.env, proxyArg).named("proxy sdk");
+	if (hostOs !== "darwin") {
+		return proxiedSdk;
+	}
+	return await tg.directory(proxiedSdk, { "bin/sw_vers": swVers() });
 }
+
+/** Provide the `sw_vers` that macOS build systems probe, since the sandbox denies the real one. It reports the deployment target rather than the version of the machine running the build, so the answer stays identical everywhere. */
+const swVers = () => {
+	const version = sdk.macOsDeploymentTarget;
+	const script = [
+		`#!/bin/sh`,
+		`case "$1" in`,
+		`\t-productName) echo "macOS" ;;`,
+		`\t-productVersion) echo "${version}" ;;`,
+		`\t"") printf 'ProductName:\\tmacOS\\nProductVersion:\\t${version}\\n' ;;`,
+		`\t*) echo "sw_vers: the Tangram shim does not implement $1" >&2; exit 1 ;;`,
+		`esac`,
+		``,
+	].join("\n");
+	return tg.file(script, { executable: true });
+};
 
 export namespace sdk {
 	/** The minimum macOS version that produced binaries should support. */

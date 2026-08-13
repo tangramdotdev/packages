@@ -139,9 +139,7 @@ export async function self(...args: tg.Args<Arg>) {
 	}
 
 	const makeArgs: Array<string> = [];
-	const envAdditions: std.env.EnvObject = {};
 	if (os === "darwin") {
-		envAdditions.MACOSX_DEPLOYMENT_TARGET = std.sdk.macOsDeploymentTarget;
 		configureArgs.push(
 			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
 			"ax_cv_c_float_words_bigendian=no",
@@ -155,7 +153,6 @@ export async function self(...args: tg.Args<Arg>) {
 		{
 			source: await source(versionKey),
 			deps,
-			env: envAdditions,
 			opt: "3",
 			setRuntimeLibraryPath: true,
 			phases: {

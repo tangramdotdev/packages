@@ -36,9 +36,7 @@ export async function build(...args: tg.Args<Arg>) {
 	];
 	const makeArgs: Array<string> = [];
 
-	const envs: tg.Args<std.env.Arg> = [];
 	if (os === "darwin") {
-		envs.push({ MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget });
 		configureArgs.push(
 			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
 			"ax_cv_c_float_words_bigendian=no",
@@ -48,7 +46,7 @@ export async function build(...args: tg.Args<Arg>) {
 		);
 	}
 
-	const env = await std.env.compose(...envs, resolved.env ?? null);
+	const env = await std.env.compose(resolved.env ?? null);
 	const providedCc = await std.env.tryGetKey({ env, key: "CC" });
 	if (providedCc) {
 		configureArgs.push(`CC="$CC"`);
