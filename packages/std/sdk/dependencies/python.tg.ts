@@ -3,15 +3,15 @@ import * as std from "../../tangram.ts";
 
 export const metadata = {
 	name: "Python",
-	version: "3.14.6",
-	tag: "Python/3.14.6",
+	version: "3.14.7",
+	tag: "Python/3.14.7",
 };
 
 export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:143b1dddefaec3bd2e21e3b839b34a2b7fb9842272883c576420d605e9f30c63";
+		"sha256:3b48dac8fb59f62eaa67ac83c1eb12bda1b7a08406dd286e252c11a66be27f81";
 	const base = `https://www.python.org/ftp/python/${version}`;
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })

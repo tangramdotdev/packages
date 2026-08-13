@@ -1,4 +1,6 @@
 import * as std from "./tangram.ts";
+import { sdk as bootstrapSdk } from "./bootstrap/sdk.tg.ts";
+import gnuPatchBuild from "./utils/patch.tg.ts";
 
 export * as make from "./bootstrap/make.tg.ts";
 export * as musl from "./bootstrap/musl.tg.ts";
@@ -87,10 +89,42 @@ export function interpreterName(host?: string) {
 	}
 }
 
-/** Apply one or more patches to a directory using the bootstrap utils. */
+/** Apply one or more patches to a directory using the bootstrap utils.
+ *
+ * The bootstrap utils supply a minimal `patch` that supports no fuzz, so it
+ * rejects any hunk whose context has drifted from the patch. Prefer `patchGnu`
+ * unless the caller sits inside GNU patch's own dependency cone.
+ */
 export async function patch(
 	source: tg.Unresolved<tg.Directory>,
 	...patches: Array<tg.Unresolved<tg.File | tg.Symlink>>
+) {
+	return patchInner(undefined, source, patches);
+}
+
+/** Apply one or more patches to a directory using GNU patch from `std.utils`.
+ *
+ * This must not be called from within GNU patch's own dependency cone, which
+ * includes `std.utils.coreutils` and `std.utils.prerequisites`. GNU patch is
+ * built with those, so patching their sources this way creates an unresolvable
+ * cycle. Those call sites must continue to use `patch`.
+ */
+export async function patchGnu(
+	source: tg.Unresolved<tg.Directory>,
+	...patches: Array<tg.Unresolved<tg.File | tg.Symlink>>
+) {
+	const host = std.triple.host();
+	// Build GNU patch the way `std.utils.env` does, so the two share a build.
+	const env = await std.env.compose(await bootstrapSdk(host));
+	const gnuPatch = await gnuPatchBuild({ build: null, env, host, sdk: "none" });
+	return patchInner(gnuPatch, source, patches);
+}
+
+/** Apply patches, optionally overriding the `patch` command from the bootstrap utils. */
+async function patchInner(
+	patchEnv: std.env.Arg | undefined,
+	source: tg.Unresolved<tg.Directory>,
+	patches: Array<tg.Unresolved<tg.File | tg.Symlink>>,
 ) {
 	const source_ = await tg.resolve(source);
 	const patches_ = await Promise.all(patches.map(tg.resolve));
@@ -99,6 +133,9 @@ export async function patch(
 		"\n",
 		...patches_.map((p) => tg`patch -p1 < ${p}`),
 	);
+	// Order matters: items later in the list prepend to PATH later, so they
+	// appear first. Any override must follow the bootstrap utils to take effect.
+	const env = std.env.compose(utils(host), patchEnv ?? null);
 	return std
 		.build(std.shBootstrap`
 		cp -R ${source_} ${tg.output}
@@ -106,7 +143,7 @@ export async function patch(
 		cd ${tg.output}
 		${patchScript}
 	`)
-		.env(utils(host))
+		.env(env)
 		.then(tg.Directory.expect);
 }
 

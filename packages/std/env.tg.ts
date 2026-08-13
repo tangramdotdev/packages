@@ -683,7 +683,7 @@ export async function envObjectFromArtifact(
 		return await wrap.envObjectFromManifestEnv(
 			manifest.env,
 			undefined,
-			artifact.state.token,
+			artifact.state.tokens,
 		);
 	} else if (artifact instanceof tg.Directory) {
 		// Return an env with PATH/CPATH/LIBRARY_PATH according to the contents of the directory.

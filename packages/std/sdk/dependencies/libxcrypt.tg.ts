@@ -28,7 +28,7 @@ export function source() {
 			tag,
 			version,
 		})
-		.then((dir) => bootstrap.patch(dir, strchrConstFix));
+		.then((dir) => bootstrap.patchGnu(dir, strchrConstFix));
 }
 
 export type Arg = std.autotools.Arg;

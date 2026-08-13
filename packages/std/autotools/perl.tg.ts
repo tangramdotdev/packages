@@ -4,22 +4,22 @@ import noFixDepsPatch from "./perl_no_fix_deps.patch" with { type: "file" };
 
 export const metadata = {
 	name: "perl",
-	version: "5.42.2",
-	tag: "perl/5.42.2",
+	version: "5.44.0",
+	tag: "perl/5.44.0",
 };
 
 export async function source(os: string) {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:9384e8deb75b7b1695e5637971b752281aaecd025a3d5d4734d33c1d0adfee47";
+		"sha256:3b855066b92491cb40e86affb1ca57d1a388aa43e51b91c7806a32c2f65f96c3";
 	const base = `https://www.cpan.org/src/5.0`;
 	const patches = [noFixDepsPatch];
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
-		.then((source) => bootstrap.patch(source, ...patches));
+		.then((source) => bootstrap.patchGnu(source, ...patches));
 }
 
 export type Arg = {

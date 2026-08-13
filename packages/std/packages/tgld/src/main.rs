@@ -1160,7 +1160,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 }
 
-/// Cache a set of library paths. Each referent carries its stored token, without which the server
+/// Cache a set of library paths. Each referent carries its stored tokens, without which the server
 /// falls back to an index lookup to authorize it.
 async fn cache_library_paths<H: BuildHasher + Default>(
 	library_paths: &HashSet<DirectoryWithSubpath, H>,
@@ -1171,9 +1171,9 @@ async fn cache_library_paths<H: BuildHasher + Default>(
 	let artifacts = library_paths
 		.iter()
 		.map(|dir_with_subpath| {
-			tg::Referent::with_node_and_token(
+			tg::Referent::with_node_and_tokens(
 				dir_with_subpath.id.clone().into(),
-				dir_with_subpath.token.clone(),
+				dir_with_subpath.tokens.clone(),
 			)
 		})
 		.collect();
@@ -1266,7 +1266,7 @@ async fn resolve_directories<H: BuildHasher + Default>(
 		futures::future::try_join_all(unresolved_paths.iter().map(|dir_with_subpath| async {
 			let resolved_dir_with_subpath = if let Some(subpath) = &dir_with_subpath.subpath {
 				let directory = tg::Directory::with_id(dir_with_subpath.id.clone());
-				directory.state().set_token(dir_with_subpath.token.clone());
+				directory.state().set_tokens(dir_with_subpath.tokens.clone());
 				let Some(inner) = directory.try_get(subpath).await? else {
 					return Err(
 						tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
@@ -1560,7 +1560,7 @@ pub async fn directory_from_dir_with_subpath(
 	dir_with_subpath: &DirectoryWithSubpath,
 ) -> tg::Result<tg::Directory> {
 	let outer = tg::Directory::with_id(dir_with_subpath.id.clone());
-	outer.state().set_token(dir_with_subpath.token.clone());
+	outer.state().set_tokens(dir_with_subpath.tokens.clone());
 	let directory = if let Some(ref subpath) = dir_with_subpath.subpath {
 		let Some(inner) = outer.try_get(subpath).await? else {
 			return Err(
@@ -1581,8 +1581,12 @@ pub async fn dir_with_subpath_from_directory(
 ) -> tg::Result<DirectoryWithSubpath> {
 	directory.store().await?;
 	let id = directory.id();
-	let token = directory.state().token();
-	let ret = DirectoryWithSubpath { id, subpath, token };
+	let tokens = directory.state().tokens();
+	let ret = DirectoryWithSubpath {
+		id,
+		subpath,
+		tokens,
+	};
 	Ok(ret)
 }
 
@@ -1591,7 +1595,7 @@ pub struct DirectoryWithSubpath {
 	id: tg::directory::Id,
 	subpath: Option<PathBuf>,
 	// Excluded from equality and hashing, since it does not change which directory is referenced.
-	token: Option<tg::grant::Token>,
+	tokens: tg::authorization::Tokens,
 }
 
 impl PartialEq for DirectoryWithSubpath {

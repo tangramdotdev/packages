@@ -18,14 +18,14 @@ export { requirements };
 /** Version metadata for each supported Python version. */
 export const versions = {
 	"3.13": {
-		version: "3.13.14",
+		version: "3.13.15",
 		checksum:
-			"sha256:639e43243c620a308f968213df9e00f2f8f62332f7adbaa7a7eeb9783057c690",
+			"sha256:1e66a7945a48390ee4c2a4268a0e4185884059a13c4aab6d148aa208deea4a76",
 	},
 	"3.14": {
-		version: "3.14.6",
+		version: "3.14.7",
 		checksum:
-			"sha256:143b1dddefaec3bd2e21e3b839b34a2b7fb9842272883c576420d605e9f30c63",
+			"sha256:3b48dac8fb59f62eaa67ac83c1eb12bda1b7a08406dd286e252c11a66be27f81",
 	},
 } as const;
 
@@ -38,8 +38,8 @@ export const metadata = {
 	name: "python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.14.6",
-	tag: `python/3.14.6`,
+	version: "3.14.7",
+	tag: `python/3.14.7`,
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */

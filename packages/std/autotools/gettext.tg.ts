@@ -47,7 +47,7 @@ export function source() {
 		checksum,
 		compression: "xz",
 	});
-	return bootstrap.patch(source, progrelocFix);
+	return bootstrap.patchGnu(source, progrelocFix);
 }
 
 export type Arg = {

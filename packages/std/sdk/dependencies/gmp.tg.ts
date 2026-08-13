@@ -20,7 +20,7 @@ export async function source() {
 			compression: "xz",
 			checksum,
 		})
-		.then((dir) => bootstrap.patch(dir, gcc15Patch));
+		.then((dir) => bootstrap.patchGnu(dir, gcc15Patch));
 }
 
 export type Arg = std.autotools.Arg;
