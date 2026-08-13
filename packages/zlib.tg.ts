@@ -16,9 +16,12 @@ export async function source() {
 	const { homepage, name, version } = metadata;
 	const checksum =
 		"sha256:d7a0654783a4da529d1bb793b7ad9c3318020af77667bcae35f95d0e42a792f3";
+	const base = `https://github.com/madler/${name}/releases/download/v${version}`;
 	const extension = ".tar.xz";
+	const archive = std.download.packageArchive({ name, version, extension });
+	const mirrors = [`${homepage}/${archive}`];
 	return std.download
-		.extractArchive({ checksum, base: homepage, name, version, extension })
+		.extractArchive({ base, checksum, extension, mirrors, name, version })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 }
