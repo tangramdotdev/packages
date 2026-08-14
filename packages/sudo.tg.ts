@@ -9,6 +9,9 @@ export const metadata = {
 	repository: "https://github.com/sudo-project/sudo",
 	version: "1.9.17p2",
 	tag: "sudo/1.9.17p2",
+	provides: {
+		binaries: ["cvtsudoers", "sudo", "sudoreplay"],
+	},
 };
 
 export async function source(): Promise<tg.Directory> {
@@ -83,11 +86,11 @@ export async function build(...args: tg.Args<Arg>) {
 		`,
 	};
 
-	const buildPhase = {
-		args: ["install_uid=$(id- u)", "install_gid=$(id -g)"],
-	};
+	// `install_uid`/`install_gid` default to 0, and chown to an unmapped id fails in the sandbox.
 	const install = {
 		args: [
+			"install_uid=$(id -u)",
+			"install_gid=$(id -g)",
 			"sudoers_uid=$(id -u)",
 			"sudoers_gid=$(id -g)",
 			tg`sysconfdir=${tg.output}/etc`,
@@ -96,7 +99,7 @@ export async function build(...args: tg.Args<Arg>) {
 			"DESTDIR=/",
 		],
 	};
-	const phases = { configure, build: buildPhase, install };
+	const phases = { configure, install };
 
 	const arg = await std.autotools.arg(
 		{
@@ -124,7 +127,13 @@ export async function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
-	const spec = std.assert.defaultSpec(metadata);
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		// sudo refuses to run under the sandbox's "no new privileges" flag.
+		binaries: std.assert.binaries(metadata.provides.binaries, {
+			sudo: { skipRun: true },
+		}),
+	};
 	return await std.assert.pkg(build, spec);
 }
 
