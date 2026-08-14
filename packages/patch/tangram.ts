@@ -1,5 +1,4 @@
 import * as std from "std" with { source: "../std" };
-import patches from "./patches" with { type: "directory" };
 
 export const metadata = {
 	homepage: "https://savannah.gnu.org/projects/patch/",
@@ -17,9 +16,7 @@ async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:308a4983ff324521b9b21310bfc2398ca861798f02307c79eb99bb0e0d2bf980";
-	return std.download
-		.fromGnu({ name, version, checksum })
-		.then((source) => std.patch(source, patches));
+	return std.download.fromGnu({ name, version, checksum });
 }
 
 export type Arg = std.autotools.Arg;
