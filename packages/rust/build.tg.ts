@@ -259,7 +259,7 @@ export async function testBasicLib() {
 		source: tests.get(crateName).then(tg.Directory.expect),
 	});
 	const rlib = await basicLib.tryGet(`lib/lib${crateName}.rlib`);
-	tg.assert(rlib !== undefined);
+	tg.assert(rlib !== null);
 
 	return true;
 }

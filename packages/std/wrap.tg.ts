@@ -1772,7 +1772,7 @@ async function optimizeLibraryPaths(
 			for (const [name, referent] of filteredNeededLibraries) {
 				const innerDir = await getInner(referent);
 				const libraryFile = await innerDir.tryGet(name);
-				if (libraryFile !== undefined) {
+				if (libraryFile !== null) {
 					tg.File.assert(libraryFile);
 					const isolatedDir = await tg.directory({ name: libraryFile });
 					isolatedPaths.push(isolatedDir);
@@ -1786,7 +1786,7 @@ async function optimizeLibraryPaths(
 			for (const [name, referent] of filteredNeededLibraries) {
 				const innerDir = await getInner(referent);
 				const libraryFile = await innerDir.tryGet(name);
-				if (libraryFile !== undefined) {
+				if (libraryFile !== null) {
 					tg.File.assert(libraryFile);
 					entries[name] = libraryFile;
 				}

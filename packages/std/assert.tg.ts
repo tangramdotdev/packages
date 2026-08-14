@@ -209,7 +209,7 @@ type FileExistsOneOfArg = {
 export async function fileExistsOneOf(arg: FileExistsOneOfArg) {
 	for (const subpath of arg.subpaths) {
 		const maybeFile = await arg.directory.tryGet(subpath);
-		if (maybeFile !== undefined && maybeFile instanceof tg.File) {
+		if (maybeFile instanceof tg.File) {
 			return true;
 		}
 	}
@@ -262,7 +262,7 @@ export async function runnableBin(arg: RunnableBinArg) {
 
 	// If the binary is a wrapper, assert that it has dependencies.
 	const artifact = await arg.directory.tryGet(`bin/${name}`);
-	if (artifact !== undefined) {
+	if (artifact !== null) {
 		let file: tg.File | undefined;
 		if (artifact instanceof tg.Symlink) {
 			const resolved = await artifact.resolve();

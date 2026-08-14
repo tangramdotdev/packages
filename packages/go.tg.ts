@@ -814,7 +814,7 @@ export async function testVendorStructure() {
 
 	// golang.org/x/text has subpackages - verify it has the expected structure
 	const language = await text.tryGet("language");
-	tg.assert(language !== undefined, "Expected language subpackage in vendor");
+	tg.assert(language !== null, "Expected language subpackage in vendor");
 }
 
 export async function testCgo() {
