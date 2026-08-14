@@ -32,9 +32,9 @@ export async function build(...args: tg.Args<Arg>) {
 	const fileName = `scylla-${version}-${buildId}.${arch}.tar.gz`;
 	const url = `${baseUrl}/${fileName}`;
 
-	// Download and extract the tarball.
+	// Download and extract the tarball. It repeats three `scylla/node_exporter` entries, so it must be extracted with tar.
 	const extracted = await std.download
-		.extractArchive({ url, checksum })
+		.extractArchive({ url, checksum, tar: true })
 		.then(tg.Directory.expect);
 
 	// Wrap the binaries with the bundled libraries.

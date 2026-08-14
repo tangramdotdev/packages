@@ -1,3 +1,5 @@
+import { build } from "./tangram.ts";
+
 export type Arg = download.BuildUrlArg & {
 	/** The expected checksum of the downloaded file. Use `sha256:any` to allow network access without verifying the result, or `sha256:none` to force a mismatch, displaying the computed checksum. */
 	checksum: tg.Checksum;
@@ -37,13 +39,26 @@ export namespace download {
 		checksum: tg.Checksum;
 		/** Optional list of mirror URLs to try if the primary URL fails. */
 		mirrors?: Array<string>;
+		/** Extract with tar instead of the builtin extractor, which rejects an archive that repeats an entry or that holds two entries whose names differ only in case. Default: false. */
+		tar?: boolean;
 	};
 
 	/** Wrapper for `std.download` that always extracts. */
 	export async function extractArchive(
 		arg: ExtractArchiveArg,
 	): Promise<tg.Artifact> {
-		return await download({ ...arg, mode: "extract" }).then(tg.Artifact.expect);
+		const { tar = false, ...rest } = arg;
+		if (!tar) {
+			return await download({ ...rest, mode: "extract" }).then(
+				tg.Artifact.expect,
+			);
+		}
+		const archive = await download(rest)
+			.then(tg.Blob.expect)
+			.then((blob) => tg.file(blob));
+		return await build`mkdir -p ${tg.output} && tar -xf ${archive} -C ${tg.output}`.then(
+			tg.Directory.expect,
+		);
 	}
 
 	export type fromGitHubArg = GithubSource & {
@@ -112,6 +127,8 @@ export namespace download {
 		checksum: tg.Checksum;
 		compression?: tg.CompressionFormat;
 		name: string;
+		/** Extract with tar instead of the builtin extractor. See `extractArchive`. Default: false. */
+		tar?: boolean;
 		version: string;
 	};
 
@@ -119,7 +136,7 @@ export namespace download {
 
 	/** Download and extract a source package hosted in the GNU FTP repository. Tries ftpmirror.gnu.org first, then falls back to ftp.gnu.org. */
 	export async function fromGnu(arg: FromGnuArg) {
-		const { checksum, compression = "gz", name, version } = arg;
+		const { checksum, compression = "gz", name, tar = false, version } = arg;
 		const archiveFormat = "tar" as tg.ArchiveFormat;
 		const extension = `.${archiveFormat}.${compression}`;
 		const archive = packageArchive({ extension, name, version });
@@ -132,7 +149,7 @@ export namespace download {
 		const mirrors = gnuHosts.slice(1).map(gnuUrl);
 
 		const outer = await download
-			.extractArchive({ checksum, url, mirrors })
+			.extractArchive({ checksum, url, mirrors, tar })
 			.then(tg.Directory.expect);
 		return download.unwrapDirectory(outer);
 	}

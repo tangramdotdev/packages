@@ -39,11 +39,13 @@ export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:51f74eb0f51cfa9873b85264dfdd5d46e8957ec95b88f0fb762f63d9e164c72e";
+	// Two pairs of test fixtures under `tta/perl/t/results` have names that differ only in case, so the source must be extracted with tar to check in on a case insensitive file system.
 	return std.download.fromGnu({
 		name,
 		version,
 		compression: "xz",
 		checksum,
+		tar: true,
 	});
 }
 
