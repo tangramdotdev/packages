@@ -68,7 +68,7 @@ pub async fn run() -> tg::Result<()> {
 	let process_id = process.id().unwrap_right().clone();
 	let cached = process.cached().unwrap_or(false);
 	let command_id = process.command().await?.id();
-	let wait = process.wait(tg::process::wait::Arg::default()).await?;
+	let wait = process.wait().await?;
 	let elapsed_ms = start.elapsed().as_millis();
 	eprintln!(
 		"runner_complete crate_name={crate_name} cached={cached} elapsed_ms={elapsed_ms} process_id={process_id} command_id={command_id}"
