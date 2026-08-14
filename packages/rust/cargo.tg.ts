@@ -844,7 +844,7 @@ export async function vendorDependencies(cargoLockArg: tg.Unresolved<tg.File>) {
 			tg.assert(pkg.source);
 			tg.assert(pkg.checksum);
 			const checksum: tg.Checksum = `sha256:${pkg.checksum}`;
-			const url = `https://crates.io/api/v1/crates/${pkg.name}/${pkg.version}/download`;
+			const url = `https://static.crates.io/crates/${pkg.name}/${pkg.name}-${pkg.version}.crate`;
 			const artifact = await std.download
 				.extractArchive({
 					checksum,

@@ -190,7 +190,7 @@ export async function flagForDependency(
 		if (!checksum) {
 			throw new Error("Dependency must specify a checksum.");
 		}
-		const url = `https://crates.io/api/v1/crates/${dep.name}/${dep.version}/download`;
+		const url = `https://static.crates.io/crates/${dep.name}/${dep.name}-${dep.version}.crate`;
 		// The URL will download a `.crate` file, which is a `tar.gz` archive.
 		source = await std.download
 			.extractArchive({
