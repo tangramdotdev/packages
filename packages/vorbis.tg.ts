@@ -44,6 +44,11 @@ export function build(...args: tg.Args<Arg>) {
 		{
 			source: source(),
 			deps,
+			phases: {
+				configure: {
+					args: ["-DCMAKE_POLICY_VERSION_MINIMUM=3.5"],
+				},
+			},
 		},
 		...args,
 	);
