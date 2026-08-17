@@ -664,16 +664,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_path = cwd.join(&options.output_path);
 		let output_file_id = output_file.id();
 		tracing::debug!(?output_file_id, ?output_path, "checking out output file");
-		let artifact = tg::Referent::with_node(tg::Artifact::from(output_file).id());
-		tg::checkout(tg::checkout::Arg {
-			artifact,
-			dependencies: false,
-			extension: None,
-			force: true,
-			lock: Some(tg::checkout::Lock::Attr),
-			path: Some(output_path.clone()),
-		})
-		.await?;
+		let artifact = tg::Artifact::from(output_file).id();
+		common::checkout_artifact_to_path(artifact, output_path.clone()).await?;
 
 		// Restore the original file permissions after checkout.
 		std::fs::set_permissions(&output_path, original_permissions).map_err(
@@ -963,7 +955,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 				let library_candidate_path_str = library_candidate_path.to_str().ok_or_else(
 					|| tg::error!(path = %library_candidate_path.display(), "unable to convert path to str"),
 				)?;
-				let library_candidate_file = if common::is_artifact_path(library_candidate_path_str)
+				let library_candidate_file = if common::is_store_path(library_candidate_path_str)
 				{
 					tracing::trace!("found an artifact, extracting file object");
 					let template = common::unrender(library_candidate_path_str)?;
@@ -1160,8 +1152,8 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 }
 
-/// Cache a set of library paths. Each referent carries its stored tokens, without which the server
-/// falls back to an index lookup to authorize it.
+/// Check out a set of library paths into the store. Each referent carries its stored tokens, without
+/// which the server falls back to an index lookup to authorize it.
 async fn cache_library_paths<H: BuildHasher + Default>(
 	library_paths: &HashSet<DirectoryWithSubpath, H>,
 ) -> tg::Result<()> {
@@ -1177,9 +1169,8 @@ async fn cache_library_paths<H: BuildHasher + Default>(
 			)
 		})
 		.collect();
-	let arg = tg::cache::Arg { artifacts };
 	tracing::debug!("caching libraries");
-	tg::cache::cache(arg)
+	common::checkout_artifacts(artifacts)
 		.await
 		.map_err(|error| tg::error!(!error, "failed to cache libraries"))?;
 	Ok(())

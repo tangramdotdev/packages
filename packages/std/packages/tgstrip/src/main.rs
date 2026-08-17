@@ -225,16 +225,8 @@ async fn run_proxy(
 				.await
 				.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
 
-			let artifact = tg::Referent::with_node(tg::Artifact::from(new_wrapper).id());
-			tg::checkout(tg::checkout::Arg {
-				artifact,
-				dependencies: false,
-				extension: None,
-				force: true,
-				path: Some(canonical_target_path),
-				lock: Some(tg::checkout::Lock::Attr),
-			})
-			.await?;
+			let artifact = tg::Artifact::from(new_wrapper).id();
+			common::checkout_artifact_to_path(artifact, canonical_target_path).await?;
 			#[cfg(feature = "tracing")]
 			tracing::info!("checked out the new output file");
 		},

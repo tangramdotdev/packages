@@ -8,8 +8,8 @@ use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
 // Sandbox mount point for referenced artifacts; rustc bakes paths of the form
-// `/opt/tangram/artifacts/<id>/...` into emitted `.d` depfiles.
-const SANDBOX_ARTIFACTS_DIR: &str = "/opt/tangram/artifacts";
+// `/opt/tangram/store/<id>/...` into emitted `.d` depfiles.
+const SANDBOX_STORE_DIR: &str = "/opt/tangram/store";
 
 // Markers that prefix tangram artifact ids in rendered env-var strings.
 const ARTIFACT_ID_MARKERS: &[&str] = &["/dir_01", "/fil_01", "/sym_01"];
@@ -194,7 +194,7 @@ async fn rewrite_depfile_source_paths(
 	source_artifact: &tg::Artifact,
 	source_dir: &Path,
 ) -> tg::Result<()> {
-	let sandbox_prefix = format!("{}/{}/", SANDBOX_ARTIFACTS_DIR, source_artifact.id());
+	let sandbox_prefix = format!("{}/{}/", SANDBOX_STORE_DIR, source_artifact.id());
 	let host_prefix = format!("{}/", source_dir.display());
 	let mut entries = tokio::fs::read_dir(out_dir).await.map_err(|error| {
 		tg::error!(
@@ -243,11 +243,13 @@ pub(crate) async fn checkout_artifact_entries(
 		let dest = target.join(&name);
 		set.spawn(async move {
 			tg::checkout(tg::checkout::Arg {
-				artifact: tg::Referent::with_node(artifact.id()),
 				dependencies: false,
 				extension: None,
 				force: true,
 				lock: None,
+				nodes: vec![tg::Referent::with_node(tg::Selector::Id(
+					artifact.id().into(),
+				))],
 				path: Some(dest),
 			})
 			.await

@@ -89,11 +89,13 @@ pub async fn run() -> tg::Result<()> {
 			)
 		})?;
 	tg::checkout(tg::checkout::Arg {
-		artifact: tg::Referent::with_node(build_dir.id().into()),
 		dependencies: true,
 		extension: None,
 		force: true,
 		lock: None,
+		nodes: vec![tg::Referent::with_node(tg::Selector::Id(
+			build_dir.id().into(),
+		))],
 		path: Some(std::path::PathBuf::from(&cargo_out_dir)),
 	})
 	.await
@@ -169,7 +171,7 @@ fn build_env(source_template: tg::Template, manifest_subpath: &str) -> tg::Resul
 }
 
 fn parse_artifact_path(path: &str) -> Option<(tg::artifact::Id, String)> {
-	for root in ["/opt/tangram/artifacts/", "/.tangram/artifacts/"] {
+	for root in ["/opt/tangram/store/", "/.tangram/store/"] {
 		let Some(rest) = path.strip_prefix(root) else {
 			continue;
 		};

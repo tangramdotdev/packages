@@ -7,7 +7,7 @@ use std::{
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
-use crate::artifact_path_for;
+use crate::checkout_artifact;
 
 /// The Tangram run entrypoint manifest.
 #[derive(
@@ -208,16 +208,9 @@ impl Manifest {
 	/// Read a manifest from the end of the given `[tg::File]`.
 	pub async fn read_from_file(file: tg::File) -> tg::Result<Option<Self>> {
 		tracing::debug!(?file, "Reading manifest from file");
-		let path = tg::checkout(tg::checkout::Arg {
-			artifact: tg::Referent::with_node(file.id().into()),
-			dependencies: false,
-			extension: None,
-			force: false,
-			lock: Some(tg::checkout::Lock::Attr),
-			path: None,
-		})
-		.await
-		.map_err(|error| tg::error!(!error, "failed to checkout the file"))?;
+		let path = checkout_artifact(file.id().into())
+			.await
+			.map_err(|error| tg::error!(!error, "failed to check out the file"))?;
 		tokio::task::spawn_blocking(move || Self::read_from_path(path))
 			.await
 			.map_err(|error| tg::error!(!error, "failed to read the manifest"))?
@@ -245,17 +238,11 @@ impl Manifest {
 			.ok_or_else(|| tg::error!("missing wrapper exe"))?;
 		let objcopy = TANGRAM_OBJCOPY_PATH.as_ref();
 
-		// Cache the input file, which is not a dependency of this executable.
-		tg::cache::cache(tg::cache::Arg {
-			artifacts: vec![tg::Referent::with_node(file.id().into())],
-		})
-		.await
-		.map_err(|error| tg::error!(!error, "failed to cache artifacts"))?;
-
-		// Get the input path on disk.
-		let input_id: tg::artifact::Id = file.id().into();
-		let input = artifact_path_for(&input_id)
-			.ok_or_else(|| tg::error!("failed to locate input file in any artifact root"))?;
+		// Check out the input file, which is not a dependency of this executable, to get its path on
+		// disk.
+		let input = checkout_artifact(file.id().into())
+			.await
+			.map_err(|error| tg::error!(!error, "failed to check out the input file"))?;
 
 		// Provide the context to wrap.
 		wrap::set_wrapper_bin_path(wrapper_bin.clone());

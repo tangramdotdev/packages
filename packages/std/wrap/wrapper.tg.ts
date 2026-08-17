@@ -427,7 +427,7 @@ export async function testWrapperValues() {
 export async function testModify() {
 	let file = await tg.file("nothing to see here\n");
 	return std.run(std.shBootstrap`
-		ls -al /.tangram/artifacts
+		ls -al /.tangram/store
 		echo 'sandbox modification' > ${file}
 		echo 'adfad' > ${tg.output}
 	`);

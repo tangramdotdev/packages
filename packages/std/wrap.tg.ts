@@ -2667,9 +2667,9 @@ export function argAndEnvDumpCross() {
 
 /**
  * Reproduces the wrapper SEGV that occurs when a wrapped binary is invoked on
- * a host that has neither /.tangram/artifacts nor /opt/tangram/artifacts.
+ * a host that has neither /.tangram/store nor /opt/tangram/store.
  */
-export async function demoFindArtifactsDirHostRun() {
+export async function demoFindStoreDirHostRun() {
 	const exe = await argAndEnvDump();
 	return tg.command({
 		executable: { path: "/bin/bash" },
@@ -2786,11 +2786,11 @@ export async function testSingleArgObjectNoMutations() {
 
 	if (os === "linux") {
 		tg.assert(
-			text.includes(`/proc/self/exe: /opt/tangram/artifacts/${wrapperID}`),
+			text.includes(`/proc/self/exe: /opt/tangram/store/${wrapperID}`),
 			"Expected /proc/self/exe to be set to the artifact ID of the wrapper",
 		);
 		tg.assert(
-			text.includes(`argv[0]: /opt/tangram/artifacts/${wrapperID}`),
+			text.includes(`argv[0]: /opt/tangram/store/${wrapperID}`),
 			"Expected argv[0] to be set to the wrapper that was invoked",
 		);
 	} else if (os === "darwin") {
@@ -2803,13 +2803,13 @@ export async function testSingleArgObjectNoMutations() {
 		console.log("origExecutable", origExecutableId);
 		tg.assert(
 			text.match(
-				new RegExp(`_NSGetExecutablePath: .*\\.tangram/artifacts/${wrapperID}`),
+				new RegExp(`_NSGetExecutablePath: .*\\.tangram/store/${wrapperID}`),
 			),
 			"Expected _NSGetExecutablePath to point to the wrapper",
 		);
 		tg.assert(
 			text.match(
-				new RegExp(`argv\\[0\\]: .*\\.tangram/artifacts/${wrapperID}`),
+				new RegExp(`argv\\[0\\]: .*\\.tangram/store/${wrapperID}`),
 			),
 			"Expected argv[0] to point to the wrapper that was invoked",
 		);

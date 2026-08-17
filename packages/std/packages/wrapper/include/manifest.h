@@ -38,7 +38,7 @@ typedef struct {
 typedef struct {
 	Arena*		arena;
 	Manifest*	manifest;
-	String		artifacts_dir;
+	String		store_dir;
 	bool		enable_tracing;
 } Cx;
 
@@ -87,24 +87,24 @@ TG_VISIBILITY String render_value (Cx* cx, JsonValue* value);
 TG_VISIBILITY String render_object (Cx* cx, JsonValue* value);
 
 #ifdef TG_IMPLEMENTATION
-#define ARTIFACTS_DIR "/.tangram/artifacts"
-#define ARTIFACTS_DIR_LEN 19
-#define OPT_ARTIFACTS_DIR "/opt/tangram/artifacts"
-#define OPT_ARTIFACTS_DIR_LEN 22
+#define STORE_DIR "/.tangram/store"
+#define STORE_DIR_LEN 15
+#define OPT_STORE_DIR "/opt/tangram/store"
+#define OPT_STORE_DIR_LEN 18
 
-TG_VISIBILITY void find_artifacts_dir (Arena* arena, String* path) {
+TG_VISIBILITY void find_store_dir (Arena* arena, String* path) {
 	struct stat statbuf;
 
 	// First check the root.
-	if (stat(ARTIFACTS_DIR, &statbuf) == 0) {
-		path->ptr = (uint8_t*)ARTIFACTS_DIR;
-		path->len = ARTIFACTS_DIR_LEN;
+	if (stat(STORE_DIR, &statbuf) == 0) {
+		path->ptr = (uint8_t*)STORE_DIR;
+		path->len = STORE_DIR_LEN;
 		return;
 	}
 
-	if (stat(OPT_ARTIFACTS_DIR, &statbuf) == 0) {
-		path->ptr = (uint8_t*)OPT_ARTIFACTS_DIR;
-		path->len = OPT_ARTIFACTS_DIR_LEN;
+	if (stat(OPT_STORE_DIR, &statbuf) == 0) {
+		path->ptr = (uint8_t*)OPT_STORE_DIR;
+		path->len = OPT_STORE_DIR_LEN;
 		return;
 	}
 
@@ -115,14 +115,14 @@ TG_VISIBILITY void find_artifacts_dir (Arena* arena, String* path) {
 	// Walk the parent directory tree.
 	do {
 		path->ptr[path->len] = 0;
-		memcpy(path->ptr + path->len, ARTIFACTS_DIR, ARTIFACTS_DIR_LEN + 1);
+		memcpy(path->ptr + path->len, STORE_DIR, STORE_DIR_LEN + 1);
 		if (stat((char*)path->ptr, &statbuf) == 0) {
-			path->len += ARTIFACTS_DIR_LEN;
+			path->len += STORE_DIR_LEN;
 			break;
 		}
 		*path = parent_dir(*path);
 	} while (path->len > 0);
-	ABORT_IF(!path->ptr, "failed to find artifacts directory");
+	ABORT_IF(!path->ptr, "failed to find the store directory");
 }
 
 TG_VISIBILITY void parse_manifest (
@@ -135,12 +135,12 @@ TG_VISIBILITY void parse_manifest (
 	// Sanity check.
 	ABORT_IF(len == 0, "expected a non-zero length");
 
-	// Find the artifacts directory.
-	String artifacts_dir;
-	find_artifacts_dir(arena, &artifacts_dir);
+	// Find the store directory.
+	String store_dir;
+	find_store_dir(arena, &store_dir);
 	if (enable_tracing) {
-		trace("artifacts directory:");
-		print_json_string(&artifacts_dir);
+		trace("store directory:");
+		print_json_string(&store_dir);
 		trace("\n");
 	}
 
@@ -148,7 +148,7 @@ TG_VISIBILITY void parse_manifest (
 	Cx cx = {
 		.arena = arena,
 		.manifest = manifest,
-		.artifacts_dir = artifacts_dir,
+		.store_dir = store_dir,
 		.enable_tracing = enable_tracing
 	};
 
@@ -689,7 +689,7 @@ TG_VISIBILITY void render_template (Cx* cx, JsonValue* template, String* rendere
 			if (cstreq(kind->value._string, "string")) {
 				append_to_string(rendered, &value->value._string, capacity);
 			} else if (cstreq(kind->value._string, "artifact")) {
-				append_to_string(rendered, &cx->artifacts_dir, capacity);
+				append_to_string(rendered, &cx->store_dir, capacity);
 				append_ch_to_string(rendered, '/', capacity);
 				append_to_string(rendered, &value->value._string, capacity);
 			} else {
@@ -794,7 +794,7 @@ TG_VISIBILITY String render_value (Cx* cx, JsonValue* value) {
 			} else if (cstreq(kind->value._string, "object")) {
 				value = json_get(object, "value");
 				ABORT_IF(!value || value->kind != JSON_STRING, "expected an ID");
-				String ss[2] = { cx->artifacts_dir, value->value._string };
+				String ss[2] = { cx->store_dir, value->value._string };
 				String s = STRING_LITERAL("/");
 				rendered = join(cx->arena, s, ss, 2);
 				break;
@@ -813,9 +813,9 @@ TG_VISIBILITY String render_value (Cx* cx, JsonValue* value) {
 	}
 	return rendered;
 }
-#undef ARTIFACTS_DIR
-#undef ARTIFACTS_DIR_LEN
-#undef OPT_ARTIFACTS_DIR
-#undef OPT_ARTIFACTS_DIR_LEN
+#undef STORE_DIR
+#undef STORE_DIR_LEN
+#undef OPT_STORE_DIR
+#undef OPT_STORE_DIR_LEN
 #undef PATH_MAX
 #endif

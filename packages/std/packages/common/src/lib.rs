@@ -54,14 +54,14 @@ pub fn template_from_artifact_and_subpath(
 	])
 }
 
-struct ArtifactRootSearch {
+struct StoreRootSearch {
 	/// Roots discovered so far, ordered closest-first.
 	found: Vec<String>,
 	/// Candidates not yet probed.
 	pending: std::vec::IntoIter<PathBuf>,
 }
 
-static ARTIFACT_ROOTS: LazyLock<Mutex<ArtifactRootSearch>> = LazyLock::new(|| {
+static STORE_ROOTS: LazyLock<Mutex<StoreRootSearch>> = LazyLock::new(|| {
 	let exe = std::env::current_exe()
 		.expect("failed to get the current executable")
 		.canonicalize()
@@ -69,24 +69,24 @@ static ARTIFACT_ROOTS: LazyLock<Mutex<ArtifactRootSearch>> = LazyLock::new(|| {
 	let mut pending: Vec<PathBuf> = exe
 		.ancestors()
 		.skip(1)
-		.map(|a| a.join(".tangram/artifacts"))
+		.map(|a| a.join(".tangram/store"))
 		.collect();
-	pending.push(PathBuf::from("/opt/tangram/artifacts"));
-	Mutex::new(ArtifactRootSearch {
+	pending.push(PathBuf::from("/opt/tangram/store"));
+	Mutex::new(StoreRootSearch {
 		found: Vec::new(),
 		pending: pending.into_iter(),
 	})
 });
 
-/// Return the i-th artifact root, walking ancestors only as far as needed.
-fn artifact_root_at(index: usize) -> Option<String> {
-	let mut search = ARTIFACT_ROOTS.lock().unwrap();
+/// Return the i-th store root, walking ancestors only as far as needed.
+fn store_root_at(index: usize) -> Option<String> {
+	let mut search = STORE_ROOTS.lock().unwrap();
 	while search.found.len() <= index {
 		let candidate = search.pending.next()?;
 		if candidate.is_dir() {
 			let s = candidate
 				.to_str()
-				.expect("artifact root path must be valid UTF-8")
+				.expect("store root path must be valid UTF-8")
 				.to_string();
 			search.found.push(s);
 		}
@@ -94,18 +94,63 @@ fn artifact_root_at(index: usize) -> Option<String> {
 	search.found.get(index).cloned()
 }
 
-/// Substring check: does this path live under any artifact root?
+/// Check out the given artifacts into the store, returning their paths.
+pub async fn checkout_artifacts(
+	artifacts: Vec<tg::Referent<tg::artifact::Id>>,
+) -> tg::Result<Vec<PathBuf>> {
+	let nodes = artifacts
+		.into_iter()
+		.map(|referent| referent.map(|id| tg::Selector::Id(id.into())))
+		.collect();
+	tg::checkout(tg::checkout::Arg {
+		dependencies: true,
+		extension: None,
+		force: false,
+		lock: None,
+		nodes,
+		path: None,
+	})
+	.await
+}
+
+/// Check out a single artifact into the store, returning its path.
+pub async fn checkout_artifact(artifact: tg::artifact::Id) -> tg::Result<PathBuf> {
+	let mut paths = checkout_artifacts(vec![tg::Referent::with_node(artifact)]).await?;
+	if paths.len() != 1 {
+		return Err(tg::error!("expected exactly one checkout path"));
+	}
+	Ok(paths.pop().unwrap())
+}
+
+/// Check out a single artifact to the given path, overwriting whatever is already there.
+pub async fn checkout_artifact_to_path(
+	artifact: tg::artifact::Id,
+	path: PathBuf,
+) -> tg::Result<()> {
+	tg::checkout(tg::checkout::Arg {
+		dependencies: false,
+		extension: None,
+		force: true,
+		lock: Some(tg::checkout::Lock::Attr),
+		nodes: vec![tg::Referent::with_node(tg::Selector::Id(artifact.into()))],
+		path: Some(path),
+	})
+	.await?;
+	Ok(())
+}
+
+/// Substring check: does this path live under any store root?
 #[must_use]
-pub fn is_artifact_path(path: &str) -> bool {
-	path.contains("/.tangram/artifacts/") || path.contains("/opt/tangram/artifacts/")
+pub fn is_store_path(path: &str) -> bool {
+	path.contains("/.tangram/store/") || path.contains("/opt/tangram/store/")
 }
 
 /// Find the on-disk path for an artifact ID by walking ancestor roots.
 #[must_use]
-pub fn artifact_path_for(id: &tg::artifact::Id) -> Option<PathBuf> {
+pub fn store_path_for(id: &tg::artifact::Id) -> Option<PathBuf> {
 	let suffix = id.to_string();
 	let mut i = 0;
-	while let Some(root) = artifact_root_at(i) {
+	while let Some(root) = store_root_at(i) {
 		let candidate = PathBuf::from(&root).join(&suffix);
 		if candidate.exists() {
 			return Some(candidate);
@@ -123,8 +168,8 @@ pub fn render_template_data(data: &tg::template::Data) -> tg::Result<String> {
 			tg::template::data::Component::String(string) => Ok(string.clone()),
 			tg::template::data::Component::Artifact(artifact_id) => {
 				let artifact_id = &artifact_id.node;
-				let path = artifact_path_for(artifact_id).ok_or_else(|| {
-					tg::error!("artifact {artifact_id} not present in any artifact root")
+				let path = store_path_for(artifact_id).ok_or_else(|| {
+					tg::error!("artifact {artifact_id} not present in any store root")
 				})?;
 				path.into_os_string()
 					.into_string()
@@ -138,14 +183,14 @@ pub fn render_template_data(data: &tg::template::Data) -> tg::Result<String> {
 /// Unrender a template string into a [`tg::Template`].
 pub fn unrender(string: &str) -> tg::Result<tg::Template> {
 	let mut i = 0;
-	while let Some(root) = artifact_root_at(i) {
+	while let Some(root) = store_root_at(i) {
 		if string.contains(&format!("{root}/")) {
 			return tg::Template::unrender(&root, string);
 		}
 		i += 1;
 	}
-	if string.contains("/opt/tangram/artifacts/") {
-		return tg::Template::unrender("/opt/tangram/artifacts", string);
+	if string.contains("/opt/tangram/store/") {
+		return tg::Template::unrender("/opt/tangram/store", string);
 	}
 	Ok(tg::Template::from(tg::template::Component::String(
 		string.to_owned(),
