@@ -2167,7 +2167,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7368575c7cc9e12d8e9dbce61f26226127dee360#7368575c7cc9e12d8e9dbce61f26226127dee360"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1659a884013346af00c6157ca4bd54b691f26f9b#1659a884013346af00c6157ca4bd54b691f26f9b"
 dependencies = [
  "async-channel",
  "aws-lc-rs",
@@ -2223,7 +2223,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7368575c7cc9e12d8e9dbce61f26226127dee360#7368575c7cc9e12d8e9dbce61f26226127dee360"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1659a884013346af00c6157ca4bd54b691f26f9b#1659a884013346af00c6157ca4bd54b691f26f9b"
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -2232,7 +2232,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7368575c7cc9e12d8e9dbce61f26226127dee360#7368575c7cc9e12d8e9dbce61f26226127dee360"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1659a884013346af00c6157ca4bd54b691f26f9b#1659a884013346af00c6157ca4bd54b691f26f9b"
 dependencies = [
  "dashmap",
  "futures",
@@ -2246,7 +2246,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7368575c7cc9e12d8e9dbce61f26226127dee360#7368575c7cc9e12d8e9dbce61f26226127dee360"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1659a884013346af00c6157ca4bd54b691f26f9b#1659a884013346af00c6157ca4bd54b691f26f9b"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2274,7 +2274,7 @@ dependencies = [
 [[package]]
 name = "tangram_pool"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7368575c7cc9e12d8e9dbce61f26226127dee360#7368575c7cc9e12d8e9dbce61f26226127dee360"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1659a884013346af00c6157ca4bd54b691f26f9b#1659a884013346af00c6157ca4bd54b691f26f9b"
 dependencies = [
  "futures",
  "tangram_futures",
@@ -2284,7 +2284,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7368575c7cc9e12d8e9dbce61f26226127dee360#7368575c7cc9e12d8e9dbce61f26226127dee360"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1659a884013346af00c6157ca4bd54b691f26f9b#1659a884013346af00c6157ca4bd54b691f26f9b"
 dependencies = [
  "bytes",
  "num",
@@ -2295,7 +2295,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7368575c7cc9e12d8e9dbce61f26226127dee360#7368575c7cc9e12d8e9dbce61f26226127dee360"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1659a884013346af00c6157ca4bd54b691f26f9b#1659a884013346af00c6157ca4bd54b691f26f9b"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -2306,7 +2306,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7368575c7cc9e12d8e9dbce61f26226127dee360#7368575c7cc9e12d8e9dbce61f26226127dee360"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1659a884013346af00c6157ca4bd54b691f26f9b#1659a884013346af00c6157ca4bd54b691f26f9b"
 dependencies = [
  "derive_more",
  "http",
@@ -2321,7 +2321,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7368575c7cc9e12d8e9dbce61f26226127dee360#7368575c7cc9e12d8e9dbce61f26226127dee360"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1659a884013346af00c6157ca4bd54b691f26f9b#1659a884013346af00c6157ca4bd54b691f26f9b"
 dependencies = [
  "bytes",
  "data-encoding",
@@ -2683,9 +2683,9 @@ checksum = "159a7cadce548703edd50d24069bc294c5415ecab0a480e0cd1ca06d112dc94a"
 
 [[package]]
 name = "uuid"
-version = "1.24.0"
+version = "1.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf3923a6f5c4c6382e0b653c4117f48d631ea17f38ed86e2a828e6f7412f5239"
+checksum = "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",

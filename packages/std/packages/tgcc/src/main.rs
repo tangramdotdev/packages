@@ -365,7 +365,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	};
 
 	let process: tg::Process = tg::Process::spawn(arg).await?;
-	let wait = process.wait().await?;
+	let wait = process.wait(tg::process::wait::Options::default()).await?;
 
 	let build_directory = wait
 		.output
