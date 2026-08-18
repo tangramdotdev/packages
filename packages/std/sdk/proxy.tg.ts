@@ -299,7 +299,6 @@ async function ldProxy(arg: LdProxyArg) {
 		std.triple.os(build) === "linux" ? (arg.embedWrapper ?? true) : false;
 
 	// Get the embedded wrapper artifacts.
-	const wrapperBin = await workspace.wrapperBinary({ host, build });
 	const wrapperExe = await workspace.wrapper({ host, build });
 	let objcopy = undefined;
 
@@ -363,7 +362,6 @@ async function ldProxy(arg: LdProxyArg) {
 		TANGRAM_CODESIGN_PATH: codesign
 			? tg.Mutation.set(codesign)
 			: (tg.Mutation.unset() as tg.Mutation<tg.File>),
-		TANGRAM_WRAPPER_BIN_PATH: tg.Mutation.set(wrapperBin),
 		TANGRAM_WRAPPER_EXE_PATH: tg.Mutation.set(wrapperExe),
 		TANGRAM_OBJCOPY_PATH: objcopy
 			? tg.Mutation.set(objcopy)
@@ -467,10 +465,9 @@ export async function test() {
 	return true;
 }
 
-/** The names of the linker proxy env vars that each locate an artifact the proxy checks out at run time. */
-const ldProxyArtifactEnvVars = [
-	"TANGRAM_CODESIGN_PATH",
-	"TANGRAM_WRAPPER_BIN_PATH",
+/** The names of the linker proxy env vars that each locate an artifact the proxy checks out at run time. Only Mach-O outputs get codesigned, so the proxy leaves `TANGRAM_CODESIGN_PATH` unset elsewhere. */
+const ldProxyArtifactEnvVars = (host: string) => [
+	...(std.triple.os(host) === "darwin" ? ["TANGRAM_CODESIGN_PATH"] : []),
 	"TANGRAM_WRAPPER_EXE_PATH",
 	"TGLD_INJECTION_PATH",
 ];
@@ -501,8 +498,8 @@ const manifestEnvValue = (
 
 /** Every artifact the linker proxy needs at run time must be reachable from its object graph.
  *
- * The proxy receives the wrapper executable, the wrapper binary, `codesign`, and the injection
- * library through its env. Passing any of them as a bare id string smuggles the reference past the
+ * The proxy receives the wrapper executable, `codesign`, and the injection library through its
+ * env. Passing any of them as a bare id string smuggles the reference past the
  * object graph: a string component is not an artifact component, so no dependency edge is recorded,
  * so the sandboxed process holds no grant and its runtime checkout is denied ("failed to ensure the
  * artifacts are stored and authorized ... failed to find the artifact").
@@ -512,7 +509,7 @@ const manifestEnvValue = (
  * vacuously. This test asserts the property the proxy actually needs: each of these env vars carries
  * an artifact, and every artifact they carry is recorded as a dependency of the proxy. */
 export async function testLdProxyDependencies() {
-	const host = std.triple.host();
+	const host = bootstrap.toolchainTriple(std.triple.host());
 	const buildToolchain = await bootstrap.sdk();
 	const { ld } = await std.sdk.toolchainComponents({
 		env: await std.env.compose(buildToolchain),
@@ -529,7 +526,7 @@ export async function testLdProxyDependencies() {
 
 	// Each env var must carry an artifact, not a bare id string.
 	const referents = new Set<tg.Object.Id>();
-	for (const name of ldProxyArtifactEnvVars) {
+	for (const name of ldProxyArtifactEnvVars(host)) {
 		const value = manifestEnvValue(manifest, name);
 		tg.assert(value !== undefined, `the linker proxy env should set ${name}`);
 		const artifacts = [];

@@ -69,10 +69,6 @@ struct Embed {
 	#[arg(long)]
 	wrapper_exe: PathBuf,
 
-	/// The wrapper binary.
-	#[arg(long)]
-	wrapper_bin: Option<PathBuf>,
-
 	/// The path of the objcopy binary to use.
 	#[arg(long)]
 	objcopy_path: Option<PathBuf>,
@@ -112,9 +108,6 @@ fn main() {
 			.expect("failed to deserialize manifest");
 			if let Some(path) = args.objcopy_path {
 				wrap::set_objcopy_path(path);
-			}
-			if let Some(path) = args.wrapper_bin {
-				wrap::set_wrapper_bin_path(path);
 			}
 			wrap::set_wrapper_exe_path(args.wrapper_exe);
 			std::fs::copy(args.input, &args.output).expect("failed to copy input file");

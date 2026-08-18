@@ -119,7 +119,6 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		...osArgs,
 	];
 	const wrapFlags = ["-static", ...releaseArgs, ...verboseArgs];
-	const objcopy = os === "linux" ? `${prefix}objcopy -O binary` : "cp";
 	let buildPhase = tg`
 		set +x
 
@@ -136,11 +135,6 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 			exit 1
 		fi
 		echo "built wrapper.exe"
-
-
-		# Extract the binary.
-		${objcopy} ${tg.output}/wrapper.exe ${tg.output}/wrapper.bin
-		echo "built wrapper.bin"
 	`;
 
 	let bin = std.phases

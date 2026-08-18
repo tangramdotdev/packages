@@ -421,18 +421,17 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 	// Look for the manifest in the executable sections.
 	char* data = NULL;
 
-	// Read the manifest. TODO: use loadable segment?
-	int fd = open((char*)path.ptr, O_RDONLY, 0);
-	ABORT_IF(fd < 0, "failed to open the file %s", path.ptr);
+#ifdef __linux__
+	// On ELF targets, the manifest is embedded in an ELF section. The header and program header
+	// table come from the same descriptor and are needed by the userland exec below regardless.
+	// Open /proc/self/exe rather than the path, so the descriptor refers to the executing inode:
+	// the path can be replaced concurrently, which libtool does when it relinks under make -j.
+	int fd = open("/proc/self/exe", O_RDONLY, 0);
+	ABORT_IF(fd < 0, "failed to open /proc/self/exe");
 	off_t offset = 0;
 	if (options->enable_tracing) {
-		trace("opened %s (%d)\n", path.ptr, fd);
+		trace("opened /proc/self/exe (%d)\n", fd);
 	}
-#ifdef __linux__
-	// On ELF targets, the manifest is embedded in an ELF section. To read it we read the ELF
-	// file, walk the file contents, and read the manifest directly from the section. In the
-	// future we may choose to make the section loadable and read only to avoid needing to open
-	// the file at all.
 	executable.elf_header = ALLOC(arena, Elf64_Ehdr);
 
 	// Read the elf header. We don't need to do any validation here, we assume the kernel didn't lie.
@@ -494,45 +493,68 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 	}
 	ABORT_IF(!data, "failed to find manifest section");
 
+	// Close the file.
+	close(fd);
 #elif defined(__APPLE__)
-	// On Mach platforms, the manifest is embedded into the binary just before the code signature
-	// which must occur at the end of the file. We read the header and all the load commands to
-	// find where the code signature is in the file, then walk back from there to read the
-	// manifest.
-	mach_header_64 mach_header = {0};
-	load_command load_command = {0};
-	linkedit_data_command code_signature_command = {0};
-	read_all(options->enable_tracing, fd, (char*)&mach_header, sizeof(mach_header_64), 0);
-	if(options->enable_tracing) {
-		trace("mach_header: %08x, ncmds: %d, izeofcmds: %d\n",
-			mach_header.magic, mach_header.ncmds, mach_header.sizeofcmds);
+	// On Mach platforms, the manifest is embedded just before the code signature, which must occur
+	// at the end of the file. Both sit in __LINKEDIT, which the kernel maps, so read them from our
+	// own image: there is no /proc/self/exe here, and resolving our path would race with any
+	// concurrent job that replaces the file.
+	extern const mach_header_64 _mh_execute_header;
+	const mach_header_64* mach_header = &_mh_execute_header;
+	if (options->enable_tracing) {
+		trace("mach_header: %08x, ncmds: %d, sizeofcmds: %d\n",
+			mach_header->magic, mach_header->ncmds, mach_header->sizeofcmds);
 	}
 
-	// Find the code signature.
-	offset = (off_t)sizeof(mach_header_64);
-	for (int i = 0; i < mach_header.ncmds; i++) {
-		read_all(options->enable_tracing, fd, (char*)&load_command, sizeof(load_command), offset);
-		if (load_command.cmd == LC_CODE_SIGNATURE) {
-			read_all(options->enable_tracing, fd, (char*)&code_signature_command, sizeof(linkedit_data_command), offset);
-			break;
+	// Find the __TEXT and __LINKEDIT segments and the code signature.
+	const segment_command_64* text_segment = NULL;
+	const segment_command_64* linkedit_segment = NULL;
+	const linkedit_data_command* code_signature_command = NULL;
+	const char* command_itr = (const char*)mach_header + sizeof(mach_header_64);
+	for (uint32_t i = 0; i < mach_header->ncmds; i++) {
+		const load_command* command = (const load_command*)command_itr;
+		if (command->cmd == LC_SEGMENT_64) {
+			const segment_command_64* segment = (const segment_command_64*)command_itr;
+			if (memcmp(segment->segname, "__TEXT", sizeof("__TEXT")) == 0) {
+				text_segment = segment;
+			} else if (memcmp(segment->segname, "__LINKEDIT", sizeof("__LINKEDIT")) == 0) {
+				linkedit_segment = segment;
+			}
+		} else if (command->cmd == LC_CODE_SIGNATURE) {
+			code_signature_command = (const linkedit_data_command*)command_itr;
 		}
-		offset += load_command.cmdsize;
+		command_itr += command->cmdsize;
 	}
-	ABORT_IF(code_signature_command.dataoff== 0, "failed to find the code signature");
+	ABORT_IF(text_segment == NULL || linkedit_segment == NULL, "failed to find the segments");
+	ABORT_IF(
+		code_signature_command == NULL || code_signature_command->dataoff == 0,
+		"failed to find the code signature"
+	);
 
-	// The footer will be stored just before the code signature.
-	offset = code_signature_command.dataoff - (off_t)sizeof(Footer);
-	read_all(options->enable_tracing, fd, (char*)&executable.footer, sizeof(Footer), offset);
+	// The image is position independent, so apply the slide to the recorded addresses.
+	uintptr_t slide = (uintptr_t)mach_header - (uintptr_t)text_segment->vmaddr;
+	const char* linkedit = (const char*)((uintptr_t)linkedit_segment->vmaddr + slide);
+	uint64_t linkedit_start = linkedit_segment->fileoff;
+
+	// The footer is stored just before the code signature.
+	ABORT_IF(
+		code_signature_command->dataoff < linkedit_start + sizeof(Footer)
+			|| code_signature_command->dataoff
+				> linkedit_start + linkedit_segment->filesize,
+		"the code signature is outside the __LINKEDIT segment"
+	);
+	uint64_t footer_offset = code_signature_command->dataoff - sizeof(Footer);
+	memcpy(&executable.footer, linkedit + (footer_offset - linkedit_start), sizeof(Footer));
 
 	// The manifest is just before the footer.
-	offset -= (off_t)executable.footer.size;
+	ABORT_IF(executable.footer.size > footer_offset - linkedit_start, "invalid footer");
+	uint64_t manifest_offset = footer_offset - executable.footer.size;
 	data = ALLOC_N(arena, executable.footer.size, char);
-	read_all(options->enable_tracing, fd, data, executable.footer.size, offset);
+	memcpy(data, linkedit + (manifest_offset - linkedit_start), executable.footer.size);
 #else
 #error "unsupported target"
 #endif
-	// Close the file.
-	close(fd);
 
 	// Parse the manifest.
 	if (options->enable_tracing) {

@@ -764,7 +764,7 @@ export namespace sdk {
 			const ldsoPath = libc.interpreterName(target);
 
 			// Try the toplevel lib directory first
-			let libDir = await directory.tryGet("lib");
+			const libDir = await directory.tryGet("lib");
 			if (libDir && libDir instanceof tg.Directory) {
 				const ldso = await libDir.tryGet(ldsoPath);
 				if (ldso && ldso instanceof tg.File) {
@@ -772,16 +772,20 @@ export namespace sdk {
 				}
 			}
 
-			// If not found in toplevel lib, try the target-prefixed directory.
-			libDir = await directory
-				.tryGet(`${target}/lib`)
-				.then(tg.Directory.expect);
+			// If not found in toplevel lib, try the target-prefixed directory. Both lookups are
+			// `tryGet`, so that a toolchain that has neither reports which one was missing rather
+			// than an unlabelled assertion.
+			const sysrootLibDir = await directory.tryGet(`${target}/lib`);
 			tg.assert(
-				libDir && libDir instanceof tg.Directory,
-				"failed to locate toolchain sysroot libdir",
+				sysrootLibDir instanceof tg.Directory,
+				`failed to locate the toolchain sysroot libdir for ${target}`,
 			);
-			const ldso = await libDir.tryGet(ldsoPath).then(tg.File.expect);
-			return { ldso, libDir };
+			const ldso = await sysrootLibDir.tryGet(ldsoPath);
+			tg.assert(
+				ldso instanceof tg.File,
+				`failed to locate ${ldsoPath} in the toolchain sysroot libdir for ${target}`,
+			);
+			return { ldso, libDir: sysrootLibDir };
 		}
 	}
 

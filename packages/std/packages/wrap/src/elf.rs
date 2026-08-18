@@ -106,8 +106,6 @@ macro_rules! impl_elf {
 
 			#[allow(clippy::too_many_lines)]
 			fn embed(&self, executable: &Path, manifest: &[u8]) -> std::io::Result<()> {
-				let wrapper_bin_path = crate::wrapper_bin_path()
-					.ok_or_else(|| std::io::Error::other("missing wrapper bin"))?;
 				let wrapper_exe_path = crate::wrapper_exe_path()
 					.ok_or_else(|| std::io::Error::other("missing wrapper exe"))?;
 
@@ -169,12 +167,16 @@ macro_rules! impl_elf {
 					}
 				}
 
-				// Read wrapper binary and get entrypoint from wrapper ELF.
-				let wrapper_bin = std::fs::read(&wrapper_bin_path)?;
-				let wrapper_entry = {
-					let wrapper_exe = File::open(&wrapper_exe_path, true)?;
-					self.elf_header(&wrapper_exe).e_entry
-				};
+				// The whole ELF file is the blob that gets appended. The stub segment below maps it
+				// at p_offset = wrapper_offset, p_vaddr = wrapper_vaddr, so the blob must be indexed
+				// by file offset: an `objcopy -O binary` image is indexed by load address and faults
+				// once execution leaves the first segment.
+				let wrapper_exe = std::fs::read(&wrapper_exe_path)?;
+				let wrapper_entry = paste! {[<$elf _Ehdr>]::read_from_bytes(
+					&wrapper_exe[0..size_of::<[<$elf _Ehdr>]>()],
+				)}
+				.expect("expected an elf header")
+				.e_entry;
 
 				// Open the executable for modification.
 				let mut file = File::open(executable, false)?;
@@ -241,8 +243,10 @@ macro_rules! impl_elf {
 				let manifest_shdr_offset = manifest_shdr_offset
 					.ok_or_else(|| std::io::Error::other("missing manifest section"))?;
 
-				// Compute the data layout.
-				let wrapper_data_size = wrapper_bin.len() + manifest.len();
+				// Compute the data layout. The footer is included so that the segment covers the same
+				// bytes as the manifest section header, which counts it in its size.
+				let wrapper_data_size =
+					wrapper_exe.len() + manifest.len() + size_of::<crate::Footer>();
 				let wrapper_vaddr = align(max_vaddr.to_usize().unwrap(), max_align.to_usize().unwrap())
 					.try_into()
 					.unwrap();
@@ -339,9 +343,9 @@ macro_rules! impl_elf {
 				.unwrap();
 				manifest_shdr.sh_type = sys::SHT_NOTE;
 				manifest_shdr.sh_flags = 0;
-				manifest_shdr.sh_addr = (wrapper_vaddr.to_usize().unwrap() + wrapper_bin.len()).try_into().unwrap();
+				manifest_shdr.sh_addr = (wrapper_vaddr.to_usize().unwrap() + wrapper_exe.len()).try_into().unwrap();
 				manifest_shdr.sh_offset =
-					(wrapper_offset.to_usize().unwrap() + wrapper_bin.len()).try_into().unwrap();
+					(wrapper_offset.to_usize().unwrap() + wrapper_exe.len()).try_into().unwrap();
 				manifest_shdr.sh_size =
 					(manifest.len() + size_of::<crate::Footer>()).try_into().unwrap();
 				manifest_shdr.sh_link = 0;
@@ -409,8 +413,8 @@ macro_rules! impl_elf {
 					}
 				}
 
-				// Append wrapper binary.
-				file.append(&wrapper_bin)?;
+				// Append the wrapper executable.
+				file.append(&wrapper_exe)?;
 
 				// Append manifest.
 				file.append(manifest)?;
@@ -584,6 +588,35 @@ macro_rules! impl_elf {
 						let old_size = isize::try_from(header.sh_size).unwrap();
 						let new_size = old_size + diff;
 						header.sh_size = new_size.try_into().unwrap();
+						break;
+					}
+				}
+
+				// Update the segment containing the manifest, so that its file size continues to
+				// cover the whole manifest and footer.
+				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
+				let (phdr_offset, phdr_count) = {
+					let ehdr = self.elf_header(file);
+					(
+						ehdr.e_phoff.to_usize().unwrap(),
+						ehdr.e_phnum.to_usize().unwrap(),
+					)
+				};
+				for i in 0..phdr_count {
+					let off = phdr_offset + i * phdr_size;
+					let phdr = paste! {[<$elf _Phdr>]::mut_from_bytes(&mut file[off..off + phdr_size])}
+						.expect("expected a program header");
+					if phdr.p_type != sys::PT_LOAD {
+						continue;
+					}
+					let start = phdr.p_offset.to_usize().unwrap();
+					let end = start + phdr.p_filesz.to_usize().unwrap();
+					if old.offset >= start && old.offset < end {
+						let new_filesz = isize::try_from(phdr.p_filesz).unwrap() + diff;
+						let new_filesz = usize::try_from(new_filesz).unwrap();
+						phdr.p_filesz = new_filesz.try_into().unwrap();
+						let p_align = phdr.p_align.to_usize().unwrap().max(1);
+						phdr.p_memsz = align(new_filesz, p_align).try_into().unwrap();
 						break;
 					}
 				}

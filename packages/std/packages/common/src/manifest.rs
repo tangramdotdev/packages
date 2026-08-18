@@ -230,9 +230,6 @@ impl Manifest {
 		tracing::debug!(?self, "Embedding manifest");
 
 		// Get the paths of the required files.
-		let wrapper_bin = TANGRAM_WRAPPER_BIN_PATH
-			.as_ref()
-			.ok_or_else(|| tg::error!("missing wrapper bin"))?;
 		let wrapper_exe = TANGRAM_WRAPPER_EXE_PATH
 			.as_ref()
 			.ok_or_else(|| tg::error!("missing wrapper exe"))?;
@@ -245,7 +242,6 @@ impl Manifest {
 			.map_err(|error| tg::error!(!error, "failed to check out the input file"))?;
 
 		// Provide the context to wrap.
-		wrap::set_wrapper_bin_path(wrapper_bin.clone());
 		wrap::set_wrapper_exe_path(wrapper_exe.clone());
 		if let Some(objcopy) = objcopy {
 			wrap::set_objcopy_path(objcopy.clone());
@@ -607,12 +603,6 @@ fn dependency_from_object_id(id: &tg::object::Id) -> Option<tg::file::Dependency
 
 // These are rendered from artifacts in the manifest, so each is a dependency already present in an
 // artifact root.
-static TANGRAM_WRAPPER_BIN_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
-	std::env::var("TANGRAM_WRAPPER_BIN_PATH")
-		.ok()
-		.map(PathBuf::from)
-});
-
 static TANGRAM_WRAPPER_EXE_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 	std::env::var("TANGRAM_WRAPPER_EXE_PATH")
 		.ok()

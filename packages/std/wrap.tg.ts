@@ -2682,6 +2682,13 @@ export async function test() {
 		tg.build(testSingleArgObjectNoMutations, {
 			name: "single arg object no mutations",
 		}),
+		tg.build(testConcurrentRelink, { name: "concurrent relink" }),
+		tg.build(testConcurrentRelinkStandalone, {
+			name: "concurrent relink standalone",
+		}),
+		tg.build(testConcurrentRelinkTransient, {
+			name: "concurrent relink transient",
+		}),
 		tg.build(testDependencies, { name: "dependencies" }),
 		tg.build(testDylibPath, { name: "dylib path" }),
 		tg.build(testEnvObjectFromArtifactAuthorization, {
@@ -2808,9 +2815,7 @@ export async function testSingleArgObjectNoMutations() {
 			"Expected _NSGetExecutablePath to point to the wrapper",
 		);
 		tg.assert(
-			text.match(
-				new RegExp(`argv\\[0\\]: .*\\.tangram/store/${wrapperID}`),
-			),
+			text.match(new RegExp(`argv\\[0\\]: .*\\.tangram/store/${wrapperID}`)),
 			"Expected argv[0] to point to the wrapper that was invoked",
 		);
 	}
@@ -3677,4 +3682,177 @@ export async function testLdLibraryPathPreservedThroughNestedWrapping() {
 	const result = string === "hello, world!\n";
 	tg.assert(result, `Expected "hello, world!\\n" but got "${string}"`);
 	return result;
+}
+
+/** The program the concurrent relink tests wrap. */
+const concurrentRelinkSource = tg.directory({
+	"main.c": tg.file(`
+		#include <stdio.h>
+		int main() {
+			printf("hello, world!\\n");
+			return 0;
+		}
+	`),
+});
+
+const relinkWrapper = async (toolchain: std.env.Arg) => {
+	const executable = await std
+		.run(std.shBootstrap`
+		cc ${concurrentRelinkSource}/main.c -o ${tg.output}
+	`)
+		.env(toolchain)
+		.then(tg.File.expect);
+	return await wrap(executable, { buildToolchain: toolchain });
+};
+
+/** Run `wrapper` from 16 concurrent workers, each replacing it with an atomic rename first. */
+const atomicRelink = async (wrapper: tg.File) => {
+	const workers = 16;
+	const iterations = 150;
+	const toolchain = await bootstrap.sdk(std.triple.host());
+
+	const output = await std
+		.build(std.shBootstrap`
+		mkdir -p .libs
+		cp ${wrapper} .libs/lt-prog
+
+		i=1
+		while [ $i -le ${workers.toString()} ]; do
+			(
+				j=0
+				while [ $j -lt ${iterations.toString()} ]; do
+					cp ${wrapper} .libs/$i-lt-prog
+					mv -f .libs/$i-lt-prog .libs/lt-prog
+					./.libs/lt-prog >> $i.log 2>&1
+					j=$((j+1))
+				done
+			) &
+			i=$((i+1))
+		done
+		wait
+
+		cat *.log > ${tg.output}
+	`)
+		.env(toolchain)
+		.then(tg.File.expect);
+
+	const lines = await output.text.then((text) => text.split("\n").slice(0, -1));
+	const failures = lines.filter((line) => line !== "hello, world!");
+	tg.assert(
+		failures.length === 0,
+		`Expected every run to succeed, got ${failures.length} failures: ${failures.slice(0, 3).join(", ")}`,
+	);
+	tg.assert(
+		lines.length === workers * iterations,
+		`Expected ${workers * iterations} runs, got ${lines.length}`,
+	);
+	return true;
+};
+
+/** A libtool wrapper script renames a relinked binary over `.libs/lt-<name>` then execs it, so under `make -j` a wrapper can be replaced between its own exec and its first read of itself. */
+export async function testConcurrentRelink() {
+	const host = std.triple.host();
+	return await atomicRelink(await relinkWrapper(await bootstrap.sdk(host)));
+}
+
+/** The same race against a standalone wrapper, which keeps its manifest elsewhere in the file and execs the program rather than userland-execing itself. */
+export async function testConcurrentRelinkStandalone() {
+	const host = std.triple.host();
+	const sdkArg = await bootstrap.sdk.arg(host);
+	const toolchain = await std.sdk({ ...sdkArg, embedWrapper: false });
+	return await atomicRelink(await relinkWrapper(toolchain));
+}
+
+/** The same race against libtool's fallback, which removes `.libs/lt-<name>` before renaming into place, so the path is briefly absent. Runs the kernel could not exec are expected; a run it did exec must not fail inside the wrapper. */
+export async function testConcurrentRelinkTransient() {
+	const host = std.triple.host();
+	const workers = 8;
+	const iterations = 200;
+
+	const toolchain = await bootstrap.sdk(host);
+	const wrapper = await relinkWrapper(toolchain);
+
+	const output = await std
+		.build(std.shBootstrap`
+		mkdir -p .libs
+		cp ${wrapper} .libs/lt-prog
+
+		i=1
+		while [ $i -le ${workers.toString()} ]; do
+			(
+				j=0
+				while [ $j -lt ${iterations.toString()} ]; do
+					cp ${wrapper} .libs/$i-lt-prog
+					# The bootstrap "rm" still reports ENOENT with "-f" if another worker wins.
+					rm -f .libs/lt-prog || true
+					mv -f .libs/$i-lt-prog .libs/lt-prog
+					# Capture the status, since a failed exec would end the worker under "set -e".
+					if result=$(./.libs/lt-prog 2>&1); then
+						status=0
+					else
+						status=$?
+					fi
+					echo "$status|$result" >> $i.log
+					j=$((j+1))
+				done
+			) &
+			i=$((i+1))
+		done
+		wait
+
+		cat *.log > ${tg.output}
+	`)
+		.env(toolchain)
+		.then(tg.File.expect);
+
+	const results = await output.text.then((text) =>
+		text
+			.split("\n")
+			.filter((line) => line !== "")
+			.map((line) => {
+				const separator = line.indexOf("|");
+				return {
+					status: line.slice(0, separator),
+					text: line.slice(separator + 1),
+				};
+			}),
+	);
+	tg.assert(
+		results.length === workers * iterations,
+		`Expected ${workers * iterations} runs, got ${results.length}`,
+	);
+
+	// The wrapper aborts with 111. The status a shell reports for a failed exec varies, so key on
+	// that rather than on an allowlist of shell statuses.
+	const aborts = results.filter((result) => result.status === "111");
+	tg.assert(
+		aborts.length === 0,
+		`Expected no wrapper failures, got ${aborts.length}: ${aborts
+			.slice(0, 3)
+			.map((abort) => `${abort.status}|${abort.text}`)
+			.join(", ")}`,
+	);
+
+	const successes = results.filter((result) => result.status === "0");
+	tg.assert(successes.length > 0, "Expected at least one run to succeed");
+
+	// Without this the test passes vacuously when the timing never makes the path absent.
+	const absent = results.filter(
+		(result) => result.status !== "0" && result.status !== "111",
+	);
+	tg.assert(
+		absent.length > 0,
+		"Expected at least one run to find the path absent",
+	);
+	const unexpected = successes.filter(
+		(result) => result.text !== "hello, world!",
+	);
+	tg.assert(
+		unexpected.length === 0,
+		`Expected every successful run to print the greeting, got ${unexpected.length} with other output: ${unexpected
+			.slice(0, 3)
+			.map((result) => result.text)
+			.join(", ")}`,
+	);
+	return true;
 }
