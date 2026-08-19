@@ -199,11 +199,40 @@ macro_rules! impl_elf {
 				// by file offset: an `objcopy -O binary` image is indexed by load address and faults
 				// once execution leaves the first segment.
 				let wrapper_exe = std::fs::read(&wrapper_exe_path)?;
-				let wrapper_entry = paste! {[<$elf _Ehdr>]::read_from_bytes(
+				let wrapper_ehdr = paste! {[<$elf _Ehdr>]::read_from_bytes(
 					&wrapper_exe[0..size_of::<[<$elf _Ehdr>]>()],
 				)}
-				.expect("expected an elf header")
-				.e_entry;
+				.expect("expected an elf header");
+				if wrapper_ehdr.e_type.to_u32() != Some(sys::ET_DYN) {
+					return Err(std::io::Error::new(
+						std::io::ErrorKind::InvalidInput,
+						"the wrapper executable must be position-independent (ET_DYN)",
+					));
+				}
+				let wrapper_entry_vaddr = wrapper_ehdr.e_entry.to_usize().unwrap();
+				let wrapper_phdr_offset = wrapper_ehdr.e_phoff.to_usize().unwrap();
+				let wrapper_phdr_count = wrapper_ehdr.e_phnum.to_usize().unwrap();
+				let wrapper_entry_offset = (0..wrapper_phdr_count)
+					.find_map(|index| {
+						let offset = wrapper_phdr_offset + index * phdr_size;
+						let bytes = wrapper_exe.get(offset..offset + phdr_size)?;
+						let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(bytes)}.ok()?;
+						if phdr.p_type != sys::PT_LOAD {
+							return None;
+						}
+						let vaddr = phdr.p_vaddr.to_usize().unwrap();
+						let filesz = phdr.p_filesz.to_usize().unwrap();
+						if wrapper_entry_vaddr < vaddr || wrapper_entry_vaddr >= vaddr + filesz {
+							return None;
+						}
+						Some(phdr.p_offset.to_usize().unwrap() + wrapper_entry_vaddr - vaddr)
+					})
+					.ok_or_else(|| {
+						std::io::Error::new(
+							std::io::ErrorKind::InvalidInput,
+							"the wrapper entry point is not in a file-backed PT_LOAD",
+						)
+					})?;
 
 				// Open the executable for modification.
 				let mut file = File::open(executable, false)?;
@@ -339,19 +368,22 @@ macro_rules! impl_elf {
 					}};
 
 					let mut bytes = Vec::with_capacity(new_count * phdr_size);
+					let mut load_entries = Vec::new();
 
-					// Copy existing loadable segments first.
+					// Collect all loadable segments, including the stub, and order them by address.
 					for i in 0..phdr_count {
 						let off = phdr_offset + i * phdr_size;
 						let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(&file[off..off + phdr_size])}.unwrap();
 						assert!(phdr.p_type != sys::PT_PHDR, "unexpected PT_PHDR");
 						if phdr.p_type == sys::PT_LOAD {
-							bytes.extend_from_slice(phdr.as_bytes());
+							load_entries.push(phdr);
 						}
 					}
-
-					// Add the new stub segment.
-					bytes.extend_from_slice(stub_segment.as_bytes());
+					load_entries.push(stub_segment);
+					load_entries.sort_unstable_by_key(|phdr| phdr.p_vaddr);
+					for phdr in load_entries {
+						bytes.extend_from_slice(phdr.as_bytes());
+					}
 
 					// Copy non-loadable segments.
 					for i in 0..phdr_count {
@@ -407,7 +439,7 @@ macro_rules! impl_elf {
 
 				// Patch the entrypoint.
 				let ehdr = self.elf_header_mut(&mut file);
-				ehdr.e_entry = (wrapper_vaddr + wrapper_entry.to_usize().unwrap())
+				ehdr.e_entry = (wrapper_vaddr + wrapper_entry_offset)
 					.try_into()
 					.unwrap();
 
@@ -608,8 +640,15 @@ macro_rules! impl_elf {
 						}
 					}
 
-					let section_table_offset =
-						file.file_size().expect("failed to get the file size");
+					let file_size = file
+						.file_size()
+						.expect("failed to get the file size")
+						.to_usize()
+						.unwrap();
+					let section_table_offset = align(
+						file_size,
+						align_of::<paste! {[<$elf _Shdr>]}>(),
+					);
 					let section_table_size =
 						section_table.len() + size_of::<paste! {[<$elf _Shdr>]}>();
 					let segment_file_offset = align(
@@ -637,6 +676,11 @@ macro_rules! impl_elf {
 						sh_entsize: 0,
 					}};
 					section_table.extend_from_slice(new_section_header.as_bytes());
+					let section_table_padding = section_table_offset - file_size;
+					if section_table_padding > 0 {
+						file.append(&vec![0; section_table_padding])
+							.expect("failed to align the section table");
+					}
 					file.append(&section_table)
 						.expect("failed to write the new section table to the file");
 
@@ -888,9 +932,13 @@ mod tests {
 		let temp = tempfile::tempdir().expect("failed to create a temporary directory");
 		let rewritten_path = temp.path().join("wrap-bss-test");
 		std::fs::copy(&executable, &rewritten_path).expect("failed to copy the test executable");
-		let manifest = serde_json::json!({ "bss": true });
-		crate::write_manifest(&rewritten_path, &manifest, None);
+		let first_manifest = serde_json::json!({ "bss": true });
+		crate::write_manifest(&rewritten_path, &first_manifest, None);
+		let output = crate::read_manifest::<serde_json::Value>(&rewritten_path, None);
+		assert_eq!(output.manifest, Some(first_manifest));
 
+		let manifest = serde_json::json!({ "bss": true, "padding": "x".repeat(8_192) });
+		crate::write_manifest(&rewritten_path, &manifest, None);
 		let output = crate::read_manifest::<serde_json::Value>(&rewritten_path, None);
 		assert_eq!(output.manifest, Some(manifest));
 		let rewritten =

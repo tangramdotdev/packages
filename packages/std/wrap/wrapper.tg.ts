@@ -98,7 +98,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 			"-nolibc",
 			"-nostdlib",
 			"-fno-tree-loop-distribute-patterns",
-			"-static",
+			"-static-pie",
 		];
 	}
 	if (os === "darwin") {
@@ -119,7 +119,6 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		...verboseArgs,
 		...osArgs,
 	];
-	const wrapFlags = ["-static", ...releaseArgs, ...verboseArgs];
 	let buildPhase = tg`
 		set +x
 
@@ -218,6 +217,9 @@ export async function test() {
 	const output = await workspace({ host, release: true });
 	if (std.triple.os(host) === "linux") {
 		await Promise.all([
+			tg.build(testWrapperPositionIndependent, {
+				name: "position-independent wrapper",
+			}),
 			tg.build(testStatic, { name: "static executable" }),
 			tg.build(testBssManifest, { name: "BSS manifest" }),
 		]);
@@ -255,6 +257,32 @@ export async function testCompile() {
 		.then(tg.File.expect);
 }
 
+/** The Linux wrapper is mapped at an address selected for the wrapped executable, so it must be a
+ * position-independent ELF whose entry point is backed by a PT_LOAD. */
+export async function testWrapperPositionIndependent() {
+	const host = std.triple.host();
+	if (std.triple.os(host) !== "linux") {
+		return true;
+	}
+	const output = await workspace({ host, release: true });
+	const wrapper = await output.get("bin/wrapper.exe").then(tg.File.expect);
+	const parsed = await elf.parse(wrapper);
+	tg.assert(parsed.header.e_type === 3, "expected the wrapper to be ET_DYN");
+	const entry = Number(parsed.header.e_entry);
+	const entrySegment = parsed.programHeaders.find(
+		(programHeader) =>
+			programHeader.p_type === 1 &&
+			entry >= Number(programHeader.p_vaddr) &&
+			entry <
+				Number(programHeader.p_vaddr) + Number(programHeader.p_filesz),
+	);
+	tg.assert(
+		entrySegment !== undefined,
+		"expected the wrapper entry point to be in a file-backed PT_LOAD",
+	);
+	return true;
+}
+
 /** A static executable has no PT_INTERP for the stub segment to reuse, so the wrapper is embedded
  * alongside a new program header table. */
 export async function testStatic() {
@@ -271,12 +299,79 @@ export async function testStatic() {
 			}
 		`),
 	});
-	const output = await std
+	const directory = await std
 		.run(std.shBootstrap`
-		gcc -static ${source}/main.c -o main
-		./main > ${tg.output}
+		mkdir ${tg.output}
+		gcc -static -no-pie ${source}/main.c -o ${tg.output}/main
 	`)
 		.env(toolchain)
+		.then(tg.Directory.expect);
+	const executable = await directory.get("main").then(tg.File.expect);
+	const parsed = await elf.parse(executable);
+	tg.assert(parsed.header.e_type === 2, "expected a static non-PIE executable");
+	tg.assert(
+		!parsed.programHeaders.some((programHeader) => programHeader.p_type === 3),
+		"expected no PT_INTERP",
+	);
+	const loads = parsed.programHeaders.filter(
+		(programHeader) => programHeader.p_type === 1,
+	);
+	for (let index = 1; index < loads.length; index++) {
+		tg.assert(
+			Number(loads[index - 1]!.p_vaddr) <= Number(loads[index]!.p_vaddr),
+			"expected PT_LOAD entries in ascending p_vaddr order",
+		);
+	}
+
+	const phoff = Number(parsed.header.e_phoff);
+	const phend = phoff + parsed.header.e_phnum * parsed.header.e_phentsize;
+	const stub = loads.find(
+		(segment) =>
+			Number(segment.p_offset) <= phoff &&
+			Number(segment.p_offset) + Number(segment.p_filesz) >= phend,
+	);
+	tg.assert(stub !== undefined, "expected e_phoff inside the stub PT_LOAD");
+	const copiedHeaderOffset = phoff - parsed.header.e_ehsize;
+	tg.assert(
+		copiedHeaderOffset === Number(stub.p_offset),
+		"expected the copied ELF header immediately before the program header table",
+	);
+	const [header, copiedHeader] = await Promise.all([
+		executable.read({ position: 0, length: parsed.header.e_ehsize }),
+		executable.read({
+			position: copiedHeaderOffset,
+			length: parsed.header.e_ehsize,
+		}),
+	]);
+	tg.assert(
+		header.every((byte, index) => byte === copiedHeader[index]),
+		"copied ELF header does not match the patched ELF header",
+	);
+	const wrapperSection = parsed.sectionHeaders.find(
+		(section) => section.sh_name === ".text.tg-wrapper",
+	);
+	const manifestSection = parsed.sectionHeaders.find(
+		(section) => section.sh_name === ".note.tg-manifest",
+	);
+	tg.assert(wrapperSection !== undefined, "expected wrapper section");
+	tg.assert(manifestSection !== undefined, "expected manifest section");
+	const stubEnd = Number(stub.p_offset) + Number(stub.p_filesz);
+	tg.assert(
+		Number(wrapperSection.sh_offset) >= Number(stub.p_offset) &&
+			Number(wrapperSection.sh_offset) + Number(wrapperSection.sh_size) <= stubEnd &&
+			Number(manifestSection.sh_offset) >= Number(stub.p_offset) &&
+			Number(manifestSection.sh_offset) + Number(manifestSection.sh_size) <= stubEnd,
+		"expected the stub to cover the wrapper, manifest, and footer",
+	);
+	const entry = Number(parsed.header.e_entry);
+	tg.assert(
+		entry >= Number(stub.p_vaddr) &&
+			entry < Number(stub.p_vaddr) + Number(stub.p_filesz),
+		"expected the entry point inside the stub PT_LOAD",
+	);
+
+	const output = await std
+		.run(std.shBootstrap`${executable} > ${tg.output}`)
 		.then(tg.File.expect);
 	const text = await output.text;
 	tg.assert(
@@ -348,11 +443,40 @@ export async function testBssManifest() {
 		JSON.stringify(readManifest) === JSON.stringify(manifest),
 		"manifest did not round trip",
 	);
+	const largerManifest = {
+		...manifest,
+		args: [
+			{
+				components: [
+					{ kind: "string" as const, value: "x".repeat(8_192) },
+				],
+			},
+		],
+	};
+	const rewrittenAgain = await std.wrap.Manifest.write(
+		rewritten,
+		largerManifest,
+		new Map(),
+	);
+	const rereadManifest = await std.wrap.Manifest.read(rewrittenAgain);
+	tg.assert(rereadManifest !== undefined, "expected a replacement manifest");
+	tg.assert(
+		JSON.stringify(rereadManifest.executable) ===
+			JSON.stringify(largerManifest.executable) &&
+			rereadManifest.args?.length === 1 &&
+			rereadManifest.args[0]?.components[0]?.kind === "string" &&
+			rereadManifest.args[0].components[0].value.length === 8_192,
+		"larger replacement manifest did not round trip",
+	);
 
-	const parsed = await elf.parse(rewritten);
+	const parsed = await elf.parse(rewrittenAgain);
 	tg.assert(
 		parsed.header.e_phnum === original.header.e_phnum + 1,
 		"expected a new program header",
+	);
+	tg.assert(
+		Number(parsed.header.e_shoff) % 8 === 0,
+		"expected an aligned section header table",
 	);
 	const loads = parsed.programHeaders.filter(
 		(programHeader) => programHeader.p_type === 1,
@@ -383,7 +507,7 @@ export async function testBssManifest() {
 	);
 
 	const output = await std
-		.run(std.shBootstrap`${rewritten} > ${tg.output}`)
+		.run(std.shBootstrap`${rewrittenAgain} > ${tg.output}`)
 		.then(tg.File.expect);
 	const text = await output.text;
 	tg.assert(
