@@ -247,6 +247,34 @@ export async function testCompile() {
 		.then(tg.File.expect);
 }
 
+/** A static executable has no PT_INTERP for the stub segment to reuse, so the wrapper is embedded
+ * alongside a new program header table. */
+export async function testStatic() {
+	const toolchain = std.bootstrap.sdk();
+	const source = tg.directory({
+		"main.c": tg.file(`
+			#include <stdio.h>
+			int main() {
+				printf("hello, world!\\n");
+				return 0;
+			}
+		`),
+	});
+	const output = await std
+		.run(std.shBootstrap`
+		gcc -static ${source}/main.c -o main
+		./main > ${tg.output}
+	`)
+		.env(toolchain)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text === "hello, world!\n",
+		`unexpected output ${JSON.stringify(text)}`,
+	);
+	return true;
+}
+
 export async function testFull() {
 	const toolchain = std.sdk();
 	const source = tg.directory({

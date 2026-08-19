@@ -40,10 +40,9 @@ typedef struct
 // The executable image.
 typedef struct {
 #ifdef __linux__
-	Elf64_Ehdr* 	elf_header;		// Header of the ELF file.
+	Elf64_Ehdr* 	elf_header;		// Header of the ELF file, mapped by the kernel.
 	Elf64_Phdr* 	program_headers;	// Program headers passed by the kernel.
-	Elf64_Shdr* 	section_headers;	// Section headers read from the binary.
-	char*		section_string_table;	// String table, for finding sections by name
+	uintptr_t	load_address;		// Address the image was loaded at.
 #endif
 	Manifest* 	manifest;		// The parsed manifest.
 	Footer		footer;			// The parsed footer.
@@ -207,9 +206,7 @@ int main (int argc, char** argv) {
 		trace("read aux vector\n");
 	}
 
-	// Compute the base address. Normally this is computed using the program header table
-	// supplied in the aux vector, but this could be garbage if using a patched program header table.
-	uintptr_t load_address = stack.auxv_glob[AT_ENTRY] - executable.elf_header->e_entry;
+	uintptr_t load_address = executable.load_address;
 
 	// Check that we have space to write the new program header table and number of entries later.
 	ABORT_IF(!nphdr || nentry < 0, "missing AT_PHDR or AT_ENTRY");
@@ -422,79 +419,60 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 	char* data = NULL;
 
 #ifdef __linux__
-	// On ELF targets, the manifest is embedded in an ELF section. The header and program header
-	// table come from the same descriptor and are needed by the userland exec below regardless.
-	// Open /proc/self/exe rather than the path, so the descriptor refers to the executing inode:
-	// the path can be replaced concurrently, which libtool does when it relinks under make -j.
-	int fd = open("/proc/self/exe", O_RDONLY, 0);
-	ABORT_IF(fd < 0, "failed to open /proc/self/exe");
-	off_t offset = 0;
+	// On ELF targets, the manifest is written at the end of a loadable segment, which the kernel
+	// maps, so read it from our own image: opening the path would race with any concurrent job
+	// that replaces the file, which libtool does when it relinks under a parallel make.
+	//
+	// The kernel passes the address of the mapped program header table in the aux vector, and the
+	// ELF header always sits immediately before it. `wrap` preserves that when it appends a
+	// program header table of its own. Both are needed by the userland exec below regardless.
+	uintptr_t program_header_address = stack->auxv_glob[AT_PHDR];
+	ABORT_IF(!program_header_address, "missing AT_PHDR");
+	executable.elf_header = (Elf64_Ehdr*)(program_header_address - sizeof(Elf64_Ehdr));
+	executable.program_headers = (Elf64_Phdr*)program_header_address;
+	bool is_elf = (executable.elf_header->e_ident[EI_MAG0] == ELFMAG0)
+		&& (executable.elf_header->e_ident[EI_MAG1] == ELFMAG1)
+		&& (executable.elf_header->e_ident[EI_MAG2] == ELFMAG2)
+		&& (executable.elf_header->e_ident[EI_MAG3] == ELFMAG3);
+	ABORT_IF(!is_elf, "the program header table is not preceded by an elf header");
+	ABORT_IF(
+		executable.elf_header->e_phnum != stack->auxv_glob[AT_PHNUM],
+		"AT_PHNUM does not match the elf header"
+	);
+
+	// The image is position independent, so apply the load address to the recorded addresses. This
+	// is computed from the entrypoint rather than the program header table, whose address is
+	// replaced by a userland exec.
+	executable.load_address = stack->auxv_glob[AT_ENTRY] - executable.elf_header->e_entry;
 	if (options->enable_tracing) {
-		trace("opened /proc/self/exe (%d)\n", fd);
-	}
-	executable.elf_header = ALLOC(arena, Elf64_Ehdr);
-
-	// Read the elf header. We don't need to do any validation here, we assume the kernel didn't lie.
-	read_all(options->enable_tracing, fd, (char*)executable.elf_header, sizeof(Elf64_Ehdr), 0);
-
-	// Read the program header table.
-	offset = executable.elf_header->e_phoff;
-	size_t size = executable.elf_header->e_phnum * sizeof(Elf64_Phdr);
-	executable.program_headers = ALLOC_N(arena, executable.elf_header->e_phnum, Elf64_Phdr);
-	read_all(options->enable_tracing, fd, (char*)executable.program_headers, size, offset);
-
-	// Read the section header table.
-	offset = executable.elf_header->e_shoff;
-	size = executable.elf_header->e_shnum * sizeof(Elf64_Shdr);
-	executable.section_headers = ALLOC_N(arena, executable.elf_header->e_shnum, Elf64_Shdr);
-	read_all(options->enable_tracing, fd, (char*)executable.section_headers, size, offset);
-
-	// Read the section header string table.
-	Elf64_Shdr* section = executable.section_headers + executable.elf_header->e_shstrndx;
-	offset = section->sh_offset;
-	size = section->sh_size;
-	executable.section_string_table = ALLOC_N(arena, size, char);
-	read_all(options->enable_tracing, fd, (char*)executable.section_string_table, size, offset);
-
-	// Get the file size.
-	offset = lseek(fd, 0, SEEK_END);
-	if (offset < 0) {
-		ABORT("failed to seek");
-	}
-	if (options->enable_tracing) {
-		trace("file size: %d\n", offset);
+		trace("load address: %p, program headers: %p (%d)\n",
+			executable.load_address, executable.program_headers, executable.elf_header->e_phnum);
 	}
 
-	Elf64_Shdr* section_itr = executable.section_headers;
-	Elf64_Shdr* section_end = section_itr + executable.elf_header->e_shnum;
-	String TANGRAM_MANIFEST_SECTION_NAME = STRING_LITERAL(".note.tg-manifest");
-	for (; section_itr != section_end; section_itr++) {
-		String name = {0};
-		name.ptr = (uint8_t*)&executable.section_string_table[section_itr->sh_name];
-		name.len = tg_strlen((char*)name.ptr);
+	// Find the segment whose file contents end with the footer.
+	String magic = { .ptr = (uint8_t*)TANGRAM_MAGIC, .len = sizeof(executable.footer.magic) };
+	Elf64_Phdr* segment_itr = executable.program_headers;
+	Elf64_Phdr* segment_end = segment_itr + executable.elf_header->e_phnum;
+	for (; segment_itr != segment_end; segment_itr++) {
+		if (segment_itr->p_type != PT_LOAD || segment_itr->p_filesz < sizeof(Footer)) {
+			continue;
+		}
+		char* end = (char*)(executable.load_address + segment_itr->p_vaddr + segment_itr->p_filesz);
+		Footer footer = {0};
+		memcpy((void*)&footer, (void*)(end - sizeof(Footer)), sizeof(Footer));
+		String found = { .ptr = (uint8_t*)footer.magic, .len = sizeof(footer.magic) };
+		if (!streq(found, magic)) {
+			continue;
+		}
+		ABORT_IF(footer.size > segment_itr->p_filesz - sizeof(Footer), "invalid footer");
+		executable.footer = footer;
+		data = end - sizeof(Footer) - footer.size;
 		if (options->enable_tracing) {
-			trace("found section ");
-			print_json_string(&name);
-			trace("\n");
+			trace("read manifest at %p, size: %ld\n", data, footer.size);
 		}
-		if (streq(name, TANGRAM_MANIFEST_SECTION_NAME)) {
-			data	= alloc(arena, section_itr->sh_size, 1);
-			size	= section_itr->sh_size;
-			offset	= section_itr->sh_offset;
-			ABORT_IF(size < sizeof(Footer), "manifest section too small");
-			if (options->enable_tracing) {
-				trace("reading manifest at offset: %ld, size: %ld\n", offset, size);
-			}
-			read_all(options->enable_tracing, fd, data, size, offset);
-			memcpy((void*)&executable.footer, (void*)(data + (size - sizeof(Footer))), sizeof(Footer));
-			ABORT_IF(executable.footer.size > size - sizeof(Footer), "invalid footer");
-			break;
-		}
+		break;
 	}
-	ABORT_IF(!data, "failed to find manifest section");
-
-	// Close the file.
-	close(fd);
+	ABORT_IF(!data, "failed to find the manifest");
 #elif defined(__APPLE__)
 	// On Mach platforms, the manifest is embedded just before the code signature, which must occur
 	// at the end of the file. Both sit in __LINKEDIT, which the kernel maps, so read them from our
@@ -546,6 +524,10 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 	);
 	uint64_t footer_offset = code_signature_command->dataoff - sizeof(Footer);
 	memcpy(&executable.footer, linkedit + (footer_offset - linkedit_start), sizeof(Footer));
+	ABORT_IF(
+		memcmp(executable.footer.magic, TANGRAM_MAGIC, sizeof(executable.footer.magic)) != 0,
+		"failed to find the manifest"
+	);
 
 	// The manifest is just before the footer.
 	ABORT_IF(executable.footer.size > footer_offset - linkedit_start, "invalid footer");
