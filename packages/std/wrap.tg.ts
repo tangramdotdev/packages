@@ -2713,6 +2713,9 @@ export async function test() {
 		tg.build(testManifestDependenciesMergeMutation, {
 			name: "manifest dependencies merge mutation",
 		}),
+		tg.build(testDarwinLargeManifestOverwrite, {
+			name: "Darwin large manifest overwrite",
+		}),
 		tg.build(testManifestMutationPrependRoundTrip, {
 			name: "manifest mutation prepend round trip",
 		}),
@@ -3062,6 +3065,56 @@ export async function testManifestMutationPrependRoundTrip() {
 	tg.assert(
 		roundTrippedMutation.inner.kind === "prepend",
 		"expected a prepend mutation to remain a prepend mutation",
+	);
+
+	return true;
+}
+
+/** Replacing a Mach-O manifest must grow the mapped __LINKEDIT segment with the file data. */
+export async function testDarwinLargeManifestOverwrite() {
+	if (std.triple.os(std.triple.host()) !== "darwin") {
+		return true;
+	}
+
+	const executable = {
+		kind: "content" as const,
+		value: await manifestTemplateFromArg("exit 0"),
+	};
+	const initial = await wrap.Manifest.write(
+		await testWrapperBinary(),
+		{ executable },
+		new Map(),
+	);
+	const values = Array.from(
+		{ length: 32 },
+		(_, index) => `${index}:${"x".repeat(1024)}`,
+	);
+	const rewritten = await wrap.Manifest.write(
+		initial,
+		{
+			executable,
+			args: await Promise.all(
+				values.map((value) => manifestTemplateFromArg(value)),
+			),
+		},
+		new Map(),
+	);
+
+	const output = await tg
+		.build(
+			std.shBootstrap`${rewritten} --tangram-print-manifest > ${tg.output}`,
+		)
+		.then(tg.File.expect);
+	const manifest = tg.encoding.json.decode(await output.text) as wrap.Manifest;
+	tg.assert(
+		manifest.args?.length === values.length &&
+			manifest.args.every((arg, index) => {
+				const component = arg.components[0];
+				return (
+					component?.kind === "string" && component.value === values[index]
+				);
+			}),
+		"large manifest did not round trip through the mapped image",
 	);
 
 	return true;

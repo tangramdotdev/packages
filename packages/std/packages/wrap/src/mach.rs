@@ -19,6 +19,40 @@ const LINKEDIT: [u8; 16] = [
 const MAGIC_64: u32 = 0xfeed_facf;
 const MAGIC_UNIVERSAL: u32 = 0xcafe_babe;
 const ALIGNMENT: usize = 16;
+const CPU_TYPE_ARM64: sys::cpu_type_t = 0x0100_000c;
+const ARM64_PAGE_SIZE: u64 = 16 * 1024;
+const DEFAULT_PAGE_SIZE: u64 = 4 * 1024;
+
+fn page_size(cputype: sys::cpu_type_t) -> u64 {
+	if cputype == CPU_TYPE_ARM64 {
+		ARM64_PAGE_SIZE
+	} else {
+		DEFAULT_PAGE_SIZE
+	}
+}
+
+fn pad_manifest(data: &[u8], position: usize) -> Vec<u8> {
+	let padding = (ALIGNMENT - (position + data.len()) % ALIGNMENT) % ALIGNMENT;
+	let mut output = vec![0; padding];
+	output.extend_from_slice(data);
+	output
+}
+
+fn resize_linkedit(
+	command: &mut segment_command_64,
+	old_size: usize,
+	new_size: usize,
+	page_size: u64,
+) {
+	command.filesize = command
+		.filesize
+		.checked_sub(old_size.to_u64().unwrap())
+		.and_then(|size| size.checked_add(new_size.to_u64().unwrap()))
+		.expect("invalid LINKEDIT file size");
+	command.vmsize = command
+		.vmsize
+		.max(command.filesize.next_multiple_of(page_size));
+}
 
 impl BinaryFormat for Mach64 {
 	fn matches(&self, file: &crate::file::File) -> bool {
@@ -32,22 +66,11 @@ impl BinaryFormat for Mach64 {
 	}
 
 	fn write_manifest(&self, file: &mut File, data: &[u8]) {
-		// Get the data and pad to 4 byte boundaries.
-		let mut data = data.to_vec();
-
-		// Pad to 4 byte boundaries.
-		if !data.len().is_multiple_of(ALIGNMENT) {
-			let padding = ALIGNMENT - data.len() % ALIGNMENT;
-			for _ in 0..padding {
-				data.insert(0, 0);
-			}
-		}
-
 		// Find the code signature and LINKEDIT sections.
 		let mut code_signature_command = None;
 		let mut linkedit_command = None;
-		let header = file.read_at::<mach_header_64>(0);
-		let mut offset = size_of_val(header);
+		let header = *file.read_at::<mach_header_64>(0);
+		let mut offset = size_of_val(&header);
 		for _ in 0..header.ncmds {
 			let load_command = file.read_at::<load_command>(offset);
 			if load_command.cmd == LC_CODE_SIGNATURE {
@@ -70,11 +93,12 @@ impl BinaryFormat for Mach64 {
 			|| file.file_size().unwrap(),
 			|(_, command)| command.dataoff.into(),
 		);
+		let data = pad_manifest(data, position.to_usize().unwrap());
 
 		// Patch LINKEDIT
 		if let Some(offset) = linkedit_command {
 			let command = file.read_at_mut::<segment_command_64>(offset);
-			command.filesize += data.len().to_u64().unwrap();
+			resize_linkedit(command, 0, data.len(), page_size(header.cputype));
 		}
 
 		// Patch the code signature.
@@ -118,25 +142,41 @@ impl BinaryFormat for Mach64 {
 			self.write_manifest(file, data);
 			return;
 		};
+		let data = pad_manifest(data, old.offset);
 
 		// Compute the new offset of the code signature.
 		let new_offset = old.offset.to_usize().unwrap() + data.len();
 
-		// Find the code signature.
+		// Find the code signature and LINKEDIT segment.
 		let header = *file.read_at::<mach_header_64>(0);
 		let mut offset = size_of_val(&header);
+		let mut code_signature_command = None;
+		let mut linkedit_command = None;
 		for _ in 0..header.ncmds {
 			let load_command = *file.read_at::<load_command>(offset);
 			if load_command.cmd == LC_CODE_SIGNATURE {
-				let code_signature = file.read_at_mut::<linkedit_data_command>(offset);
-				code_signature.dataoff = new_offset.try_into().unwrap();
-				break;
+				assert!(code_signature_command.replace(offset).is_none());
+			} else if load_command.cmd == LC_SEGMENT_64 {
+				let command = file.read_at::<segment_command_64>(offset);
+				if command.segname == LINKEDIT {
+					assert!(linkedit_command.replace(offset).is_none());
+				}
 			}
 			offset += load_command.cmdsize.to_usize().unwrap();
 		}
 
+		// Patch the code signature and LINKEDIT segment.
+		if let Some(offset) = code_signature_command {
+			let command = file.read_at_mut::<linkedit_data_command>(offset);
+			command.dataoff = new_offset.try_into().unwrap();
+		}
+		if let Some(offset) = linkedit_command {
+			let command = file.read_at_mut::<segment_command_64>(offset);
+			resize_linkedit(command, old.length, data.len(), page_size(header.cputype));
+		}
+
 		// Replace the manifest.
-		file.replace(old, data)
+		file.replace(old, &data)
 			.expect("failed to overwrite manifest");
 	}
 
