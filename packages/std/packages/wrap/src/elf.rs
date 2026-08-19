@@ -123,6 +123,177 @@ macro_rules! impl_elf {
 				last.map(|(offset, _)| offset)
 			}
 
+			/// Get the end of the last address the loadable segments occupy, the largest alignment
+			/// they require, and the distance between their addresses and their offsets.
+			fn image_extent(&self, file: &File) -> (usize, usize, usize) {
+				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
+				let (phdr_offset, phdr_count) = {
+					let ehdr = self.elf_header(file);
+					(
+						ehdr.e_phoff.to_usize().unwrap(),
+						ehdr.e_phnum.to_usize().unwrap(),
+					)
+				};
+				let mut max_vaddr = 0;
+				let mut max_align = 1;
+				let mut first: Option<(usize, usize)> = None;
+				for i in 0..phdr_count {
+					let offset = phdr_offset + i * phdr_size;
+					let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(&file[offset..offset + phdr_size])}
+						.expect("expected a program header");
+					if phdr.p_type != sys::PT_LOAD {
+						continue;
+					}
+					let vaddr = phdr.p_vaddr.to_usize().unwrap();
+					max_vaddr = max_vaddr.max(vaddr + phdr.p_memsz.to_usize().unwrap());
+					max_align = max_align.max(phdr.p_align.to_usize().unwrap());
+					if first.is_none_or(|(current, _)| vaddr < current) {
+						first = Some((vaddr, phdr.p_offset.to_usize().unwrap()));
+					}
+				}
+				let (vaddr, offset) = first.expect("expected a loadable segment");
+				(max_vaddr, max_align, vaddr - offset)
+			}
+
+			/// Choose the offset, address, and alignment of a new loadable segment at the end of the
+			/// file. It goes after every address the image already occupies, and the same distance from
+			/// its offset as the rest of the image, because a kernel before 5.19 reports the program
+			/// header table at the load address plus `e_phoff` rather than at the address of the
+			/// segment holding it. Both computations agree only when every segment keeps the same
+			/// distance.
+			fn appended_segment(&self, file: &File, file_size: usize) -> (usize, usize, usize) {
+				let (max_vaddr, max_align, bias) = self.image_extent(file);
+				let offset = align(file_size.max(align(max_vaddr, max_align) - bias), max_align);
+
+				// The segment is placed at the largest alignment in the image, but it can only claim
+				// an alignment its own address and offset agree on, which an image loaded at an
+				// unusual address may not.
+				let mut segment_align = max_align;
+				while bias % segment_align != 0 {
+					segment_align /= 2;
+				}
+				(offset, offset + bias, segment_align)
+			}
+
+			/// Add the manifest in a new read-only segment at the end of the file. This is for images
+			/// whose last loadable segment has a bss, which cannot be extended over file data without
+			/// initializing memory that must stay zero-filled. The segment also holds a copy of the elf
+			/// header and a program header table with room for itself, because the wrapper reads both
+			/// from the addresses the kernel maps them at.
+			fn append_manifest_segment(
+				&self,
+				file: &mut File,
+				data: &[u8],
+				mut section_table: Vec<u8>,
+				name_index: usize,
+			) {
+				let ehdr_size = size_of::<paste! {[<$elf _Ehdr>]}>();
+				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
+				let shdr_size = size_of::<paste! {[<$elf _Shdr>]}>();
+				let (phdr_offset, phdr_count) = {
+					let ehdr = self.elf_header(file);
+					(
+						ehdr.e_phoff.to_usize().unwrap(),
+						ehdr.e_phnum.to_usize().unwrap(),
+					)
+				};
+				let new_phdr_count = phdr_count + 1;
+
+				// The section table goes first, so that the manifest and its footer are the last bytes
+				// of the file, and so of the segment.
+				let file_size = file
+					.file_size()
+					.expect("failed to get the file size")
+					.to_usize()
+					.unwrap();
+				let section_table_offset = align(file_size, align_of::<paste! {[<$elf _Shdr>]}>());
+				let section_table_size = section_table.len() + shdr_size;
+				let (segment_offset, segment_vaddr, segment_align) =
+					self.appended_segment(file, section_table_offset + section_table_size);
+				let headers_offset = segment_offset + ehdr_size;
+				let new_section_offset = headers_offset + new_phdr_count * phdr_size;
+				let segment_size = new_section_offset + data.len() - segment_offset;
+
+				// Add the manifest section.
+				let new_section_header = paste! {[<$elf _Shdr>] {
+					sh_type: sys::SHT_NOTE,
+					sh_offset: new_section_offset.try_into().unwrap(),
+					sh_size: data.len().try_into().unwrap(),
+					sh_addr: (segment_vaddr + new_section_offset - segment_offset)
+						.try_into()
+						.unwrap(),
+					sh_name: name_index.try_into().unwrap(),
+					sh_flags: sys::SHF_ALLOC.try_into().unwrap(),
+					sh_link: 0,
+					sh_info: 0,
+					sh_addralign: 1,
+					sh_entsize: 0,
+				}};
+				section_table.extend_from_slice(new_section_header.as_bytes());
+
+				// Build the new program header table, moving PT_PHDR along with it.
+				let new_segment = paste! {[<$elf _Phdr>] {
+					p_type: sys::PT_LOAD,
+					p_flags: sys::PF_R,
+					p_offset: segment_offset.try_into().unwrap(),
+					p_vaddr: segment_vaddr.try_into().unwrap(),
+					p_paddr: segment_vaddr.try_into().unwrap(),
+					p_filesz: segment_size.try_into().unwrap(),
+					p_memsz: segment_size.try_into().unwrap(),
+					p_align: segment_align.try_into().unwrap(),
+				}};
+				let mut phdr_bytes = Vec::with_capacity(new_phdr_count * phdr_size);
+				let mut found_phdr = false;
+				for index in 0..phdr_count {
+					let offset = phdr_offset + index * phdr_size;
+					let mut phdr = paste! {[<$elf _Phdr>]::read_from_bytes(
+						&file[offset..offset + phdr_size],
+					)}
+					.expect("expected a program header");
+					if phdr.p_type == sys::PT_PHDR {
+						assert!(!found_phdr, "multiple program header segments found");
+						found_phdr = true;
+						let size = new_phdr_count * phdr_size;
+						phdr.p_offset = headers_offset.try_into().unwrap();
+						phdr.p_vaddr = (segment_vaddr + ehdr_size).try_into().unwrap();
+						phdr.p_paddr = phdr.p_vaddr;
+						phdr.p_filesz = size.try_into().unwrap();
+						phdr.p_memsz = size.try_into().unwrap();
+					}
+					phdr_bytes.extend_from_slice(phdr.as_bytes());
+				}
+
+				// The new segment goes last, which keeps the loadable segments in address order
+				// because it is above every address the image already occupies.
+				phdr_bytes.extend_from_slice(new_segment.as_bytes());
+
+				// Write the section table, then the segment.
+				let padding = section_table_offset - file_size;
+				if padding > 0 {
+					file.append(&vec![0; padding])
+						.expect("failed to align the section table");
+				}
+				file.append(&section_table)
+					.expect("failed to write the new section table to the file");
+				let padding = segment_offset - section_table_offset - section_table_size;
+				if padding > 0 {
+					file.append(&vec![0; padding])
+						.expect("failed to write segment padding");
+				}
+				let ehdr = self.elf_header_mut(file);
+				ehdr.e_phoff = headers_offset.try_into().unwrap();
+				ehdr.e_phnum = new_phdr_count.try_into().unwrap();
+				ehdr.e_shnum += 1;
+				ehdr.e_shoff = section_table_offset.try_into().unwrap();
+				let ehdr_bytes = ehdr.as_bytes().to_vec();
+				file.append(&ehdr_bytes)
+					.expect("failed to write the copied elf header");
+				file.append(&phdr_bytes)
+					.expect("failed to write the relocated program header table");
+				file.append(data)
+					.expect("failed to write the manifest to the end of the file");
+			}
+
 			fn section_header_table(&self, file: &File) -> FileLocation {
 				let ehdr = self.elf_header(file);
 				FileLocation {
@@ -247,27 +418,19 @@ macro_rules! impl_elf {
 					)
 				};
 
-				// Find PT_INTERP header and compute the virtual address range / alignment.
+				// Find the PT_INTERP header and where a new segment can go.
 				let mut pt_interp_index: Option<usize> = None;
-				let mut min_vaddr = <paste! {[<$elf _Off>]}>::MAX;
-				let mut max_vaddr = 0;
-				let mut max_align = 0;
 				for i in 0..phdr_count {
 					let off = phdr_offset + i * phdr_size;
 					let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(&file[off..off + phdr_size])}
 						.expect("invalid program header");
-					if phdr.p_type == sys::PT_LOAD {
-						min_vaddr = min_vaddr.min(phdr.p_vaddr);
-						max_vaddr = max_vaddr.max(phdr.p_vaddr + phdr.p_memsz);
-						max_align = max_align.max(phdr.p_align);
-					}
 					if phdr.p_type == sys::PT_INTERP {
 						assert!(pt_interp_index.is_none(), "multiple interpreters found");
 						pt_interp_index = Some(i);
 					}
 				}
-				let min_vaddr = min_vaddr.to_usize().unwrap();
-				let max_align = max_align.to_usize().unwrap();
+				let (segment_offset, segment_vaddr, segment_align) =
+					self.appended_segment(&file, file_size);
 
 				// Find wrapper and manifest section headers in a single pass.
 				let mut wrapper_shdr_offset: Option<usize> = None;
@@ -321,8 +484,8 @@ macro_rules! impl_elf {
 						size_of::<paste! {[<$elf _Ehdr>]}>(),
 						"the program header table must follow the elf header",
 					);
-					wrapper_offset = align(file_size, max_align);
-					wrapper_vaddr = align(max_vaddr.to_usize().unwrap(), max_align);
+					wrapper_offset = segment_offset;
+					wrapper_vaddr = segment_vaddr;
 					new_phdr_table = None;
 
 					let stub_segment = paste! {[<$elf _Phdr>] {
@@ -332,39 +495,31 @@ macro_rules! impl_elf {
 						p_vaddr: wrapper_vaddr.try_into().unwrap(),
 						p_paddr: wrapper_vaddr.try_into().unwrap(),
 						p_filesz: wrapper_data_size.try_into().unwrap(),
-						p_memsz: align(wrapper_data_size, max_align).try_into().unwrap(),
-						p_align: max_align.try_into().unwrap(),
+						p_memsz: align(wrapper_data_size, segment_align).try_into().unwrap(),
+						p_align: segment_align.try_into().unwrap(),
 					}};
 					let offset = phdr_offset + interpreter_index * phdr_size;
 					file[offset..offset + phdr_size].copy_from_slice(stub_segment.as_bytes());
 				} else {
 					// Create a new program header table if there's no PT_INTERP we can abuse. It goes
 					// inside the stub segment, preceded by a copy of the elf header, because the
-					// wrapper reads both from the addresses the kernel maps them at. The segment's
-					// address matches its offset so that AT_PHDR is correct on kernels that compute
-					// it as the load address plus e_phoff.
+					// wrapper reads both from the addresses the kernel maps them at.
 					let new_count = phdr_count + 1;
 					let headers_size = size_of::<paste! {[<$elf _Ehdr>]}>() + new_count * phdr_size;
-					let stub_size = align(headers_size, max_align) + wrapper_data_size;
-					let mut segment_offset = align(file_size, max_align);
-					if segment_offset < max_vaddr.to_usize().unwrap()
-						&& segment_offset + stub_size > min_vaddr
-					{
-						segment_offset = align(max_vaddr.to_usize().unwrap(), max_align);
-					}
+					let stub_size = align(headers_size, segment_align) + wrapper_data_size;
 					let headers_offset = segment_offset + size_of::<paste! {[<$elf _Ehdr>]}>();
-					wrapper_offset = segment_offset + align(headers_size, max_align);
-					wrapper_vaddr = wrapper_offset;
+					wrapper_offset = segment_offset + align(headers_size, segment_align);
+					wrapper_vaddr = segment_vaddr + align(headers_size, segment_align);
 
 					let stub_segment = paste! {[<$elf _Phdr>]{
 						p_type: sys::PT_LOAD,
 						p_flags: sys::PF_R | sys::PF_X,
 						p_offset: segment_offset.try_into().unwrap(),
-						p_vaddr: segment_offset.try_into().unwrap(),
-						p_paddr: segment_offset.try_into().unwrap(),
+						p_vaddr: segment_vaddr.try_into().unwrap(),
+						p_paddr: segment_vaddr.try_into().unwrap(),
 						p_filesz: stub_size.try_into().unwrap(),
-						p_memsz: align(stub_size, max_align).try_into().unwrap(),
-						p_align: max_align.try_into().unwrap(),
+						p_memsz: align(stub_size, segment_align).try_into().unwrap(),
+						p_align: segment_align.try_into().unwrap(),
 					}};
 
 					let mut bytes = Vec::with_capacity(new_count * phdr_size);
@@ -409,7 +564,7 @@ macro_rules! impl_elf {
 				wrapper_shdr.sh_offset = wrapper_offset.try_into().unwrap();
 				wrapper_shdr.sh_size = wrapper_data_size.try_into().unwrap();
 				wrapper_shdr.sh_link = 0;
-				wrapper_shdr.sh_addralign = max_align.try_into().unwrap();
+				wrapper_shdr.sh_addralign = segment_align.try_into().unwrap();
 				wrapper_shdr.sh_entsize = 0;
 				file[wrapper_shdr_offset..wrapper_shdr_offset + shdr_size]
 					.copy_from_slice(wrapper_shdr.as_bytes());
@@ -419,13 +574,13 @@ macro_rules! impl_elf {
 				)}
 				.unwrap();
 				manifest_shdr.sh_type = sys::SHT_NOTE;
-				manifest_shdr.sh_flags = 0;
+				manifest_shdr.sh_flags = sys::SHF_ALLOC.try_into().unwrap();
 				manifest_shdr.sh_addr = (wrapper_vaddr + wrapper_exe.len()).try_into().unwrap();
 				manifest_shdr.sh_offset = (wrapper_offset + wrapper_exe.len()).try_into().unwrap();
 				manifest_shdr.sh_size =
 					(manifest.len() + size_of::<crate::Footer>()).try_into().unwrap();
 				manifest_shdr.sh_link = 0;
-				manifest_shdr.sh_addralign = 0;
+				manifest_shdr.sh_addralign = 1;
 				manifest_shdr.sh_entsize = 0;
 				file[manifest_shdr_offset..manifest_shdr_offset + shdr_size]
 					.copy_from_slice(manifest_shdr.as_bytes());
@@ -551,7 +706,6 @@ macro_rules! impl_elf {
 					})
 			}
 
-			#[allow(clippy::too_many_lines)]
 			fn write_manifest(&self, file: &mut File, data: &[u8]) {
 				let name = TANGRAM_MANIFEST_SECTION_NAME.to_bytes_with_nul();
 				let name_len = name.len();
@@ -561,16 +715,15 @@ macro_rules! impl_elf {
 				let string_table_location = self.section_string_table(file);
 				let mut section_table_location = self.section_header_table(file);
 
-				// Get the actual data.
-				let mut string_table = file[string_table_location].to_vec();
+				// Get the section table, before the insert below moves it.
 				let mut section_table = file[section_table_location].to_vec();
 
-				// Add to the string table.
-				let name_index = string_table.len();
-				string_table.extend_from_slice(name);
-				string_table.push(0);
+				// The name goes at the end of the string table, so its index is the old length.
+				let name_index = string_table_location.length;
 
-				// Update existing sections.
+				// Update existing sections. Growing the string table in place shifts everything after
+				// it along by the length of the name.
+				let shift = <paste! {[<$elf _Off>]}>::try_from(name_len).unwrap();
 				for (index, chunk) in section_table
 					.chunks_exact_mut(size_of::<paste! {[<$elf _Shdr>]}>())
 					.enumerate()
@@ -578,22 +731,22 @@ macro_rules! impl_elf {
 					let header = paste! {[<$elf _Shdr>]::mut_from_bytes(chunk)}
 						.expect("expected a section header");
 					if index == string_table_index {
-						header.sh_size += <paste! {[<$elf _Off>]}>::try_from(name_len).unwrap();
+						header.sh_size += shift;
 						continue;
 					}
-					// If this section occurs after the original string_table location, update its offset.
-					if header.sh_offset > string_table_location.end().try_into().unwrap() {
-						header.sh_offset = <paste! {[<$elf _Off>]}>::try_from(name_len).unwrap();
+					if header.sh_offset >= string_table_location.end().try_into().unwrap() {
+						header.sh_offset += shift;
 					}
 				}
 
-				// Now the hard part:
-				// Insert the new string table at the offset of the original.
-				file.insert(&string_table, string_table_location.offset as u64)
+				// Append the name to the string table.
+				file.insert(name, string_table_location.end().to_u64().unwrap())
 					.expect("failed to insert string table");
 
-				// Delete the old section table.
-				section_table_location.offset += name_len;
+				// Delete the old section table, which the insert may have moved.
+				if section_table_location.offset >= string_table_location.end() {
+					section_table_location.offset += name_len;
+				}
 				file.delete(section_table_location)
 					.expect("failed to delete section table");
 
@@ -612,135 +765,9 @@ macro_rules! impl_elf {
 				);
 
 				// Extending a segment with a BSS would make the bytes after p_filesz initialize
-				// memory which must remain zero-filled. Instead, append a read-only segment containing
-				// a relocated program header table followed by the manifest.
+				// memory which must remain zero-filled, so give the manifest a segment of its own.
 				if segment.p_filesz < segment.p_memsz {
-					let (phdr_offset, phdr_count) = {
-						let ehdr = self.elf_header(file);
-						(
-							ehdr.e_phoff.to_usize().unwrap(),
-							ehdr.e_phnum.to_usize().unwrap(),
-						)
-					};
-					let new_phdr_count = phdr_count + 1;
-					let mut max_vaddr = 0;
-					let mut max_align = 1;
-					for index in 0..phdr_count {
-						let offset = phdr_offset + index * phdr_size;
-						let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(
-							&file[offset..offset + phdr_size],
-						)}
-						.expect("expected a program header");
-						if phdr.p_type == sys::PT_LOAD {
-							max_vaddr = max_vaddr.max(
-								phdr.p_vaddr.to_usize().unwrap()
-									+ phdr.p_memsz.to_usize().unwrap(),
-							);
-							max_align = max_align.max(phdr.p_align.to_usize().unwrap());
-						}
-					}
-
-					let file_size = file
-						.file_size()
-						.expect("failed to get the file size")
-						.to_usize()
-						.unwrap();
-					let section_table_offset = align(
-						file_size,
-						align_of::<paste! {[<$elf _Shdr>]}>(),
-					);
-					let section_table_size =
-						section_table.len() + size_of::<paste! {[<$elf _Shdr>]}>();
-					let segment_file_offset = align(
-						section_table_offset.to_usize().unwrap() + section_table_size,
-						max_align,
-					);
-					let segment_vaddr = align(max_vaddr, max_align);
-					let headers_offset =
-						segment_file_offset + size_of::<paste! {[<$elf _Ehdr>]}>();
-					let new_section_offset = headers_offset + new_phdr_count * phdr_size;
-					let segment_size = new_section_offset + data.len() - segment_file_offset;
-
-					let new_section_header = paste! {[<$elf _Shdr>] {
-						sh_type: sys::SHT_NOTE,
-						sh_offset: new_section_offset.try_into().unwrap(),
-						sh_size: data.len().try_into().unwrap(),
-						sh_addr: (segment_vaddr + new_section_offset - segment_file_offset)
-							.try_into()
-							.unwrap(),
-						sh_name: name_index.try_into().unwrap(),
-						sh_flags: 0,
-						sh_link: 0,
-						sh_info: 0,
-						sh_addralign: 0,
-						sh_entsize: 0,
-					}};
-					section_table.extend_from_slice(new_section_header.as_bytes());
-					let section_table_padding = section_table_offset - file_size;
-					if section_table_padding > 0 {
-						file.append(&vec![0; section_table_padding])
-							.expect("failed to align the section table");
-					}
-					file.append(&section_table)
-						.expect("failed to write the new section table to the file");
-
-					let padding = segment_file_offset
-						- file
-							.file_size()
-							.expect("failed to get the file size")
-							.to_usize()
-							.unwrap();
-					if padding > 0 {
-						file.append(&vec![0; padding])
-							.expect("failed to write segment padding");
-					}
-
-					let new_segment = paste! {[<$elf _Phdr>] {
-						p_type: sys::PT_LOAD,
-						p_flags: sys::PF_R,
-						p_offset: segment_file_offset.try_into().unwrap(),
-						p_vaddr: segment_vaddr.try_into().unwrap(),
-						p_paddr: segment_vaddr.try_into().unwrap(),
-						p_filesz: segment_size.try_into().unwrap(),
-						p_memsz: segment_size.try_into().unwrap(),
-						p_align: max_align.try_into().unwrap(),
-					}};
-					let mut phdr_bytes = Vec::with_capacity(new_phdr_count * phdr_size);
-					let mut found_phdr = false;
-					for index in 0..phdr_count {
-						let offset = phdr_offset + index * phdr_size;
-						let mut phdr = paste! {[<$elf _Phdr>]::read_from_bytes(
-							&file[offset..offset + phdr_size],
-						)}
-						.expect("expected a program header");
-						if phdr.p_type == sys::PT_PHDR {
-							assert!(!found_phdr, "multiple program header segments found");
-							found_phdr = true;
-							let size = new_phdr_count * phdr_size;
-							phdr.p_offset = headers_offset.try_into().unwrap();
-							phdr.p_vaddr = (segment_vaddr + size_of::<paste! {[<$elf _Ehdr>]}>())
-								.try_into()
-								.unwrap();
-							phdr.p_paddr = phdr.p_vaddr;
-							phdr.p_filesz = size.try_into().unwrap();
-							phdr.p_memsz = size.try_into().unwrap();
-						}
-						phdr_bytes.extend_from_slice(phdr.as_bytes());
-					}
-					phdr_bytes.extend_from_slice(new_segment.as_bytes());
-
-					let ehdr = self.elf_header_mut(file);
-					ehdr.e_phoff = headers_offset.try_into().unwrap();
-					ehdr.e_phnum = new_phdr_count.try_into().unwrap();
-					ehdr.e_shnum += 1;
-					ehdr.e_shoff = section_table_offset.try_into().unwrap();
-					let ehdr_bytes = ehdr.as_bytes().to_vec();
-					file.append(&ehdr_bytes)
-						.expect("failed to write the copied elf header");
-					file.append(&phdr_bytes)
-						.expect("failed to write the relocated program header table");
-					file.append(data)
-						.expect("failed to write new section to end of file");
+					self.append_manifest_segment(file, data, section_table, name_index);
 					return;
 				}
 				let vaddr_delta =
@@ -753,19 +780,19 @@ macro_rules! impl_elf {
 					+ section_table.len()
 					+ size_of::<paste! {[<$elf _Shdr>]}>();
 
-				// Create the new section.
-				let sh_type = sys::SHT_NOTE;
-				let sh_flags = 0;
+				// Create the new section. It is allocated, so that a tool which repacks the file keeps
+				// it inside the segment extended below rather than moving it out with the other
+				// sections that are not part of the image.
 				let new_section_header = paste! {[<$elf _Shdr>]{
-					sh_type: sh_type .try_into().unwrap(),
+					sh_type: sys::SHT_NOTE,
 					sh_offset: new_section_offset .try_into().unwrap(),
 					sh_size: data.len() .try_into().unwrap(),
 					sh_addr: (new_section_offset + vaddr_delta) .try_into().unwrap(),
 					sh_name: name_index .try_into().unwrap(),
-					sh_flags: sh_flags .try_into().unwrap(),
+					sh_flags: sys::SHF_ALLOC .try_into().unwrap(),
 					sh_link: 0,
 					sh_info: 0,
-					sh_addralign: 0,
+					sh_addralign: 1,
 					sh_entsize: 0,
 				}};
 

@@ -2688,6 +2688,9 @@ export async function test() {
 		}),
 		tg.build(wrapperModule.testStatic, { name: "static executable" }),
 		tg.build(wrapperModule.testBssManifest, { name: "BSS manifest" }),
+		tg.build(wrapperModule.testStripPreservesManifest, {
+			name: "strip preserves manifest",
+		}),
 		tg.build(testConcurrentRelink, { name: "concurrent relink" }),
 		tg.build(testConcurrentRelinkStandalone, {
 			name: "concurrent relink standalone",
@@ -3880,8 +3883,7 @@ export async function testConcurrentRelinkTransient() {
 		`Expected ${workers * iterations} runs, got ${results.length}`,
 	);
 
-	// The wrapper aborts with 111. The status a shell reports for a failed exec varies, so key on
-	// that rather than on an allowlist of shell statuses.
+	// The wrapper aborts with 111.
 	const aborts = results.filter((result) => result.status === "111");
 	tg.assert(
 		aborts.length === 0,
@@ -3894,6 +3896,8 @@ export async function testConcurrentRelinkTransient() {
 	const successes = results.filter((result) => result.status === "0");
 	tg.assert(successes.length > 0, "Expected at least one run to succeed");
 
+	// A run the kernel could not exec at all is expected. The status a shell reports for a failed
+	// exec varies, so key on the message rather than on an allowlist of statuses.
 	const isAbsentPathFailure = (result: (typeof results)[number]) => {
 		const status = Number(result.status);
 		return (

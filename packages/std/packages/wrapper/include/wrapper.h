@@ -206,8 +206,6 @@ int main (int argc, char** argv) {
 		trace("read aux vector\n");
 	}
 
-	uintptr_t load_address = executable.load_address;
-
 	// Check that we have space to write the new program header table and number of entries later.
 	ABORT_IF(!nphdr || nentry < 0, "missing AT_PHDR or AT_ENTRY");
 
@@ -215,7 +213,7 @@ int main (int argc, char** argv) {
 	void* entrypoint = NULL;
 	if (executable.manifest->interpreter.ptr) {
 		// If there's an interpreter arg,
-		stack.auxv[nentry].a_un.a_val = load_address + executable.manifest->entrypoint;
+		stack.auxv[nentry].a_un.a_val = executable.load_address + executable.manifest->entrypoint;
 
 		// Load the interpreter.
 		Interpreter interpreter = create_interpreter(
@@ -236,7 +234,7 @@ int main (int argc, char** argv) {
 		// Set the entrypoint as the interpreter.
 		entrypoint = (void*)(interpreter.base_address + interpreter.entry);
 	} else {
-		entrypoint = (void*)((uintptr_t)load_address + executable.manifest->entrypoint);
+		entrypoint = (void*)(executable.load_address + executable.manifest->entrypoint);
 	}
 
 	// Fix program headers. We use a second arena to avoid freeing the memory before userland exec.
@@ -245,7 +243,7 @@ int main (int argc, char** argv) {
 	ProgramHeaders new_phdrs = create_program_headers(
 		&preserved_memory,
 		executable.manifest,
-		(void*)load_address,
+		(void*)executable.load_address,
 		stack.auxv[nentry].a_un.a_val,
 		executable.program_headers,
 		executable.elf_header->e_phnum
@@ -449,12 +447,18 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 			executable.load_address, executable.program_headers, executable.elf_header->e_phnum);
 	}
 
-	// Find the segment whose file contents end with the footer.
+	// Find the footer at the end of the file contents of a loadable segment. `wrap` writes it to the
+	// segment whose file contents end last, so take that one: a binary wrapped more than once keeps
+	// the earlier footers, and only the last one describes the manifest in force.
 	String magic = { .ptr = (uint8_t*)TANGRAM_MAGIC, .len = sizeof(executable.footer.magic) };
 	Elf64_Phdr* segment_itr = executable.program_headers;
 	Elf64_Phdr* segment_end = segment_itr + executable.elf_header->e_phnum;
+	uint64_t file_end = 0;
 	for (; segment_itr != segment_end; segment_itr++) {
 		if (segment_itr->p_type != PT_LOAD || segment_itr->p_filesz < sizeof(Footer)) {
+			continue;
+		}
+		if (data && segment_itr->p_offset + segment_itr->p_filesz <= file_end) {
 			continue;
 		}
 		char* end = (char*)(executable.load_address + segment_itr->p_vaddr + segment_itr->p_filesz);
@@ -467,10 +471,10 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 		ABORT_IF(footer.size > segment_itr->p_filesz - sizeof(Footer), "invalid footer");
 		executable.footer = footer;
 		data = end - sizeof(Footer) - footer.size;
+		file_end = segment_itr->p_offset + segment_itr->p_filesz;
 		if (options->enable_tracing) {
 			trace("read manifest at %p, size: %ld\n", data, footer.size);
 		}
-		break;
 	}
 	ABORT_IF(!data, "failed to find the manifest");
 #elif defined(__APPLE__)
@@ -529,11 +533,14 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 		"failed to find the manifest"
 	);
 
-	// The manifest is just before the footer.
+	// The manifest is just before the footer. Point straight at the mapping: parsing it does not
+	// write to it, so there is nothing to copy.
 	ABORT_IF(executable.footer.size > footer_offset - linkedit_start, "invalid footer");
 	uint64_t manifest_offset = footer_offset - executable.footer.size;
-	data = ALLOC_N(arena, executable.footer.size, char);
-	memcpy(data, linkedit + (manifest_offset - linkedit_start), executable.footer.size);
+	data = (char*)(linkedit + (manifest_offset - linkedit_start));
+	if (options->enable_tracing) {
+		trace("read manifest at %p, size: %ld\n", data, executable.footer.size);
+	}
 #else
 #error "unsupported target"
 #endif
