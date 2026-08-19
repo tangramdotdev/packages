@@ -1,4 +1,5 @@
 import * as bootstrap from "../bootstrap.tg.ts";
+import * as elf from "../file/elf.tg.ts";
 import * as gnu from "../sdk/gnu.tg.ts";
 import * as llvm from "../sdk/llvm.tg.ts";
 import * as std from "../tangram.ts";
@@ -216,7 +217,10 @@ export async function test() {
 	// const buildToolchain = await bootstrap.sdk.env(host);
 	const output = await workspace({ host, release: true });
 	if (std.triple.os(host) === "linux") {
-		await tg.build(testStatic, { name: "static executable" });
+		await Promise.all([
+			tg.build(testStatic, { name: "static executable" }),
+			tg.build(testBssManifest, { name: "BSS manifest" }),
+		]);
 	}
 	return output;
 }
@@ -277,6 +281,113 @@ export async function testStatic() {
 	const text = await output.text;
 	tg.assert(
 		text === "hello, world!\n",
+		`unexpected output ${JSON.stringify(text)}`,
+	);
+	return true;
+}
+
+/** Writing a manifest must preserve an existing BSS rather than extending its PT_LOAD over file
+ * data. */
+export async function testBssManifest() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		return true;
+	}
+	const toolchain = std.bootstrap.sdk();
+	const source = tg.directory({
+		"main.c": tg.file(`
+			#include <stdint.h>
+			#include <stdio.h>
+			volatile uint8_t retained_uninitialized_global[65536];
+			int main() {
+				if (retained_uninitialized_global[0] != 0 ||
+					retained_uninitialized_global[65535] != 0) {
+					return 1;
+				}
+				retained_uninitialized_global[0] = 7;
+				printf("bss manifest: ok\\n");
+				return 0;
+			}
+		`),
+	});
+	const executable = await std
+		.run(std.shBootstrap`gcc -static ${source}/main.c -o ${tg.output}`)
+		.env(toolchain, { TGLD_PASSTHROUGH: true })
+		.then(tg.File.expect);
+
+	const original = await elf.parse(executable);
+	const originalLoads = original.programHeaders.filter(
+		(programHeader) => programHeader.p_type === 1,
+	);
+	let bssSegment = originalLoads[0];
+	tg.assert(bssSegment !== undefined, "expected a loadable segment");
+	for (const segment of originalLoads.slice(1)) {
+		const end = Number(segment.p_offset) + Number(segment.p_filesz);
+		const bssEnd = Number(bssSegment.p_offset) + Number(bssSegment.p_filesz);
+		if (end > bssEnd) {
+			bssSegment = segment;
+		}
+	}
+	tg.assert(
+		Number(bssSegment.p_memsz) > Number(bssSegment.p_filesz),
+		"expected the final PT_LOAD to contain a BSS",
+	);
+
+	const manifest = {
+		executable: {
+			kind: "address" as const,
+			value: Number(original.header.e_entry),
+		},
+	};
+	const rewritten = await std.wrap.Manifest.write(
+		executable,
+		manifest,
+		new Map(),
+	);
+	const readManifest = await std.wrap.Manifest.read(rewritten);
+	tg.assert(
+		JSON.stringify(readManifest) === JSON.stringify(manifest),
+		"manifest did not round trip",
+	);
+
+	const parsed = await elf.parse(rewritten);
+	tg.assert(
+		parsed.header.e_phnum === original.header.e_phnum + 1,
+		"expected a new program header",
+	);
+	const loads = parsed.programHeaders.filter(
+		(programHeader) => programHeader.p_type === 1,
+	);
+	const preservedBss = loads.find(
+		(segment) => Number(segment.p_vaddr) === Number(bssSegment.p_vaddr),
+	);
+	tg.assert(preservedBss !== undefined, "original BSS segment is missing");
+	tg.assert(
+		Number(preservedBss.p_offset) === Number(bssSegment.p_offset) &&
+			Number(preservedBss.p_filesz) === Number(bssSegment.p_filesz) &&
+			Number(preservedBss.p_memsz) === Number(bssSegment.p_memsz),
+		"original BSS segment changed",
+	);
+	let manifestSegment = loads[0];
+	tg.assert(manifestSegment !== undefined, "expected a loadable segment");
+	for (const segment of loads.slice(1)) {
+		if (
+			Number(segment.p_offset) + Number(segment.p_filesz) >
+			Number(manifestSegment.p_offset) + Number(manifestSegment.p_filesz)
+		) {
+			manifestSegment = segment;
+		}
+	}
+	tg.assert(
+		Number(manifestSegment.p_filesz) === Number(manifestSegment.p_memsz),
+		"manifest segment unexpectedly contains a BSS",
+	);
+
+	const output = await std
+		.run(std.shBootstrap`${rewritten} > ${tg.output}`)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text === "bss manifest: ok\n",
 		`unexpected output ${JSON.stringify(text)}`,
 	);
 	return true;

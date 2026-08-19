@@ -519,6 +519,7 @@ macro_rules! impl_elf {
 					})
 			}
 
+			#[allow(clippy::too_many_lines)]
 			fn write_manifest(&self, file: &mut File, data: &[u8]) {
 				let name = TANGRAM_MANIFEST_SECTION_NAME.to_bytes_with_nul();
 				let name_len = name.len();
@@ -573,10 +574,131 @@ macro_rules! impl_elf {
 				let segment =
 					paste! {[<$elf _Phdr>]::read_from_bytes(&file[segment_offset..segment_offset + phdr_size])}
 						.expect("expected a program header");
-				assert_eq!(
-					segment.p_filesz, segment.p_memsz,
-					"cannot extend a segment with a bss",
+				assert!(
+					segment.p_filesz <= segment.p_memsz,
+					"segment file size exceeds its memory size",
 				);
+
+				// Extending a segment with a BSS would make the bytes after p_filesz initialize
+				// memory which must remain zero-filled. Instead, append a read-only segment containing
+				// a relocated program header table followed by the manifest.
+				if segment.p_filesz < segment.p_memsz {
+					let (phdr_offset, phdr_count) = {
+						let ehdr = self.elf_header(file);
+						(
+							ehdr.e_phoff.to_usize().unwrap(),
+							ehdr.e_phnum.to_usize().unwrap(),
+						)
+					};
+					let new_phdr_count = phdr_count + 1;
+					let mut max_vaddr = 0;
+					let mut max_align = 1;
+					for index in 0..phdr_count {
+						let offset = phdr_offset + index * phdr_size;
+						let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(
+							&file[offset..offset + phdr_size],
+						)}
+						.expect("expected a program header");
+						if phdr.p_type == sys::PT_LOAD {
+							max_vaddr = max_vaddr.max(
+								phdr.p_vaddr.to_usize().unwrap()
+									+ phdr.p_memsz.to_usize().unwrap(),
+							);
+							max_align = max_align.max(phdr.p_align.to_usize().unwrap());
+						}
+					}
+
+					let section_table_offset =
+						file.file_size().expect("failed to get the file size");
+					let section_table_size =
+						section_table.len() + size_of::<paste! {[<$elf _Shdr>]}>();
+					let segment_file_offset = align(
+						section_table_offset.to_usize().unwrap() + section_table_size,
+						max_align,
+					);
+					let segment_vaddr = align(max_vaddr, max_align);
+					let headers_offset =
+						segment_file_offset + size_of::<paste! {[<$elf _Ehdr>]}>();
+					let new_section_offset = headers_offset + new_phdr_count * phdr_size;
+					let segment_size = new_section_offset + data.len() - segment_file_offset;
+
+					let new_section_header = paste! {[<$elf _Shdr>] {
+						sh_type: sys::SHT_NOTE,
+						sh_offset: new_section_offset.try_into().unwrap(),
+						sh_size: data.len().try_into().unwrap(),
+						sh_addr: (segment_vaddr + new_section_offset - segment_file_offset)
+							.try_into()
+							.unwrap(),
+						sh_name: name_index.try_into().unwrap(),
+						sh_flags: 0,
+						sh_link: 0,
+						sh_info: 0,
+						sh_addralign: 0,
+						sh_entsize: 0,
+					}};
+					section_table.extend_from_slice(new_section_header.as_bytes());
+					file.append(&section_table)
+						.expect("failed to write the new section table to the file");
+
+					let padding = segment_file_offset
+						- file
+							.file_size()
+							.expect("failed to get the file size")
+							.to_usize()
+							.unwrap();
+					if padding > 0 {
+						file.append(&vec![0; padding])
+							.expect("failed to write segment padding");
+					}
+
+					let new_segment = paste! {[<$elf _Phdr>] {
+						p_type: sys::PT_LOAD,
+						p_flags: sys::PF_R,
+						p_offset: segment_file_offset.try_into().unwrap(),
+						p_vaddr: segment_vaddr.try_into().unwrap(),
+						p_paddr: segment_vaddr.try_into().unwrap(),
+						p_filesz: segment_size.try_into().unwrap(),
+						p_memsz: segment_size.try_into().unwrap(),
+						p_align: max_align.try_into().unwrap(),
+					}};
+					let mut phdr_bytes = Vec::with_capacity(new_phdr_count * phdr_size);
+					let mut found_phdr = false;
+					for index in 0..phdr_count {
+						let offset = phdr_offset + index * phdr_size;
+						let mut phdr = paste! {[<$elf _Phdr>]::read_from_bytes(
+							&file[offset..offset + phdr_size],
+						)}
+						.expect("expected a program header");
+						if phdr.p_type == sys::PT_PHDR {
+							assert!(!found_phdr, "multiple program header segments found");
+							found_phdr = true;
+							let size = new_phdr_count * phdr_size;
+							phdr.p_offset = headers_offset.try_into().unwrap();
+							phdr.p_vaddr = (segment_vaddr + size_of::<paste! {[<$elf _Ehdr>]}>())
+								.try_into()
+								.unwrap();
+							phdr.p_paddr = phdr.p_vaddr;
+							phdr.p_filesz = size.try_into().unwrap();
+							phdr.p_memsz = size.try_into().unwrap();
+						}
+						phdr_bytes.extend_from_slice(phdr.as_bytes());
+					}
+					phdr_bytes.extend_from_slice(new_segment.as_bytes());
+
+					let ehdr = self.elf_header_mut(file);
+					ehdr.e_phoff = headers_offset.try_into().unwrap();
+					ehdr.e_phnum = new_phdr_count.try_into().unwrap();
+					ehdr.e_shnum += 1;
+					ehdr.e_shoff = section_table_offset.try_into().unwrap();
+					let ehdr_bytes = ehdr.as_bytes().to_vec();
+					file.append(&ehdr_bytes)
+						.expect("failed to write the copied elf header");
+					file.append(&phdr_bytes)
+						.expect("failed to write the relocated program header table");
+					file.append(data)
+						.expect("failed to write new section to end of file");
+					return;
+				}
 				let vaddr_delta =
 					segment.p_vaddr.to_usize().unwrap() - segment.p_offset.to_usize().unwrap();
 
@@ -718,4 +840,102 @@ impl_elf!(Elf64);
 
 fn align(m: usize, n: usize) -> usize {
 	(m + n - 1) & !(n - 1)
+}
+
+#[cfg(all(
+	test,
+	target_os = "linux",
+	target_endian = "little",
+	target_pointer_width = "64"
+))]
+mod tests {
+	use super::*;
+	use std::sync::atomic::{AtomicU8, Ordering};
+
+	const CHILD_ENV: &str = "TANGRAM_WRAP_BSS_TEST_CHILD";
+
+	#[used]
+	static RETAINED_BSS: [AtomicU8; 65_536] = [const { AtomicU8::new(0) }; 65_536];
+
+	fn retained_bss_is_zero() -> bool {
+		RETAINED_BSS[0].load(Ordering::Relaxed) == 0
+			&& RETAINED_BSS[RETAINED_BSS.len() - 1].load(Ordering::Relaxed) == 0
+	}
+
+	fn last_loadable_segment(file: &File) -> Elf64_Phdr {
+		let offset = Elf64
+			.last_loadable_segment(file)
+			.expect("expected a loadable segment");
+		Elf64_Phdr::read_from_bytes(&file[offset..offset + size_of::<Elf64_Phdr>()])
+			.expect("expected a program header")
+	}
+
+	#[test]
+	fn writes_manifest_to_elf_with_bss() {
+		if std::env::var_os(CHILD_ENV).is_some() {
+			assert!(retained_bss_is_zero());
+			return;
+		}
+
+		assert!(retained_bss_is_zero());
+		let executable = std::env::current_exe().expect("failed to get the test executable");
+		let original = File::open(&executable, true).expect("failed to open the test executable");
+		let original_phnum = Elf64.elf_header(&original).e_phnum;
+		let bss_segment = last_loadable_segment(&original);
+		assert!(bss_segment.p_memsz > bss_segment.p_filesz);
+		drop(original);
+
+		let temp = tempfile::tempdir().expect("failed to create a temporary directory");
+		let rewritten_path = temp.path().join("wrap-bss-test");
+		std::fs::copy(&executable, &rewritten_path).expect("failed to copy the test executable");
+		let manifest = serde_json::json!({ "bss": true });
+		crate::write_manifest(&rewritten_path, &manifest, None);
+
+		let output = crate::read_manifest::<serde_json::Value>(&rewritten_path, None);
+		assert_eq!(output.manifest, Some(manifest));
+		let rewritten =
+			File::open(&rewritten_path, true).expect("failed to open the rewritten file");
+		let ehdr = Elf64.elf_header(&rewritten);
+		assert_eq!(ehdr.e_phnum, original_phnum + 1);
+		let manifest_location = output.location.expect("expected a manifest location");
+		let phdr_size = size_of::<Elf64_Phdr>();
+		let mut found_original_bss = false;
+		let mut found_manifest_segment = false;
+		for index in 0..ehdr.e_phnum.to_usize().unwrap() {
+			let offset = ehdr.e_phoff.to_usize().unwrap() + index * phdr_size;
+			let phdr = Elf64_Phdr::read_from_bytes(&rewritten[offset..offset + phdr_size])
+				.expect("expected a program header");
+			if phdr.p_type != sys::PT_LOAD {
+				continue;
+			}
+			if phdr.p_vaddr == bss_segment.p_vaddr {
+				assert_eq!(phdr.p_offset, bss_segment.p_offset);
+				assert_eq!(phdr.p_filesz, bss_segment.p_filesz);
+				assert_eq!(phdr.p_memsz, bss_segment.p_memsz);
+				found_original_bss = true;
+			}
+			let start = phdr.p_offset.to_usize().unwrap();
+			let end = start + phdr.p_filesz.to_usize().unwrap();
+			if manifest_location.offset >= start && manifest_location.end() == end {
+				assert_eq!(phdr.p_filesz, phdr.p_memsz);
+				found_manifest_segment = true;
+			}
+		}
+		assert!(found_original_bss);
+		assert!(found_manifest_segment);
+		drop(rewritten);
+
+		let child = std::process::Command::new(&rewritten_path)
+			.args(["--exact", "elf::tests::writes_manifest_to_elf_with_bss"])
+			.env(CHILD_ENV, "1")
+			.output()
+			.expect("failed to execute the rewritten test executable");
+		assert!(
+			child.status.success(),
+			"rewritten executable failed with status {:?}\nstdout:\n{}\nstderr:\n{}",
+			child.status.code(),
+			String::from_utf8_lossy(&child.stdout),
+			String::from_utf8_lossy(&child.stderr),
+		);
+	}
 }

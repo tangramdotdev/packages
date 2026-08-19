@@ -2684,6 +2684,7 @@ export async function test() {
 			name: "single arg object no mutations",
 		}),
 		tg.build(wrapperModule.testStatic, { name: "static executable" }),
+		tg.build(wrapperModule.testBssManifest, { name: "BSS manifest" }),
 		tg.build(testConcurrentRelink, { name: "concurrent relink" }),
 		tg.build(testConcurrentRelinkStandalone, {
 			name: "concurrent relink standalone",
