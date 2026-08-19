@@ -276,13 +276,10 @@ export async function testCompile() {
 		.then(tg.File.expect);
 }
 
-/** `embed` copies the whole wrapper file into one segment of the wrapped executable and maps it at
- * an address chosen for that executable, indexed by file offset. The wrapper's own segments are not
- * laid out that way: its writable segment sits one page apart from its offset, so inside a host
- * binary it lands short of where the wrapper's code would address it. That is only harmless while
- * the wrapper has no relocations to apply and no memory beyond its file contents, which is what
- * this checks. If it ever stops holding, `embed` has to build a memory image instead of copying the
- * file, and map it by address. */
+/** `embed` lays the wrapper's segments out by address and maps the result at an address chosen for
+ * the wrapped executable, so the distances its code resolved at link time survive. Two things do
+ * not survive: relocations, because nothing applies them, and writes, because the segment carrying
+ * the wrapper is not writable. */
 export async function testWrapperPositionIndependent() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
@@ -306,20 +303,18 @@ export async function testWrapperPositionIndependent() {
 		entrySegment !== undefined,
 		"expected the wrapper entry point to be in a file-backed PT_LOAD",
 	);
-	for (const segment of segments) {
-		tg.assert(
-			Number(segment.p_filesz) === Number(segment.p_memsz),
-			"expected the wrapper to have no bss",
+	const sized = (names: Array<string>) =>
+		parsed.sectionHeaders.filter(
+			(section) =>
+				names.includes(section.sh_name) && Number(section.sh_size) > 0,
 		);
-	}
-	const relocations = parsed.sectionHeaders.filter((section) =>
-		[".rel.dyn", ".rel.plt", ".rela.dyn", ".rela.plt"].includes(
-			section.sh_name,
-		),
+	tg.assert(
+		sized([".rel.dyn", ".rel.plt", ".rela.dyn", ".rela.plt"]).length === 0,
+		"expected the wrapper to have no relocations",
 	);
 	tg.assert(
-		relocations.every((section) => Number(section.sh_size) === 0),
-		"expected the wrapper to have no relocations",
+		sized([".data", ".bss"]).length === 0,
+		"expected the wrapper to have nothing it would write to",
 	);
 	return true;
 }
@@ -586,7 +581,12 @@ export async function testStripPreservesManifest() {
 		.run(std.shBootstrap`gcc ${source}/main.c -o ${tg.output}`)
 		.env(toolchain)
 		.then(tg.File.expect);
-	const standalone = await std.wrap(embedded, { buildToolchain: toolchain });
+	// `merge` defaults to true, which would rewrite the manifest of the embedded wrapper instead of
+	// producing a standalone one, leaving that layout untested.
+	const standalone = await std.wrap(embedded, {
+		buildToolchain: toolchain,
+		merge: false,
+	});
 	const output = await std
 		.run(std.shBootstrap`
 			cp ${embedded} embedded

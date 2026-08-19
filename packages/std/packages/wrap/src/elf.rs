@@ -365,10 +365,12 @@ macro_rules! impl_elf {
 					}
 				}
 
-				// The whole ELF file is the blob that gets appended. The stub segment below maps it
-				// at p_offset = wrapper_offset, p_vaddr = wrapper_vaddr, so the blob must be indexed
-				// by file offset: an `objcopy -O binary` image is indexed by load address and faults
-				// once execution leaves the first segment.
+				// The blob that gets appended is the wrapper's memory image, not its file. The stub
+				// segment below maps the blob contiguously at a single address, while the wrapper's
+				// own segments sit at different distances from their offsets, and its code reaches
+				// its data by the distances the linker resolved. Copying the file would move that
+				// data out from under the code, with nothing to notice: a static PIE reaching a
+				// hidden global emits a plain pc-relative address and no relocation at all.
 				let wrapper_exe = std::fs::read(&wrapper_exe_path)?;
 				let wrapper_ehdr = paste! {[<$elf _Ehdr>]::read_from_bytes(
 					&wrapper_exe[0..size_of::<[<$elf _Ehdr>]>()],
@@ -383,27 +385,55 @@ macro_rules! impl_elf {
 				let wrapper_entry_vaddr = wrapper_ehdr.e_entry.to_usize().unwrap();
 				let wrapper_phdr_offset = wrapper_ehdr.e_phoff.to_usize().unwrap();
 				let wrapper_phdr_count = wrapper_ehdr.e_phnum.to_usize().unwrap();
-				let wrapper_entry_offset = (0..wrapper_phdr_count)
-					.find_map(|index| {
+				let wrapper_segments = (0..wrapper_phdr_count)
+					.filter_map(|index| {
 						let offset = wrapper_phdr_offset + index * phdr_size;
 						let bytes = wrapper_exe.get(offset..offset + phdr_size)?;
 						let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(bytes)}.ok()?;
 						if phdr.p_type != sys::PT_LOAD {
 							return None;
 						}
-						let vaddr = phdr.p_vaddr.to_usize().unwrap();
-						let filesz = phdr.p_filesz.to_usize().unwrap();
-						if wrapper_entry_vaddr < vaddr || wrapper_entry_vaddr >= vaddr + filesz {
-							return None;
-						}
-						Some(phdr.p_offset.to_usize().unwrap() + wrapper_entry_vaddr - vaddr)
+						Some((
+							phdr.p_offset.to_usize().unwrap(),
+							phdr.p_vaddr.to_usize().unwrap(),
+							phdr.p_filesz.to_usize().unwrap(),
+							phdr.p_memsz.to_usize().unwrap(),
+						))
 					})
+					.collect::<Vec<_>>();
+				let min_vaddr = wrapper_segments
+					.iter()
+					.map(|&(_, vaddr, _, _)| vaddr)
+					.min()
 					.ok_or_else(|| {
 						std::io::Error::new(
 							std::io::ErrorKind::InvalidInput,
-							"the wrapper entry point is not in a file-backed PT_LOAD",
+							"the wrapper executable has no loadable segments",
 						)
 					})?;
+
+				// Lay each segment down at its address. The gaps between them, and any memory a
+				// segment claims past its file contents, stay zero.
+				let image_size = wrapper_segments
+					.iter()
+					.map(|&(_, vaddr, _, memsz)| vaddr + memsz - min_vaddr)
+					.max()
+					.unwrap();
+				let mut wrapper_image = vec![0u8; image_size];
+				for &(offset, vaddr, filesz, _) in &wrapper_segments {
+					let start = vaddr - min_vaddr;
+					wrapper_image[start..start + filesz]
+						.copy_from_slice(&wrapper_exe[offset..offset + filesz]);
+				}
+				if !wrapper_segments.iter().any(|&(_, vaddr, filesz, _)| {
+					wrapper_entry_vaddr >= vaddr && wrapper_entry_vaddr < vaddr + filesz
+				}) {
+					return Err(std::io::Error::new(
+						std::io::ErrorKind::InvalidInput,
+						"the wrapper entry point is not in a file-backed PT_LOAD",
+					));
+				}
+				let wrapper_entry_offset = wrapper_entry_vaddr - min_vaddr;
 
 				// Open the executable for modification.
 				let mut file = File::open(executable, false)?;
@@ -469,7 +499,7 @@ macro_rules! impl_elf {
 				// Compute the data layout. The footer is included so that the segment covers the same
 				// bytes as the manifest section header, which counts it in its size.
 				let wrapper_data_size =
-					wrapper_exe.len() + manifest.len() + size_of::<crate::Footer>();
+					wrapper_image.len() + manifest.len() + size_of::<crate::Footer>();
 
 				// Determine the wrapper offset and address, and build a new phdr table if needed.
 				let new_phdr_table: Option<(Vec<u8>, usize)>;
@@ -575,8 +605,8 @@ macro_rules! impl_elf {
 				.unwrap();
 				manifest_shdr.sh_type = sys::SHT_NOTE;
 				manifest_shdr.sh_flags = sys::SHF_ALLOC.try_into().unwrap();
-				manifest_shdr.sh_addr = (wrapper_vaddr + wrapper_exe.len()).try_into().unwrap();
-				manifest_shdr.sh_offset = (wrapper_offset + wrapper_exe.len()).try_into().unwrap();
+				manifest_shdr.sh_addr = (wrapper_vaddr + wrapper_image.len()).try_into().unwrap();
+				manifest_shdr.sh_offset = (wrapper_offset + wrapper_image.len()).try_into().unwrap();
 				manifest_shdr.sh_size =
 					(manifest.len() + size_of::<crate::Footer>()).try_into().unwrap();
 				manifest_shdr.sh_link = 0;
@@ -650,7 +680,7 @@ macro_rules! impl_elf {
 				}
 
 				// Append the wrapper executable.
-				file.append(&wrapper_exe)?;
+				file.append(&wrapper_image)?;
 
 				// Append manifest.
 				file.append(manifest)?;
