@@ -2691,6 +2691,9 @@ export async function test() {
 		tg.build(wrapperModule.testStripPreservesManifest, {
 			name: "strip preserves manifest",
 		}),
+		tg.build(wrapperModule.testEmbedNonuniformWrapper, {
+			name: "embed nonuniform wrapper",
+		}),
 		tg.build(testConcurrentRelink, { name: "concurrent relink" }),
 		tg.build(testConcurrentRelinkStandalone, {
 			name: "concurrent relink standalone",

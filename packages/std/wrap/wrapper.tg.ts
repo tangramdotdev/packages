@@ -3,6 +3,7 @@ import * as elf from "../file/elf.tg.ts";
 import * as gnu from "../sdk/gnu.tg.ts";
 import * as llvm from "../sdk/llvm.tg.ts";
 import * as std from "../tangram.ts";
+import * as wrapWorkspace from "./workspace.tg.ts";
 import source from "../packages/wrapper";
 import workspaceSrc from "../" with { type: "directory" };
 import dependencySource from "./test/libdependency.c" with { type: "file" };
@@ -221,8 +222,13 @@ const PT_LOAD = 1;
 const PT_INTERP = 3;
 const ET_EXEC = 2;
 const ET_DYN = 3;
+const SHT_RELA = 4;
+const SHT_REL = 9;
+const SHT_RELR = 19;
+const SHF_WRITE = 0x1;
 
 type ProgramHeader = elf.File["programHeaders"][number];
+type SectionHeader = elf.File["sectionHeaders"][number];
 
 const loadableSegments = (parsed: elf.File) =>
 	parsed.programHeaders.filter(
@@ -231,6 +237,35 @@ const loadableSegments = (parsed: elf.File) =>
 
 const segmentFileEnd = (segment: ProgramHeader) =>
 	Number(segment.p_offset) + Number(segment.p_filesz);
+
+/** How far a segment's address sits from its offset. */
+const segmentBias = (segment: ProgramHeader) =>
+	Number(segment.p_vaddr) - Number(segment.p_offset);
+
+const containingSegment = (parsed: elf.File, address: number, what: string) => {
+	const segment = loadableSegments(parsed).find(
+		(candidate) =>
+			address >= Number(candidate.p_vaddr) &&
+			address < Number(candidate.p_vaddr) + Number(candidate.p_filesz),
+	);
+	tg.assert(segment !== undefined, `expected ${what} in a file-backed PT_LOAD`);
+	return segment;
+};
+
+const sizedSections = (
+	parsed: elf.File,
+	predicate: (section: SectionHeader) => boolean,
+) =>
+	parsed.sectionHeaders.filter(
+		(section) => Number(section.sh_size) > 0 && predicate(section),
+	);
+
+/** Match relocations by section type. Their names vary — `.rela.iplt` and the small-data and TLS
+ * variants are all relocations a list of names would miss. */
+const relocationSections = (parsed: elf.File) =>
+	sizedSections(parsed, (section) =>
+		[SHT_REL, SHT_RELA, SHT_RELR].includes(section.sh_type),
+	);
 
 /** The loadable segment whose file contents end last, which is where `wrap` puts the manifest. */
 const lastLoadableSegment = (parsed: elf.File) => {
@@ -292,29 +327,29 @@ export async function testWrapperPositionIndependent() {
 		parsed.header.e_type === ET_DYN,
 		"expected the wrapper to be ET_DYN",
 	);
-	const entry = Number(parsed.header.e_entry);
-	const segments = loadableSegments(parsed);
-	const entrySegment = segments.find(
-		(segment) =>
-			entry >= Number(segment.p_vaddr) &&
-			entry < Number(segment.p_vaddr) + Number(segment.p_filesz),
+	containingSegment(
+		parsed,
+		Number(parsed.header.e_entry),
+		"the wrapper entry point",
 	);
 	tg.assert(
-		entrySegment !== undefined,
-		"expected the wrapper entry point to be in a file-backed PT_LOAD",
-	);
-	const sized = (names: Array<string>) =>
-		parsed.sectionHeaders.filter(
-			(section) =>
-				names.includes(section.sh_name) && Number(section.sh_size) > 0,
-		);
-	tg.assert(
-		sized([".rel.dyn", ".rel.plt", ".rela.dyn", ".rela.plt"]).length === 0,
+		relocationSections(parsed).length === 0,
 		"expected the wrapper to have no relocations",
 	);
+	// Nothing relocates the wrapper, so its `.dynamic` and its GOT are read but never stored to.
+	// Anything else writable is data the wrapper would write.
+	const exempt = [".dynamic", ".got", ".got.plt"];
+	const writable = sizedSections(
+		parsed,
+		(section) =>
+			(Number(section.sh_flags) & SHF_WRITE) !== 0 &&
+			!exempt.includes(section.sh_name),
+	);
 	tg.assert(
-		sized([".data", ".bss"]).length === 0,
-		"expected the wrapper to have nothing it would write to",
+		writable.length === 0,
+		`expected the wrapper to have nothing it would write to, found ${writable
+			.map((section) => section.sh_name)
+			.join(", ")}`,
 	);
 	return true;
 }
@@ -374,10 +409,8 @@ export async function testStatic() {
 	// A kernel before 5.19 reports the program header table at the load address plus e_phoff rather
 	// than at the address of the segment holding it, so the stub has to sit the same distance from
 	// its offset as the rest of the image for both to name the same address.
-	const bias = (segment: ProgramHeader) =>
-		Number(segment.p_vaddr) - Number(segment.p_offset);
 	tg.assert(
-		bias(stub) === bias(loads[0]!),
+		segmentBias(stub) === segmentBias(loads[0]!),
 		"expected the stub segment at the same address-to-offset distance as the image",
 	);
 
@@ -537,8 +570,7 @@ export async function testBssManifest() {
 	// The relocated program header table has to keep the same address-to-offset distance as the
 	// image, or a kernel before 5.19 reports it somewhere it is not.
 	tg.assert(
-		Number(manifestSegment.p_vaddr) - Number(manifestSegment.p_offset) ===
-			Number(loads[0]!.p_vaddr) - Number(loads[0]!.p_offset),
+		segmentBias(manifestSegment) === segmentBias(loads[0]!),
 		"expected the manifest segment at the same address-to-offset distance as the image",
 	);
 	const phoff = Number(parsed.header.e_phoff);
@@ -601,6 +633,106 @@ export async function testStripPreservesManifest() {
 	const text = await output.text;
 	tg.assert(
 		text === "stripped: ok\nstripped: ok\n",
+		`unexpected output ${JSON.stringify(text)}`,
+	);
+	return true;
+}
+
+/** `embed` maps the wrapper contiguously at one address, but a static PIE's own segments sit at
+ * different distances from their offsets, and its code reaches its data by the distances the linker
+ * resolved. Appending the wrapper's file rather than its memory image moves that data out from
+ * under the code, and nothing in the file reports it: reaching a hidden global compiles to a bare
+ * pc-relative address with no relocation to inspect. This wrapper is that shape, and it exits zero
+ * only if the global still reads back once embedded. */
+export async function testEmbedNonuniformWrapper() {
+	const host = std.triple.host();
+	if (std.triple.os(host) !== "linux") {
+		return true;
+	}
+	const toolchain = std.bootstrap.sdk();
+	const source = tg.directory({
+		"wrapper.c": tg.file(`
+			__attribute__((visibility("hidden"))) volatile int global = 7;
+
+			__attribute__((noreturn)) static void tg_exit(int code) {
+				for (;;) {
+			#if defined(__aarch64__)
+					register long number __asm__("x8") = 93;
+					register long argument __asm__("x0") = code;
+					__asm__ volatile("svc #0" : : "r"(number), "r"(argument) : "memory");
+			#elif defined(__x86_64__)
+					__asm__ volatile("syscall" : : "a"(60), "D"((long)code) : "memory");
+			#else
+			#error "unsupported architecture"
+			#endif
+				}
+			}
+
+			void _start(void) { tg_exit(global == 7 ? 0 : 1); }
+		`),
+		"host.c": tg.file(`int main() { return 0; }`),
+		"manifest.json": tg.file(`{"executable":{"kind":"address","value":0}}`),
+	});
+	const wrapperExe = await std
+		.run(std.shBootstrap`
+			gcc ${source}/wrapper.c -o ${tg.output} \
+				-nolibc -nostdlib -ffreestanding -fPIC -Os -static-pie \
+				-fno-asynchronous-unwind-tables -fno-stack-protector
+		`)
+		.env(toolchain, { TGLD_PASSTHROUGH: true })
+		.then(tg.File.expect);
+
+	const parsed = await elf.parse(wrapperExe);
+	tg.assert(
+		parsed.header.e_type === ET_DYN,
+		"expected a position-independent wrapper",
+	);
+	tg.assert(
+		relocationSections(parsed).length === 0,
+		"expected no relocations to give the layout away",
+	);
+	const data = parsed.sectionHeaders.find(
+		(section) => section.sh_name === ".data" && Number(section.sh_size) > 0,
+	);
+	tg.assert(data !== undefined, "expected an initialized global");
+	const entrySegment = containingSegment(
+		parsed,
+		Number(parsed.header.e_entry),
+		"the entry point",
+	);
+	const dataSegment = containingSegment(
+		parsed,
+		Number(data.sh_addr),
+		"the initialized global",
+	);
+	tg.assert(
+		segmentBias(dataSegment) !== segmentBias(entrySegment),
+		"expected the global and the code at different address-to-offset distances",
+	);
+
+	const wrapped = await std
+		.run(std.shBootstrap`
+			gcc ${source}/host.c -o host
+			${wrapWorkspace.wrap({ host })} embed host \
+				--manifest ${source}/manifest.json \
+				--wrapper-exe ${wrapperExe} \
+				-o ${tg.output}
+		`)
+		.env(toolchain, { TGLD_PASSTHROUGH: true })
+		.then(tg.File.expect);
+
+	// A wrapper reading its global from the wrong address faults rather than returning, so report the
+	// status instead of letting the process take the build down with it.
+	const output = await std
+		.run(std.shBootstrap`
+			cp ${wrapped} wrapped
+			chmod +x wrapped
+			if ./wrapped ; then echo "embedded wrapper: ok" ; else echo "embedded wrapper exited $?" ; fi > ${tg.output}
+		`)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text === "embedded wrapper: ok\n",
 		`unexpected output ${JSON.stringify(text)}`,
 	);
 	return true;
