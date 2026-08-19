@@ -4,6 +4,7 @@ import * as gnu from "./sdk/gnu.tg.ts";
 import * as std from "./tangram.ts";
 import * as injection from "./wrap/injection.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
+import * as wrapperModule from "./wrap/wrapper.tg.ts";
 import inspectProcessSource from "./wrap/test/inspectProcess.c" with { type: "file" };
 
 export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
@@ -2682,6 +2683,7 @@ export async function test() {
 		tg.build(testSingleArgObjectNoMutations, {
 			name: "single arg object no mutations",
 		}),
+		tg.build(wrapperModule.testStatic, { name: "static executable" }),
 		tg.build(testConcurrentRelink, { name: "concurrent relink" }),
 		tg.build(testConcurrentRelinkStandalone, {
 			name: "concurrent relink standalone",
