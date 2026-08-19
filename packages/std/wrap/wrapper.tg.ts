@@ -214,7 +214,11 @@ export async function test() {
 	tg.assert(hostArch);
 
 	// const buildToolchain = await bootstrap.sdk.env(host);
-	return workspace({ host, release: true });
+	const output = await workspace({ host, release: true });
+	if (std.triple.os(host) === "linux") {
+		await tg.build(testStatic, { name: "static executable" });
+	}
+	return output;
 }
 
 export async function testCompile() {
@@ -250,6 +254,9 @@ export async function testCompile() {
 /** A static executable has no PT_INTERP for the stub segment to reuse, so the wrapper is embedded
  * alongside a new program header table. */
 export async function testStatic() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		return true;
+	}
 	const toolchain = std.bootstrap.sdk();
 	const source = tg.directory({
 		"main.c": tg.file(`

@@ -2808,14 +2808,13 @@ export async function testSingleArgObjectNoMutations() {
 		await origExecutable.store();
 		const origExecutableId = origExecutable.id;
 		console.log("origExecutable", origExecutableId);
+		const wrapperStorePath = `.*/store/${wrapperID}`;
 		tg.assert(
-			text.match(
-				new RegExp(`_NSGetExecutablePath: .*\\.tangram/store/${wrapperID}`),
-			),
+			text.match(new RegExp(`_NSGetExecutablePath: ${wrapperStorePath}`)),
 			"Expected _NSGetExecutablePath to point to the wrapper",
 		);
 		tg.assert(
-			text.match(new RegExp(`argv\\[0\\]: .*\\.tangram/store/${wrapperID}`)),
+			text.match(new RegExp(`argv\\[0\\]: ${wrapperStorePath}`)),
 			"Expected argv[0] to point to the wrapper that was invoked",
 		);
 	}
@@ -3836,10 +3835,30 @@ export async function testConcurrentRelinkTransient() {
 	const successes = results.filter((result) => result.status === "0");
 	tg.assert(successes.length > 0, "Expected at least one run to succeed");
 
-	// Without this the test passes vacuously when the timing never makes the path absent.
-	const absent = results.filter(
-		(result) => result.status !== "0" && result.status !== "111",
+	const isAbsentPathFailure = (result: (typeof results)[number]) => {
+		const status = Number(result.status);
+		return (
+			status > 0 &&
+			status < 128 &&
+			/(?:not found|no such file or directory)/i.test(result.text)
+		);
+	};
+	const unexpectedFailures = results.filter(
+		(result) =>
+			result.status !== "0" &&
+			result.status !== "111" &&
+			!isAbsentPathFailure(result),
 	);
+	tg.assert(
+		unexpectedFailures.length === 0,
+		`Expected every non-wrapper failure to be a missing-path exec failure, got ${unexpectedFailures.length} unexpected failures: ${unexpectedFailures
+			.slice(0, 3)
+			.map((failure) => `${failure.status}|${failure.text}`)
+			.join(", ")}`,
+	);
+
+	// Without this the test passes vacuously when the timing never makes the path absent.
+	const absent = results.filter(isAbsentPathFailure);
 	tg.assert(
 		absent.length > 0,
 		"Expected at least one run to find the path absent",
