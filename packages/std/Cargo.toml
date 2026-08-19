@@ -41,9 +41,9 @@ paste = "1"
 rustix = { version = "1", features = ["all-apis"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "9b8967af8b10e3b515d3800e78235dfac9773a8d" }
-tangram_either = { git = "https://github.com/tangramdotdev/tangram", rev = "9b8967af8b10e3b515d3800e78235dfac9773a8d" }
-tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "9b8967af8b10e3b515d3800e78235dfac9773a8d" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "050662b23bc387369f4c2622185e004e3d61009a" }
+tangram_either = { git = "https://github.com/tangramdotdev/tangram", rev = "050662b23bc387369f4c2622185e004e3d61009a" }
+tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "050662b23bc387369f4c2622185e004e3d61009a" }
 tempfile = "3"
 tokio = { version = "1", default-features = false, features = [
   "rt",

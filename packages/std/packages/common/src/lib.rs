@@ -100,7 +100,7 @@ pub async fn checkout_artifacts(
 ) -> tg::Result<Vec<PathBuf>> {
 	let nodes = artifacts
 		.into_iter()
-		.map(|referent| referent.map(|id| tg::Selector::Id(id.into())))
+		.map(|referent| referent.map(Into::into))
 		.collect();
 	tg::checkout(tg::checkout::Arg {
 		dependencies: true,
@@ -132,7 +132,7 @@ pub async fn checkout_artifact_to_path(
 		extension: None,
 		force: true,
 		lock: Some(tg::checkout::Lock::Attr),
-		nodes: vec![tg::Referent::with_node(tg::Selector::Id(artifact.into()))],
+		nodes: vec![tg::Referent::with_node(artifact.into())],
 		path: Some(path),
 	})
 	.await?;

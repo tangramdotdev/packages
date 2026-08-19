@@ -247,9 +247,7 @@ pub(crate) async fn checkout_artifact_entries(
 				extension: None,
 				force: true,
 				lock: None,
-				nodes: vec![tg::Referent::with_node(tg::Selector::Id(
-					artifact.id().into(),
-				))],
+				nodes: vec![tg::Referent::with_node(artifact.id().into())],
 				path: Some(dest),
 			})
 			.await
