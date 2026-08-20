@@ -96,6 +96,180 @@ macro_rules! impl_elf {
 				}
 			}
 
+			fn last_loadable_segment(&self, file: &File) -> Option<usize> {
+				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
+				let (phdr_offset, phdr_count) = {
+					let ehdr = self.elf_header(file);
+					(
+						ehdr.e_phoff.to_usize().unwrap(),
+						ehdr.e_phnum.to_usize().unwrap(),
+					)
+				};
+				let mut last: Option<(usize, usize)> = None;
+				for i in 0..phdr_count {
+					let offset = phdr_offset + i * phdr_size;
+					let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(&file[offset..offset + phdr_size])}
+						.expect("expected a program header");
+					if phdr.p_type != sys::PT_LOAD {
+						continue;
+					}
+					let end = phdr.p_offset.to_usize().unwrap() + phdr.p_filesz.to_usize().unwrap();
+					if last.is_none_or(|(_, last_end)| end > last_end) {
+						last = Some((offset, end));
+					}
+				}
+				last.map(|(offset, _)| offset)
+			}
+
+			fn image_extent(&self, file: &File) -> (usize, usize, usize) {
+				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
+				let (phdr_offset, phdr_count) = {
+					let ehdr = self.elf_header(file);
+					(
+						ehdr.e_phoff.to_usize().unwrap(),
+						ehdr.e_phnum.to_usize().unwrap(),
+					)
+				};
+				let mut max_vaddr = 0;
+				let mut max_align = 1;
+				let mut first: Option<(usize, usize)> = None;
+				for i in 0..phdr_count {
+					let offset = phdr_offset + i * phdr_size;
+					let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(&file[offset..offset + phdr_size])}
+						.expect("expected a program header");
+					if phdr.p_type != sys::PT_LOAD {
+						continue;
+					}
+					let vaddr = phdr.p_vaddr.to_usize().unwrap();
+					max_vaddr = max_vaddr.max(vaddr + phdr.p_memsz.to_usize().unwrap());
+					max_align = max_align.max(phdr.p_align.to_usize().unwrap());
+					if first.is_none_or(|(current, _)| vaddr < current) {
+						first = Some((vaddr, phdr.p_offset.to_usize().unwrap()));
+					}
+				}
+				let (vaddr, offset) = first.expect("expected a loadable segment");
+				(max_vaddr, max_align, vaddr - offset)
+			}
+
+			fn appended_segment(&self, file: &File, file_size: usize) -> (usize, usize, usize) {
+				let (max_vaddr, max_align, bias) = self.image_extent(file);
+				let offset = align(file_size.max(align(max_vaddr, max_align) - bias), max_align);
+
+				let mut segment_align = max_align;
+				while bias % segment_align != 0 {
+					segment_align /= 2;
+				}
+				(offset, offset + bias, segment_align)
+			}
+
+			fn append_manifest_segment(
+				&self,
+				file: &mut File,
+				data: &[u8],
+				mut section_table: Vec<u8>,
+				name_index: usize,
+			) {
+				let ehdr_size = size_of::<paste! {[<$elf _Ehdr>]}>();
+				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
+				let shdr_size = size_of::<paste! {[<$elf _Shdr>]}>();
+				let (phdr_offset, phdr_count) = {
+					let ehdr = self.elf_header(file);
+					(
+						ehdr.e_phoff.to_usize().unwrap(),
+						ehdr.e_phnum.to_usize().unwrap(),
+					)
+				};
+				let new_phdr_count = phdr_count + 1;
+
+				let file_size = file
+					.file_size()
+					.expect("failed to get the file size")
+					.to_usize()
+					.unwrap();
+				let section_table_offset = align(file_size, align_of::<paste! {[<$elf _Shdr>]}>());
+				let section_table_size = section_table.len() + shdr_size;
+				let (segment_offset, segment_vaddr, segment_align) =
+					self.appended_segment(file, section_table_offset + section_table_size);
+				let headers_offset = segment_offset + ehdr_size;
+				let new_section_offset = headers_offset + new_phdr_count * phdr_size;
+				let segment_size = new_section_offset + data.len() - segment_offset;
+
+				let new_section_header = paste! {[<$elf _Shdr>] {
+					sh_type: sys::SHT_NOTE,
+					sh_offset: new_section_offset.try_into().unwrap(),
+					sh_size: data.len().try_into().unwrap(),
+					sh_addr: (segment_vaddr + new_section_offset - segment_offset)
+						.try_into()
+						.unwrap(),
+					sh_name: name_index.try_into().unwrap(),
+					sh_flags: sys::SHF_ALLOC.try_into().unwrap(),
+					sh_link: 0,
+					sh_info: 0,
+					sh_addralign: 1,
+					sh_entsize: 0,
+				}};
+				section_table.extend_from_slice(new_section_header.as_bytes());
+
+				let new_segment = paste! {[<$elf _Phdr>] {
+					p_type: sys::PT_LOAD,
+					p_flags: sys::PF_R,
+					p_offset: segment_offset.try_into().unwrap(),
+					p_vaddr: segment_vaddr.try_into().unwrap(),
+					p_paddr: segment_vaddr.try_into().unwrap(),
+					p_filesz: segment_size.try_into().unwrap(),
+					p_memsz: segment_size.try_into().unwrap(),
+					p_align: segment_align.try_into().unwrap(),
+				}};
+				let mut phdr_bytes = Vec::with_capacity(new_phdr_count * phdr_size);
+				let mut found_phdr = false;
+				for index in 0..phdr_count {
+					let offset = phdr_offset + index * phdr_size;
+					let mut phdr = paste! {[<$elf _Phdr>]::read_from_bytes(
+						&file[offset..offset + phdr_size],
+					)}
+					.expect("expected a program header");
+					if phdr.p_type == sys::PT_PHDR {
+						assert!(!found_phdr, "multiple program header segments found");
+						found_phdr = true;
+						let size = new_phdr_count * phdr_size;
+						phdr.p_offset = headers_offset.try_into().unwrap();
+						phdr.p_vaddr = (segment_vaddr + ehdr_size).try_into().unwrap();
+						phdr.p_paddr = phdr.p_vaddr;
+						phdr.p_filesz = size.try_into().unwrap();
+						phdr.p_memsz = size.try_into().unwrap();
+					}
+					phdr_bytes.extend_from_slice(phdr.as_bytes());
+				}
+
+				// The new segment is above the existing image, preserving PT_LOAD order.
+				phdr_bytes.extend_from_slice(new_segment.as_bytes());
+
+				let padding = section_table_offset - file_size;
+				if padding > 0 {
+					file.append(&vec![0; padding])
+						.expect("failed to align the section table");
+				}
+				file.append(&section_table)
+					.expect("failed to write the new section table to the file");
+				let padding = segment_offset - section_table_offset - section_table_size;
+				if padding > 0 {
+					file.append(&vec![0; padding])
+						.expect("failed to write segment padding");
+				}
+				let ehdr = self.elf_header_mut(file);
+				ehdr.e_phoff = headers_offset.try_into().unwrap();
+				ehdr.e_phnum = new_phdr_count.try_into().unwrap();
+				ehdr.e_shnum += 1;
+				ehdr.e_shoff = section_table_offset.try_into().unwrap();
+				let ehdr_bytes = ehdr.as_bytes().to_vec();
+				file.append(&ehdr_bytes)
+					.expect("failed to write the copied elf header");
+				file.append(&phdr_bytes)
+					.expect("failed to write the relocated program header table");
+				file.append(data)
+					.expect("failed to write the manifest to the end of the file");
+			}
+
 			fn section_header_table(&self, file: &File) -> FileLocation {
 				let ehdr = self.elf_header(file);
 				FileLocation {
@@ -106,8 +280,6 @@ macro_rules! impl_elf {
 
 			#[allow(clippy::too_many_lines)]
 			fn embed(&self, executable: &Path, manifest: &[u8]) -> std::io::Result<()> {
-				let wrapper_bin_path = crate::wrapper_bin_path()
-					.ok_or_else(|| std::io::Error::other("missing wrapper bin"))?;
 				let wrapper_exe_path = crate::wrapper_exe_path()
 					.ok_or_else(|| std::io::Error::other("missing wrapper exe"))?;
 
@@ -169,12 +341,68 @@ macro_rules! impl_elf {
 					}
 				}
 
-				// Read wrapper binary and get entrypoint from wrapper ELF.
-				let wrapper_bin = std::fs::read(&wrapper_bin_path)?;
-				let wrapper_entry = {
-					let wrapper_exe = File::open(&wrapper_exe_path, true)?;
-					self.elf_header(&wrapper_exe).e_entry
-				};
+				// Reconstruct the wrapper's memory image from its loadable segments.
+				let wrapper_exe = std::fs::read(&wrapper_exe_path)?;
+				let wrapper_ehdr = paste! {[<$elf _Ehdr>]::read_from_bytes(
+					&wrapper_exe[0..size_of::<[<$elf _Ehdr>]>()],
+				)}
+				.expect("expected an elf header");
+				if wrapper_ehdr.e_type.to_u32() != Some(sys::ET_DYN) {
+					return Err(std::io::Error::new(
+						std::io::ErrorKind::InvalidInput,
+						"the wrapper executable must be position-independent (ET_DYN)",
+					));
+				}
+				let wrapper_entry_vaddr = wrapper_ehdr.e_entry.to_usize().unwrap();
+				let wrapper_phdr_offset = wrapper_ehdr.e_phoff.to_usize().unwrap();
+				let wrapper_phdr_count = wrapper_ehdr.e_phnum.to_usize().unwrap();
+				let wrapper_segments = (0..wrapper_phdr_count)
+					.filter_map(|index| {
+						let offset = wrapper_phdr_offset + index * phdr_size;
+						let bytes = wrapper_exe.get(offset..offset + phdr_size)?;
+						let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(bytes)}.ok()?;
+						if phdr.p_type != sys::PT_LOAD {
+							return None;
+						}
+						Some((
+							phdr.p_offset.to_usize().unwrap(),
+							phdr.p_vaddr.to_usize().unwrap(),
+							phdr.p_filesz.to_usize().unwrap(),
+							phdr.p_memsz.to_usize().unwrap(),
+						))
+					})
+					.collect::<Vec<_>>();
+				let min_vaddr = wrapper_segments
+					.iter()
+					.map(|&(_, vaddr, _, _)| vaddr)
+					.min()
+					.ok_or_else(|| {
+						std::io::Error::new(
+							std::io::ErrorKind::InvalidInput,
+							"the wrapper executable has no loadable segments",
+						)
+					})?;
+
+				let image_size = wrapper_segments
+					.iter()
+					.map(|&(_, vaddr, _, memsz)| vaddr + memsz - min_vaddr)
+					.max()
+					.unwrap();
+				let mut wrapper_image = vec![0u8; image_size];
+				for &(offset, vaddr, filesz, _) in &wrapper_segments {
+					let start = vaddr - min_vaddr;
+					wrapper_image[start..start + filesz]
+						.copy_from_slice(&wrapper_exe[offset..offset + filesz]);
+				}
+				if !wrapper_segments.iter().any(|&(_, vaddr, filesz, _)| {
+					wrapper_entry_vaddr >= vaddr && wrapper_entry_vaddr < vaddr + filesz
+				}) {
+					return Err(std::io::Error::new(
+						std::io::ErrorKind::InvalidInput,
+						"the wrapper entry point is not in a file-backed PT_LOAD",
+					));
+				}
+				let wrapper_entry_offset = wrapper_entry_vaddr - min_vaddr;
 
 				// Open the executable for modification.
 				let mut file = File::open(executable, false)?;
@@ -189,23 +417,18 @@ macro_rules! impl_elf {
 					)
 				};
 
-				// Find PT_INTERP header and compute max virtual address / alignment.
 				let mut pt_interp_index: Option<usize> = None;
-				let mut max_vaddr = 0;
-				let mut max_align = 0;
 				for i in 0..phdr_count {
 					let off = phdr_offset + i * phdr_size;
 					let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(&file[off..off + phdr_size])}
 						.expect("invalid program header");
-					if phdr.p_type == sys::PT_LOAD {
-						max_vaddr = max_vaddr.max(phdr.p_vaddr + phdr.p_memsz);
-						max_align = max_align.max(phdr.p_align);
-					}
 					if phdr.p_type == sys::PT_INTERP {
 						assert!(pt_interp_index.is_none(), "multiple interpreters found");
 						pt_interp_index = Some(i);
 					}
 				}
+				let (segment_offset, segment_vaddr, segment_align) =
+					self.appended_segment(&file, file_size);
 
 				// Find wrapper and manifest section headers in a single pass.
 				let mut wrapper_shdr_offset: Option<usize> = None;
@@ -241,68 +464,72 @@ macro_rules! impl_elf {
 				let manifest_shdr_offset = manifest_shdr_offset
 					.ok_or_else(|| std::io::Error::other("missing manifest section"))?;
 
-				// Compute the data layout.
-				let wrapper_data_size = wrapper_bin.len() + manifest.len();
-				let wrapper_vaddr = align(max_vaddr.to_usize().unwrap(), max_align.to_usize().unwrap())
-					.try_into()
-					.unwrap();
-				let wrapper_memsz = align(wrapper_data_size, max_align.to_usize().unwrap())
-					.try_into()
-					.unwrap();
+				let wrapper_data_size =
+					wrapper_image.len() + manifest.len() + size_of::<crate::Footer>();
 
-				// Determine wrapper offset and build new phdr table if needed.
 				let new_phdr_table: Option<(Vec<u8>, usize)>;
 				let wrapper_offset: usize;
+				let wrapper_vaddr: usize;
 
 				if let Some(interpreter_index) = pt_interp_index {
-					// Reuse PT_INTERP header for the stub segment.
-					wrapper_offset = align(file_size, max_align.to_usize().unwrap());
+					// Reuse PT_INTERP for the stub segment.
+					assert_eq!(
+						phdr_offset,
+						size_of::<paste! {[<$elf _Ehdr>]}>(),
+						"the program header table must follow the elf header",
+					);
+					wrapper_offset = segment_offset;
+					wrapper_vaddr = segment_vaddr;
 					new_phdr_table = None;
 
 					let stub_segment = paste! {[<$elf _Phdr>] {
 						p_type: sys::PT_LOAD,
 						p_flags: sys::PF_R | sys::PF_X,
 						p_offset: wrapper_offset.try_into().unwrap(),
-						p_vaddr: wrapper_vaddr,
-						p_paddr: wrapper_vaddr,
+						p_vaddr: wrapper_vaddr.try_into().unwrap(),
+						p_paddr: wrapper_vaddr.try_into().unwrap(),
 						p_filesz: wrapper_data_size.try_into().unwrap(),
-						p_memsz: wrapper_memsz,
-						p_align: max_align,
+						p_memsz: align(wrapper_data_size, segment_align).try_into().unwrap(),
+						p_align: segment_align.try_into().unwrap(),
 					}};
 					let offset = phdr_offset + interpreter_index * phdr_size;
 					file[offset..offset + phdr_size].copy_from_slice(stub_segment.as_bytes());
 				} else {
-					// Create a new section header if there's no PT_INTERP we can abuse.
-					let headers_offset = align(file_size, 64);
+					// Put a copied ELF header and new program header table in the stub.
 					let new_count = phdr_count + 1;
-					let headers_size = new_count * phdr_size;
-					wrapper_offset = align(headers_offset + headers_size, max_align.to_usize().unwrap());
+					let headers_size = size_of::<paste! {[<$elf _Ehdr>]}>() + new_count * phdr_size;
+					let stub_size = align(headers_size, segment_align) + wrapper_data_size;
+					let headers_offset = segment_offset + size_of::<paste! {[<$elf _Ehdr>]}>();
+					wrapper_offset = segment_offset + align(headers_size, segment_align);
+					wrapper_vaddr = segment_vaddr + align(headers_size, segment_align);
 
 					let stub_segment = paste! {[<$elf _Phdr>]{
 						p_type: sys::PT_LOAD,
 						p_flags: sys::PF_R | sys::PF_X,
-						p_offset: wrapper_offset.try_into().unwrap(),
-						p_vaddr: wrapper_vaddr,
-						p_paddr: wrapper_vaddr,
-						p_filesz: wrapper_data_size.try_into().unwrap(),
-						p_memsz: wrapper_memsz,
-						p_align: max_align,
+						p_offset: segment_offset.try_into().unwrap(),
+						p_vaddr: segment_vaddr.try_into().unwrap(),
+						p_paddr: segment_vaddr.try_into().unwrap(),
+						p_filesz: stub_size.try_into().unwrap(),
+						p_memsz: align(stub_size, segment_align).try_into().unwrap(),
+						p_align: segment_align.try_into().unwrap(),
 					}};
 
-					let mut bytes = Vec::with_capacity(headers_size);
+					let mut bytes = Vec::with_capacity(new_count * phdr_size);
+					let mut load_entries = Vec::new();
 
-					// Copy existing loadable segments first.
 					for i in 0..phdr_count {
 						let off = phdr_offset + i * phdr_size;
 						let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(&file[off..off + phdr_size])}.unwrap();
 						assert!(phdr.p_type != sys::PT_PHDR, "unexpected PT_PHDR");
 						if phdr.p_type == sys::PT_LOAD {
-							bytes.extend_from_slice(phdr.as_bytes());
+							load_entries.push(phdr);
 						}
 					}
-
-					// Add the new stub segment.
-					bytes.extend_from_slice(stub_segment.as_bytes());
+					load_entries.push(stub_segment);
+					load_entries.sort_unstable_by_key(|phdr| phdr.p_vaddr);
+					for phdr in load_entries {
+						bytes.extend_from_slice(phdr.as_bytes());
+					}
 
 					// Copy non-loadable segments.
 					for i in 0..phdr_count {
@@ -313,7 +540,7 @@ macro_rules! impl_elf {
 						}
 					}
 
-					assert_eq!(bytes.len(), headers_size);
+					assert_eq!(bytes.len(), new_count * phdr_size);
 					new_phdr_table = Some((bytes, headers_offset));
 				}
 
@@ -324,11 +551,11 @@ macro_rules! impl_elf {
 				.unwrap();
 				wrapper_shdr.sh_type = sys::SHT_PROGBITS;
 				wrapper_shdr.sh_flags = (sys::SHF_ALLOC | sys::SHF_EXECINSTR).try_into().unwrap();
-				wrapper_shdr.sh_addr = wrapper_vaddr;
+				wrapper_shdr.sh_addr = wrapper_vaddr.try_into().unwrap();
 				wrapper_shdr.sh_offset = wrapper_offset.try_into().unwrap();
 				wrapper_shdr.sh_size = wrapper_data_size.try_into().unwrap();
 				wrapper_shdr.sh_link = 0;
-				wrapper_shdr.sh_addralign = max_align;
+				wrapper_shdr.sh_addralign = segment_align.try_into().unwrap();
 				wrapper_shdr.sh_entsize = 0;
 				file[wrapper_shdr_offset..wrapper_shdr_offset + shdr_size]
 					.copy_from_slice(wrapper_shdr.as_bytes());
@@ -338,14 +565,13 @@ macro_rules! impl_elf {
 				)}
 				.unwrap();
 				manifest_shdr.sh_type = sys::SHT_NOTE;
-				manifest_shdr.sh_flags = 0;
-				manifest_shdr.sh_addr = (wrapper_vaddr.to_usize().unwrap() + wrapper_bin.len()).try_into().unwrap();
-				manifest_shdr.sh_offset =
-					(wrapper_offset.to_usize().unwrap() + wrapper_bin.len()).try_into().unwrap();
+				manifest_shdr.sh_flags = sys::SHF_ALLOC.try_into().unwrap();
+				manifest_shdr.sh_addr = (wrapper_vaddr + wrapper_image.len()).try_into().unwrap();
+				manifest_shdr.sh_offset = (wrapper_offset + wrapper_image.len()).try_into().unwrap();
 				manifest_shdr.sh_size =
 					(manifest.len() + size_of::<crate::Footer>()).try_into().unwrap();
 				manifest_shdr.sh_link = 0;
-				manifest_shdr.sh_addralign = 0;
+				manifest_shdr.sh_addralign = 1;
 				manifest_shdr.sh_entsize = 0;
 				file[manifest_shdr_offset..manifest_shdr_offset + shdr_size]
 					.copy_from_slice(manifest_shdr.as_bytes());
@@ -359,7 +585,9 @@ macro_rules! impl_elf {
 
 				// Patch the entrypoint.
 				let ehdr = self.elf_header_mut(&mut file);
-				ehdr.e_entry = wrapper_vaddr + wrapper_entry;
+				ehdr.e_entry = (wrapper_vaddr + wrapper_entry_offset)
+					.try_into()
+					.unwrap();
 
 				// Patch program header table or sort existing headers.
 				if let Some((_, headers_offset)) = &new_phdr_table {
@@ -390,12 +618,13 @@ macro_rules! impl_elf {
 					}
 				}
 
-				// Write new program header table if necessary.
 				if let Some((phdr_bytes, headers_offset)) = new_phdr_table {
-					let padding = headers_offset - file_size;
+					let ehdr_bytes = self.elf_header(&file).as_bytes().to_vec();
+					let padding = headers_offset - ehdr_bytes.len() - file_size;
 					if padding > 0 {
 						file.append(&vec![0u8; padding])?;
 					}
+					file.append(&ehdr_bytes)?;
 					file.append(&phdr_bytes)?;
 					let padding = wrapper_offset - headers_offset - phdr_bytes.len();
 					if padding > 0 {
@@ -409,8 +638,7 @@ macro_rules! impl_elf {
 					}
 				}
 
-				// Append wrapper binary.
-				file.append(&wrapper_bin)?;
+				file.append(&wrapper_image)?;
 
 				// Append manifest.
 				file.append(manifest)?;
@@ -475,16 +703,12 @@ macro_rules! impl_elf {
 				let string_table_location = self.section_string_table(file);
 				let mut section_table_location = self.section_header_table(file);
 
-				// Get the actual data.
-				let mut string_table = file[string_table_location].to_vec();
 				let mut section_table = file[section_table_location].to_vec();
 
-				// Add to the string table.
-				let name_index = string_table.len();
-				string_table.extend_from_slice(name);
-				string_table.push(0);
+				let name_index = string_table_location.length;
 
-				// Update existing sections.
+				// Account for growing the section string table.
+				let shift = <paste! {[<$elf _Off>]}>::try_from(name_len).unwrap();
 				for (index, chunk) in section_table
 					.chunks_exact_mut(size_of::<paste! {[<$elf _Shdr>]}>())
 					.enumerate()
@@ -492,57 +716,79 @@ macro_rules! impl_elf {
 					let header = paste! {[<$elf _Shdr>]::mut_from_bytes(chunk)}
 						.expect("expected a section header");
 					if index == string_table_index {
-						header.sh_size += <paste! {[<$elf _Off>]}>::try_from(name_len).unwrap();
+						header.sh_size += shift;
 						continue;
 					}
-					// If this section occurs after the original string_table location, update its offset.
-					if header.sh_offset > string_table_location.end().try_into().unwrap() {
-						header.sh_offset = <paste! {[<$elf _Off>]}>::try_from(name_len).unwrap();
+					if header.sh_offset >= string_table_location.end().try_into().unwrap() {
+						header.sh_offset += shift;
 					}
 				}
 
-				// Now the hard part:
-				// Insert the new string table at the offset of the original.
-				file.insert(&string_table, string_table_location.offset as u64)
+				file.insert(name, string_table_location.end().to_u64().unwrap())
 					.expect("failed to insert string table");
 
-				// Delete the old section table.
-				section_table_location.offset += name_len;
+				if section_table_location.offset >= string_table_location.end() {
+					section_table_location.offset += name_len;
+				}
 				file.delete(section_table_location)
 					.expect("failed to delete section table");
 
-				// Get the offset of the end of the file.
-				let new_section_offset = file.file_size().expect("failed to get the file size");
+				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
+				let segment_offset = self
+					.last_loadable_segment(file)
+					.expect("expected a loadable segment");
+				let segment =
+					paste! {[<$elf _Phdr>]::read_from_bytes(&file[segment_offset..segment_offset + phdr_size])}
+						.expect("expected a program header");
+				assert!(
+					segment.p_filesz <= segment.p_memsz,
+					"segment file size exceeds its memory size",
+				);
 
-				// Write the new section.
-				file.append(data)
-					.expect("failed to write new section to end of file");
+				// Do not turn BSS into file-backed data.
+				if segment.p_filesz < segment.p_memsz {
+					self.append_manifest_segment(file, data, section_table, name_index);
+					return;
+				}
+				let vaddr_delta =
+					segment.p_vaddr.to_usize().unwrap() - segment.p_offset.to_usize().unwrap();
 
-				// Create the new section.
-				let sh_type = sys::SHT_NOTE;
-				let sh_flags = 0;
+				let section_table_offset = file.file_size().expect("failed to get the file size");
+				let new_section_offset = section_table_offset.to_usize().unwrap()
+					+ section_table.len()
+					+ size_of::<paste! {[<$elf _Shdr>]}>();
+
+				// SHF_ALLOC keeps the manifest mapped after strip.
 				let new_section_header = paste! {[<$elf _Shdr>]{
-					sh_type: sh_type .try_into().unwrap(),
+					sh_type: sys::SHT_NOTE,
 					sh_offset: new_section_offset .try_into().unwrap(),
 					sh_size: data.len() .try_into().unwrap(),
-					sh_addr: 0,
+					sh_addr: (new_section_offset + vaddr_delta) .try_into().unwrap(),
 					sh_name: name_index .try_into().unwrap(),
-					sh_flags: sh_flags .try_into().unwrap(),
+					sh_flags: sys::SHF_ALLOC .try_into().unwrap(),
 					sh_link: 0,
 					sh_info: 0,
-					sh_addralign: 0,
+					sh_addralign: 1,
 					sh_entsize: 0,
 				}};
 
 				// Write the new section to the section table.
 				section_table.extend_from_slice(new_section_header.as_bytes());
 
-				// Get the offset of the new section table.
-				let section_table_offset = file.file_size().expect("failed to get the file size");
-
 				// Append the new section table.
 				file.append(&section_table)
 					.expect("failed to write the new section table to the file");
+
+				file.append(data)
+					.expect("failed to write new section to end of file");
+
+				let file_size = file.file_size().expect("failed to get the file size");
+				let segment =
+					paste! {[<$elf _Phdr>]::mut_from_bytes(&mut file[segment_offset..segment_offset + phdr_size])}
+						.expect("expected a program header");
+				let filesz = file_size.to_usize().unwrap() - segment.p_offset.to_usize().unwrap();
+				segment.p_filesz = filesz.try_into().unwrap();
+				segment.p_memsz = filesz.try_into().unwrap();
 
 				// Update the elf header.
 				let ehdr = self.elf_header_mut(file);
@@ -588,6 +834,33 @@ macro_rules! impl_elf {
 					}
 				}
 
+				// Keep the manifest covered by its segment.
+				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
+				let (phdr_offset, phdr_count) = {
+					let ehdr = self.elf_header(file);
+					(
+						ehdr.e_phoff.to_usize().unwrap(),
+						ehdr.e_phnum.to_usize().unwrap(),
+					)
+				};
+				for i in 0..phdr_count {
+					let off = phdr_offset + i * phdr_size;
+					let phdr = paste! {[<$elf _Phdr>]::mut_from_bytes(&mut file[off..off + phdr_size])}
+						.expect("expected a program header");
+					if phdr.p_type != sys::PT_LOAD {
+						continue;
+					}
+					let start = phdr.p_offset.to_usize().unwrap();
+					let end = start + phdr.p_filesz.to_usize().unwrap();
+					if old.offset >= start && old.offset < end {
+						let new_filesz = isize::try_from(phdr.p_filesz).unwrap() + diff;
+						let new_filesz = usize::try_from(new_filesz).unwrap();
+						phdr.p_filesz = new_filesz.try_into().unwrap();
+						phdr.p_memsz = phdr.p_memsz.max(new_filesz.try_into().unwrap());
+						break;
+					}
+				}
+
 				// Update the header.
 				let old_offset = isize::try_from(self.elf_header(file).e_shoff).unwrap();
 				if old_offset >= isize::try_from(old.offset).unwrap() {
@@ -611,4 +884,106 @@ impl_elf!(Elf64);
 
 fn align(m: usize, n: usize) -> usize {
 	(m + n - 1) & !(n - 1)
+}
+
+#[cfg(all(
+	test,
+	target_os = "linux",
+	target_endian = "little",
+	target_pointer_width = "64"
+))]
+mod tests {
+	use super::*;
+	use std::sync::atomic::{AtomicU8, Ordering};
+
+	const CHILD_ENV: &str = "TANGRAM_WRAP_BSS_TEST_CHILD";
+
+	#[used]
+	static RETAINED_BSS: [AtomicU8; 65_536] = [const { AtomicU8::new(0) }; 65_536];
+
+	fn retained_bss_is_zero() -> bool {
+		RETAINED_BSS[0].load(Ordering::Relaxed) == 0
+			&& RETAINED_BSS[RETAINED_BSS.len() - 1].load(Ordering::Relaxed) == 0
+	}
+
+	fn last_loadable_segment(file: &File) -> Elf64_Phdr {
+		let offset = Elf64
+			.last_loadable_segment(file)
+			.expect("expected a loadable segment");
+		Elf64_Phdr::read_from_bytes(&file[offset..offset + size_of::<Elf64_Phdr>()])
+			.expect("expected a program header")
+	}
+
+	#[test]
+	fn writes_manifest_to_elf_with_bss() {
+		if std::env::var_os(CHILD_ENV).is_some() {
+			assert!(retained_bss_is_zero());
+			return;
+		}
+
+		assert!(retained_bss_is_zero());
+		let executable = std::env::current_exe().expect("failed to get the test executable");
+		let original = File::open(&executable, true).expect("failed to open the test executable");
+		let original_phnum = Elf64.elf_header(&original).e_phnum;
+		let bss_segment = last_loadable_segment(&original);
+		assert!(bss_segment.p_memsz > bss_segment.p_filesz);
+		drop(original);
+
+		let temp = tempfile::tempdir().expect("failed to create a temporary directory");
+		let rewritten_path = temp.path().join("wrap-bss-test");
+		std::fs::copy(&executable, &rewritten_path).expect("failed to copy the test executable");
+		let first_manifest = serde_json::json!({ "bss": true });
+		crate::write_manifest(&rewritten_path, &first_manifest, None);
+		let output = crate::read_manifest::<serde_json::Value>(&rewritten_path, None);
+		assert_eq!(output.manifest, Some(first_manifest));
+
+		let manifest = serde_json::json!({ "bss": true, "padding": "x".repeat(8_192) });
+		crate::write_manifest(&rewritten_path, &manifest, None);
+		let output = crate::read_manifest::<serde_json::Value>(&rewritten_path, None);
+		assert_eq!(output.manifest, Some(manifest));
+		let rewritten =
+			File::open(&rewritten_path, true).expect("failed to open the rewritten file");
+		let ehdr = Elf64.elf_header(&rewritten);
+		assert_eq!(ehdr.e_phnum, original_phnum + 1);
+		let manifest_location = output.location.expect("expected a manifest location");
+		let phdr_size = size_of::<Elf64_Phdr>();
+		let mut found_original_bss = false;
+		let mut found_manifest_segment = false;
+		for index in 0..ehdr.e_phnum.to_usize().unwrap() {
+			let offset = ehdr.e_phoff.to_usize().unwrap() + index * phdr_size;
+			let phdr = Elf64_Phdr::read_from_bytes(&rewritten[offset..offset + phdr_size])
+				.expect("expected a program header");
+			if phdr.p_type != sys::PT_LOAD {
+				continue;
+			}
+			if phdr.p_vaddr == bss_segment.p_vaddr {
+				assert_eq!(phdr.p_offset, bss_segment.p_offset);
+				assert_eq!(phdr.p_filesz, bss_segment.p_filesz);
+				assert_eq!(phdr.p_memsz, bss_segment.p_memsz);
+				found_original_bss = true;
+			}
+			let start = phdr.p_offset.to_usize().unwrap();
+			let end = start + phdr.p_filesz.to_usize().unwrap();
+			if manifest_location.offset >= start && manifest_location.end() == end {
+				assert_eq!(phdr.p_filesz, phdr.p_memsz);
+				found_manifest_segment = true;
+			}
+		}
+		assert!(found_original_bss);
+		assert!(found_manifest_segment);
+		drop(rewritten);
+
+		let child = std::process::Command::new(&rewritten_path)
+			.args(["--exact", "elf::tests::writes_manifest_to_elf_with_bss"])
+			.env(CHILD_ENV, "1")
+			.output()
+			.expect("failed to execute the rewritten test executable");
+		assert!(
+			child.status.success(),
+			"rewritten executable failed with status {:?}\nstdout:\n{}\nstderr:\n{}",
+			child.status.code(),
+			String::from_utf8_lossy(&child.stdout),
+			String::from_utf8_lossy(&child.stderr),
+		);
+	}
 }

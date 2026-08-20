@@ -196,31 +196,6 @@ export async function wrapper(...args: tg.Args<Arg>) {
 		.then(tg.File.expect);
 }
 
-export async function wrapperBinary(...args: tg.Args<Arg>) {
-	const resolved = await tg.Args.apply<
-		Arg,
-		tg.ValueOrMaybeMutationMap<Arg>,
-		Arg
-	>({
-		args,
-		map: async (a) => a,
-		reduce: {},
-	});
-	const { build, host, release = true, source, verbose = false } = resolved;
-
-	if (
-		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
-	) {
-		return tg.build(defaultWrapperBinary).named("default wrapper");
-	}
-
-	return await tg
-		.build(workspace, ...args)
-		.named("workspace")
-		.then((dir) => dir.get("bin/wrapper.bin"))
-		.then(tg.File.expect);
-}
-
 /** The default workspace built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
 export async function defaultWorkspace() {
 	const host = std.triple.host();
@@ -235,22 +210,9 @@ export async function defaultWrapper() {
 	return workspace.get("bin/wrapper.exe").then(tg.File.expect);
 }
 
-/** The default wrapper binary built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
-export async function defaultWrapperBinary() {
-	const workspace = await tg
-		.build(std.buildDefaultWorkspace)
-		.named("default workspace");
-	return workspace.get("bin/wrapper.bin").then(tg.File.expect);
-}
-
 /** Release helper - builds defaultWrapper with a referent to this file for cache hits. */
 export async function buildDefaultWrapper() {
 	return tg.build(defaultWrapper).named("default wrapper");
-}
-
-/** Release helper - builds defaultWrapperBinary with a referent to this file for cache hits. */
-export async function buildDefaultWrapperBin() {
-	return tg.build(defaultWrapperBinary).named("default wrapper binary");
 }
 
 type ToolchainArg = {

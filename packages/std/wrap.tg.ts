@@ -4,6 +4,7 @@ import * as gnu from "./sdk/gnu.tg.ts";
 import * as std from "./tangram.ts";
 import * as injection from "./wrap/injection.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
+import * as wrapperModule from "./wrap/wrapper.tg.ts";
 import inspectProcessSource from "./wrap/test/inspectProcess.c" with { type: "file" };
 
 export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
@@ -2682,6 +2683,24 @@ export async function test() {
 		tg.build(testSingleArgObjectNoMutations, {
 			name: "single arg object no mutations",
 		}),
+		tg.build(wrapperModule.testWrapperPositionIndependent, {
+			name: "position-independent wrapper",
+		}),
+		tg.build(wrapperModule.testStatic, { name: "static executable" }),
+		tg.build(wrapperModule.testBssManifest, { name: "BSS manifest" }),
+		tg.build(wrapperModule.testStripPreservesManifest, {
+			name: "strip preserves manifest",
+		}),
+		tg.build(wrapperModule.testEmbedNonuniformWrapper, {
+			name: "embed nonuniform wrapper",
+		}),
+		tg.build(testConcurrentRelink, { name: "concurrent relink" }),
+		tg.build(testConcurrentRelinkStandalone, {
+			name: "concurrent relink standalone",
+		}),
+		tg.build(testConcurrentRelinkTransient, {
+			name: "concurrent relink transient",
+		}),
 		tg.build(testDependencies, { name: "dependencies" }),
 		tg.build(testDylibPath, { name: "dylib path" }),
 		tg.build(testEnvObjectFromArtifactAuthorization, {
@@ -2699,6 +2718,9 @@ export async function test() {
 		}),
 		tg.build(testManifestDependenciesMergeMutation, {
 			name: "manifest dependencies merge mutation",
+		}),
+		tg.build(testDarwinLargeManifestOverwrite, {
+			name: "Darwin large manifest overwrite",
 		}),
 		tg.build(testManifestMutationPrependRoundTrip, {
 			name: "manifest mutation prepend round trip",
@@ -2801,16 +2823,13 @@ export async function testSingleArgObjectNoMutations() {
 		await origExecutable.store();
 		const origExecutableId = origExecutable.id;
 		console.log("origExecutable", origExecutableId);
+		const wrapperStorePath = `.*/store/${wrapperID}`;
 		tg.assert(
-			text.match(
-				new RegExp(`_NSGetExecutablePath: .*\\.tangram/store/${wrapperID}`),
-			),
+			text.match(new RegExp(`_NSGetExecutablePath: ${wrapperStorePath}`)),
 			"Expected _NSGetExecutablePath to point to the wrapper",
 		);
 		tg.assert(
-			text.match(
-				new RegExp(`argv\\[0\\]: .*\\.tangram/store/${wrapperID}`),
-			),
+			text.match(new RegExp(`argv\\[0\\]: ${wrapperStorePath}`)),
 			"Expected argv[0] to point to the wrapper that was invoked",
 		);
 	}
@@ -3052,6 +3071,55 @@ export async function testManifestMutationPrependRoundTrip() {
 	tg.assert(
 		roundTrippedMutation.inner.kind === "prepend",
 		"expected a prepend mutation to remain a prepend mutation",
+	);
+
+	return true;
+}
+
+export async function testDarwinLargeManifestOverwrite() {
+	if (std.triple.os(std.triple.host()) !== "darwin") {
+		return true;
+	}
+
+	const executable = {
+		kind: "content" as const,
+		value: await manifestTemplateFromArg("exit 0"),
+	};
+	const initial = await wrap.Manifest.write(
+		await testWrapperBinary(),
+		{ executable },
+		new Map(),
+	);
+	const values = Array.from(
+		{ length: 32 },
+		(_, index) => `${index}:${"x".repeat(1024)}`,
+	);
+	const rewritten = await wrap.Manifest.write(
+		initial,
+		{
+			executable,
+			args: await Promise.all(
+				values.map((value) => manifestTemplateFromArg(value)),
+			),
+		},
+		new Map(),
+	);
+
+	const output = await tg
+		.build(
+			std.shBootstrap`${rewritten} --tangram-print-manifest > ${tg.output}`,
+		)
+		.then(tg.File.expect);
+	const manifest = tg.encoding.json.decode(await output.text) as wrap.Manifest;
+	tg.assert(
+		manifest.args?.length === values.length &&
+			manifest.args.every((arg, index) => {
+				const component = arg.components[0];
+				return (
+					component?.kind === "string" && component.value === values[index]
+				);
+			}),
+		"large manifest did not round trip through the mapped image",
 	);
 
 	return true;
@@ -3677,4 +3745,190 @@ export async function testLdLibraryPathPreservedThroughNestedWrapping() {
 	const result = string === "hello, world!\n";
 	tg.assert(result, `Expected "hello, world!\\n" but got "${string}"`);
 	return result;
+}
+
+const concurrentRelinkSource = tg.directory({
+	"main.c": tg.file(`
+		#include <stdio.h>
+		int main() {
+			printf("hello, world!\\n");
+			return 0;
+		}
+	`),
+});
+
+const relinkWrapper = async (toolchain: std.env.Arg) => {
+	const executable = await std
+		.run(std.shBootstrap`
+		cc ${concurrentRelinkSource}/main.c -o ${tg.output}
+	`)
+		.env(toolchain)
+		.then(tg.File.expect);
+	return await wrap(executable, { buildToolchain: toolchain });
+};
+
+const atomicRelink = async (wrapper: tg.File) => {
+	const workers = 16;
+	const iterations = 150;
+	const toolchain = await bootstrap.sdk(std.triple.host());
+
+	const output = await std
+		.build(std.shBootstrap`
+		mkdir -p .libs
+		cp ${wrapper} .libs/lt-prog
+
+		i=1
+		while [ $i -le ${workers.toString()} ]; do
+			(
+				j=0
+				while [ $j -lt ${iterations.toString()} ]; do
+					cp ${wrapper} .libs/$i-lt-prog
+					mv -f .libs/$i-lt-prog .libs/lt-prog
+					./.libs/lt-prog >> $i.log 2>&1
+					j=$((j+1))
+				done
+			) &
+			i=$((i+1))
+		done
+		wait
+
+		cat *.log > ${tg.output}
+	`)
+		.env(toolchain)
+		.then(tg.File.expect);
+
+	const lines = await output.text.then((text) => text.split("\n").slice(0, -1));
+	const failures = lines.filter((line) => line !== "hello, world!");
+	tg.assert(
+		failures.length === 0,
+		`Expected every run to succeed, got ${failures.length} failures: ${failures.slice(0, 3).join(", ")}`,
+	);
+	tg.assert(
+		lines.length === workers * iterations,
+		`Expected ${workers * iterations} runs, got ${lines.length}`,
+	);
+	return true;
+};
+
+export async function testConcurrentRelink() {
+	const host = std.triple.host();
+	return await atomicRelink(await relinkWrapper(await bootstrap.sdk(host)));
+}
+
+export async function testConcurrentRelinkStandalone() {
+	const host = std.triple.host();
+	const sdkArg = await bootstrap.sdk.arg(host);
+	const toolchain = await std.sdk({ ...sdkArg, embedWrapper: false });
+	return await atomicRelink(await relinkWrapper(toolchain));
+}
+
+export async function testConcurrentRelinkTransient() {
+	const host = std.triple.host();
+	const workers = 8;
+	const iterations = 200;
+
+	const toolchain = await bootstrap.sdk(host);
+	const wrapper = await relinkWrapper(toolchain);
+
+	const output = await std
+		.build(std.shBootstrap`
+		mkdir -p .libs
+		cp ${wrapper} .libs/lt-prog
+
+		i=1
+		while [ $i -le ${workers.toString()} ]; do
+			(
+				j=0
+				while [ $j -lt ${iterations.toString()} ]; do
+					cp ${wrapper} .libs/$i-lt-prog
+					# The bootstrap "rm" still reports ENOENT with "-f" if another worker wins.
+					rm -f .libs/lt-prog || true
+					mv -f .libs/$i-lt-prog .libs/lt-prog
+					# Capture the status, since a failed exec would end the worker under "set -e".
+					if result=$(./.libs/lt-prog 2>&1); then
+						status=0
+					else
+						status=$?
+					fi
+					echo "$status|$result" >> $i.log
+					j=$((j+1))
+				done
+			) &
+			i=$((i+1))
+		done
+		wait
+
+		cat *.log > ${tg.output}
+	`)
+		.env(toolchain)
+		.then(tg.File.expect);
+
+	const results = await output.text.then((text) =>
+		text
+			.split("\n")
+			.filter((line) => line !== "")
+			.map((line) => {
+				const separator = line.indexOf("|");
+				return {
+					status: line.slice(0, separator),
+					text: line.slice(separator + 1),
+				};
+			}),
+	);
+	tg.assert(
+		results.length === workers * iterations,
+		`Expected ${workers * iterations} runs, got ${results.length}`,
+	);
+
+	const aborts = results.filter((result) => result.status === "111");
+	tg.assert(
+		aborts.length === 0,
+		`Expected no wrapper failures, got ${aborts.length}: ${aborts
+			.slice(0, 3)
+			.map((abort) => `${abort.status}|${abort.text}`)
+			.join(", ")}`,
+	);
+
+	const successes = results.filter((result) => result.status === "0");
+	tg.assert(successes.length > 0, "Expected at least one run to succeed");
+
+	// Shell status varies for a missing executable, so also check its message.
+	const isAbsentPathFailure = (result: (typeof results)[number]) => {
+		const status = Number(result.status);
+		return (
+			status > 0 &&
+			status < 128 &&
+			/(?:not found|no such file or directory)/i.test(result.text)
+		);
+	};
+	const unexpectedFailures = results.filter(
+		(result) =>
+			result.status !== "0" &&
+			result.status !== "111" &&
+			!isAbsentPathFailure(result),
+	);
+	tg.assert(
+		unexpectedFailures.length === 0,
+		`Expected every non-wrapper failure to be a missing-path exec failure, got ${unexpectedFailures.length} unexpected failures: ${unexpectedFailures
+			.slice(0, 3)
+			.map((failure) => `${failure.status}|${failure.text}`)
+			.join(", ")}`,
+	);
+
+	const absent = results.filter(isAbsentPathFailure);
+	tg.assert(
+		absent.length > 0,
+		"Expected at least one run to find the path absent",
+	);
+	const unexpected = successes.filter(
+		(result) => result.text !== "hello, world!",
+	);
+	tg.assert(
+		unexpected.length === 0,
+		`Expected every successful run to print the greeting, got ${unexpected.length} with other output: ${unexpected
+			.slice(0, 3)
+			.map((result) => result.text)
+			.join(", ")}`,
+	);
+	return true;
 }

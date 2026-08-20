@@ -1,7 +1,9 @@
 import * as bootstrap from "../bootstrap.tg.ts";
+import * as elf from "../file/elf.tg.ts";
 import * as gnu from "../sdk/gnu.tg.ts";
 import * as llvm from "../sdk/llvm.tg.ts";
 import * as std from "../tangram.ts";
+import * as wrapWorkspace from "./workspace.tg.ts";
 import source from "../packages/wrapper";
 import workspaceSrc from "../" with { type: "directory" };
 import dependencySource from "./test/libdependency.c" with { type: "file" };
@@ -97,7 +99,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 			"-nolibc",
 			"-nostdlib",
 			"-fno-tree-loop-distribute-patterns",
-			"-static",
+			"-static-pie",
 		];
 	}
 	if (os === "darwin") {
@@ -118,8 +120,6 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		...verboseArgs,
 		...osArgs,
 	];
-	const wrapFlags = ["-static", ...releaseArgs, ...verboseArgs];
-	const objcopy = os === "linux" ? `${prefix}objcopy -O binary` : "cp";
 	let buildPhase = tg`
 		set +x
 
@@ -136,11 +136,6 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 			exit 1
 		fi
 		echo "built wrapper.exe"
-
-
-		# Extract the binary.
-		${objcopy} ${tg.output}/wrapper.exe ${tg.output}/wrapper.bin
-		echo "built wrapper.bin"
 	`;
 
 	let bin = std.phases
@@ -223,6 +218,65 @@ export async function test() {
 	return workspace({ host, release: true });
 }
 
+const PT_LOAD = 1;
+const PT_INTERP = 3;
+const ET_EXEC = 2;
+const ET_DYN = 3;
+const SHT_RELA = 4;
+const SHT_REL = 9;
+const SHT_RELR = 19;
+const SHF_WRITE = 0x1;
+
+type ProgramHeader = elf.File["programHeaders"][number];
+type SectionHeader = elf.File["sectionHeaders"][number];
+
+const loadableSegments = (parsed: elf.File) =>
+	parsed.programHeaders.filter(
+		(programHeader) => programHeader.p_type === PT_LOAD,
+	);
+
+const segmentFileEnd = (segment: ProgramHeader) =>
+	Number(segment.p_offset) + Number(segment.p_filesz);
+
+const segmentBias = (segment: ProgramHeader) =>
+	Number(segment.p_vaddr) - Number(segment.p_offset);
+
+const containingSegment = (parsed: elf.File, address: number, what: string) => {
+	const segment = loadableSegments(parsed).find(
+		(candidate) =>
+			address >= Number(candidate.p_vaddr) &&
+			address < Number(candidate.p_vaddr) + Number(candidate.p_filesz),
+	);
+	tg.assert(segment !== undefined, `expected ${what} in a file-backed PT_LOAD`);
+	return segment;
+};
+
+const sizedSections = (
+	parsed: elf.File,
+	predicate: (section: SectionHeader) => boolean,
+) =>
+	parsed.sectionHeaders.filter(
+		(section) => Number(section.sh_size) > 0 && predicate(section),
+	);
+
+const relocationSections = (parsed: elf.File) =>
+	sizedSections(parsed, (section) =>
+		[SHT_REL, SHT_RELA, SHT_RELR].includes(section.sh_type),
+	);
+
+const lastLoadableSegment = (parsed: elf.File) => {
+	const segments = loadableSegments(parsed);
+	const last = segments.reduce<ProgramHeader | undefined>(
+		(current, segment) =>
+			current === undefined || segmentFileEnd(segment) > segmentFileEnd(current)
+				? segment
+				: current,
+		undefined,
+	);
+	tg.assert(last !== undefined, "expected a loadable segment");
+	return last;
+};
+
 export async function testCompile() {
 	const toolchain = std.bootstrap.sdk();
 	const source = tg.directory({
@@ -251,6 +305,408 @@ export async function testCompile() {
 			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 		})
 		.then(tg.File.expect);
+}
+
+export async function testWrapperPositionIndependent() {
+	const host = std.triple.host();
+	if (std.triple.os(host) !== "linux") {
+		return true;
+	}
+	const output = await workspace({ host, release: true });
+	const wrapper = await output.get("bin/wrapper.exe").then(tg.File.expect);
+	const parsed = await elf.parse(wrapper);
+	tg.assert(
+		parsed.header.e_type === ET_DYN,
+		"expected the wrapper to be ET_DYN",
+	);
+	containingSegment(
+		parsed,
+		Number(parsed.header.e_entry),
+		"the wrapper entry point",
+	);
+	tg.assert(
+		relocationSections(parsed).length === 0,
+		"expected the wrapper to have no relocations",
+	);
+	// The static wrapper does not update its dynamic metadata or GOT.
+	const exempt = [".dynamic", ".got", ".got.plt"];
+	const writable = sizedSections(
+		parsed,
+		(section) =>
+			(Number(section.sh_flags) & SHF_WRITE) !== 0 &&
+			!exempt.includes(section.sh_name),
+	);
+	tg.assert(
+		writable.length === 0,
+		`expected the wrapper to have nothing it would write to, found ${writable
+			.map((section) => section.sh_name)
+			.join(", ")}`,
+	);
+	return true;
+}
+
+export async function testStatic() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		return true;
+	}
+	const toolchain = std.bootstrap.sdk();
+	const source = tg.directory({
+		"main.c": tg.file(`
+			#include <stdio.h>
+			int main() {
+				printf("hello, world!\\n");
+				return 0;
+			}
+		`),
+	});
+	const directory = await std
+		.run(std.shBootstrap`
+		mkdir ${tg.output}
+		gcc -static -no-pie ${source}/main.c -o ${tg.output}/main
+	`)
+		.env(toolchain)
+		.then(tg.Directory.expect);
+	const executable = await directory.get("main").then(tg.File.expect);
+	const parsed = await elf.parse(executable);
+	tg.assert(
+		parsed.header.e_type === ET_EXEC,
+		"expected a static non-PIE executable",
+	);
+	tg.assert(
+		!parsed.programHeaders.some(
+			(programHeader) => programHeader.p_type === PT_INTERP,
+		),
+		"expected no PT_INTERP",
+	);
+	const loads = loadableSegments(parsed);
+	for (let index = 1; index < loads.length; index++) {
+		tg.assert(
+			Number(loads[index - 1]!.p_vaddr) <= Number(loads[index]!.p_vaddr),
+			"expected PT_LOAD entries in ascending p_vaddr order",
+		);
+	}
+
+	const phoff = Number(parsed.header.e_phoff);
+	const phend = phoff + parsed.header.e_phnum * parsed.header.e_phentsize;
+	const stub = loads.find(
+		(segment) =>
+			Number(segment.p_offset) <= phoff &&
+			Number(segment.p_offset) + Number(segment.p_filesz) >= phend,
+	);
+	tg.assert(stub !== undefined, "expected e_phoff inside the stub PT_LOAD");
+
+	// Preserve the load bias used by legacy AT_PHDR calculation.
+	tg.assert(
+		segmentBias(stub) === segmentBias(loads[0]!),
+		"expected the stub segment at the same address-to-offset distance as the image",
+	);
+
+	const copiedHeaderOffset = phoff - parsed.header.e_ehsize;
+	tg.assert(
+		copiedHeaderOffset === Number(stub.p_offset),
+		"expected the copied ELF header immediately before the program header table",
+	);
+	const [header, copiedHeader] = await Promise.all([
+		executable.read({ position: 0, length: parsed.header.e_ehsize }),
+		executable.read({
+			position: copiedHeaderOffset,
+			length: parsed.header.e_ehsize,
+		}),
+	]);
+	tg.assert(
+		header.every((byte, index) => byte === copiedHeader[index]),
+		"copied ELF header does not match the patched ELF header",
+	);
+	const wrapperSection = parsed.sectionHeaders.find(
+		(section) => section.sh_name === ".text.tg-wrapper",
+	);
+	const manifestSection = parsed.sectionHeaders.find(
+		(section) => section.sh_name === ".note.tg-manifest",
+	);
+	tg.assert(wrapperSection !== undefined, "expected wrapper section");
+	tg.assert(manifestSection !== undefined, "expected manifest section");
+	const stubEnd = Number(stub.p_offset) + Number(stub.p_filesz);
+	tg.assert(
+		Number(wrapperSection.sh_offset) >= Number(stub.p_offset) &&
+			Number(wrapperSection.sh_offset) + Number(wrapperSection.sh_size) <=
+				stubEnd &&
+			Number(manifestSection.sh_offset) >= Number(stub.p_offset) &&
+			Number(manifestSection.sh_offset) + Number(manifestSection.sh_size) <=
+				stubEnd,
+		"expected the stub to cover the wrapper, manifest, and footer",
+	);
+	const entry = Number(parsed.header.e_entry);
+	tg.assert(
+		entry >= Number(stub.p_vaddr) &&
+			entry < Number(stub.p_vaddr) + Number(stub.p_filesz),
+		"expected the entry point inside the stub PT_LOAD",
+	);
+
+	const output = await std
+		.run(std.shBootstrap`${executable} > ${tg.output}`)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text === "hello, world!\n",
+		`unexpected output ${JSON.stringify(text)}`,
+	);
+	return true;
+}
+
+export async function testBssManifest() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		return true;
+	}
+	const toolchain = std.bootstrap.sdk();
+	const source = tg.directory({
+		"main.c": tg.file(`
+			#include <stdint.h>
+			#include <stdio.h>
+			volatile uint8_t retained_uninitialized_global[65536];
+			int main() {
+				if (retained_uninitialized_global[0] != 0 ||
+					retained_uninitialized_global[65535] != 0) {
+					return 1;
+				}
+				retained_uninitialized_global[0] = 7;
+				printf("bss manifest: ok\\n");
+				return 0;
+			}
+		`),
+	});
+	const executable = await std
+		.run(std.shBootstrap`gcc -static ${source}/main.c -o ${tg.output}`)
+		.env(toolchain, { TGLD_PASSTHROUGH: true })
+		.then(tg.File.expect);
+
+	const original = await elf.parse(executable);
+	const bssSegment = lastLoadableSegment(original);
+	tg.assert(
+		Number(bssSegment.p_memsz) > Number(bssSegment.p_filesz),
+		"expected the final PT_LOAD to contain a BSS",
+	);
+
+	const manifest = {
+		executable: {
+			kind: "address" as const,
+			value: Number(original.header.e_entry),
+		},
+	};
+	const rewritten = await std.wrap.Manifest.write(
+		executable,
+		manifest,
+		new Map(),
+	);
+	const readManifest = await std.wrap.Manifest.read(rewritten);
+	tg.assert(
+		JSON.stringify(readManifest) === JSON.stringify(manifest),
+		"manifest did not round trip",
+	);
+	const largerManifest = {
+		...manifest,
+		args: [
+			{
+				components: [{ kind: "string" as const, value: "x".repeat(8_192) }],
+			},
+		],
+	};
+	const rewrittenAgain = await std.wrap.Manifest.write(
+		rewritten,
+		largerManifest,
+		new Map(),
+	);
+	const rereadManifest = await std.wrap.Manifest.read(rewrittenAgain);
+	tg.assert(rereadManifest !== undefined, "expected a replacement manifest");
+	tg.assert(
+		JSON.stringify(rereadManifest.executable) ===
+			JSON.stringify(largerManifest.executable) &&
+			rereadManifest.args?.length === 1 &&
+			rereadManifest.args[0]?.components[0]?.kind === "string" &&
+			rereadManifest.args[0].components[0].value.length === 8_192,
+		"larger replacement manifest did not round trip",
+	);
+
+	const parsed = await elf.parse(rewrittenAgain);
+	tg.assert(
+		parsed.header.e_phnum === original.header.e_phnum + 1,
+		"expected a new program header",
+	);
+	tg.assert(
+		Number(parsed.header.e_shoff) % 8 === 0,
+		"expected an aligned section header table",
+	);
+	const loads = loadableSegments(parsed);
+	const preservedBss = loads.find(
+		(segment) => Number(segment.p_vaddr) === Number(bssSegment.p_vaddr),
+	);
+	tg.assert(preservedBss !== undefined, "original BSS segment is missing");
+	tg.assert(
+		Number(preservedBss.p_offset) === Number(bssSegment.p_offset) &&
+			Number(preservedBss.p_filesz) === Number(bssSegment.p_filesz) &&
+			Number(preservedBss.p_memsz) === Number(bssSegment.p_memsz),
+		"original BSS segment changed",
+	);
+	const manifestSegment = lastLoadableSegment(parsed);
+	tg.assert(
+		Number(manifestSegment.p_filesz) === Number(manifestSegment.p_memsz),
+		"manifest segment unexpectedly contains a BSS",
+	);
+
+	// Preserve the load bias used by legacy AT_PHDR calculation.
+	tg.assert(
+		segmentBias(manifestSegment) === segmentBias(loads[0]!),
+		"expected the manifest segment at the same address-to-offset distance as the image",
+	);
+	const phoff = Number(parsed.header.e_phoff);
+	tg.assert(
+		phoff >= Number(manifestSegment.p_offset) &&
+			phoff + parsed.header.e_phnum * parsed.header.e_phentsize <=
+				segmentFileEnd(manifestSegment),
+		"expected the program header table inside the manifest segment",
+	);
+
+	const output = await std
+		.run(std.shBootstrap`${rewrittenAgain} > ${tg.output}`)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text === "bss manifest: ok\n",
+		`unexpected output ${JSON.stringify(text)}`,
+	);
+	return true;
+}
+
+export async function testStripPreservesManifest() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		return true;
+	}
+	const toolchain = std.bootstrap.sdk();
+	const source = tg.directory({
+		"main.c": tg.file(`
+			#include <stdio.h>
+			int main() {
+				printf("stripped: ok\\n");
+				return 0;
+			}
+		`),
+	});
+	const embedded = await std
+		.run(std.shBootstrap`gcc ${source}/main.c -o ${tg.output}`)
+		.env(toolchain)
+		.then(tg.File.expect);
+	const standalone = await std.wrap(embedded, {
+		buildToolchain: toolchain,
+		merge: false,
+	});
+	const output = await std
+		.run(std.shBootstrap`
+			cp ${embedded} embedded
+			cp ${standalone} standalone
+			chmod +w embedded standalone
+			strip embedded standalone
+			./embedded > ${tg.output}
+			./standalone >> ${tg.output}
+		`)
+		.env(toolchain, { TGSTRIP_PASSTHROUGH: true })
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text === "stripped: ok\nstripped: ok\n",
+		`unexpected output ${JSON.stringify(text)}`,
+	);
+	return true;
+}
+
+export async function testEmbedNonuniformWrapper() {
+	const host = std.triple.host();
+	if (std.triple.os(host) !== "linux") {
+		return true;
+	}
+	const toolchain = std.bootstrap.sdk();
+	const source = tg.directory({
+		"wrapper.c": tg.file(`
+			__attribute__((visibility("hidden"))) volatile int global = 7;
+
+			__attribute__((noreturn)) static void tg_exit(int code) {
+				for (;;) {
+			#if defined(__aarch64__)
+					register long number __asm__("x8") = 93;
+					register long argument __asm__("x0") = code;
+					__asm__ volatile("svc #0" : : "r"(number), "r"(argument) : "memory");
+			#elif defined(__x86_64__)
+					__asm__ volatile("syscall" : : "a"(60), "D"((long)code) : "memory");
+			#else
+			#error "unsupported architecture"
+			#endif
+				}
+			}
+
+			void _start(void) { tg_exit(global == 7 ? 0 : 1); }
+		`),
+		"host.c": tg.file(`int main() { return 0; }`),
+		"manifest.json": tg.file(`{"executable":{"kind":"address","value":0}}`),
+	});
+	const wrapperExe = await std
+		.run(std.shBootstrap`
+			gcc ${source}/wrapper.c -o ${tg.output} \
+				-nolibc -nostdlib -ffreestanding -fPIC -Os -static-pie \
+				-fno-asynchronous-unwind-tables -fno-stack-protector
+		`)
+		.env(toolchain, { TGLD_PASSTHROUGH: true })
+		.then(tg.File.expect);
+
+	const parsed = await elf.parse(wrapperExe);
+	tg.assert(
+		parsed.header.e_type === ET_DYN,
+		"expected a position-independent wrapper",
+	);
+	tg.assert(
+		relocationSections(parsed).length === 0,
+		"expected no relocations to give the layout away",
+	);
+	const data = parsed.sectionHeaders.find(
+		(section) => section.sh_name === ".data" && Number(section.sh_size) > 0,
+	);
+	tg.assert(data !== undefined, "expected an initialized global");
+	const entrySegment = containingSegment(
+		parsed,
+		Number(parsed.header.e_entry),
+		"the entry point",
+	);
+	const dataSegment = containingSegment(
+		parsed,
+		Number(data.sh_addr),
+		"the initialized global",
+	);
+	tg.assert(
+		segmentBias(dataSegment) !== segmentBias(entrySegment),
+		"expected the global and the code at different address-to-offset distances",
+	);
+
+	const wrapped = await std
+		.run(std.shBootstrap`
+			gcc ${source}/host.c -o host
+			${wrapWorkspace.wrap({ host })} embed host \
+				--manifest ${source}/manifest.json \
+				--wrapper-exe ${wrapperExe} \
+				-o ${tg.output}
+		`)
+		.env(toolchain, { TGLD_PASSTHROUGH: true })
+		.then(tg.File.expect);
+
+	const output = await std
+		.run(std.shBootstrap`
+			cp ${wrapped} wrapped
+			chmod +x wrapped
+			if ./wrapped ; then echo "embedded wrapper: ok" ; else echo "embedded wrapper exited $?" ; fi > ${tg.output}
+		`)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text === "embedded wrapper: ok\n",
+		`unexpected output ${JSON.stringify(text)}`,
+	);
+	return true;
 }
 
 export async function testFull() {

@@ -40,10 +40,9 @@ typedef struct
 // The executable image.
 typedef struct {
 #ifdef __linux__
-	Elf64_Ehdr* 	elf_header;		// Header of the ELF file.
+	Elf64_Ehdr* 	elf_header;		// Header of the ELF file, mapped by the kernel.
 	Elf64_Phdr* 	program_headers;	// Program headers passed by the kernel.
-	Elf64_Shdr* 	section_headers;	// Section headers read from the binary.
-	char*		section_string_table;	// String table, for finding sections by name
+	uintptr_t	load_address;		// Address the image was loaded at.
 #endif
 	Manifest* 	manifest;		// The parsed manifest.
 	Footer		footer;			// The parsed footer.
@@ -207,10 +206,6 @@ int main (int argc, char** argv) {
 		trace("read aux vector\n");
 	}
 
-	// Compute the base address. Normally this is computed using the program header table
-	// supplied in the aux vector, but this could be garbage if using a patched program header table.
-	uintptr_t load_address = stack.auxv_glob[AT_ENTRY] - executable.elf_header->e_entry;
-
 	// Check that we have space to write the new program header table and number of entries later.
 	ABORT_IF(!nphdr || nentry < 0, "missing AT_PHDR or AT_ENTRY");
 
@@ -218,7 +213,7 @@ int main (int argc, char** argv) {
 	void* entrypoint = NULL;
 	if (executable.manifest->interpreter.ptr) {
 		// If there's an interpreter arg,
-		stack.auxv[nentry].a_un.a_val = load_address + executable.manifest->entrypoint;
+		stack.auxv[nentry].a_un.a_val = executable.load_address + executable.manifest->entrypoint;
 
 		// Load the interpreter.
 		Interpreter interpreter = create_interpreter(
@@ -239,7 +234,7 @@ int main (int argc, char** argv) {
 		// Set the entrypoint as the interpreter.
 		entrypoint = (void*)(interpreter.base_address + interpreter.entry);
 	} else {
-		entrypoint = (void*)((uintptr_t)load_address + executable.manifest->entrypoint);
+		entrypoint = (void*)(executable.load_address + executable.manifest->entrypoint);
 	}
 
 	// Fix program headers. We use a second arena to avoid freeing the memory before userland exec.
@@ -248,7 +243,7 @@ int main (int argc, char** argv) {
 	ProgramHeaders new_phdrs = create_program_headers(
 		&preserved_memory,
 		executable.manifest,
-		(void*)load_address,
+		(void*)executable.load_address,
 		stack.auxv[nentry].a_un.a_val,
 		executable.program_headers,
 		executable.elf_header->e_phnum
@@ -421,118 +416,115 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 	// Look for the manifest in the executable sections.
 	char* data = NULL;
 
-	// Read the manifest. TODO: use loadable segment?
-	int fd = open((char*)path.ptr, O_RDONLY, 0);
-	ABORT_IF(fd < 0, "failed to open the file %s", path.ptr);
-	off_t offset = 0;
-	if (options->enable_tracing) {
-		trace("opened %s (%d)\n", path.ptr, fd);
-	}
 #ifdef __linux__
-	// On ELF targets, the manifest is embedded in an ELF section. To read it we read the ELF
-	// file, walk the file contents, and read the manifest directly from the section. In the
-	// future we may choose to make the section loadable and read only to avoid needing to open
-	// the file at all.
-	executable.elf_header = ALLOC(arena, Elf64_Ehdr);
+	// Read the manifest from the mapped image to avoid racing replacements of the executable.
+	uintptr_t program_header_address = stack->auxv_glob[AT_PHDR];
+	ABORT_IF(!program_header_address, "missing AT_PHDR");
+	executable.elf_header = (Elf64_Ehdr*)(program_header_address - sizeof(Elf64_Ehdr));
+	executable.program_headers = (Elf64_Phdr*)program_header_address;
+	bool is_elf = (executable.elf_header->e_ident[EI_MAG0] == ELFMAG0)
+		&& (executable.elf_header->e_ident[EI_MAG1] == ELFMAG1)
+		&& (executable.elf_header->e_ident[EI_MAG2] == ELFMAG2)
+		&& (executable.elf_header->e_ident[EI_MAG3] == ELFMAG3);
+	ABORT_IF(!is_elf, "the program header table is not preceded by an elf header");
+	ABORT_IF(
+		executable.elf_header->e_phnum != stack->auxv_glob[AT_PHNUM],
+		"AT_PHNUM does not match the elf header"
+	);
 
-	// Read the elf header. We don't need to do any validation here, we assume the kernel didn't lie.
-	read_all(options->enable_tracing, fd, (char*)executable.elf_header, sizeof(Elf64_Ehdr), 0);
-
-	// Read the program header table.
-	offset = executable.elf_header->e_phoff;
-	size_t size = executable.elf_header->e_phnum * sizeof(Elf64_Phdr);
-	executable.program_headers = ALLOC_N(arena, executable.elf_header->e_phnum, Elf64_Phdr);
-	read_all(options->enable_tracing, fd, (char*)executable.program_headers, size, offset);
-
-	// Read the section header table.
-	offset = executable.elf_header->e_shoff;
-	size = executable.elf_header->e_shnum * sizeof(Elf64_Shdr);
-	executable.section_headers = ALLOC_N(arena, executable.elf_header->e_shnum, Elf64_Shdr);
-	read_all(options->enable_tracing, fd, (char*)executable.section_headers, size, offset);
-
-	// Read the section header string table.
-	Elf64_Shdr* section = executable.section_headers + executable.elf_header->e_shstrndx;
-	offset = section->sh_offset;
-	size = section->sh_size;
-	executable.section_string_table = ALLOC_N(arena, size, char);
-	read_all(options->enable_tracing, fd, (char*)executable.section_string_table, size, offset);
-
-	// Get the file size.
-	offset = lseek(fd, 0, SEEK_END);
-	if (offset < 0) {
-		ABORT("failed to seek");
-	}
+	executable.load_address = stack->auxv_glob[AT_ENTRY] - executable.elf_header->e_entry;
 	if (options->enable_tracing) {
-		trace("file size: %d\n", offset);
+		trace("load address: %p, program headers: %p (%d)\n",
+			executable.load_address, executable.program_headers, executable.elf_header->e_phnum);
 	}
 
-	Elf64_Shdr* section_itr = executable.section_headers;
-	Elf64_Shdr* section_end = section_itr + executable.elf_header->e_shnum;
-	String TANGRAM_MANIFEST_SECTION_NAME = STRING_LITERAL(".note.tg-manifest");
-	for (; section_itr != section_end; section_itr++) {
-		String name = {0};
-		name.ptr = (uint8_t*)&executable.section_string_table[section_itr->sh_name];
-		name.len = tg_strlen((char*)name.ptr);
+	// Use the footer in the loadable segment whose file contents end last.
+	String magic = { .ptr = (uint8_t*)TANGRAM_MAGIC, .len = sizeof(executable.footer.magic) };
+	Elf64_Phdr* segment_itr = executable.program_headers;
+	Elf64_Phdr* segment_end = segment_itr + executable.elf_header->e_phnum;
+	uint64_t file_end = 0;
+	for (; segment_itr != segment_end; segment_itr++) {
+		if (segment_itr->p_type != PT_LOAD || segment_itr->p_filesz < sizeof(Footer)) {
+			continue;
+		}
+		if (data && segment_itr->p_offset + segment_itr->p_filesz <= file_end) {
+			continue;
+		}
+		char* end = (char*)(executable.load_address + segment_itr->p_vaddr + segment_itr->p_filesz);
+		Footer footer = {0};
+		memcpy((void*)&footer, (void*)(end - sizeof(Footer)), sizeof(Footer));
+		String found = { .ptr = (uint8_t*)footer.magic, .len = sizeof(footer.magic) };
+		if (!streq(found, magic)) {
+			continue;
+		}
+		ABORT_IF(footer.size > segment_itr->p_filesz - sizeof(Footer), "invalid footer");
+		executable.footer = footer;
+		data = end - sizeof(Footer) - footer.size;
+		file_end = segment_itr->p_offset + segment_itr->p_filesz;
 		if (options->enable_tracing) {
-			trace("found section ");
-			print_json_string(&name);
-			trace("\n");
-		}
-		if (streq(name, TANGRAM_MANIFEST_SECTION_NAME)) {
-			data	= alloc(arena, section_itr->sh_size, 1);
-			size	= section_itr->sh_size;
-			offset	= section_itr->sh_offset;
-			ABORT_IF(size < sizeof(Footer), "manifest section too small");
-			if (options->enable_tracing) {
-				trace("reading manifest at offset: %ld, size: %ld\n", offset, size);
-			}
-			read_all(options->enable_tracing, fd, data, size, offset);
-			memcpy((void*)&executable.footer, (void*)(data + (size - sizeof(Footer))), sizeof(Footer));
-			ABORT_IF(executable.footer.size > size - sizeof(Footer), "invalid footer");
-			break;
+			trace("read manifest at %p, size: %ld\n", data, footer.size);
 		}
 	}
-	ABORT_IF(!data, "failed to find manifest section");
-
+	ABORT_IF(!data, "failed to find the manifest");
 #elif defined(__APPLE__)
-	// On Mach platforms, the manifest is embedded into the binary just before the code signature
-	// which must occur at the end of the file. We read the header and all the load commands to
-	// find where the code signature is in the file, then walk back from there to read the
-	// manifest.
-	mach_header_64 mach_header = {0};
-	load_command load_command = {0};
-	linkedit_data_command code_signature_command = {0};
-	read_all(options->enable_tracing, fd, (char*)&mach_header, sizeof(mach_header_64), 0);
-	if(options->enable_tracing) {
-		trace("mach_header: %08x, ncmds: %d, izeofcmds: %d\n",
-			mach_header.magic, mach_header.ncmds, mach_header.sizeofcmds);
+	// Read the manifest from the mapped __LINKEDIT segment.
+	extern const mach_header_64 _mh_execute_header;
+	const mach_header_64* mach_header = &_mh_execute_header;
+	if (options->enable_tracing) {
+		trace("mach_header: %08x, ncmds: %d, sizeofcmds: %d\n",
+			mach_header->magic, mach_header->ncmds, mach_header->sizeofcmds);
 	}
 
-	// Find the code signature.
-	offset = (off_t)sizeof(mach_header_64);
-	for (int i = 0; i < mach_header.ncmds; i++) {
-		read_all(options->enable_tracing, fd, (char*)&load_command, sizeof(load_command), offset);
-		if (load_command.cmd == LC_CODE_SIGNATURE) {
-			read_all(options->enable_tracing, fd, (char*)&code_signature_command, sizeof(linkedit_data_command), offset);
-			break;
+	const segment_command_64* text_segment = NULL;
+	const segment_command_64* linkedit_segment = NULL;
+	const linkedit_data_command* code_signature_command = NULL;
+	const char* command_itr = (const char*)mach_header + sizeof(mach_header_64);
+	for (uint32_t i = 0; i < mach_header->ncmds; i++) {
+		const load_command* command = (const load_command*)command_itr;
+		if (command->cmd == LC_SEGMENT_64) {
+			const segment_command_64* segment = (const segment_command_64*)command_itr;
+			if (memcmp(segment->segname, "__TEXT", sizeof("__TEXT")) == 0) {
+				text_segment = segment;
+			} else if (memcmp(segment->segname, "__LINKEDIT", sizeof("__LINKEDIT")) == 0) {
+				linkedit_segment = segment;
+			}
+		} else if (command->cmd == LC_CODE_SIGNATURE) {
+			code_signature_command = (const linkedit_data_command*)command_itr;
 		}
-		offset += load_command.cmdsize;
+		command_itr += command->cmdsize;
 	}
-	ABORT_IF(code_signature_command.dataoff== 0, "failed to find the code signature");
+	ABORT_IF(text_segment == NULL || linkedit_segment == NULL, "failed to find the segments");
+	ABORT_IF(
+		code_signature_command == NULL || code_signature_command->dataoff == 0,
+		"failed to find the code signature"
+	);
 
-	// The footer will be stored just before the code signature.
-	offset = code_signature_command.dataoff - (off_t)sizeof(Footer);
-	read_all(options->enable_tracing, fd, (char*)&executable.footer, sizeof(Footer), offset);
+	uintptr_t slide = (uintptr_t)mach_header - (uintptr_t)text_segment->vmaddr;
+	const char* linkedit = (const char*)((uintptr_t)linkedit_segment->vmaddr + slide);
+	uint64_t linkedit_start = linkedit_segment->fileoff;
 
-	// The manifest is just before the footer.
-	offset -= (off_t)executable.footer.size;
-	data = ALLOC_N(arena, executable.footer.size, char);
-	read_all(options->enable_tracing, fd, data, executable.footer.size, offset);
+	ABORT_IF(
+		code_signature_command->dataoff < linkedit_start + sizeof(Footer)
+			|| code_signature_command->dataoff
+				> linkedit_start + linkedit_segment->filesize,
+		"the code signature is outside the __LINKEDIT segment"
+	);
+	uint64_t footer_offset = code_signature_command->dataoff - sizeof(Footer);
+	memcpy(&executable.footer, linkedit + (footer_offset - linkedit_start), sizeof(Footer));
+	ABORT_IF(
+		memcmp(executable.footer.magic, TANGRAM_MAGIC, sizeof(executable.footer.magic)) != 0,
+		"failed to find the manifest"
+	);
+
+	ABORT_IF(executable.footer.size > footer_offset - linkedit_start, "invalid footer");
+	uint64_t manifest_offset = footer_offset - executable.footer.size;
+	data = (char*)(linkedit + (manifest_offset - linkedit_start));
+	if (options->enable_tracing) {
+		trace("read manifest at %p, size: %ld\n", data, executable.footer.size);
+	}
 #else
 #error "unsupported target"
 #endif
-	// Close the file.
-	close(fd);
 
 	// Parse the manifest.
 	if (options->enable_tracing) {

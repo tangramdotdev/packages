@@ -220,18 +220,10 @@ pub fn detect_format(path: impl AsRef<Path>) -> std::io::Result<Option<Format>> 
 }
 
 static OBJCOPY_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
-static WRAPPER_BIN_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 static WRAPPER_EXE_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 pub fn set_objcopy_path(p: impl AsRef<Path>) {
 	OBJCOPY_PATH.lock().unwrap().replace(p.as_ref().to_owned());
-}
-
-pub fn set_wrapper_bin_path(p: impl AsRef<Path>) {
-	WRAPPER_BIN_PATH
-		.lock()
-		.unwrap()
-		.replace(p.as_ref().to_owned());
 }
 
 pub fn set_wrapper_exe_path(p: impl AsRef<Path>) {
@@ -248,10 +240,6 @@ pub(crate) fn objcopy_path() -> PathBuf {
 		.as_ref()
 		.cloned()
 		.unwrap_or_else(|| PathBuf::from("objcopy"))
-}
-
-pub(crate) fn wrapper_bin_path() -> Option<PathBuf> {
-	WRAPPER_EXE_PATH.lock().unwrap().as_ref().cloned()
 }
 
 pub(crate) fn wrapper_exe_path() -> Option<PathBuf> {
