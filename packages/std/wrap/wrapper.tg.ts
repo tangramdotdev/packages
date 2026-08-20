@@ -238,7 +238,6 @@ const loadableSegments = (parsed: elf.File) =>
 const segmentFileEnd = (segment: ProgramHeader) =>
 	Number(segment.p_offset) + Number(segment.p_filesz);
 
-/** How far a segment's address sits from its offset. */
 const segmentBias = (segment: ProgramHeader) =>
 	Number(segment.p_vaddr) - Number(segment.p_offset);
 
@@ -260,14 +259,11 @@ const sizedSections = (
 		(section) => Number(section.sh_size) > 0 && predicate(section),
 	);
 
-/** Match relocations by section type. Their names vary — `.rela.iplt` and the small-data and TLS
- * variants are all relocations a list of names would miss. */
 const relocationSections = (parsed: elf.File) =>
 	sizedSections(parsed, (section) =>
 		[SHT_REL, SHT_RELA, SHT_RELR].includes(section.sh_type),
 	);
 
-/** The loadable segment whose file contents end last, which is where `wrap` puts the manifest. */
 const lastLoadableSegment = (parsed: elf.File) => {
 	const segments = loadableSegments(parsed);
 	const last = segments.reduce<ProgramHeader | undefined>(
@@ -311,10 +307,6 @@ export async function testCompile() {
 		.then(tg.File.expect);
 }
 
-/** `embed` lays the wrapper's segments out by address and maps the result at an address chosen for
- * the wrapped executable, so the distances its code resolved at link time survive. Two things do
- * not survive: relocations, because nothing applies them, and writes, because the segment carrying
- * the wrapper is not writable. */
 export async function testWrapperPositionIndependent() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
@@ -336,8 +328,7 @@ export async function testWrapperPositionIndependent() {
 		relocationSections(parsed).length === 0,
 		"expected the wrapper to have no relocations",
 	);
-	// Nothing relocates the wrapper, so its `.dynamic` and its GOT are read but never stored to.
-	// Anything else writable is data the wrapper would write.
+	// The static wrapper does not update its dynamic metadata or GOT.
 	const exempt = [".dynamic", ".got", ".got.plt"];
 	const writable = sizedSections(
 		parsed,
@@ -354,8 +345,6 @@ export async function testWrapperPositionIndependent() {
 	return true;
 }
 
-/** A static executable has no PT_INTERP for the stub segment to reuse, so the wrapper is embedded
- * alongside a new program header table. */
 export async function testStatic() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
 		return true;
@@ -406,9 +395,7 @@ export async function testStatic() {
 	);
 	tg.assert(stub !== undefined, "expected e_phoff inside the stub PT_LOAD");
 
-	// A kernel before 5.19 reports the program header table at the load address plus e_phoff rather
-	// than at the address of the segment holding it, so the stub has to sit the same distance from
-	// its offset as the rest of the image for both to name the same address.
+	// Preserve the load bias used by legacy AT_PHDR calculation.
 	tg.assert(
 		segmentBias(stub) === segmentBias(loads[0]!),
 		"expected the stub segment at the same address-to-offset distance as the image",
@@ -466,8 +453,6 @@ export async function testStatic() {
 	return true;
 }
 
-/** Writing a manifest must preserve an existing BSS rather than extending its PT_LOAD over file
- * data. */
 export async function testBssManifest() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
 		return true;
@@ -567,8 +552,7 @@ export async function testBssManifest() {
 		"manifest segment unexpectedly contains a BSS",
 	);
 
-	// The relocated program header table has to keep the same address-to-offset distance as the
-	// image, or a kernel before 5.19 reports it somewhere it is not.
+	// Preserve the load bias used by legacy AT_PHDR calculation.
 	tg.assert(
 		segmentBias(manifestSegment) === segmentBias(loads[0]!),
 		"expected the manifest segment at the same address-to-offset distance as the image",
@@ -592,9 +576,6 @@ export async function testBssManifest() {
 	return true;
 }
 
-/** The wrapper reads the manifest from a segment, but `strip` repacks a file by section and only
- * keeps the segments covering allocated ones. Both the embedded and the standalone wrapper must
- * still run after being stripped. */
 export async function testStripPreservesManifest() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
 		return true;
@@ -613,8 +594,6 @@ export async function testStripPreservesManifest() {
 		.run(std.shBootstrap`gcc ${source}/main.c -o ${tg.output}`)
 		.env(toolchain)
 		.then(tg.File.expect);
-	// `merge` defaults to true, which would rewrite the manifest of the embedded wrapper instead of
-	// producing a standalone one, leaving that layout untested.
 	const standalone = await std.wrap(embedded, {
 		buildToolchain: toolchain,
 		merge: false,
@@ -638,12 +617,6 @@ export async function testStripPreservesManifest() {
 	return true;
 }
 
-/** `embed` maps the wrapper contiguously at one address, but a static PIE's own segments sit at
- * different distances from their offsets, and its code reaches its data by the distances the linker
- * resolved. Appending the wrapper's file rather than its memory image moves that data out from
- * under the code, and nothing in the file reports it: reaching a hidden global compiles to a bare
- * pc-relative address with no relocation to inspect. This wrapper is that shape, and it exits zero
- * only if the global still reads back once embedded. */
 export async function testEmbedNonuniformWrapper() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
@@ -721,8 +694,6 @@ export async function testEmbedNonuniformWrapper() {
 		.env(toolchain, { TGLD_PASSTHROUGH: true })
 		.then(tg.File.expect);
 
-	// A wrapper reading its global from the wrong address faults rather than returning, so report the
-	// status instead of letting the process take the build down with it.
 	const output = await std
 		.run(std.shBootstrap`
 			cp ${wrapped} wrapped

@@ -31,10 +31,6 @@ fn page_size(cputype: sys::cpu_type_t) -> u64 {
 	}
 }
 
-/// Pad the manifest at the front, so that whatever follows it stays aligned and the footer stays the
-/// last thing before it. `read_manifest` reports the manifest without the padding, so replacing one
-/// leaves the padding of the previous write in the file. That is at most `ALIGNMENT` bytes each
-/// time, and always inside `__LINKEDIT` ahead of the manifest, where nothing reads it.
 fn pad_manifest(data: &[u8], position: usize) -> Vec<u8> {
 	let padding = (ALIGNMENT - (position + data.len()) % ALIGNMENT) % ALIGNMENT;
 	let mut output = vec![0; padding];
@@ -151,7 +147,6 @@ impl BinaryFormat for Mach64 {
 		// Compute the new offset of the code signature.
 		let new_offset = old.offset.to_usize().unwrap() + data.len();
 
-		// Find the code signature and LINKEDIT segment.
 		let header = *file.read_at::<mach_header_64>(0);
 		let mut offset = size_of_val(&header);
 		let mut code_signature_command = None;
@@ -172,7 +167,6 @@ impl BinaryFormat for Mach64 {
 			offset += load_command.cmdsize.to_usize().unwrap();
 		}
 
-		// Patch the code signature and LINKEDIT segment.
 		if let Some(offset) = code_signature_command {
 			let command = file.read_at_mut::<linkedit_data_command>(offset);
 			command.dataoff = new_offset.try_into().unwrap();

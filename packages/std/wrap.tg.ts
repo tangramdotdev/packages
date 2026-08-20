@@ -3076,7 +3076,6 @@ export async function testManifestMutationPrependRoundTrip() {
 	return true;
 }
 
-/** Replacing a Mach-O manifest must grow the mapped __LINKEDIT segment with the file data. */
 export async function testDarwinLargeManifestOverwrite() {
 	if (std.triple.os(std.triple.host()) !== "darwin") {
 		return true;
@@ -3748,7 +3747,6 @@ export async function testLdLibraryPathPreservedThroughNestedWrapping() {
 	return result;
 }
 
-/** The program the concurrent relink tests wrap. */
 const concurrentRelinkSource = tg.directory({
 	"main.c": tg.file(`
 		#include <stdio.h>
@@ -3769,7 +3767,6 @@ const relinkWrapper = async (toolchain: std.env.Arg) => {
 	return await wrap(executable, { buildToolchain: toolchain });
 };
 
-/** Run `wrapper` from 16 concurrent workers, each replacing it with an atomic rename first. */
 const atomicRelink = async (wrapper: tg.File) => {
 	const workers = 16;
 	const iterations = 150;
@@ -3813,13 +3810,11 @@ const atomicRelink = async (wrapper: tg.File) => {
 	return true;
 };
 
-/** A libtool wrapper script renames a relinked binary over `.libs/lt-<name>` then execs it, so under `make -j` a wrapper can be replaced between its own exec and its first read of itself. */
 export async function testConcurrentRelink() {
 	const host = std.triple.host();
 	return await atomicRelink(await relinkWrapper(await bootstrap.sdk(host)));
 }
 
-/** The same race against a standalone wrapper, which keeps its manifest elsewhere in the file and execs the program rather than userland-execing itself. */
 export async function testConcurrentRelinkStandalone() {
 	const host = std.triple.host();
 	const sdkArg = await bootstrap.sdk.arg(host);
@@ -3827,7 +3822,6 @@ export async function testConcurrentRelinkStandalone() {
 	return await atomicRelink(await relinkWrapper(toolchain));
 }
 
-/** The same race against libtool's fallback, which removes `.libs/lt-<name>` before renaming into place, so the path is briefly absent. Runs the kernel could not exec are expected; a run it did exec must not fail inside the wrapper. */
 export async function testConcurrentRelinkTransient() {
 	const host = std.triple.host();
 	const workers = 8;
@@ -3886,7 +3880,6 @@ export async function testConcurrentRelinkTransient() {
 		`Expected ${workers * iterations} runs, got ${results.length}`,
 	);
 
-	// The wrapper aborts with 111.
 	const aborts = results.filter((result) => result.status === "111");
 	tg.assert(
 		aborts.length === 0,
@@ -3899,8 +3892,7 @@ export async function testConcurrentRelinkTransient() {
 	const successes = results.filter((result) => result.status === "0");
 	tg.assert(successes.length > 0, "Expected at least one run to succeed");
 
-	// A run the kernel could not exec at all is expected. The status a shell reports for a failed
-	// exec varies, so key on the message rather than on an allowlist of statuses.
+	// Shell status varies for a missing executable, so also check its message.
 	const isAbsentPathFailure = (result: (typeof results)[number]) => {
 		const status = Number(result.status);
 		return (
@@ -3923,7 +3915,6 @@ export async function testConcurrentRelinkTransient() {
 			.join(", ")}`,
 	);
 
-	// Without this the test passes vacuously when the timing never makes the path absent.
 	const absent = results.filter(isAbsentPathFailure);
 	tg.assert(
 		absent.length > 0,

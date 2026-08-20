@@ -417,13 +417,7 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 	char* data = NULL;
 
 #ifdef __linux__
-	// On ELF targets, the manifest is written at the end of a loadable segment, which the kernel
-	// maps, so read it from our own image: opening the path would race with any concurrent job
-	// that replaces the file, which libtool does when it relinks under a parallel make.
-	//
-	// The kernel passes the address of the mapped program header table in the aux vector, and the
-	// ELF header always sits immediately before it. `wrap` preserves that when it appends a
-	// program header table of its own. Both are needed by the userland exec below regardless.
+	// Read the manifest from the mapped image to avoid racing replacements of the executable.
 	uintptr_t program_header_address = stack->auxv_glob[AT_PHDR];
 	ABORT_IF(!program_header_address, "missing AT_PHDR");
 	executable.elf_header = (Elf64_Ehdr*)(program_header_address - sizeof(Elf64_Ehdr));
@@ -438,18 +432,13 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 		"AT_PHNUM does not match the elf header"
 	);
 
-	// The image is position independent, so apply the load address to the recorded addresses. This
-	// is computed from the entrypoint rather than the program header table, whose address is
-	// replaced by a userland exec.
 	executable.load_address = stack->auxv_glob[AT_ENTRY] - executable.elf_header->e_entry;
 	if (options->enable_tracing) {
 		trace("load address: %p, program headers: %p (%d)\n",
 			executable.load_address, executable.program_headers, executable.elf_header->e_phnum);
 	}
 
-	// Find the footer at the end of the file contents of a loadable segment. `wrap` writes it to the
-	// segment whose file contents end last, so take that one: a binary wrapped more than once keeps
-	// the earlier footers, and only the last one describes the manifest in force.
+	// Use the footer in the loadable segment whose file contents end last.
 	String magic = { .ptr = (uint8_t*)TANGRAM_MAGIC, .len = sizeof(executable.footer.magic) };
 	Elf64_Phdr* segment_itr = executable.program_headers;
 	Elf64_Phdr* segment_end = segment_itr + executable.elf_header->e_phnum;
@@ -478,10 +467,7 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 	}
 	ABORT_IF(!data, "failed to find the manifest");
 #elif defined(__APPLE__)
-	// On Mach platforms, the manifest is embedded just before the code signature, which must occur
-	// at the end of the file. Both sit in __LINKEDIT, which the kernel maps, so read them from our
-	// own image: there is no /proc/self/exe here, and resolving our path would race with any
-	// concurrent job that replaces the file.
+	// Read the manifest from the mapped __LINKEDIT segment.
 	extern const mach_header_64 _mh_execute_header;
 	const mach_header_64* mach_header = &_mh_execute_header;
 	if (options->enable_tracing) {
@@ -489,7 +475,6 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 			mach_header->magic, mach_header->ncmds, mach_header->sizeofcmds);
 	}
 
-	// Find the __TEXT and __LINKEDIT segments and the code signature.
 	const segment_command_64* text_segment = NULL;
 	const segment_command_64* linkedit_segment = NULL;
 	const linkedit_data_command* code_signature_command = NULL;
@@ -514,12 +499,10 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 		"failed to find the code signature"
 	);
 
-	// The image is position independent, so apply the slide to the recorded addresses.
 	uintptr_t slide = (uintptr_t)mach_header - (uintptr_t)text_segment->vmaddr;
 	const char* linkedit = (const char*)((uintptr_t)linkedit_segment->vmaddr + slide);
 	uint64_t linkedit_start = linkedit_segment->fileoff;
 
-	// The footer is stored just before the code signature.
 	ABORT_IF(
 		code_signature_command->dataoff < linkedit_start + sizeof(Footer)
 			|| code_signature_command->dataoff
@@ -533,8 +516,6 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 		"failed to find the manifest"
 	);
 
-	// The manifest is just before the footer. Point straight at the mapping: parsing it does not
-	// write to it, so there is nothing to copy.
 	ABORT_IF(executable.footer.size > footer_offset - linkedit_start, "invalid footer");
 	uint64_t manifest_offset = footer_offset - executable.footer.size;
 	data = (char*)(linkedit + (manifest_offset - linkedit_start));

@@ -772,9 +772,6 @@ export namespace sdk {
 				}
 			}
 
-			// If not found in toplevel lib, try the target-prefixed directory. Both lookups are
-			// `tryGet`, so that a toolchain that has neither reports which one was missing rather
-			// than an unlabelled assertion.
 			const sysrootLibDir = await directory.tryGet(`${target}/lib`);
 			tg.assert(
 				sysrootLibDir instanceof tg.Directory,

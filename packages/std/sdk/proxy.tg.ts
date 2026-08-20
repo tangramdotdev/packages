@@ -465,7 +465,6 @@ export async function test() {
 	return true;
 }
 
-/** The names of the linker proxy env vars that each locate an artifact the proxy checks out at run time. Only Mach-O outputs get codesigned, so the proxy leaves `TANGRAM_CODESIGN_PATH` unset elsewhere. */
 const ldProxyArtifactEnvVars = (host: string) => [
 	...(std.triple.os(host) === "darwin" ? ["TANGRAM_CODESIGN_PATH"] : []),
 	"TANGRAM_WRAPPER_EXE_PATH",
@@ -496,18 +495,6 @@ const manifestEnvValue = (
 	return map.value[name];
 };
 
-/** Every artifact the linker proxy needs at run time must be reachable from its object graph.
- *
- * The proxy receives the wrapper executable, `codesign`, and the injection library through its
- * env. Passing any of them as a bare id string smuggles the reference past the
- * object graph: a string component is not an artifact component, so no dependency edge is recorded,
- * so the sandboxed process holds no grant and its runtime checkout is denied ("failed to ensure the
- * artifacts are stored and authorized ... failed to find the artifact").
- *
- * Note that a bare id string is invisible to `manifestDependencies`, which only yields artifact
- * components. Asserting only that every referent is a recorded dependency therefore passes
- * vacuously. This test asserts the property the proxy actually needs: each of these env vars carries
- * an artifact, and every artifact they carry is recorded as a dependency of the proxy. */
 export async function testLdProxyDependencies() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const buildToolchain = await bootstrap.sdk();

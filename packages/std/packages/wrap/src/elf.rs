@@ -96,8 +96,6 @@ macro_rules! impl_elf {
 				}
 			}
 
-			/// Get the offset of the program header of the loadable segment whose file contents end
-			/// last. The manifest goes at the end of it, where the wrapper looks for the footer.
 			fn last_loadable_segment(&self, file: &File) -> Option<usize> {
 				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
 				let (phdr_offset, phdr_count) = {
@@ -123,8 +121,6 @@ macro_rules! impl_elf {
 				last.map(|(offset, _)| offset)
 			}
 
-			/// Get the end of the last address the loadable segments occupy, the largest alignment
-			/// they require, and the distance between their addresses and their offsets.
 			fn image_extent(&self, file: &File) -> (usize, usize, usize) {
 				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
 				let (phdr_offset, phdr_count) = {
@@ -155,19 +151,10 @@ macro_rules! impl_elf {
 				(max_vaddr, max_align, vaddr - offset)
 			}
 
-			/// Choose the offset, address, and alignment of a new loadable segment at the end of the
-			/// file. It goes after every address the image already occupies, and the same distance from
-			/// its offset as the rest of the image, because a kernel before 5.19 reports the program
-			/// header table at the load address plus `e_phoff` rather than at the address of the
-			/// segment holding it. Both computations agree only when every segment keeps the same
-			/// distance.
 			fn appended_segment(&self, file: &File, file_size: usize) -> (usize, usize, usize) {
 				let (max_vaddr, max_align, bias) = self.image_extent(file);
 				let offset = align(file_size.max(align(max_vaddr, max_align) - bias), max_align);
 
-				// The segment is placed at the largest alignment in the image, but it can only claim
-				// an alignment its own address and offset agree on, which an image loaded at an
-				// unusual address may not.
 				let mut segment_align = max_align;
 				while bias % segment_align != 0 {
 					segment_align /= 2;
@@ -175,11 +162,6 @@ macro_rules! impl_elf {
 				(offset, offset + bias, segment_align)
 			}
 
-			/// Add the manifest in a new read-only segment at the end of the file. This is for images
-			/// whose last loadable segment has a bss, which cannot be extended over file data without
-			/// initializing memory that must stay zero-filled. The segment also holds a copy of the elf
-			/// header and a program header table with room for itself, because the wrapper reads both
-			/// from the addresses the kernel maps them at.
 			fn append_manifest_segment(
 				&self,
 				file: &mut File,
@@ -199,8 +181,6 @@ macro_rules! impl_elf {
 				};
 				let new_phdr_count = phdr_count + 1;
 
-				// The section table goes first, so that the manifest and its footer are the last bytes
-				// of the file, and so of the segment.
 				let file_size = file
 					.file_size()
 					.expect("failed to get the file size")
@@ -214,7 +194,6 @@ macro_rules! impl_elf {
 				let new_section_offset = headers_offset + new_phdr_count * phdr_size;
 				let segment_size = new_section_offset + data.len() - segment_offset;
 
-				// Add the manifest section.
 				let new_section_header = paste! {[<$elf _Shdr>] {
 					sh_type: sys::SHT_NOTE,
 					sh_offset: new_section_offset.try_into().unwrap(),
@@ -231,7 +210,6 @@ macro_rules! impl_elf {
 				}};
 				section_table.extend_from_slice(new_section_header.as_bytes());
 
-				// Build the new program header table, moving PT_PHDR along with it.
 				let new_segment = paste! {[<$elf _Phdr>] {
 					p_type: sys::PT_LOAD,
 					p_flags: sys::PF_R,
@@ -263,11 +241,9 @@ macro_rules! impl_elf {
 					phdr_bytes.extend_from_slice(phdr.as_bytes());
 				}
 
-				// The new segment goes last, which keeps the loadable segments in address order
-				// because it is above every address the image already occupies.
+				// The new segment is above the existing image, preserving PT_LOAD order.
 				phdr_bytes.extend_from_slice(new_segment.as_bytes());
 
-				// Write the section table, then the segment.
 				let padding = section_table_offset - file_size;
 				if padding > 0 {
 					file.append(&vec![0; padding])
@@ -365,12 +341,7 @@ macro_rules! impl_elf {
 					}
 				}
 
-				// The blob that gets appended is the wrapper's memory image, not its file. The stub
-				// segment below maps the blob contiguously at a single address, while the wrapper's
-				// own segments sit at different distances from their offsets, and its code reaches
-				// its data by the distances the linker resolved. Copying the file would move that
-				// data out from under the code, with nothing to notice: a static PIE reaching a
-				// hidden global emits a plain pc-relative address and no relocation at all.
+				// Reconstruct the wrapper's memory image from its loadable segments.
 				let wrapper_exe = std::fs::read(&wrapper_exe_path)?;
 				let wrapper_ehdr = paste! {[<$elf _Ehdr>]::read_from_bytes(
 					&wrapper_exe[0..size_of::<[<$elf _Ehdr>]>()],
@@ -412,8 +383,6 @@ macro_rules! impl_elf {
 						)
 					})?;
 
-				// Lay each segment down at its address. The gaps between them, and any memory a
-				// segment claims past its file contents, stay zero.
 				let image_size = wrapper_segments
 					.iter()
 					.map(|&(_, vaddr, _, memsz)| vaddr + memsz - min_vaddr)
@@ -448,7 +417,6 @@ macro_rules! impl_elf {
 					)
 				};
 
-				// Find the PT_INTERP header and where a new segment can go.
 				let mut pt_interp_index: Option<usize> = None;
 				for i in 0..phdr_count {
 					let off = phdr_offset + i * phdr_size;
@@ -496,19 +464,15 @@ macro_rules! impl_elf {
 				let manifest_shdr_offset = manifest_shdr_offset
 					.ok_or_else(|| std::io::Error::other("missing manifest section"))?;
 
-				// Compute the data layout. The footer is included so that the segment covers the same
-				// bytes as the manifest section header, which counts it in its size.
 				let wrapper_data_size =
 					wrapper_image.len() + manifest.len() + size_of::<crate::Footer>();
 
-				// Determine the wrapper offset and address, and build a new phdr table if needed.
 				let new_phdr_table: Option<(Vec<u8>, usize)>;
 				let wrapper_offset: usize;
 				let wrapper_vaddr: usize;
 
 				if let Some(interpreter_index) = pt_interp_index {
-					// Reuse PT_INTERP header for the stub segment. The existing program header table
-					// stays where it is, so the kernel keeps mapping it and reporting it in AT_PHDR.
+					// Reuse PT_INTERP for the stub segment.
 					assert_eq!(
 						phdr_offset,
 						size_of::<paste! {[<$elf _Ehdr>]}>(),
@@ -531,9 +495,7 @@ macro_rules! impl_elf {
 					let offset = phdr_offset + interpreter_index * phdr_size;
 					file[offset..offset + phdr_size].copy_from_slice(stub_segment.as_bytes());
 				} else {
-					// Create a new program header table if there's no PT_INTERP we can abuse. It goes
-					// inside the stub segment, preceded by a copy of the elf header, because the
-					// wrapper reads both from the addresses the kernel maps them at.
+					// Put a copied ELF header and new program header table in the stub.
 					let new_count = phdr_count + 1;
 					let headers_size = size_of::<paste! {[<$elf _Ehdr>]}>() + new_count * phdr_size;
 					let stub_size = align(headers_size, segment_align) + wrapper_data_size;
@@ -555,7 +517,6 @@ macro_rules! impl_elf {
 					let mut bytes = Vec::with_capacity(new_count * phdr_size);
 					let mut load_entries = Vec::new();
 
-					// Collect all loadable segments, including the stub, and order them by address.
 					for i in 0..phdr_count {
 						let off = phdr_offset + i * phdr_size;
 						let phdr = paste! {[<$elf _Phdr>]::read_from_bytes(&file[off..off + phdr_size])}.unwrap();
@@ -657,8 +618,6 @@ macro_rules! impl_elf {
 					}
 				}
 
-				// Write new program header table if necessary, preceded by a copy of the patched elf
-				// header, which is where the wrapper looks for it.
 				if let Some((phdr_bytes, headers_offset)) = new_phdr_table {
 					let ehdr_bytes = self.elf_header(&file).as_bytes().to_vec();
 					let padding = headers_offset - ehdr_bytes.len() - file_size;
@@ -679,7 +638,6 @@ macro_rules! impl_elf {
 					}
 				}
 
-				// Append the wrapper executable.
 				file.append(&wrapper_image)?;
 
 				// Append manifest.
@@ -745,14 +703,11 @@ macro_rules! impl_elf {
 				let string_table_location = self.section_string_table(file);
 				let mut section_table_location = self.section_header_table(file);
 
-				// Get the section table, before the insert below moves it.
 				let mut section_table = file[section_table_location].to_vec();
 
-				// The name goes at the end of the string table, so its index is the old length.
 				let name_index = string_table_location.length;
 
-				// Update existing sections. Growing the string table in place shifts everything after
-				// it along by the length of the name.
+				// Account for growing the section string table.
 				let shift = <paste! {[<$elf _Off>]}>::try_from(name_len).unwrap();
 				for (index, chunk) in section_table
 					.chunks_exact_mut(size_of::<paste! {[<$elf _Shdr>]}>())
@@ -769,19 +724,15 @@ macro_rules! impl_elf {
 					}
 				}
 
-				// Append the name to the string table.
 				file.insert(name, string_table_location.end().to_u64().unwrap())
 					.expect("failed to insert string table");
 
-				// Delete the old section table, which the insert may have moved.
 				if section_table_location.offset >= string_table_location.end() {
 					section_table_location.offset += name_len;
 				}
 				file.delete(section_table_location)
 					.expect("failed to delete section table");
 
-				// Get the segment the manifest will be added to, and the distance between its
-				// addresses and its offsets.
 				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
 				let segment_offset = self
 					.last_loadable_segment(file)
@@ -794,8 +745,7 @@ macro_rules! impl_elf {
 					"segment file size exceeds its memory size",
 				);
 
-				// Extending a segment with a BSS would make the bytes after p_filesz initialize
-				// memory which must remain zero-filled, so give the manifest a segment of its own.
+				// Do not turn BSS into file-backed data.
 				if segment.p_filesz < segment.p_memsz {
 					self.append_manifest_segment(file, data, section_table, name_index);
 					return;
@@ -803,16 +753,12 @@ macro_rules! impl_elf {
 				let vaddr_delta =
 					segment.p_vaddr.to_usize().unwrap() - segment.p_offset.to_usize().unwrap();
 
-				// The section table is written before the manifest, so that the manifest and its
-				// footer are the last bytes of the file, and so of the segment extended below.
 				let section_table_offset = file.file_size().expect("failed to get the file size");
 				let new_section_offset = section_table_offset.to_usize().unwrap()
 					+ section_table.len()
 					+ size_of::<paste! {[<$elf _Shdr>]}>();
 
-				// Create the new section. It is allocated, so that a tool which repacks the file keeps
-				// it inside the segment extended below rather than moving it out with the other
-				// sections that are not part of the image.
+				// SHF_ALLOC keeps the manifest mapped after strip.
 				let new_section_header = paste! {[<$elf _Shdr>]{
 					sh_type: sys::SHT_NOTE,
 					sh_offset: new_section_offset .try_into().unwrap(),
@@ -833,11 +779,9 @@ macro_rules! impl_elf {
 				file.append(&section_table)
 					.expect("failed to write the new section table to the file");
 
-				// Write the new section.
 				file.append(data)
 					.expect("failed to write new section to end of file");
 
-				// Extend the segment so that the kernel maps the manifest.
 				let file_size = file.file_size().expect("failed to get the file size");
 				let segment =
 					paste! {[<$elf _Phdr>]::mut_from_bytes(&mut file[segment_offset..segment_offset + phdr_size])}
@@ -890,8 +834,7 @@ macro_rules! impl_elf {
 					}
 				}
 
-				// Update the segment containing the manifest, so that its file size continues to
-				// cover the whole manifest and footer.
+				// Keep the manifest covered by its segment.
 				let phdr_size = size_of::<paste! {[<$elf _Phdr>]}>();
 				let (phdr_offset, phdr_count) = {
 					let ehdr = self.elf_header(file);
