@@ -75,6 +75,9 @@ export type Arg = CommonArg & {
 	/** Should this build have network access? Must set a checksum to enable. Default: false. */
 	network?: boolean;
 
+	/** Workspace members to select with `--package`. When empty, cargo's own default member selection applies. */
+	packages?: Array<string>;
+
 	/** Should the build environment include pkg-config? Default: true. */
 	pkgConfig?: boolean;
 
@@ -83,6 +86,9 @@ export type Arg = CommonArg & {
 
 	/** A name for the build process. */
 	processName?: string;
+
+	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Default: "build". */
+	subcommand?: string;
 
 	/** Whether to generate a cargo timing report. Adds `--timings` to the cargo build command and includes the `cargo-timings/` directory in the output. Default: false. */
 	timings?: boolean;
@@ -402,6 +408,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		host,
 		manifestSubdir,
 		network = false,
+		packages = [],
 		parallelJobs,
 		pkgConfig = true,
 		pre,
@@ -410,6 +417,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		proxy = false,
 		sdk: sdk_ = {},
 		source,
+		subcommand = "build",
 		target: target_,
 		timings = false,
 		useCargoVendor = false,
@@ -528,6 +536,9 @@ linker = "${hostLinker}"`;
 		`--features "${features.join(",")}"`,
 		"--target $RUST_TARGET",
 	];
+	for (const name of packages) {
+		cargoArgs.push(`--package ${name}`);
+	}
 	if (!network) {
 		cargoArgs.push("--offline", "--frozen");
 	}
@@ -548,8 +559,8 @@ linker = "${hostLinker}"`;
 	// Redirect + replay (not process substitution) to avoid tee being killed
 	// before flushing on Linux.
 	const buildCommand = captureStderr
-		? tg`${cargoCmd} build ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
-		: tg`${cargoCmd} build ${cargoArgString}`;
+		? tg`${cargoCmd} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
+		: tg`${cargoCmd} ${subcommand} ${cargoArgString}`;
 	const buildScript = tg.Template.join(
 		"\n",
 		preparePaths,
