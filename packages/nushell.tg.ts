@@ -1,3 +1,4 @@
+import { libclang } from "llvm" with { source: "./llvm" };
 import { cargo } from "rust" with { source: "./rust" };
 import * as std from "std" with { source: "./std" };
 
@@ -31,8 +32,14 @@ export function source() {
 
 export type Arg = cargo.Arg;
 
-export function build(...args: tg.Args<Arg>) {
-	return cargo.build({ source: source() }, ...args);
+export async function build(...args: tg.Args<Arg>) {
+	const arg = await cargo.arg({ source: source() }, ...args);
+	// On macOS, the `libproc` dependency generates its bindings with `bindgen`, which locates libclang through `LIBCLANG_PATH`.
+	const env =
+		std.triple.os(arg.host) === "darwin"
+			? { LIBCLANG_PATH: tg`${await libclang({ host: arg.host })}/lib` }
+			: undefined;
+	return cargo.build(arg, std.args.optional("env", env));
 }
 
 export default build;

@@ -354,10 +354,11 @@ export async function testOpenSSL() {
 
 /** Legacy fixture: bindgen requires libclang from LLVM. */
 export async function testBindgen() {
+	// `clang-sys` searches `LIBCLANG_PATH`, not the `LIBRARY_PATH` an artifact contributes.
 	const result = await cargo.build({
 		source: tests.get("hello-bindgen").then(tg.Directory.expect),
 		proxy: true,
-		env: std.env.arg(libclang()),
+		env: { LIBCLANG_PATH: tg`${await libclang()}/lib` },
 	});
 	console.log("testBindgen result", result.id);
 

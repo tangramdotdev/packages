@@ -278,11 +278,12 @@ export async function libclang(arg?: LLVMArg) {
 			tg`-DZLIB_ROOT=${zlibNgArtifact}`,
 		],
 	};
+	// Without the resource headers, such as `stdbool.h`, libclang cannot parse most translation units.
 	const buildPhase = {
 		pre: "cd build",
-		body: "ninja libclang",
+		body: "ninja libclang clang-resource-headers",
 	};
-	const install = "ninja install-libclang";
+	const install = "ninja install-libclang install-clang-resource-headers";
 	const phases = { configure, build: buildPhase, install };
 
 	return await cmake.build({
