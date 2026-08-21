@@ -63,7 +63,7 @@ export const metadata = {
 };
 
 const PROFILE = "minimal" as const;
-export const VERSION = "1.97.1" as const;
+export const VERSION = "1.98.0" as const;
 
 export type ToolchainArg = {
 	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD" for pinned nightly. */
@@ -97,7 +97,7 @@ export async function self(unresolvedArg?: tg.Unresolved<ToolchainArg>) {
 	if (channel === "stable" || channel === undefined) {
 		manifestUrl = `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`;
 		manifestChecksum =
-			"sha256:03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf";
+			"sha256:3f7d139b73bbbd0004ef6e58b430831c68cdad2b1f64ee2eb35d54c09199489a";
 	} else if (channel === "nightly") {
 		manifestUrl = "https://static.rust-lang.org/dist/channel-rust-nightly.toml";
 		manifestChecksum = "sha256:any";
