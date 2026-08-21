@@ -1,5 +1,6 @@
 import { cargo } from "rust" with { source: "./rust" };
 import * as std from "std" with { source: "./std" };
+import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://dandavison.github.io/delta/",
@@ -29,10 +30,16 @@ export function source() {
 	});
 }
 
-export type Arg = cargo.Arg;
+export function deps() {
+	return std.deps({
+		zlib: zlib.build,
+	});
+}
+
+export type Arg = cargo.Arg & std.deps.Arg<typeof deps>;
 
 export function build(...args: tg.Args<Arg>) {
-	return cargo.build({ source: source() }, ...args);
+	return cargo.build({ deps, source: source() }, ...args);
 }
 
 export default build;
