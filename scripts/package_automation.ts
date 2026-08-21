@@ -66,7 +66,7 @@ class TangramClient {
 	async build(
 		target: string,
 		options: { tag?: string; retry?: boolean; public?: boolean } = {},
-	): Promise<{ id: string; token?: string }> {
+	): Promise<{ id: string; cached: boolean; lease?: string }> {
 		const args = [target, "-d", "-v"];
 		if (options.tag) {
 			args.push(`--tag=${options.tag}`, "--create-tag-ancestors");
@@ -82,10 +82,14 @@ class TangramClient {
 			.text()
 			.then((t) => t.trim());
 
+		// The spawn output omits `cached` when it is false.
 		const result = JSON.parse(output);
-		const returnValue: { id: string; token?: string } = { id: result.process };
-		if (result.token) {
-			returnValue.token = result.token;
+		const returnValue: { id: string; cached: boolean; lease?: string } = {
+			id: result.process,
+			cached: result.cached === true,
+		};
+		if (result.lease) {
+			returnValue.lease = result.lease;
 		}
 		return returnValue;
 	}
@@ -111,8 +115,8 @@ class TangramClient {
 		await $`${this.exe} push ${args}`.quiet();
 	}
 
-	async cancel(processId: string, token: string): Promise<void> {
-		await $`${this.exe} cancel ${processId} ${token}`.quiet();
+	async cancel(processId: string, lease: string): Promise<void> {
+		await $`${this.exe} cancel ${processId} ${lease}`.quiet();
 	}
 
 	async format(path: string): Promise<void> {
@@ -462,20 +466,15 @@ async function executeBuild(
 		});
 		processId = process.id;
 
-		// Track processes that have a cancellation token
-		if (process.token) {
-			ctx.processTracker.add(process.id, process.token);
-			log(
-				`[${actionName}] ${buildPath}: ${processId}${options.tag ? ` (tag: ${options.tag})` : ""}`,
-			);
-		} else {
-			// No token means the build is cached/already complete
-			log(
-				`[${actionName}] ${buildPath}: ${processId} (cached)${options.tag ? ` (tag: ${options.tag})` : ""}`,
-			);
+		// Only a process with a lease can be cancelled.
+		if (process.lease) {
+			ctx.processTracker.add(process.id, process.lease);
 		}
+		log(
+			`[${actionName}] ${buildPath}: ${processId}${process.cached ? " (cached)" : ""}${options.tag ? ` (tag: ${options.tag})` : ""}`,
+		);
 
-		// Berify the process output to check for failures.
+		// Verify the process output to check for failures.
 		await ctx.tangram.processOutput(processId);
 
 		return { ok: true, value: processId };
@@ -942,8 +941,8 @@ class ProcessTracker {
 		this.results = results;
 	}
 
-	add(id: string, token: string): void {
-		this.processes.set(id, token);
+	add(id: string, lease: string): void {
+		this.processes.set(id, lease);
 	}
 
 	remove(id: string): void {
@@ -952,10 +951,10 @@ class ProcessTracker {
 
 	async cancelAll(): Promise<void> {
 		log("Cancelling all tracked processes...");
-		for (const [id, token] of this.processes) {
+		for (const [id, lease] of this.processes) {
 			log(`cancelling ${id}`);
 			try {
-				await this.tangram.cancel(id, token);
+				await this.tangram.cancel(id, lease);
 			} catch (err) {
 				log(`Failed to cancel process ${id}: ${err}`);
 			}
