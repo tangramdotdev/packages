@@ -23,8 +23,8 @@ rg_path=$(command -v rg)
 jq_path=$(command -v jq)
 echo \"rg -> $rg_path\"
 echo \"jq -> $jq_path\"
-case $rg_path in */artifacts/*) ;; *) echo 'rg is not from a tangram artifact'; exit 1 ;; esac
-case $jq_path in */artifacts/*) ;; *) echo 'jq is not from a tangram artifact'; exit 1 ;; esac
+case $rg_path in */store/*) ;; *) echo 'rg is not from a tangram artifact'; exit 1 ;; esac
+case $jq_path in */store/*) ;; *) echo 'jq is not from a tangram artifact'; exit 1 ;; esac
 echo beta | rg -q beta
 echo '{\"a\":[1,2,3]}' | jq -e '.a[1] == 2' > /dev/null
 echo FUNCTIONAL-OK"
@@ -56,16 +56,35 @@ def main [--cleanup, --remote-port: int = 8091] {
     # Evaluate the demo on the fresh server. Its own root process is not cached anywhere, so it runs;
     # every child it reaches should resolve from the remote instead of executing.
     let process = (^tangram -d $FRESH build --detach ./packages/demo | str trim)
-    ^tangram -d $FRESH wait $process | ignore
+    # Capture the wait result rather than discarding it. A failed evaluation still leaves a process
+    # record behind, so the child census below would otherwise be taken over a partial run and report
+    # a clean sweep for a build that never finished.
+    let evaluation = (do -i { ^tangram -d $FRESH wait $process } | complete)
+    if $evaluation.exit_code != 0 {
+        print $"(ansi red_bold)FAIL(ansi reset) the evaluation of ./packages/demo failed on the cold client."
+        print $evaluation.stderr
+    }
     let children = (^tangram -d $FRESH process get $process | from json | get children)
     let executed = ($children | where { |c| ($c.cached? | default false) == false })
 
     # Wrapping is expected to happen on the client: composing a different env, or adding a variable
     # to it, must produce a new wrapper without rebuilding anything. Any other local execution is a
-    # cache miss on something that should have been downloaded.
-    let wrap = ["read+manifest" "write+manifest" "codesign"]
+    # cache miss on something that should have been downloaded. The wrapper export resolves which
+    # wrapper artifact to use and compiles nothing, so it belongs with the manifest steps.
+    let wrap = ["read+manifest" "write+manifest" "codesign" "default+wrapper"]
+
+    # The codesign step runs rcodesign, which the client fetches itself. Allowing every download by
+    # name would also hide a package source download, which is a real miss, so the URL decides.
     let unexpected = ($executed | where { |c|
-        not ($wrap | any { |w| $c.process | str contains $"name=($w)" })
+        if ($wrap | any { |w| $c.process | str contains $"name=($w)" }) {
+            false
+        } else if ($c.process | str contains "name=download") {
+            let id = ($c.process | split row '?' | first)
+            let command = (^tangram -d $FRESH process get $id | from json | get command)
+            not (^tangram -d $FRESH get $command | str contains "apple-codesign")
+        } else {
+            true
+        }
     })
 
     print $"children: ($children | length), executed: ($executed | length), unexpected: ($unexpected | length)"
@@ -75,7 +94,7 @@ def main [--cleanup, --remote-port: int = 8091] {
         ^tangram -d $FRESH run -b ./packages/demo -- sh -c $CHECK
     } | complete)
     print $result.stdout
-    if $result.exit_code == 0 and ($result.stdout | str contains "FUNCTIONAL-OK") and ($unexpected | is-empty) {
+    if $evaluation.exit_code == 0 and $result.exit_code == 0 and ($result.stdout | str contains "FUNCTIONAL-OK") and ($unexpected | is-empty) {
         print $"(ansi green_bold)PASS(ansi reset) the cold client wrapped locally and built nothing."
     } else {
         print $"(ansi red_bold)FAIL(ansi reset) exit ($result.exit_code)"
