@@ -13,8 +13,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",
-	version: "16.1.0",
-	tag: "gcc/16.1.0",
+	version: "16.2.0",
+	tag: "gcc/16.2.0",
 	provides: {
 		binaries: ["gcc"],
 	},
@@ -221,7 +221,7 @@ export async function gccSource() {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:50efb4d94c3397aff3b0d61a5abd748b4dd31d9d3f2ab7be05b171d36a510f79";
+		"sha256:e6738e29597f733270731aa90600f37ffdc045079dfc27ec7e8192cc81085c3e";
 	const base = `http://ftpmirror.gnu.org/gnu/${name}/${name}-${version}`;
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
