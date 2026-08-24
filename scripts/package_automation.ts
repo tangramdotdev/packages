@@ -131,7 +131,7 @@ class TangramClient {
 		path: string,
 		options: { remote?: string } = {},
 	): Promise<void> {
-		const args = [path];
+		const args = [path, "--force"];
 		if (options.remote) {
 			args.push(`--remote=${options.remote}`);
 		}
