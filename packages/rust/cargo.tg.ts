@@ -84,6 +84,9 @@ export type Arg = CommonArg & {
 	/** The cargo build profile to use. Default: "release". */
 	profile?: string;
 
+	/** The flag that selects the cargo profile. Subcommands such as `nextest run` claim `--profile` for a profile of their own and accept the cargo profile as `--cargo-profile`. Default: "--profile". */
+	profileFlag?: string;
+
 	/** A name for the build process. */
 	processName?: string;
 
@@ -414,6 +417,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		pre,
 		processName,
 		profile = "release",
+		profileFlag = "--profile",
 		proxy = false,
 		sdk: sdk_ = {},
 		source,
@@ -530,7 +534,7 @@ linker = "${hostLinker}"`;
 		? `${manifestSubdir}/Cargo.toml`
 		: `"Cargo.toml"`;
 	const cargoArgs = [
-		`--profile ${profile}`,
+		`${profileFlag} ${profile}`,
 		tg`--target-dir "${tg.output}/target"`,
 		`--manifest-path "$TGRUSTC_SOURCE_DIR/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
