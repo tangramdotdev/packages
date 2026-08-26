@@ -2,6 +2,7 @@ use tangram_client::prelude::*;
 
 mod args;
 mod driver;
+mod lock;
 mod outer;
 mod passthrough;
 mod runner;

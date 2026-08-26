@@ -134,35 +134,20 @@ fn read_sidecar(deps_dir: &Path, stem: &str) -> Option<Vec<String>> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::sync::atomic::{AtomicU32, Ordering};
-
-	static COUNTER: AtomicU32 = AtomicU32::new(0);
-
-	fn temp_dir() -> PathBuf {
-		let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-		let path = std::env::temp_dir().join(format!(
-			"tgrustc-sidecar-test-{}-{}",
-			std::process::id(),
-			id
-		));
-		let _ = fs::remove_dir_all(&path);
-		fs::create_dir_all(&path).unwrap();
-		path
-	}
 
 	#[test]
 	fn writes_then_reads_a_sidecar() {
-		let dir = temp_dir();
+		let temp = tempfile::tempdir().unwrap();
+		let dir = temp.path();
 		write_sidecars(
-			&dir,
+			dir,
 			&["libfoo-abc123".to_owned()],
 			&["libbar-def456".to_owned(), "libbaz-789abc".to_owned()],
 		)
 		.unwrap();
-		write_sidecars(&dir, &["libbar-def456".to_owned()], &[]).unwrap();
-		write_sidecars(&dir, &["libbaz-789abc".to_owned()], &[]).unwrap();
-		let (visited, complete) =
-			closure_from_sidecars(&[dir.as_path()], &["libfoo-abc123".to_owned()]);
+		write_sidecars(dir, &["libbar-def456".to_owned()], &[]).unwrap();
+		write_sidecars(dir, &["libbaz-789abc".to_owned()], &[]).unwrap();
+		let (visited, complete) = closure_from_sidecars(&[dir], &["libfoo-abc123".to_owned()]);
 		assert!(complete);
 		assert_eq!(
 			visited,
@@ -176,16 +161,16 @@ mod tests {
 
 	#[test]
 	fn missing_sidecar_marks_incomplete() {
-		let dir = temp_dir();
+		let temp = tempfile::tempdir().unwrap();
 		let (_visited, complete) =
-			closure_from_sidecars(&[dir.as_path()], &["libfoo-abc123".to_owned()]);
+			closure_from_sidecars(&[temp.path()], &["libfoo-abc123".to_owned()]);
 		assert!(!complete);
 	}
 
 	#[test]
 	fn empty_stems_yield_empty_complete_closure() {
-		let dir = temp_dir();
-		let (visited, complete) = closure_from_sidecars(&[dir.as_path()], &[]);
+		let temp = tempfile::tempdir().unwrap();
+		let (visited, complete) = closure_from_sidecars(&[temp.path()], &[]);
 		assert!(complete);
 		assert!(visited.is_empty());
 	}

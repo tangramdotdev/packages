@@ -1,8 +1,8 @@
-use crate::{args::Args, sidecar};
+use crate::{args::Args, lock, sidecar};
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	path::{Path, PathBuf},
-	time::Instant,
+	time::{Duration, Instant},
 };
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
@@ -14,7 +14,77 @@ const SANDBOX_STORE_DIR: &str = "/opt/tangram/store";
 // Markers that prefix tangram artifact ids in rendered env-var strings.
 const ARTIFACT_ID_MARKERS: &[&str] = &["/dir_01", "/fil_01", "/sym_01"];
 
+// The phases of one wrapper invocation. `prepare` is the check-ins and the arg
+// and env rewriting before the spawn; `materialize` is the checkout and sidecar
+// write after it.
+#[derive(Default)]
+struct Timing {
+	materialize: Duration,
+	prepare: Duration,
+	spawn: Duration,
+}
+
+// How the `-L dependency=` snapshot was bounded. Sidecars name the exact stems
+// a compilation reaches, but a stem compiled outside the proxy leaves none, and
+// an unbounded snapshot contains the crate's own dependents, so compiling the
+// crate changes the input to its next compilation and the key can never
+// converge. The lockfile bounds the snapshot by package when the sidecars
+// cannot bound it by stem.
+enum Closure {
+	All,
+	Packages(BTreeSet<String>),
+	Stems(BTreeSet<String>),
+}
+
+impl Closure {
+	fn with_stems(direct_stems_by_dir: &BTreeMap<PathBuf, Vec<String>>, cwd: &Path) -> Self {
+		let dirs: Vec<&Path> = direct_stems_by_dir.keys().map(PathBuf::as_path).collect();
+		let stems: Vec<String> = direct_stems_by_dir.values().flatten().cloned().collect();
+		let (visited, complete) = sidecar::closure_from_sidecars(&dirs, &stems);
+		if complete {
+			return Self::Stems(visited);
+		}
+		lock::closure(cwd, &stems).map_or(Self::All, Self::Packages)
+	}
+
+	fn contains(&self, stem: &str) -> bool {
+		match self {
+			Self::All => true,
+			Self::Packages(packages) => lock::package_names(stem)
+				.iter()
+				.any(|name| packages.contains(name)),
+			Self::Stems(stems) => stems.contains(stem),
+		}
+	}
+
+	fn kind(&self) -> &'static str {
+		match self {
+			Self::All => "all",
+			Self::Packages(_) => "packages",
+			Self::Stems(_) => "stems",
+		}
+	}
+}
+
+fn emit_proxy_complete(
+	display_name: &str,
+	cached: bool,
+	closure: &Closure,
+	timing: &Timing,
+	process_id: &tg::process::Id,
+	command_id: &tg::command::Id,
+) {
+	let closure = closure.kind();
+	let prepare_ms = timing.prepare.as_millis();
+	let elapsed_ms = timing.spawn.as_millis();
+	let materialize_ms = timing.materialize.as_millis();
+	eprintln!(
+		"proxy_complete crate_name={display_name} cached={cached} closure={closure} prepare_ms={prepare_ms} elapsed_ms={elapsed_ms} materialize_ms={materialize_ms} process_id={process_id} command_id={command_id}"
+	);
+}
+
 pub async fn run(args: Args) -> tg::Result<()> {
+	let run_start = Instant::now();
 	let cwd = std::env::current_dir().map_err(|error| tg::error!("failed to read cwd: {error}"))?;
 	// Scope the source artifact to `CARGO_MANIFEST_DIR` (per-crate) rather than
 	// the workspace so a sibling crate's edits cannot blow this crate's
@@ -30,6 +100,107 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		.map_err(|_| tg::error!("the driver artifact must be a file"))?
 		.into();
 
+	let (env, toolchain_artifact) = build_env(&args.rustc, &source_artifact).await?;
+
+	// Per-dir BFS roots: cross-compiles route proc-macro and library externs
+	// through different dirs, each with its own sidecar set.
+	let direct_extern_stems_by_dir = sidecar::direct_extern_stems_by_dir(&args.passthrough);
+	let closure = Closure::with_stems(&direct_extern_stems_by_dir, &cwd);
+
+	let spawn_args = build_spawn_args(
+		&args.passthrough,
+		&toolchain_artifact,
+		&source_artifact,
+		&source_dir,
+		&cwd,
+		&closure,
+	)
+	.await?;
+
+	let name = args
+		.crate_name
+		.as_deref()
+		.map_or_else(|| "rustc".to_owned(), |c| format!("rustc {c}"));
+	let process_arg = tg::process::Arg {
+		args: spawn_args,
+		env,
+		executable: Some(executable),
+		host: Some(crate::host().to_owned()),
+		name: Some(name),
+		sandbox: Some(tg::process::SandboxArg::Bool(true)),
+		stderr: tg::process::Stdio::Log,
+		stdin: tg::process::Stdio::Null,
+		stdout: tg::process::Stdio::Log,
+		..Default::default()
+	};
+
+	// Everything up to here is preparation: the source and driver check-ins,
+	// and the arg and env rewriting.
+	let mut timing = Timing {
+		prepare: run_start.elapsed(),
+		..Timing::default()
+	};
+
+	let spawn_start = Instant::now();
+	let process: tg::Process = tg::Process::spawn(process_arg).await?;
+	let process_id = process.id().unwrap_right().clone();
+	append_spawn_log(&process_id);
+	let cached = process.cached().unwrap_or(false);
+	let command_id = process.command().await?.id();
+	let wait = process.wait(tg::process::wait::Options::default()).await?;
+	timing.spawn = spawn_start.elapsed();
+	let display_name = display_crate_name(args.crate_name.as_deref());
+
+	// A failed compile materializes nothing and `process_output_or_exit` does
+	// not return, so emit the timing before it.
+	if wait.exit != 0 {
+		emit_proxy_complete(
+			&display_name,
+			cached,
+			&closure,
+			&timing,
+			&process_id,
+			&command_id,
+		);
+	}
+
+	let output_dir = process_output_or_exit(wait, &process_id, "the sandbox").await?;
+
+	// Materialize outputs before forwarding logs. Cargo treats rustc's stdout
+	// as a pipelining readiness signal; releasing it before checkout completes
+	// races the next wrapper's `-L dependency=` directory snapshot.
+	let materialize_start = Instant::now();
+	if let Some(out_dir) = &args.out_dir {
+		materialize_outputs(
+			&output_dir,
+			Path::new(out_dir),
+			&source_artifact,
+			&source_dir,
+			&args,
+		)
+		.await?;
+	}
+	timing.materialize = materialize_start.elapsed();
+
+	emit_proxy_complete(
+		&display_name,
+		cached,
+		&closure,
+		&timing,
+		&process_id,
+		&command_id,
+	);
+
+	forward_logs(&output_dir, None).await?;
+
+	Ok(())
+}
+
+// The sandbox env, with the toolchain artifact that provides rustc.
+async fn build_env(
+	rustc: &str,
+	source_artifact: &tg::Artifact,
+) -> tg::Result<(tg::value::Map, tg::Artifact)> {
 	// `tg::process::env::env()` reconstitutes typed values from the parent's
 	// `TANGRAM_ENV_*` shadow vars; `std::env::vars()` would lose the typing.
 	let mut env = tg::process::env::env()?;
@@ -37,9 +208,9 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	// Cargo populates these with paths embedding the outer cargo-sandbox's
 	// source artifact id, which varies per `cargo.build`. Re-anchor on the
 	// per-crate source artifact so they depend only on this crate's source.
-	override_manifest_env(&mut env, &source_artifact);
+	override_manifest_env(&mut env, source_artifact);
 
-	let toolchain_artifact = resolve_toolchain(&mut env, &args.rustc).await?;
+	let toolchain_artifact = resolve_toolchain(&mut env, rustc).await?;
 
 	// `TGRUSTC_SANDBOX_SDK` provides a linker on PATH; final-binary crates
 	// shell out to `cc` which the bare host env does not resolve.
@@ -61,69 +232,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		tg::Value::String("1".to_owned()),
 	);
 
-	// Per-dir BFS roots: cross-compiles route proc-macro and library externs
-	// through different dirs, each with its own sidecar set.
-	let direct_extern_stems_by_dir = sidecar::direct_extern_stems_by_dir(&args.passthrough);
-
-	let spawn_args = build_spawn_args(
-		&args.passthrough,
-		&toolchain_artifact,
-		&source_artifact,
-		&source_dir,
-		&cwd,
-		&direct_extern_stems_by_dir,
-	)
-	.await?;
-
-	let name = args
-		.crate_name
-		.as_deref()
-		.map_or_else(|| "rustc".to_owned(), |c| format!("rustc {c}"));
-	let process_arg = tg::process::Arg {
-		args: spawn_args,
-		env,
-		executable: Some(executable),
-		host: Some(crate::host().to_owned()),
-		name: Some(name),
-		sandbox: Some(tg::process::SandboxArg::Bool(true)),
-		stderr: tg::process::Stdio::Log,
-		stdin: tg::process::Stdio::Null,
-		stdout: tg::process::Stdio::Log,
-		..Default::default()
-	};
-
-	let spawn_start = Instant::now();
-	let process: tg::Process = tg::Process::spawn(process_arg).await?;
-	let process_id = process.id().unwrap_right().clone();
-	append_spawn_log(&process_id);
-	let cached = process.cached().unwrap_or(false);
-	let command_id = process.command().await?.id();
-	let wait = process.wait(tg::process::wait::Options::default()).await?;
-	let elapsed_ms = spawn_start.elapsed().as_millis();
-	let display_name = display_crate_name(args.crate_name.as_deref());
-	eprintln!(
-		"proxy_complete crate_name={display_name} cached={cached} elapsed_ms={elapsed_ms} process_id={process_id} command_id={command_id}"
-	);
-
-	let output_dir = process_output_or_exit(wait, &process_id, "the sandbox").await?;
-
-	// Materialize outputs before forwarding logs. Cargo treats rustc's stdout
-	// as a pipelining readiness signal; releasing it before checkout completes
-	// races the next wrapper's `-L dependency=` directory snapshot.
-	if let Some(out_dir) = &args.out_dir {
-		materialize_outputs(
-			&output_dir,
-			Path::new(out_dir),
-			&source_artifact,
-			&source_dir,
-			&args,
-		)
-		.await?;
-	}
-
-	forward_logs(&output_dir, None).await?;
-
-	Ok(())
+	Ok((env, toolchain_artifact))
 }
 
 async fn resolve_toolchain(env: &mut tg::value::Map, rustc: &str) -> tg::Result<tg::Artifact> {
@@ -372,23 +481,12 @@ async fn build_spawn_args(
 	source_artifact: &tg::Artifact,
 	source_dir: &Path,
 	cwd: &Path,
-	direct_extern_stems_by_dir: &BTreeMap<PathBuf, Vec<String>>,
+	closure: &Closure,
 ) -> tg::Result<tg::value::Array> {
 	let rustc_template = tg::Template::with_components([
 		tg::template::Component::Artifact(toolchain_artifact.clone()),
 		tg::template::Component::String("/bin/rustc".to_owned()),
 	]);
-	let all_dirs: Vec<&Path> = direct_extern_stems_by_dir
-		.keys()
-		.map(PathBuf::as_path)
-		.collect();
-	let all_stems: Vec<String> = direct_extern_stems_by_dir
-		.values()
-		.flatten()
-		.cloned()
-		.collect();
-	let (global_closure, global_complete) = sidecar::closure_from_sidecars(&all_dirs, &all_stems);
-	let global_closure = global_complete.then_some(global_closure);
 	let mut spawn_args: tg::value::Array = Vec::with_capacity(passthrough.len() + 1);
 	spawn_args.push(tg::Value::Template(rustc_template));
 	let mut iter = passthrough.iter();
@@ -406,7 +504,7 @@ async fn build_spawn_args(
 				.next()
 				.ok_or_else(|| tg::error!("-L was the last argument; expected a value"))?;
 			spawn_args.push(tg::Value::String("-L".to_owned()));
-			spawn_args.push(rewrite_search_path(value, global_closure.as_ref()).await?);
+			spawn_args.push(rewrite_search_path(value, closure).await?);
 			continue;
 		}
 		spawn_args.push(rewrite_arg(arg, source_artifact, source_dir, cwd));
@@ -431,10 +529,7 @@ fn display_crate_name(crate_name: Option<&str>) -> String {
 // path (`.rlib`, `.rmeta`, `.so`, `.dylib`, `.a`). Anything else (notably
 // cargo's `.d` depfiles, whose content embeds per-process sandbox paths)
 // makes the checkin non-deterministic.
-async fn rewrite_search_path(
-	value: &str,
-	global_closure: Option<&BTreeSet<String>>,
-) -> tg::Result<tg::Value> {
+async fn rewrite_search_path(value: &str, closure: &Closure) -> tg::Result<tg::Value> {
 	let (prefix, path) = match value.split_once('=') {
 		Some((kind, p)) => (format!("{kind}="), p),
 		None => (String::new(), value),
@@ -443,11 +538,9 @@ async fn rewrite_search_path(
 	if !p.is_absolute() || !p.is_dir() {
 		return Ok(tg::Value::String(value.to_owned()));
 	}
-	let closure = if prefix == "dependency=" {
-		global_closure
-	} else {
-		None
-	};
+	// Only `dependency=` names the crate graph; the other kinds point at native
+	// library dirs the closure says nothing about.
+	let closure = (prefix == "dependency=").then_some(closure);
 	let artifact = checkin_loadable_search_path(p, closure).await?;
 	let template = tg::Template::with_components([
 		tg::template::Component::String(prefix),
@@ -458,7 +551,7 @@ async fn rewrite_search_path(
 
 async fn checkin_loadable_search_path(
 	p: &Path,
-	dep_closure: Option<&BTreeSet<String>>,
+	dep_closure: Option<&Closure>,
 ) -> tg::Result<tg::Artifact> {
 	let loadable = |ext: &str| matches!(ext, "rlib" | "rmeta" | "so" | "dylib" | "a");
 	let mut dir = tokio::fs::read_dir(p)
@@ -484,9 +577,11 @@ async fn checkin_loadable_search_path(
 			let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
 				continue;
 			};
-			// Match by full `lib<crate>-<hash>` stem so the multi-version case
-			// stays correct: the same crate can appear under two hashes and
-			// only some are reachable.
+			// A stem closure matches the full `lib<crate>-<hash>` stem so the
+			// multi-version case stays correct: the same crate can appear under
+			// two hashes and only some are reachable. A package closure is
+			// coarser and admits every hash of a reachable package, which only
+			// ever admits more than needed.
 			if !closure.contains(stem) {
 				continue;
 			}
@@ -561,15 +656,7 @@ fn resolve_rustc(rustc: &str) -> tg::Result<PathBuf> {
 	if candidate.is_absolute() {
 		return Ok(candidate.to_path_buf());
 	}
-	let path = std::env::var_os("PATH")
-		.ok_or_else(|| tg::error!("PATH is not set; cannot resolve rustc binary"))?;
-	for dir in std::env::split_paths(&path) {
-		let candidate = dir.join(rustc);
-		if candidate.is_file() {
-			return Ok(candidate);
-		}
-	}
-	Err(tg::error!("could not find {rustc} on PATH"))
+	which::which(rustc).map_err(|error| tg::error!("could not find {rustc} on PATH: {error}"))
 }
 
 // Recover the artifact embedded in an env-var value. Templates carry it

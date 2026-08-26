@@ -2,6 +2,8 @@ import * as std from "std" with { source: "../std" };
 import { $ } from "std" with { source: "../std" };
 import zlib from "zlib-ng" with { source: "../zlib-ng.tg.ts" };
 
+export * as benchmark from "./benchmark.tg.ts";
+
 import * as build_ from "./build.tg.ts";
 export * as build from "./build.tg.ts";
 

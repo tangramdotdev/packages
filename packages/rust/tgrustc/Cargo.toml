@@ -19,8 +19,14 @@ result_large_err = "allow"
 
 [dependencies]
 rustix = { version = "1", features = ["stdio"] }
+serde = { version = "1", default-features = false, features = ["derive", "std"] }
 tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "e6e9b68c0a7bac557a4e456c5196e5abe49e848e" }
 tokio = { version = "1", default-features = false, features = ["rt", "fs"] }
+toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
+which = "8"
+
+[dev-dependencies]
+tempfile = "3"
 
 [profile.release]
 codegen-units = 1

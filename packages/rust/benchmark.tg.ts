@@ -42,8 +42,14 @@ type BaselineTiming = {
 type StatsSummary = {
 	hits: number;
 	misses: number;
+	prepareMs: number;
 	totalMs: number;
+	materializeMs: number;
+	wallMs: number;
 	crates: number;
+	closureStems: number;
+	closurePackages: number;
+	closureAll: number;
 };
 
 /** Result of running all scenarios for one project. */
@@ -222,6 +228,33 @@ function formatSummaryRow(
 	return `  ${label.padEnd(15)}  ${String(totalMs).padStart(7)} ms    ${crateStr}      ${hitsStr} / ${missStr}    ${hitRate}${hitRate !== "n/a" ? "%" : ""}`;
 }
 
+/** Format a phase-split row for the report table. `Prepare %` is the share of
+ * wall time that is pure proxy overhead. */
+function formatPhaseRow(
+	label: string,
+	summary: StatsSummary | undefined,
+): string {
+	if (summary === undefined) {
+		return `  ${label.padEnd(15)}       n/a          n/a                n/a         n/a`;
+	}
+	const { prepareMs, totalMs, materializeMs, wallMs } = summary;
+	const share =
+		wallMs > 0 ? `${((prepareMs / wallMs) * 100).toFixed(1)}%` : "n/a";
+	return `  ${label.padEnd(15)}  ${String(prepareMs).padStart(7)} ms  ${String(totalMs).padStart(7)} ms  ${String(materializeMs).padStart(9)} ms  ${String(wallMs).padStart(7)} ms   ${share}`;
+}
+
+/** Format a closure-tier row for the report table. */
+function formatClosureRow(
+	label: string,
+	summary: StatsSummary | undefined,
+): string {
+	if (summary === undefined) {
+		return `  ${label.padEnd(15)}    n/a         n/a         n/a`;
+	}
+	const { closureStems, closurePackages, closureAll } = summary;
+	return `  ${label.padEnd(15)}  ${String(closureStems).padStart(5)}    ${String(closurePackages).padStart(8)}    ${String(closureAll).padStart(8)}`;
+}
+
 /** Format a single benchmark result as a text report section. */
 function formatResultSection(result: BenchmarkResult): string {
 	const lines: Array<string> = [];
@@ -272,6 +305,26 @@ function formatResultSection(result: BenchmarkResult): string {
 			warmSummary?.misses,
 		),
 	);
+
+	// Phase split. Only the proxy scenarios have one; the baseline runs rustc
+	// directly and has no prepare or materialize work to report.
+	lines.push("");
+	lines.push(
+		"  Phase            Prepare       Spawn      Materialize        Wall   Prepare %",
+	);
+	lines.push(
+		"  -----            -------       -----      -----------        ----   ---------",
+	);
+	lines.push(formatPhaseRow("Proxy Cold", coldSummary));
+	lines.push(formatPhaseRow("Proxy Warm", warmSummary));
+
+	// Closure split. An `all` invocation snapshots the whole deps dir, so it is
+	// both slow and uncacheable; a rising count is the signal to look at.
+	lines.push("");
+	lines.push("  Closure          Stems    Packages         All");
+	lines.push("  -------          -----    --------         ---");
+	lines.push(formatClosureRow("Proxy Cold", coldSummary));
+	lines.push(formatClosureRow("Proxy Warm", warmSummary));
 
 	// Comparison section.
 	const comparisons: Array<string> = [];

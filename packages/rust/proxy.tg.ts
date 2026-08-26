@@ -583,13 +583,18 @@ export async function testMissingExternsFallback() {
 	return result;
 }
 
-/** Per-spawn observability emitted by the wrapper. Currently unused — the
- * new wrapper does not emit tracing lines, so `parseStats` returns undefined
- * and tests that depend on it fail until cache-hit observability is added. */
+/** Per-spawn observability from the wrapper's `proxy_complete` line. The three
+ * timings split an invocation into preparation, the spawn itself, and
+ * materialization; a failed compile reports `materialize_ms=0`. `closure` is
+ * how the `-L dependency=` snapshot was bounded: `stems` from sidecars,
+ * `packages` from `Cargo.lock`, or `all` when neither could be proven. */
 export type RustcStats = {
 	crate_name: string;
 	cached: boolean;
+	closure: "stems" | "packages" | "all";
+	prepare_ms: number;
 	elapsed_ms: number;
+	materialize_ms: number;
 	process_id: string;
 	command_id: string;
 };
@@ -609,14 +614,22 @@ export async function parseStats(
 		if (!line.includes(eventName)) continue;
 		const crateMatch = /crate_name=(\S+)/.exec(line);
 		const cachedMatch = /cached=(true|false)/.exec(line);
+		const closureMatch = /closure=(stems|packages|all)/.exec(line);
+		const prepareMatch = /prepare_ms=(\d+)/.exec(line);
 		const elapsedMatch = /elapsed_ms=(\d+)/.exec(line);
+		const materializeMatch = /materialize_ms=(\d+)/.exec(line);
 		const processMatch = /process_id=(\S+)/.exec(line);
 		const commandMatch = /command_id=(\S+)/.exec(line);
 		if (crateMatch?.[1] && cachedMatch?.[1]) {
 			stats.push({
 				crate_name: crateMatch[1],
 				cached: cachedMatch[1] === "true",
+				closure: (closureMatch?.[1] ?? "all") as RustcStats["closure"],
+				prepare_ms: prepareMatch?.[1] ? parseInt(prepareMatch[1], 10) : 0,
 				elapsed_ms: elapsedMatch?.[1] ? parseInt(elapsedMatch[1], 10) : 0,
+				materialize_ms: materializeMatch?.[1]
+					? parseInt(materializeMatch[1], 10)
+					: 0,
 				process_id: processMatch?.[1] ?? "",
 				command_id: commandMatch?.[1] ?? "",
 			});
@@ -628,8 +641,25 @@ export async function parseStats(
 export function summarizeStats(stats: Array<RustcStats>) {
 	const hits = stats.filter((s) => s.cached).length;
 	const misses = stats.filter((s) => !s.cached).length;
-	const totalMs = stats.reduce((sum, s) => sum + s.elapsed_ms, 0);
-	return { hits, misses, totalMs, crates: stats.length };
+	const sum = (pick: (s: RustcStats) => number) =>
+		stats.reduce((total, s) => total + pick(s), 0);
+	const prepareMs = sum((s) => s.prepare_ms);
+	const totalMs = sum((s) => s.elapsed_ms);
+	const materializeMs = sum((s) => s.materialize_ms);
+	const count = (kind: RustcStats["closure"]) =>
+		stats.filter((s) => s.closure === kind).length;
+	return {
+		hits,
+		misses,
+		prepareMs,
+		totalMs,
+		materializeMs,
+		wallMs: prepareMs + totalMs + materializeMs,
+		crates: stats.length,
+		closureStems: count("stems"),
+		closurePackages: count("packages"),
+		closureAll: count("all"),
+	};
 }
 
 export function buildWithStats(...args: tg.Args<cargo.Arg>) {
