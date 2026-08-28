@@ -27,6 +27,8 @@ export * as bootstrap from "./bootstrap.tg.ts";
 
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
+import * as gettext from "./autotools/gettext.tg.ts";
+import * as pkgconf from "./autotools/pkgconf.tg.ts";
 import * as process_ from "./process.tg.ts";
 import caCertificates from "./certificates.tg.ts";
 import * as cc from "./cc.tg.ts";
@@ -43,6 +45,7 @@ import * as packages from "./packages_test.tg.ts";
 import * as phases from "./phases.tg.ts";
 import * as pkgconfig from "./pkgconfig.tg.ts";
 import * as sdk from "./sdk.tg.ts";
+import * as glibc from "./sdk/libc/glibc.tg.ts";
 import * as triple from "./triple.tg.ts";
 import * as utils from "./utils.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
@@ -54,6 +57,58 @@ export const metadata = {
 	version: "0.0.0",
 	tag: "std/0.0.0",
 };
+
+/** Prioritize make, then fetch every upstream source used by the default build. */
+export async function prefetchSources(host: string) {
+	const os = triple.os(host);
+	await bootstrap.make.source();
+
+	const sources: Array<tg.Unresolved<tg.Directory>> = [
+		utils.bash.source(),
+		utils.bzip2.source(),
+		utils.coreutils.source(os),
+		utils.diffutils.source(),
+		utils.findutils.source(os),
+		utils.gawk.source(),
+		utils.grep.source(),
+		utils.gzip.source(),
+		utils.patch.source(),
+		utils.sed.source(),
+		utils.tar.source(),
+		utils.xz.source(),
+		pkgconf.source(),
+		dependencies.m4.source(),
+		dependencies.bison.source(),
+		dependencies.flex.source(),
+		dependencies.perl.source(os),
+		gettext.source(),
+	];
+
+	if (os === "linux") {
+		sources.push(
+			utils.attr.source(),
+			dependencies.libxcrypt.source(),
+			dependencies.python.source(),
+			dependencies.zlib.source(),
+			dependencies.zstd.source(),
+			dependencies.gmp.source(),
+			dependencies.isl.source(),
+			dependencies.mpfr.source(),
+			dependencies.mpc.source(),
+			sdk.gnu.binutils.source(host),
+			sdk.gnu.gcc.source(false),
+			sdk.kernelHeaders.source(),
+			glibc.source(),
+		);
+	} else if (os === "darwin") {
+		sources.push(utils.fileCmds.source(), utils.libiconv.source());
+	} else {
+		return tg.unreachable(`unsupported host OS: ${os}`);
+	}
+
+	await Promise.all(sources);
+	return true;
+}
 
 /** The default SDK for the detected host. */
 export async function default_() {

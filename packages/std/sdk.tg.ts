@@ -25,24 +25,33 @@ export async function sdk(
 	...args: tg.Args<sdk.ArgObject>
 ): Promise<tg.Directory> {
 	const resolved = await sdk.arg(...args);
+	const sources =
+		typeof resolved.toolchain === "string"
+			? tg
+					.build(std.prefetchSources, resolved.host)
+					.named("std source prefetch")
+			: undefined;
+	let output: tg.Unresolved<tg.Directory> | undefined;
 
 	// Delegate to pre-built SDKs when args match defaults for remote cache hits.
 	const detectedHost = sdk.canonicalTriple(std.triple.host());
 	if (resolved.host === detectedHost && sdk.isDefaultArgs(resolved)) {
 		if (resolved.target === detectedHost) {
-			return tg.build(std.buildSdk);
+			output = tg.build(std.buildSdk);
 		}
-		if (std.triple.os(detectedHost) === "linux") {
+		if (output === undefined && std.triple.os(detectedHost) === "linux") {
 			const arch = std.triple.arch(detectedHost);
 			const crossArch = arch === "x86_64" ? "aarch64" : "x86_64";
 			const expectedCross = sdk.canonicalTriple(`${crossArch}-linux`);
 			if (resolved.target === expectedCross) {
-				return tg.build(std.buildCrossSdk);
+				output = tg.build(std.buildCrossSdk);
 			}
 		}
 	}
 
-	return tg.build(sdkInner, resolved);
+	output ??= tg.build(sdkInner, resolved);
+	const [result] = await Promise.all([output, sources]);
+	return result;
 }
 
 /** Inner SDK implementation. Takes already-resolved, canonical arguments so
