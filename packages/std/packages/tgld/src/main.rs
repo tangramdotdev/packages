@@ -487,10 +487,36 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 					(Some(artifact), path) => {
 						tracing::debug!(?artifact, ?path, "checking for entries");
 						if let Ok(directory) = artifact.try_unwrap_directory() {
-							let mut entries = match tokio::fs::read_dir(library_path).await {
-								Ok(entries) => entries,
+							let has_entries = match tokio::fs::read_dir(library_path).await {
+								Ok(mut entries) => entries.next_entry().await.map_err(
+									|error| tg::error!(!error, path = %library_path, "failed to read the library path's entries"),
+								)?.is_some(),
 								Err(error) if error.kind() == std::io::ErrorKind::NotADirectory => {
 									return Ok(None);
+								},
+								// The library path is not checked out yet, so consult the object graph instead.
+								Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+									let root = directory_cache_ref.intern(&directory);
+									let target = {
+										let _walk = root.walk.lock().await;
+										if let Some(ref subpath) = path {
+											root.directory
+												.get(subpath)
+												.await?
+												.try_unwrap_directory()
+												.ok()
+										} else {
+											Some(root.directory.clone())
+										}
+									};
+									match target {
+										Some(target) => {
+											let target = directory_cache_ref.intern(&target);
+											let _walk = target.walk.lock().await;
+											!target.directory.entries().await?.is_empty()
+										},
+										None => false,
+									}
 								},
 								Err(error) => {
 									return Err(
@@ -498,16 +524,14 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 									);
 								},
 							};
-							if entries.next_entry().await.map_err(
-								|error| tg::error!(!error, path = %library_path, "failed to read the library path's entries"),
-							)?.is_none() {
-								None
-							} else {
+							if has_entries {
 								tracing::debug!(?path, "found a directory with entries");
 								let root = directory_cache_ref.intern(&directory);
 								let dir_with_subpath =
 									dir_with_subpath_from_directory(&root.directory, path).await?;
 								Some(dir_with_subpath)
+							} else {
+								None
 							}
 						} else {
 							None
