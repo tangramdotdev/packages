@@ -5,6 +5,7 @@ use std::{
 	hash::BuildHasher,
 	path::PathBuf,
 	str::FromStr,
+	sync::{Arc, Mutex},
 };
 use tangram_client::prelude::*;
 use tokio::io::AsyncReadExt as _;
@@ -428,6 +429,8 @@ fn read_options() -> tg::Result<Options> {
 
 #[allow(clippy::too_many_lines)]
 async fn create_wrapper(options: &Options) -> tg::Result<()> {
+	let directory_cache = DirectoryCache::default();
+
 	// Analyze the output file.
 	let AnalyzeOutputFileOutput {
 		is_executable,
@@ -472,10 +475,11 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	.await?;
 
 	// Unrender all library paths to symlinks. If any library path points into the working directory, check in its contents.
+	let directory_cache_ref = &directory_cache;
 	let library_paths = command_line_library_path
 		.into_iter()
 		.chain(
-			futures::future::try_join_all(options.library_paths.iter().map(|library_path| async {
+			futures::future::try_join_all(options.library_paths.iter().map(|library_path| async move {
 				let symlink = common::template_to_symlink(&common::unrender(library_path)?)?;
 				let artifact = symlink.artifact().await?;
 				let path = symlink.path().await?;
@@ -483,24 +487,33 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 					(Some(artifact), path) => {
 						tracing::debug!(?artifact, ?path, "checking for entries");
 						if let Ok(directory) = artifact.try_unwrap_directory() {
-							let entries = if let Some(ref subpath) = path {
-								if let Ok(subdirectory) =
-									directory.get(&subpath).await?.try_unwrap_directory()
-								{
-									subdirectory.entries().await?
-								} else {
-									BTreeMap::default()
-								}
-							} else {
-								directory.entries().await?
+							let has_entries = match tokio::fs::read_dir(library_path).await {
+								Ok(mut entries) => entries.next_entry().await.map_err(
+									|error| tg::error!(!error, path = %library_path, "failed to read the library path's entries"),
+								)?.is_some(),
+								Err(error) if error.kind() == std::io::ErrorKind::NotADirectory => {
+									return Ok(None);
+								},
+								// The library path is not checked out yet, so consult the object graph instead.
+								Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+									return directory_cache_ref
+										.resolve_nonempty(&directory, path)
+										.await;
+								},
+								Err(error) => {
+									return Err(
+										tg::error!(!error, path = %library_path, "failed to read the library path"),
+									);
+								},
 							};
-							if entries.is_empty() {
-								None
-							} else {
+							if has_entries {
 								tracing::debug!(?path, "found a directory with entries");
+								let root = directory_cache_ref.intern(&directory);
 								let dir_with_subpath =
-									dir_with_subpath_from_directory(&directory, path).await?;
+									dir_with_subpath_from_directory(&root.directory, path).await?;
 								Some(dir_with_subpath)
+							} else {
+								None
 							}
 						} else {
 							None
@@ -582,6 +595,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			&output_file,
 			library_paths,
 			&mut needed_libraries,
+			&directory_cache,
 			options.library_path_strategy,
 			options.max_depth,
 			options.disallow_missing,
@@ -955,8 +969,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 				let library_candidate_path_str = library_candidate_path.to_str().ok_or_else(
 					|| tg::error!(path = %library_candidate_path.display(), "unable to convert path to str"),
 				)?;
-				let library_candidate_file = if common::is_store_path(library_candidate_path_str)
-				{
+				let library_candidate_file = if common::is_store_path(library_candidate_path_str) {
 					tracing::trace!("found an artifact, extracting file object");
 					let template = common::unrender(library_candidate_path_str)?;
 					tracing::trace!(?template, "unrendered library candidate path");
@@ -1058,6 +1071,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	file: &tg::File,
 	library_paths: HashSet<DirectoryWithSubpath, H>,
 	needed_libraries: &mut HashMap<String, Option<DirectoryWithSubpath>, H>,
+	directory_cache: &DirectoryCache,
 	strategy: LibraryPathStrategy,
 	max_depth: usize,
 	disallow_missing: bool,
@@ -1067,10 +1081,18 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 
 	// Cache the library paths before searching them, so reads do not reassemble blobs.
-	cache_library_paths(&library_paths).await?;
+	let checkouts = cache_library_paths(&library_paths).await?;
 
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
-	find_transitive_needed_libraries(file, &library_paths, needed_libraries, max_depth, 0).await?;
+	find_transitive_needed_libraries(
+		file,
+		&checkouts,
+		needed_libraries,
+		directory_cache,
+		max_depth,
+		0,
+	)
+	.await?;
 	tracing::debug!(?needed_libraries, "post-find");
 
 	let filtered_library_paths = needed_libraries.values().flatten().cloned().collect();
@@ -1084,7 +1106,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	match strategy {
 		LibraryPathStrategy::Resolve => {
 			let resolved_library_paths: HashSet<DirectoryWithSubpath, H> =
-				resolve_directories(&filtered_library_paths).await?;
+				resolve_directories(&filtered_library_paths, directory_cache).await?;
 			tracing::trace!(?resolved_library_paths, "post-resolve");
 			return finalize_library_paths(
 				disallow_missing,
@@ -1094,20 +1116,8 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 			.await;
 		},
 		LibraryPathStrategy::Isolate => {
-			// Create an individual library path for every found library.
-			let mut isolated_library_paths: HashSet<DirectoryWithSubpath, H> = HashSet::default();
-			for (name, dir_with_subpath) in needed_libraries.iter() {
-				if let Some(dir_with_subpath) = dir_with_subpath {
-					let directory = directory_from_dir_with_subpath(dir_with_subpath).await?;
-					if let Ok(Some(artifact)) = directory.try_get(&name).await {
-						let mut entries = BTreeMap::new();
-						entries.insert(name.clone(), artifact);
-						let dir = tg::Directory::with_entries(entries);
-						let dir_with_subpath = dir_with_subpath_from_directory(&dir, None).await?;
-						isolated_library_paths.insert(dir_with_subpath);
-					}
-				}
-			}
+			let isolated_library_paths =
+				isolate_library_paths(needed_libraries, directory_cache).await?;
 			tracing::trace!(?isolated_library_paths, "post-isolate");
 
 			return finalize_library_paths(
@@ -1118,26 +1128,9 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 			.await;
 		},
 		LibraryPathStrategy::Combine => {
-			// Create a directory combining all located library files.
-			let mut entries = BTreeMap::new();
-			for (name, dir_with_subpath) in needed_libraries.iter() {
-				if let Some(dir_with_subpath) = dir_with_subpath {
-					let directory = directory_from_dir_with_subpath(dir_with_subpath).await?;
-					if let Ok(Some(artifact)) = directory.try_get(&name).await {
-						entries.insert(name.clone(), artifact);
-					}
-				}
-			}
-			let dir_id = if entries.is_empty() {
-				None
-			} else {
-				let dir_with_subpath =
-					dir_with_subpath_from_directory(&tg::Directory::with_entries(entries), None)
-						.await?;
-				Some(dir_with_subpath)
-			};
-			tracing::trace!(?dir_id, "post-combine");
-			let combined_library_path = dir_id.into_iter().collect();
+			let combined_library_path =
+				combine_library_paths(needed_libraries, directory_cache).await?;
+			tracing::trace!(?combined_library_path, "post-combine");
 
 			return finalize_library_paths(
 				disallow_missing,
@@ -1152,28 +1145,94 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 }
 
-/// Check out a set of library paths into the store. Each referent carries its stored tokens, without
-/// which the server falls back to an index lookup to authorize it.
+async fn isolate_library_paths<H: BuildHasher + Default>(
+	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
+	directory_cache: &DirectoryCache,
+) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
+	let mut isolated_library_paths = HashSet::default();
+	for (name, dir_with_subpath) in located_libraries(needed_libraries) {
+		let directory = directory_cache.resolve(dir_with_subpath).await?;
+		let Ok(Some(artifact)) = directory.try_get(name).await else {
+			continue;
+		};
+		let mut entries = BTreeMap::new();
+		entries.insert(name.clone(), artifact);
+		let directory = tg::Directory::with_entries(entries);
+		let dir_with_subpath = dir_with_subpath_from_directory(&directory, None).await?;
+		isolated_library_paths.insert(dir_with_subpath);
+	}
+
+	Ok(isolated_library_paths)
+}
+
+async fn combine_library_paths<H: BuildHasher + Default>(
+	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
+	directory_cache: &DirectoryCache,
+) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
+	let mut entries = BTreeMap::new();
+	for (name, dir_with_subpath) in located_libraries(needed_libraries) {
+		let directory = directory_cache.resolve(dir_with_subpath).await?;
+		if let Ok(Some(artifact)) = directory.try_get(name).await {
+			entries.insert(name.clone(), artifact);
+		}
+	}
+	if entries.is_empty() {
+		return Ok(HashSet::default());
+	}
+	let directory = tg::Directory::with_entries(entries);
+	let dir_with_subpath = dir_with_subpath_from_directory(&directory, None).await?;
+	let combined_library_path = std::iter::once(dir_with_subpath).collect();
+
+	Ok(combined_library_path)
+}
+
+/// Check out library paths and return their filesystem paths.
 async fn cache_library_paths<H: BuildHasher + Default>(
 	library_paths: &HashSet<DirectoryWithSubpath, H>,
-) -> tg::Result<()> {
+) -> tg::Result<Vec<(DirectoryWithSubpath, PathBuf)>> {
 	if library_paths.is_empty() {
-		return Ok(());
+		return Ok(Vec::new());
 	}
-	let artifacts = library_paths
+	let ordered_library_paths = library_paths.iter().cloned().collect_vec();
+	let ordered_roots = ordered_library_paths
 		.iter()
-		.map(|dir_with_subpath| {
-			tg::Referent::with_node_and_tokens(
-				dir_with_subpath.id.clone().into(),
-				dir_with_subpath.tokens.clone(),
-			)
-		})
+		.map(|dir_with_subpath| (dir_with_subpath.id.clone(), dir_with_subpath.tokens.clone()))
+		.collect::<HashSet<_, Hasher>>()
+		.into_iter()
+		.collect_vec();
+	let artifacts = ordered_roots
+		.iter()
+		.map(|(id, tokens)| tg::Referent::with_node_and_tokens(id.clone().into(), tokens.clone()))
 		.collect();
 	tracing::debug!("caching libraries");
-	common::checkout_artifacts(artifacts)
+	let paths = common::checkout_artifacts(artifacts)
 		.await
 		.map_err(|error| tg::error!(!error, "failed to cache libraries"))?;
-	Ok(())
+	if paths.len() != ordered_roots.len() {
+		return Err(tg::error!("expected one checkout path per library root"));
+	}
+	let paths: HashMap<_, _, Hasher> = ordered_roots
+		.into_iter()
+		.map(|(id, _)| id)
+		.zip(paths)
+		.collect();
+
+	let checkouts = ordered_library_paths
+		.into_iter()
+		.map(|dir_with_subpath| {
+			let path = paths
+				.get(&dir_with_subpath.id)
+				.expect("every library root was checked out")
+				.clone();
+			let path = match dir_with_subpath.subpath {
+				Some(ref subpath) => path.join(subpath),
+				None => path,
+			};
+			(dir_with_subpath, path)
+		})
+		.collect();
+
+	Ok(checkouts)
 }
 
 /// Produce the set of library paths to be written to the wrapper post-optimization.
@@ -1182,10 +1241,10 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	library_paths: HashSet<DirectoryWithSubpath, H>,
 	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
 ) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
-	cache_library_paths(&library_paths).await?;
+	let checkouts = cache_library_paths(&library_paths).await?;
 
 	// Warn or error if any required libraries are not included in the set.
-	verify_missing_libraries(disallow_missing, needed_libraries, &library_paths).await?;
+	verify_missing_libraries(disallow_missing, needed_libraries, &checkouts).await?;
 	Ok(library_paths)
 }
 
@@ -1193,7 +1252,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 async fn verify_missing_libraries<H: BuildHasher + Default>(
 	disallow_missing: bool,
 	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
-	library_paths: &HashSet<DirectoryWithSubpath, H>,
+	checkouts: &[(DirectoryWithSubpath, PathBuf)],
 ) -> tg::Result<()> {
 	let mut found_libraries = HashSet::default();
 	let basename = |library_name: &str| -> tg::Result<String> {
@@ -1204,16 +1263,28 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 		Ok(res.to_owned())
 	};
 
+	// Read from the checkouts to avoid loading the directories again.
+	let futures = checkouts.iter().map(|(library_path, path)| async move {
+		let mut read_dir = tokio::fs::read_dir(path).await.map_err(
+			|error| tg::error!(!error, directory = %library_path.id, path = %path.display(), "failed to read the checked out library path"),
+		)?;
+		let mut names = Vec::new();
+		while let Some(entry) = read_dir.next_entry().await.map_err(
+			|error| tg::error!(!error, path = %path.display(), "failed to read the library path's entries"),
+		)? {
+			names.push(entry.file_name().to_string_lossy().into_owned());
+		}
+		Ok::<_, tg::Error>(names)
+	});
+	let entries = futures::future::try_join_all(futures).await?;
+
 	for library in needed_libraries.keys() {
 		// For this check, we just care about the basename.
 		let library_basename = basename(library)?;
-		for library_path in library_paths {
-			let directory = directory_from_dir_with_subpath(library_path).await?;
-			let directory_id = directory.id();
-			tracing::trace!(?library_basename, %directory_id, "checking for library");
-			for needed_library_name in directory.entries().await?.keys() {
-				if needed_library_name.starts_with(&library_basename) {
-					let found_library_basename = basename(needed_library_name)?;
+		for names in &entries {
+			for name in names {
+				if name.starts_with(&library_basename) {
+					let found_library_basename = basename(name)?;
 					found_libraries.insert(found_library_basename);
 					break;
 				}
@@ -1234,6 +1305,10 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 		.difference(&found_libraries)
 		.collect_vec();
 	if !missing_libs.is_empty() {
+		let library_paths = checkouts
+			.iter()
+			.map(|(library_path, _)| library_path)
+			.collect_vec();
 		if disallow_missing {
 			return Err(tg::error!(
 				?library_paths,
@@ -1252,18 +1327,12 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 /// Given a set of directories which may contain subpaths, return structs with the item resolved to the inner directory.
 async fn resolve_directories<H: BuildHasher + Default>(
 	unresolved_paths: &HashSet<DirectoryWithSubpath, H>,
+	directory_cache: &DirectoryCache,
 ) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
 	let resolved_paths =
 		futures::future::try_join_all(unresolved_paths.iter().map(|dir_with_subpath| async {
-			let resolved_dir_with_subpath = if let Some(subpath) = &dir_with_subpath.subpath {
-				let directory = tg::Directory::with_id(dir_with_subpath.id.clone());
-				directory.state().set_tokens(dir_with_subpath.tokens.clone());
-				let Some(inner) = directory.try_get(subpath).await? else {
-					return Err(
-						tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
-					);
-				};
-				let inner = inner.try_unwrap_directory().map_err(|error| tg::error!(!error, outer =% dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?;
+			let resolved_dir_with_subpath = if dir_with_subpath.subpath.is_some() {
+				let inner = directory_cache.resolve(dir_with_subpath).await?;
 				dir_with_subpath_from_directory(&inner, None).await?
 			} else {
 				dir_with_subpath.clone()
@@ -1276,11 +1345,116 @@ async fn resolve_directories<H: BuildHasher + Default>(
 	Ok(resolved_paths)
 }
 
+/// Reuse handles and serialize cold walks through each directory.
+#[derive(Default)]
+struct DirectoryCache {
+	directories: Mutex<HashMap<tg::directory::Id, CachedDirectory, Hasher>>,
+	resolved: Mutex<HashMap<DirectoryWithSubpath, tg::Directory, Hasher>>,
+}
+
+#[derive(Clone)]
+struct CachedDirectory {
+	directory: tg::Directory,
+	walk: Arc<futures::lock::Mutex<()>>,
+}
+
+impl DirectoryCache {
+	fn intern(&self, directory: &tg::Directory) -> CachedDirectory {
+		let mut directories = self.directories.lock().unwrap();
+		let cached = directories
+			.entry(directory.id())
+			.or_insert_with(|| CachedDirectory {
+				directory: directory.clone(),
+				walk: Arc::new(futures::lock::Mutex::new(())),
+			});
+		cached
+			.directory
+			.state()
+			.inherit_location(directory.state().location().as_ref());
+		cached
+			.directory
+			.state()
+			.inherit_tokens(&directory.state().tokens());
+		cached.clone()
+	}
+
+	fn insert_resolved(&self, dir_with_subpath: &DirectoryWithSubpath, directory: &tg::Directory) {
+		directory.state().inherit_tokens(&dir_with_subpath.tokens);
+		self.resolved
+			.lock()
+			.unwrap()
+			.insert(dir_with_subpath.clone(), directory.clone());
+	}
+
+	async fn resolve_nonempty(
+		&self,
+		directory: &tg::Directory,
+		path: Option<PathBuf>,
+	) -> tg::Result<Option<DirectoryWithSubpath>> {
+		let root = self.intern(directory);
+		let target = {
+			let _walk = root.walk.lock().await;
+			if let Some(ref path) = path {
+				root.directory.get(path).await?.try_unwrap_directory().ok()
+			} else {
+				Some(root.directory.clone())
+			}
+		};
+		let Some(target) = target else {
+			return Ok(None);
+		};
+		let target = self.intern(&target);
+		let has_entries = {
+			let _walk = target.walk.lock().await;
+			!target.directory.entries().await?.is_empty()
+		};
+		if !has_entries {
+			return Ok(None);
+		}
+		tracing::debug!(?path, "found a directory with entries");
+		let dir_with_subpath = dir_with_subpath_from_directory(&root.directory, path).await?;
+		self.insert_resolved(&dir_with_subpath, &target.directory);
+		Ok(Some(dir_with_subpath))
+	}
+
+	async fn resolve(&self, dir_with_subpath: &DirectoryWithSubpath) -> tg::Result<tg::Directory> {
+		if let Some(directory) = self.resolved.lock().unwrap().get(dir_with_subpath).cloned() {
+			directory.state().inherit_tokens(&dir_with_subpath.tokens);
+			return Ok(directory);
+		}
+		let outer = self.intern(&{
+			let outer = tg::Directory::with_id(dir_with_subpath.id.clone());
+			outer.state().set_tokens(dir_with_subpath.tokens.clone());
+			outer
+		});
+		let _walk = outer.walk.lock().await;
+		if let Some(directory) = self.resolved.lock().unwrap().get(dir_with_subpath).cloned() {
+			directory.state().inherit_tokens(&dir_with_subpath.tokens);
+			return Ok(directory);
+		}
+		let directory = if let Some(ref subpath) = dir_with_subpath.subpath {
+			let Some(inner) = outer.directory.try_get(subpath).await? else {
+				return Err(
+					tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
+				);
+			};
+			let inner = inner.try_unwrap_directory().map_err(|error| tg::error!(!error, outer = %dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?;
+			self.intern(&inner).directory
+		} else {
+			outer.directory.clone()
+		};
+		self.insert_resolved(dir_with_subpath, &directory);
+
+		Ok(directory)
+	}
+}
+
 /// Recursively find all needed libraries for an executable.
 async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync>(
 	file: &tg::File,
-	library_paths: &HashSet<DirectoryWithSubpath, H>,
+	library_paths: &[(DirectoryWithSubpath, PathBuf)],
 	all_needed_libraries: &mut HashMap<String, Option<DirectoryWithSubpath>, H>,
+	directory_cache: &DirectoryCache,
 	max_depth: usize,
 	depth: usize,
 ) -> tg::Result<()> {
@@ -1311,11 +1485,18 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 		return Ok(());
 	}
 
-	for dir_with_subpath in library_paths {
-		let directory = directory_from_dir_with_subpath(dir_with_subpath).await?;
+	for (dir_with_subpath, path) in library_paths {
 		tracing::trace!(?dir_with_subpath, "Checking directory for libraries.");
-		let copy = all_needed_libraries.keys().cloned().collect_vec();
-		for library_name in copy {
+
+		let names = all_needed_libraries
+			.iter()
+			.filter(|(_, located)| located.is_none())
+			.map(|(name, _)| name.clone())
+			.collect_vec();
+		tracing::debug!(?names, "checking for libraries");
+		let mut directory = None;
+		for library_name in names {
+			// A recursion earlier in this pass may already have located the library.
 			if all_needed_libraries
 				.get(&library_name)
 				.unwrap_or(&None)
@@ -1323,31 +1504,54 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 			{
 				continue;
 			}
-			tracing::info!(?library_name, "checking for library");
-			if let Ok(Some(tg::artifact::Handle::File(found_library))) =
-				directory.try_get(&library_name).await
+			if !tokio::fs::try_exists(path.join(&library_name))
+				.await
+				.unwrap_or(false)
 			{
-				let found_library_id = found_library.id();
-				tracing::trace!(?found_library_id, ?library_name, "Found library file.");
-				*all_needed_libraries
-					.entry(library_name.clone())
-					.or_insert(None) = Some(dir_with_subpath.clone());
-				Box::pin(find_transitive_needed_libraries(
-					&found_library,
-					library_paths,
-					all_needed_libraries,
-					max_depth,
-					depth + 1,
-				))
-				.await?;
-				if found_all_libraries(all_needed_libraries) {
-					return Ok(());
-				}
+				continue;
+			}
+			let directory = match &directory {
+				Some(directory) => directory,
+				None => directory.insert(directory_cache.resolve(dir_with_subpath).await?),
+			};
+			let Ok(Some(tg::artifact::Handle::File(found_library))) =
+				directory.try_get(&library_name).await
+			else {
+				continue;
+			};
+			let found_library_id = found_library.id();
+			tracing::trace!(?found_library_id, ?library_name, "Found library file.");
+			*all_needed_libraries
+				.entry(library_name.clone())
+				.or_insert(None) = Some(dir_with_subpath.clone());
+			Box::pin(find_transitive_needed_libraries(
+				&found_library,
+				library_paths,
+				all_needed_libraries,
+				directory_cache,
+				max_depth,
+				depth + 1,
+			))
+			.await?;
+			if found_all_libraries(all_needed_libraries) {
+				return Ok(());
 			}
 		}
 	}
 
 	Ok(())
+}
+
+fn located_libraries<H: BuildHasher>(
+	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
+) -> impl Iterator<Item = (&String, &DirectoryWithSubpath)> {
+	needed_libraries
+		.iter()
+		.filter_map(|(name, dir_with_subpath)| {
+			dir_with_subpath
+				.as_ref()
+				.map(|dir_with_subpath| (name, dir_with_subpath))
+		})
 }
 
 /// Determine if all needed libraries have been found.
@@ -1544,25 +1748,6 @@ async fn bytes_from_path(path: impl AsRef<std::path::Path>) -> tg::Result<Vec<u8
 		.map_err(|error| tg::error!(source = error, "failed to read the output file"))?;
 
 	Ok(bytes)
-}
-
-/// Get a [`tg::Directory`] handle from a [`DirectoryWithSubpath`]. If there is a subpath present, returns the inner directory.
-pub async fn directory_from_dir_with_subpath(
-	dir_with_subpath: &DirectoryWithSubpath,
-) -> tg::Result<tg::Directory> {
-	let outer = tg::Directory::with_id(dir_with_subpath.id.clone());
-	outer.state().set_tokens(dir_with_subpath.tokens.clone());
-	let directory = if let Some(ref subpath) = dir_with_subpath.subpath {
-		let Some(inner) = outer.try_get(subpath).await? else {
-			return Err(
-				tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
-			);
-		};
-		inner.try_unwrap_directory().map_err(|error| tg::error!(!error, outer = %dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?
-	} else {
-		outer
-	};
-	Ok(directory)
 }
 
 /// Get a [`DirectoryWithSubpath`] from a [`tg::Directory`] handle.
