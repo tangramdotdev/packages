@@ -1099,12 +1099,8 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	tracing::debug!(?filtered_library_paths, "post-filter");
 
 	if matches!(strategy, LibraryPathStrategy::Filter) {
-		return finalize_library_paths(
-			disallow_missing,
-			filtered_library_paths,
-			needed_libraries,
-		)
-		.await;
+		return finalize_library_paths(disallow_missing, filtered_library_paths, needed_libraries)
+			.await;
 	}
 
 	match strategy {
@@ -1190,19 +1186,15 @@ async fn combine_library_paths<H: BuildHasher + Default>(
 	Ok(combined_library_path)
 }
 
-/// Check out a set of library paths into the store, returning the path each one was checked out to.
-/// Each referent carries its stored tokens, without which the server falls back to an index lookup
-/// to authorize it.
+/// Check out library paths and return their filesystem paths.
 async fn cache_library_paths<H: BuildHasher + Default>(
 	library_paths: &HashSet<DirectoryWithSubpath, H>,
 ) -> tg::Result<Vec<(DirectoryWithSubpath, PathBuf)>> {
 	if library_paths.is_empty() {
 		return Ok(Vec::new());
 	}
-	// The checkout returns one path per artifact in order, so hold the paths in an order the
-	// results can be zipped against.
-	let library_paths = library_paths.iter().cloned().collect_vec();
-	let artifacts = library_paths
+	let ordered_library_paths = library_paths.iter().cloned().collect_vec();
+	let artifacts = ordered_library_paths
 		.iter()
 		.map(|dir_with_subpath| {
 			tg::Referent::with_node_and_tokens(
@@ -1215,13 +1207,11 @@ async fn cache_library_paths<H: BuildHasher + Default>(
 	let paths = common::checkout_artifacts(artifacts)
 		.await
 		.map_err(|error| tg::error!(!error, "failed to cache libraries"))?;
-	if paths.len() != library_paths.len() {
+	if paths.len() != ordered_library_paths.len() {
 		return Err(tg::error!("expected one checkout path per library path"));
 	}
 
-	// A checkout names the root of a library path, so a subpath is appended to reach the directory
-	// the path refers to.
-	let checkouts = library_paths
+	let checkouts = ordered_library_paths
 		.into_iter()
 		.zip(paths)
 		.map(|(dir_with_subpath, path)| {
@@ -1264,8 +1254,7 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 		Ok(res.to_owned())
 	};
 
-	// Every library path was just checked out, so read the names from the store instead of walking
-	// each directory over the network again.
+	// Read from the checkouts to avoid loading the directories again.
 	let futures = checkouts.iter().map(|(library_path, path)| async move {
 		let mut read_dir = tokio::fs::read_dir(path).await.map_err(
 			|error| tg::error!(!error, directory = %library_path.id, path = %path.display(), "failed to read the checked out library path"),
@@ -1307,7 +1296,10 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 		.difference(&found_libraries)
 		.collect_vec();
 	if !missing_libs.is_empty() {
-		let library_paths = checkouts.iter().map(|(library_path, _)| library_path).collect_vec();
+		let library_paths = checkouts
+			.iter()
+			.map(|(library_path, _)| library_path)
+			.collect_vec();
 		if disallow_missing {
 			return Err(tg::error!(
 				?library_paths,
