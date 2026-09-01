@@ -1103,7 +1103,6 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 			disallow_missing,
 			filtered_library_paths,
 			needed_libraries,
-			directory_cache,
 		)
 		.await;
 	}
@@ -1117,7 +1116,6 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 				disallow_missing,
 				resolved_library_paths,
 				needed_libraries,
-				directory_cache,
 			)
 			.await;
 		},
@@ -1130,7 +1128,6 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 				disallow_missing,
 				isolated_library_paths,
 				needed_libraries,
-				directory_cache,
 			)
 			.await;
 		},
@@ -1143,7 +1140,6 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 				disallow_missing,
 				combined_library_path,
 				needed_libraries,
-				directory_cache,
 			)
 			.await;
 		},
@@ -1194,14 +1190,18 @@ async fn combine_library_paths<H: BuildHasher + Default>(
 	Ok(combined_library_path)
 }
 
-/// Check out a set of library paths into the store. Each referent carries its stored tokens, without
-/// which the server falls back to an index lookup to authorize it.
+/// Check out a set of library paths into the store, returning the path each one was checked out to.
+/// Each referent carries its stored tokens, without which the server falls back to an index lookup
+/// to authorize it.
 async fn cache_library_paths<H: BuildHasher + Default>(
 	library_paths: &HashSet<DirectoryWithSubpath, H>,
-) -> tg::Result<()> {
+) -> tg::Result<Vec<(DirectoryWithSubpath, PathBuf)>> {
 	if library_paths.is_empty() {
-		return Ok(());
+		return Ok(Vec::new());
 	}
+	// The checkout returns one path per artifact in order, so hold the paths in an order the
+	// results can be zipped against.
+	let library_paths = library_paths.iter().cloned().collect_vec();
 	let artifacts = library_paths
 		.iter()
 		.map(|dir_with_subpath| {
@@ -1212,10 +1212,28 @@ async fn cache_library_paths<H: BuildHasher + Default>(
 		})
 		.collect();
 	tracing::debug!("caching libraries");
-	common::checkout_artifacts(artifacts)
+	let paths = common::checkout_artifacts(artifacts)
 		.await
 		.map_err(|error| tg::error!(!error, "failed to cache libraries"))?;
-	Ok(())
+	if paths.len() != library_paths.len() {
+		return Err(tg::error!("expected one checkout path per library path"));
+	}
+
+	// A checkout names the root of a library path, so a subpath is appended to reach the directory
+	// the path refers to.
+	let checkouts = library_paths
+		.into_iter()
+		.zip(paths)
+		.map(|(dir_with_subpath, path)| {
+			let path = match dir_with_subpath.subpath {
+				Some(ref subpath) => path.join(subpath),
+				None => path,
+			};
+			(dir_with_subpath, path)
+		})
+		.collect();
+
+	Ok(checkouts)
 }
 
 /// Produce the set of library paths to be written to the wrapper post-optimization.
@@ -1223,18 +1241,11 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	disallow_missing: bool,
 	library_paths: HashSet<DirectoryWithSubpath, H>,
 	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
-	directory_cache: &DirectoryCache,
 ) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
-	cache_library_paths(&library_paths).await?;
+	let checkouts = cache_library_paths(&library_paths).await?;
 
 	// Warn or error if any required libraries are not included in the set.
-	verify_missing_libraries(
-		disallow_missing,
-		needed_libraries,
-		&library_paths,
-		directory_cache,
-	)
-	.await?;
+	verify_missing_libraries(disallow_missing, needed_libraries, &checkouts).await?;
 	Ok(library_paths)
 }
 
@@ -1242,8 +1253,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 async fn verify_missing_libraries<H: BuildHasher + Default>(
 	disallow_missing: bool,
 	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
-	library_paths: &HashSet<DirectoryWithSubpath, H>,
-	directory_cache: &DirectoryCache,
+	checkouts: &[(DirectoryWithSubpath, PathBuf)],
 ) -> tg::Result<()> {
 	let mut found_libraries = HashSet::default();
 	let basename = |library_name: &str| -> tg::Result<String> {
@@ -1254,12 +1264,19 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 		Ok(res.to_owned())
 	};
 
-	// List the entries of each library path once, then match the names in memory instead of
-	// refetching every directory for every needed library.
-	let futures = library_paths.iter().map(|library_path| async move {
-		let directory = directory_cache.resolve(library_path).await?;
-		let entries = directory.entries().await?;
-		Ok::<_, tg::Error>(entries.into_keys().collect_vec())
+	// Every library path was just checked out, so read the names from the store instead of walking
+	// each directory over the network again.
+	let futures = checkouts.iter().map(|(library_path, path)| async move {
+		let mut read_dir = tokio::fs::read_dir(path).await.map_err(
+			|error| tg::error!(!error, directory = %library_path.id, path = %path.display(), "failed to read the checked out library path"),
+		)?;
+		let mut names = Vec::new();
+		while let Some(entry) = read_dir.next_entry().await.map_err(
+			|error| tg::error!(!error, path = %path.display(), "failed to read the library path's entries"),
+		)? {
+			names.push(entry.file_name().to_string_lossy().into_owned());
+		}
+		Ok::<_, tg::Error>(names)
 	});
 	let entries = futures::future::try_join_all(futures).await?;
 
@@ -1290,6 +1307,7 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 		.difference(&found_libraries)
 		.collect_vec();
 	if !missing_libs.is_empty() {
+		let library_paths = checkouts.iter().map(|(library_path, _)| library_path).collect_vec();
 		if disallow_missing {
 			return Err(tg::error!(
 				?library_paths,
