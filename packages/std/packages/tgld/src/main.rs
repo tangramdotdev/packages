@@ -496,27 +496,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 								},
 								// The library path is not checked out yet, so consult the object graph instead.
 								Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-									let root = directory_cache_ref.intern(&directory);
-									let target = {
-										let _walk = root.walk.lock().await;
-										if let Some(ref subpath) = path {
-											root.directory
-												.get(subpath)
-												.await?
-												.try_unwrap_directory()
-												.ok()
-										} else {
-											Some(root.directory.clone())
-										}
-									};
-									match target {
-										Some(target) => {
-											let target = directory_cache_ref.intern(&target);
-											let _walk = target.walk.lock().await;
-											!target.directory.entries().await?.is_empty()
-										},
-										None => false,
-									}
+									return directory_cache_ref
+										.resolve_nonempty(&directory, path)
+										.await;
 								},
 								Err(error) => {
 									return Err(
@@ -1396,6 +1378,45 @@ impl DirectoryCache {
 		cached.clone()
 	}
 
+	fn insert_resolved(&self, dir_with_subpath: &DirectoryWithSubpath, directory: &tg::Directory) {
+		directory.state().inherit_tokens(&dir_with_subpath.tokens);
+		self.resolved
+			.lock()
+			.unwrap()
+			.insert(dir_with_subpath.clone(), directory.clone());
+	}
+
+	async fn resolve_nonempty(
+		&self,
+		directory: &tg::Directory,
+		path: Option<PathBuf>,
+	) -> tg::Result<Option<DirectoryWithSubpath>> {
+		let root = self.intern(directory);
+		let target = {
+			let _walk = root.walk.lock().await;
+			if let Some(ref path) = path {
+				root.directory.get(path).await?.try_unwrap_directory().ok()
+			} else {
+				Some(root.directory.clone())
+			}
+		};
+		let Some(target) = target else {
+			return Ok(None);
+		};
+		let target = self.intern(&target);
+		let has_entries = {
+			let _walk = target.walk.lock().await;
+			!target.directory.entries().await?.is_empty()
+		};
+		if !has_entries {
+			return Ok(None);
+		}
+		tracing::debug!(?path, "found a directory with entries");
+		let dir_with_subpath = dir_with_subpath_from_directory(&root.directory, path).await?;
+		self.insert_resolved(&dir_with_subpath, &target.directory);
+		Ok(Some(dir_with_subpath))
+	}
+
 	async fn resolve(&self, dir_with_subpath: &DirectoryWithSubpath) -> tg::Result<tg::Directory> {
 		if let Some(directory) = self.resolved.lock().unwrap().get(dir_with_subpath).cloned() {
 			directory.state().inherit_tokens(&dir_with_subpath.tokens);
@@ -1422,11 +1443,7 @@ impl DirectoryCache {
 		} else {
 			outer.directory.clone()
 		};
-		directory.state().inherit_tokens(&dir_with_subpath.tokens);
-		self.resolved
-			.lock()
-			.unwrap()
-			.insert(dir_with_subpath.clone(), directory.clone());
+		self.insert_resolved(dir_with_subpath, &directory);
 
 		Ok(directory)
 	}
