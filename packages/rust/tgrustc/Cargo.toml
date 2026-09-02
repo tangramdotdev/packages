@@ -20,7 +20,7 @@ result_large_err = "allow"
 [dependencies]
 rustix = { version = "1", features = ["stdio"] }
 serde = { version = "1", default-features = false, features = ["derive", "std"] }
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "591e2f7ec293ffea16536d37bd942ed90e6f1b4f" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "21b4c0c1fba5364a3e605207c76f69bee0a1faa6" }
 tokio = { version = "1", default-features = false, features = ["rt", "fs"] }
 toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
 which = "8"
