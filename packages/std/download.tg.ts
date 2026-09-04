@@ -132,7 +132,7 @@ export namespace download {
 		version: string;
 	};
 
-	const gnuHosts = ["ftpmirror.gnu.org", "ftp.gnu.org"];
+	const gnuHosts = ["mirrors.kernel.org", "ftpmirror.gnu.org", "ftp.gnu.org"];
 
 	/** Download and extract a source package hosted in the GNU FTP repository. Tries ftpmirror.gnu.org first, then falls back to ftp.gnu.org. */
 	export async function fromGnu(arg: FromGnuArg) {

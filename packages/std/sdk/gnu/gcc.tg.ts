@@ -22,7 +22,7 @@ export function source(bundledSources?: boolean) {
 	const extension = ".tar.xz";
 	const checksum =
 		"sha256:e6738e29597f733270731aa90600f37ffdc045079dfc27ec7e8192cc81085c3e";
-	const base = `http://ftpmirror.gnu.org/gnu/${name}/${name}-${version}`;
+	const base = `http://mirrors.kernel.org/gnu/${name}/${name}-${version}`;
 	let sourceDir: PromiseLike<tg.Directory> = std.download
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
