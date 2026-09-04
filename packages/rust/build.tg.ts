@@ -129,9 +129,7 @@ export async function build(...args: tg.Args<Arg>) {
 		tg`--out-dir=${tg.output}/${outputLocation}`,
 		`--edition=${edition}`,
 		`-C linker=${targetPrefix}cc`,
-		...(std.triple.os(target) === "darwin"
-			? []
-			: [`-C linker-features=-lld`]),
+		...(std.triple.os(target) === "darwin" ? [] : [`-C linker-features=-lld`]),
 		`--crate-name=${crateName}`,
 		`--crate-type=${crateType}`,
 		`--target=${rustTarget}`,

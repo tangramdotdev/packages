@@ -202,8 +202,10 @@ export async function self(unresolvedArg?: tg.Unresolved<ToolchainArg>) {
 		// Filter dynamic libraries while retaining the Rust sysroot structure.
 		const unwrapped = rustInstall.get(executable).then(tg.File.expect);
 		const wrapped = std.wrap(unwrapped, {
-			libraryPaths: [tg`${zlibArtifact}/lib`],
-			retainedLibraryPaths: [tg`${rustInstall}/lib`],
+			libraryPaths: [
+				tg`${zlibArtifact}/lib`,
+				{ path: tg`${rustInstall}/lib`, preserve: true },
+			],
 		});
 
 		artifact = tg.directory(artifact, {
