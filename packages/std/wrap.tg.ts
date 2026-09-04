@@ -196,8 +196,8 @@ export namespace wrap {
 		/** The interpreter to run the executable with. If not provided, a default is detected. Pass `null` to suppress detection and invoke the executable directly. */
 		interpreter?: tg.File | tg.Symlink | tg.Template | Interpreter | null;
 
-		/** Library paths to include. If the executable is wrapped, they will be merged. */
-		libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template> | null;
+		/** Library paths to include. If the executable is wrapped, they will be merged. Use `{ path, preserve: true }` to search a path without modifying it during optimization. */
+		libraryPaths?: Array<LibraryPath> | null;
 
 		/** Which library path strategy should we use? The default is "isolate", which retains each needed library in a separate directory. */
 		libraryPathStrategy?: LibraryPathStrategy | null;
@@ -207,6 +207,21 @@ export namespace wrap {
 
 		/** Specify how to handle executables that are already Tangram wrappers. When `merge` is true, retain the original executable in the resulting manifest. When `merge` is set to false, produce a manifest pointing to the original wrapper. This option is ignored if the executable being wrapped is not a Tangram wrapper. Default: true. */
 		merge?: boolean;
+	};
+
+	/** A library path or a library path with optimization options. */
+	export type LibraryPath =
+		| tg.Directory
+		| tg.Symlink
+		| tg.Template
+		| LibraryPathObject;
+
+	export type LibraryPathObject = {
+		/** The library path. */
+		path: tg.Directory | tg.Symlink | tg.Template;
+
+		/** Preserve the path without modification while still searching it during dependency discovery. */
+		preserve: true;
 	};
 
 	/** Either a normal interpreter, ld-linux, ld-musl, or dyld. */
@@ -1218,7 +1233,7 @@ type ManifestInterpreterArg = {
 	host?: string;
 	interpreter?: tg.File | tg.Symlink | tg.Template | wrap.Interpreter;
 	executable?: string | tg.Template | tg.File | tg.Symlink;
-	libraryPaths?: Array<tg.Template.Arg>;
+	libraryPaths?: Array<wrap.LibraryPath>;
 	libraryPathStrategy?: wrap.LibraryPathStrategy;
 	preloads?: Array<tg.File | tg.Symlink | tg.Template>;
 };
@@ -1693,12 +1708,18 @@ async function muslLoader(
 
 type OptimizeLibraryPathsArg = {
 	executable?: string | tg.Template | tg.File | tg.Symlink;
+	getNeededLibrariesForFile?: (file: tg.File) => Promise<Array<string>>;
 	interpreter:
 		| wrap.DyLdInterpreter
 		| wrap.LdLinuxInterpreter
 		| wrap.LdMuslInterpreter;
-	libraryPaths?: Array<tg.Template.Arg>;
+	libraryPaths?: Array<wrap.LibraryPath>;
 	libraryPathStrategy?: wrap.LibraryPathStrategy;
+};
+
+type NormalizedLibraryPath = {
+	path: tg.Template.Arg;
+	preserve: boolean;
 };
 
 async function optimizeLibraryPaths(
@@ -1707,6 +1728,7 @@ async function optimizeLibraryPaths(
 	wrap.DyLdInterpreter | wrap.LdLinuxInterpreter | wrap.LdMuslInterpreter
 > {
 	const {
+		getNeededLibrariesForFile = getNeededLibraries,
 		interpreter,
 		libraryPaths: additionalLibraryPaths = [],
 		libraryPathStrategy: strategy = "isolate",
@@ -1715,10 +1737,14 @@ async function optimizeLibraryPaths(
 	let executable = arg.executable;
 
 	// Set up the initial set of paths.
-	const paths = [
-		...(interpreter.libraryPaths ?? []),
-		...additionalLibraryPaths,
+	const libraryPaths: Array<NormalizedLibraryPath> = [
+		...(interpreter.libraryPaths ?? []).map((path) => ({
+			path,
+			preserve: false,
+		})),
+		...additionalLibraryPaths.map(normalizeLibraryPath),
 	];
+	const paths = libraryPaths.map(({ path }) => path);
 	const output = { ...interpreter, libraryPaths: paths };
 
 	if (strategy === "none") {
@@ -1727,7 +1753,12 @@ async function optimizeLibraryPaths(
 
 	// Isolate all available libraries without analyzing the executable.
 	if (strategy === "unfilteredIsolate") {
-		output.libraryPaths = await separateLibraries(paths);
+		const paths = await Promise.all(
+			libraryPaths.map(async ({ path, preserve }) =>
+				preserve ? [path] : await separateLibraries([path]),
+			),
+		);
+		output.libraryPaths = paths.flat();
 		return output;
 	}
 
@@ -1745,36 +1776,57 @@ async function optimizeLibraryPaths(
 	}
 
 	// Produce a set of the available library paths as directories with optional subpaths.
-	const libraryPathSet = await createLibraryPathSet(paths);
+	const libraryPathSet = await createLibraryPathSet(libraryPaths);
+	const preservedLibraryPathSet = new Set(
+		[...libraryPathSet].filter(({ preserve }) => preserve),
+	);
+	const preservedLibraryPaths = libraryPaths
+		.filter(({ preserve }) => preserve)
+		.map(({ path }) => path);
 
 	// Find any transitively needed libraries in the set and record their location.
 	const neededLibraries = executable
-		? await findTransitiveNeededLibraries(executable, libraryPathSet)
+		? await findTransitiveNeededLibraries(
+				executable,
+				libraryPathSet,
+				getNeededLibrariesForFile,
+			)
 		: new Map();
 
 	// All optimization strategies required filtering first.
-	const filteredNeededLibraries: Map<string, DirWithSubpath> = new Map();
+	const filteredNeededLibraries: Map<string, ResolvedLibraryPath> = new Map();
 	neededLibraries.forEach((referent, name) => {
 		if (referent !== undefined) {
 			filteredNeededLibraries.set(name, referent);
 		}
 	});
-	const filteredLibraryPathSet = new Set(filteredNeededLibraries.values());
+	const filteredLibraryPathSet = new Set(
+		[...filteredNeededLibraries.values()].filter(
+			(referent) => !preservedLibraryPathSet.has(referent),
+		),
+	);
 	if (strategy === "filter") {
-		output.libraryPaths = await Promise.all(
+		const filteredLibraryPaths = await Promise.all(
 			[...filteredLibraryPathSet].map(templateArgFromDirWithSubpath),
 		);
+		output.libraryPaths = [...filteredLibraryPaths, ...preservedLibraryPaths];
 		return output;
 	}
 
 	switch (strategy) {
 		case "resolve": {
-			output.libraryPaths = await resolvePaths(filteredLibraryPathSet);
+			output.libraryPaths = [
+				...(await resolvePaths(filteredLibraryPathSet)),
+				...preservedLibraryPaths,
+			];
 			break;
 		}
 		case "isolate": {
 			const isolatedPaths: Array<tg.Directory> = [];
 			for (const [name, referent] of filteredNeededLibraries) {
+				if (preservedLibraryPathSet.has(referent)) {
+					continue;
+				}
 				const innerDir = await getInner(referent);
 				const libraryFile = await innerDir.tryGet(name);
 				if (libraryFile !== null) {
@@ -1783,12 +1835,15 @@ async function optimizeLibraryPaths(
 					isolatedPaths.push(isolatedDir);
 				}
 			}
-			output.libraryPaths = isolatedPaths;
+			output.libraryPaths = [...isolatedPaths, ...preservedLibraryPaths];
 			break;
 		}
 		case "combine": {
 			const entries: Record<string, tg.Artifact> = {};
 			for (const [name, referent] of filteredNeededLibraries) {
+				if (preservedLibraryPathSet.has(referent)) {
+					continue;
+				}
 				const innerDir = await getInner(referent);
 				const libraryFile = await innerDir.tryGet(name);
 				if (libraryFile !== null) {
@@ -1796,8 +1851,9 @@ async function optimizeLibraryPaths(
 					entries[name] = libraryFile;
 				}
 			}
-			output.libraryPaths =
+			const combinedLibraryPaths =
 				Object.keys(entries).length === 0 ? [] : [await tg.directory(entries)];
+			output.libraryPaths = [...combinedLibraryPaths, ...preservedLibraryPaths];
 			break;
 		}
 		default: {
@@ -1806,6 +1862,18 @@ async function optimizeLibraryPaths(
 	}
 
 	return output;
+}
+
+function normalizeLibraryPath(arg: wrap.LibraryPath): NormalizedLibraryPath {
+	if (
+		arg instanceof tg.Directory ||
+		arg instanceof tg.Symlink ||
+		arg instanceof tg.Template
+	) {
+		return { path: arg, preserve: false };
+	}
+
+	return arg;
 }
 
 async function getNeededLibraries(executable: tg.File): Promise<Array<string>> {
@@ -1833,36 +1901,36 @@ type DirWithSubpath = {
 	subpath?: string;
 };
 
-async function createLibraryPathSet(
-	libraryPaths: Array<tg.Template.Arg>,
-): Promise<Set<DirWithSubpath>> {
-	const set: Set<DirWithSubpath> = new Set();
+type ResolvedLibraryPath = DirWithSubpath & NormalizedLibraryPath;
 
-	for (let path of libraryPaths) {
+async function createLibraryPathSet(
+	libraryPaths: Array<NormalizedLibraryPath>,
+): Promise<Set<ResolvedLibraryPath>> {
+	const set: Set<ResolvedLibraryPath> = new Set();
+
+	for (const libraryPath of libraryPaths) {
+		const { path, preserve } = libraryPath;
+		let value: DirWithSubpath | undefined;
 		if (path instanceof tg.Directory) {
-			set.add({ dir: path });
-		}
-		if (path instanceof tg.Template) {
-			const maybeResult = await tryTemplateToDirWithSubpath(path);
-			if (maybeResult !== undefined) {
-				set.add(maybeResult);
-			}
-		}
-		if (path instanceof tg.Symlink) {
+			value = { dir: path };
+		} else if (path instanceof tg.Template) {
+			value = await tryTemplateToDirWithSubpath(path);
+		} else if (path instanceof tg.Symlink) {
 			const artifact = await path.artifact;
 			if (artifact !== null) {
 				tg.Directory.assert(artifact);
-				let ret: DirWithSubpath = { dir: artifact };
+				value = { dir: artifact };
 				const subpath = await path.path;
 				if (subpath !== null) {
-					ret = { ...ret, subpath };
+					value = { ...value, subpath };
 				}
-				set.add(ret);
 			}
-		}
-		if (path instanceof tg.File) {
+		} else if (path instanceof tg.File) {
 			await path.store();
 			throw new Error(`found a file in the library paths:  ${path.id}`);
+		}
+		if (value !== undefined) {
+			set.add({ ...value, path, preserve });
 		}
 	}
 
@@ -1932,14 +2000,14 @@ async function tryTemplateToDirWithSubpath(
 	return undefined;
 }
 
-async function findTransitiveNeededLibraries(
+async function findTransitiveNeededLibraries<T extends DirWithSubpath>(
 	executable: tg.File,
-	libraryPaths: Set<DirWithSubpath>,
+	libraryPaths: Set<T>,
 	getNeededLibrariesForFile: (
 		file: tg.File,
 	) => Promise<Array<string>> = getNeededLibraries,
-): Promise<Map<string, DirWithSubpath | undefined>> {
-	const neededLibraries = new Map<string, DirWithSubpath | undefined>();
+): Promise<Map<string, T | undefined>> {
+	const neededLibraries = new Map<string, T | undefined>();
 	const files = [executable];
 	const visited = new Set<tg.File.Id>();
 	while (files.length > 0) {
@@ -2756,6 +2824,9 @@ export async function test() {
 		tg.build(testOptimizeLibraryPathsDoesNotMutateInput, {
 			name: "optimize library paths does not mutate input",
 		}),
+		tg.build(testPreservedLibraryPaths, {
+			name: "preserved library paths",
+		}),
 		tg.build(testTransitiveNeededLibraries, {
 			name: "transitive needed libraries",
 		}),
@@ -3464,6 +3535,49 @@ export async function testOptimizeLibraryPathsDoesNotMutateInput() {
 		interpreter.libraryPaths === libraryPaths && libraryPaths.length === 1,
 		"expected library path optimization not to mutate its input",
 	);
+
+	return true;
+}
+
+export async function testPreservedLibraryPaths() {
+	const executable = await tg.file("executable");
+	const direct = await tg.file("direct");
+	const transitive = await tg.file("transitive");
+	const optimizedLibraryPath = await tg.directory({
+		"libtransitive.so": transitive,
+		"libunused.so": tg.file("unused"),
+	});
+	const preservedLibraryPath = await tg.directory({
+		"libdirect.so": direct,
+		resource: tg.file("resource"),
+	});
+	const interpreter: wrap.DyLdInterpreter = { kind: "dyld" };
+	const optimized = await optimizeLibraryPaths({
+		executable,
+		getNeededLibrariesForFile: async (file) => {
+			if (file.id === executable.id) {
+				return ["libdirect.so"];
+			} else if (file.id === direct.id) {
+				return ["libtransitive.so"];
+			} else {
+				return [];
+			}
+		},
+		interpreter,
+		libraryPaths: [
+			optimizedLibraryPath,
+			{ path: preservedLibraryPath, preserve: true },
+		],
+	});
+
+	tg.assert(optimized.libraryPaths?.length === 2);
+	const [isolatedPath, preservedPath] = optimized.libraryPaths;
+	tg.assert(isolatedPath instanceof tg.Directory);
+	tg.assert(preservedPath instanceof tg.Directory);
+	tg.assert(preservedPath.id === preservedLibraryPath.id);
+	tg.assert((await isolatedPath.tryGet("libtransitive.so")) instanceof tg.File);
+	tg.assert((await isolatedPath.tryGet("libunused.so")) === null);
+	tg.assert((await preservedPath.tryGet("resource")) instanceof tg.File);
 
 	return true;
 }
