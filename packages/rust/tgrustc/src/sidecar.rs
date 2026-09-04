@@ -52,6 +52,25 @@ pub fn direct_extern_stems_by_dir(passthrough: &[String]) -> BTreeMap<PathBuf, V
 	by_dir
 }
 
+// Artifact builds may isolate crates in separate dependency directories.
+pub fn dependency_dirs(passthrough: &[String]) -> BTreeSet<PathBuf> {
+	let mut dirs: BTreeSet<PathBuf> = direct_extern_stems_by_dir(passthrough)
+		.into_keys()
+		.collect();
+	let mut iter = passthrough.iter();
+	while let Some(arg) = iter.next() {
+		if arg != "-L" {
+			continue;
+		}
+		let Some(value) = iter.next() else { continue };
+		let Some(path) = value.strip_prefix("dependency=") else {
+			continue;
+		};
+		dirs.insert(PathBuf::from(path));
+	}
+	dirs
+}
+
 // Library outputs are `lib<crate><extra-filename>`; bin outputs are
 // `<crate><extra-filename>`. Write both so consumers find the sidecar
 // regardless of which form their `--extern` value points at.
@@ -195,6 +214,67 @@ mod tests {
 				"liblibc-1de91543535344de".to_owned(),
 				"libsignal_hook_registry-5eca2".to_owned(),
 			]
+		);
+	}
+
+	#[test]
+	fn dependency_dirs_include_extern_parents_and_search_paths() {
+		let pass = vec![
+			"--extern".to_owned(),
+			"direct=/outputs/direct/libdirect-abc123.rmeta".to_owned(),
+			"-L".to_owned(),
+			"dependency=/outputs/transitive".to_owned(),
+			"-L".to_owned(),
+			"native=/native/lib".to_owned(),
+		];
+		assert_eq!(
+			dependency_dirs(&pass),
+			BTreeSet::from([
+				PathBuf::from("/outputs/direct"),
+				PathBuf::from("/outputs/transitive"),
+			])
+		);
+	}
+
+	#[test]
+	fn walks_sidecars_across_isolated_dependency_dirs() {
+		let temp = tempfile::tempdir().unwrap();
+		let regex_dir = temp.path().join("regex-automata");
+		let aho_dir = temp.path().join("aho-corasick");
+		let memchr_dir = temp.path().join("memchr");
+		let syntax_dir = temp.path().join("regex-syntax");
+
+		write_sidecars(
+			&regex_dir,
+			&["libregex_automata-regex".to_owned()],
+			&[
+				"libaho_corasick-aho".to_owned(),
+				"libmemchr-memchr".to_owned(),
+				"libregex_syntax-syntax".to_owned(),
+			],
+		)
+		.unwrap();
+		write_sidecars(
+			&aho_dir,
+			&["libaho_corasick-aho".to_owned()],
+			&["libmemchr-memchr".to_owned()],
+		)
+		.unwrap();
+		write_sidecars(&memchr_dir, &["libmemchr-memchr".to_owned()], &[]).unwrap();
+		write_sidecars(&syntax_dir, &["libregex_syntax-syntax".to_owned()], &[]).unwrap();
+
+		let dirs = [&regex_dir, &aho_dir, &memchr_dir, &syntax_dir].map(PathBuf::as_path);
+		let (visited, complete) =
+			closure_from_sidecars(&dirs, &["libregex_automata-regex".to_owned()]);
+		assert!(complete);
+		assert_eq!(
+			visited,
+			BTreeSet::from([
+				"libaho_corasick-aho".to_owned(),
+				"libmemchr-memchr".to_owned(),
+				"libregex_automata-regex".to_owned(),
+				"libregex_syntax-syntax".to_owned(),
+			])
 		);
 	}
 }

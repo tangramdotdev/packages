@@ -37,14 +37,18 @@ enum Closure {
 }
 
 impl Closure {
-	fn with_stems(direct_stems_by_dir: &BTreeMap<PathBuf, Vec<String>>, cwd: &Path) -> Self {
-		let dirs: Vec<&Path> = direct_stems_by_dir.keys().map(PathBuf::as_path).collect();
+	fn with_stems(
+		direct_stems_by_dir: &BTreeMap<PathBuf, Vec<String>>,
+		dependency_dirs: &BTreeSet<PathBuf>,
+		lock_root: &Path,
+	) -> Self {
+		let dirs: Vec<&Path> = dependency_dirs.iter().map(PathBuf::as_path).collect();
 		let stems: Vec<String> = direct_stems_by_dir.values().flatten().cloned().collect();
 		let (visited, complete) = sidecar::closure_from_sidecars(&dirs, &stems);
 		if complete {
 			return Self::Stems(visited);
 		}
-		lock::closure(cwd, &stems).map_or(Self::All, Self::Packages)
+		lock::closure(lock_root, &stems).map_or(Self::All, Self::Packages)
 	}
 
 	fn contains(&self, stem: &str) -> bool {
@@ -105,7 +109,11 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	// Per-dir BFS roots: cross-compiles route proc-macro and library externs
 	// through different dirs, each with its own sidecar set.
 	let direct_extern_stems_by_dir = sidecar::direct_extern_stems_by_dir(&args.passthrough);
-	let closure = Closure::with_stems(&direct_extern_stems_by_dir, &cwd);
+	let dependency_dirs = sidecar::dependency_dirs(&args.passthrough);
+	// Prefer Cargo's top-level lockfile over a vendored crate's lockfile.
+	let lock_root =
+		std::env::var_os("TGRUSTC_SOURCE_DIR").map_or_else(|| cwd.clone(), PathBuf::from);
+	let closure = Closure::with_stems(&direct_extern_stems_by_dir, &dependency_dirs, &lock_root);
 
 	let spawn_args = build_spawn_args(
 		&args.passthrough,
