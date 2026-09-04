@@ -79,6 +79,10 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 				build: buildTriple,
 				host,
 				interpreter: arg.interpreter,
+				...(arg.executable instanceof tg.File ||
+				arg.executable instanceof tg.Symlink
+					? { executable: arg.executable }
+					: {}),
 				...std.args.optional("libraryPaths", arg.libraryPaths),
 				...(arg.libraryPathStrategy !== undefined &&
 				arg.libraryPathStrategy !== null
@@ -1775,7 +1779,7 @@ async function optimizeLibraryPaths(
 				const libraryFile = await innerDir.tryGet(name);
 				if (libraryFile !== null) {
 					tg.File.assert(libraryFile);
-					const isolatedDir = await tg.directory({ name: libraryFile });
+					const isolatedDir = await tg.directory({ [name]: libraryFile });
 					isolatedPaths.push(isolatedDir);
 				}
 			}
@@ -2743,6 +2747,9 @@ export async function test() {
 		tg.build(testMergedWrapperArgumentOrder, {
 			name: "merged wrapper argument order",
 		}),
+		tg.build(testRewrapEmbeddedExecutableRetainsNeededLibraries, {
+			name: "rewrap embedded executable retains needed libraries",
+		}),
 		tg.build(testNeededLibrariesAuthorization, {
 			name: "needed libraries authorization",
 		}),
@@ -2845,6 +2852,68 @@ export async function testSingleArgObjectNoMutations() {
 	tg.assert(text.includes("HELLO=WORLD"), "Expected HELLO to be set");
 
 	return wrapper;
+}
+
+export async function testRewrapEmbeddedExecutableRetainsNeededLibraries() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		return true;
+	}
+
+	const executable = await argAndEnvDump();
+	const originalManifest = await wrap.Manifest.read(executable);
+	tg.assert(originalManifest !== undefined);
+	tg.assert(
+		originalManifest.executable.kind === "address",
+		"expected an embedded executable",
+	);
+
+	const wrapper = await wrap(executable);
+	const manifest = await wrap.Manifest.read(wrapper);
+	tg.assert(manifest !== undefined);
+	tg.assert(
+		manifest.interpreter?.kind === "ld-linux" ||
+			manifest.interpreter?.kind === "ld-musl",
+		"expected a dynamic loader interpreter",
+	);
+	tg.assert(
+		(manifest.interpreter.libraryPaths?.length ?? 0) > 0,
+		"expected the rewrapped executable to retain library paths",
+	);
+
+	const interpreter = await wrap.interpreterFromManifestInterpreter(
+		manifest.interpreter,
+		undefined,
+		wrapper.state.tokens,
+	);
+	tg.assert(
+		interpreter?.kind === "ld-linux" || interpreter?.kind === "ld-musl",
+		"expected a dynamic loader interpreter",
+	);
+	const libraryPaths = await Promise.all(
+		(interpreter.libraryPaths ?? []).map(async (path) => {
+			const parsed = await tryTemplateToDirWithSubpath(await tg.template(path));
+			tg.assert(parsed !== undefined, "expected a directory library path");
+			return await getInner(parsed);
+		}),
+	);
+	for (const name of await getNeededLibraries(executable)) {
+		const found = await Promise.all(
+			libraryPaths.map(
+				async (path) => (await path.tryGet(name)) instanceof tg.File,
+			),
+		);
+		tg.assert(
+			found.some((value) => value),
+			`expected an isolated library path containing ${name}`,
+		);
+	}
+
+	const output = await std
+		.build(std.shBootstrap`${wrapper} > ${tg.output}`)
+		.then(tg.File.expect);
+	tg.assert((await output.text).includes("argv[0]"));
+
+	return true;
 }
 
 export async function testBasicCross() {
