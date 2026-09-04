@@ -199,16 +199,11 @@ export async function self(unresolvedArg?: tg.Unresolved<ToolchainArg>) {
 	let artifact = tg.directory();
 
 	for (const executable of executables) {
-		// Add the zlib library path with the default strategy, isolating libz.
+		// Filter dynamic libraries while retaining the Rust sysroot structure.
 		const unwrapped = rustInstall.get(executable).then(tg.File.expect);
-		let wrapped = std.wrap(unwrapped, {
+		const wrapped = std.wrap(unwrapped, {
 			libraryPaths: [tg`${zlibArtifact}/lib`],
-		});
-
-		// Add the rust library path with no library path handling, preserving the whole structure and `rustlib` subdirectory.
-		wrapped = std.wrap(wrapped, {
-			libraryPaths: [tg`${rustInstall}/lib`],
-			libraryPathStrategy: "none",
+			retainedLibraryPaths: [tg`${rustInstall}/lib`],
 		});
 
 		artifact = tg.directory(artifact, {

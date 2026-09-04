@@ -89,6 +89,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					? { libraryPathStrategy: arg.libraryPathStrategy }
 					: {}),
 				...std.args.optional("preloads", arg.preloads),
+				...std.args.optional("retainedLibraryPaths", arg.retainedLibraryPaths),
 			},
 			references,
 		);
@@ -113,6 +114,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					? { libraryPathStrategy: arg.libraryPathStrategy }
 					: {}),
 				...std.args.optional("preloads", arg.preloads),
+				...std.args.optional("retainedLibraryPaths", arg.retainedLibraryPaths),
 			},
 			references,
 		);
@@ -204,6 +206,11 @@ export namespace wrap {
 
 		/** Preloads to include. If the executable is wrapped, they will be merged. */
 		preloads?: Array<tg.File | tg.Symlink | tg.Template> | null;
+
+		/** Library paths to search during optimization and retain without modification. */
+		retainedLibraryPaths?: Array<
+			tg.Directory | tg.Symlink | tg.Template
+		> | null;
 
 		/** Specify how to handle executables that are already Tangram wrappers. When `merge` is true, retain the original executable in the resulting manifest. When `merge` is set to false, produce a manifest pointing to the original wrapper. This option is ignored if the executable being wrapped is not a Tangram wrapper. Default: true. */
 		merge?: boolean;
@@ -318,6 +325,7 @@ export namespace wrap {
 			libraryPaths = [],
 			libraryPathStrategy,
 			preloads = [],
+			retainedLibraryPaths = [],
 		} = await tg.Args.apply<wrap.Arg, wrap.ArgObject, wrap.ArgObject>({
 			args,
 			map: async (arg) => {
@@ -339,6 +347,7 @@ export namespace wrap {
 			reduce: {
 				env: (a, b) => std.env.compose(a ?? null, b ?? null),
 				libraryPaths: "append",
+				retainedLibraryPaths: "append",
 				preloads: "append",
 				args: "append",
 			},
@@ -483,6 +492,7 @@ export namespace wrap {
 			libraryPaths,
 			...(libraryPathStrategy !== undefined ? { libraryPathStrategy } : {}),
 			preloads,
+			retainedLibraryPaths,
 		};
 
 		return output;
@@ -1221,6 +1231,7 @@ type ManifestInterpreterArg = {
 	libraryPaths?: Array<tg.Template.Arg>;
 	libraryPathStrategy?: wrap.LibraryPathStrategy;
 	preloads?: Array<tg.File | tg.Symlink | tg.Template>;
+	retainedLibraryPaths?: Array<tg.Template.Arg>;
 };
 
 /** Compute the buildToolchain, using the provided value or computing a default. */
@@ -1265,12 +1276,19 @@ async function manifestInterpreterFromWrapArgObject(
 
 	// If this is not a "normal" interpreter run the library path optimization, including any additional paths from the user.
 	if (interpreter.kind !== "normal") {
-		const { executable, libraryPaths, libraryPathStrategy, preloads } = arg;
+		const {
+			executable,
+			libraryPaths,
+			libraryPathStrategy,
+			preloads,
+			retainedLibraryPaths,
+		} = arg;
 		interpreter = await optimizeLibraryPaths({
 			...(executable !== undefined ? { executable } : {}),
 			interpreter,
 			...(libraryPaths !== undefined ? { libraryPaths } : {}),
 			...(libraryPathStrategy !== undefined ? { libraryPathStrategy } : {}),
+			...(retainedLibraryPaths !== undefined ? { retainedLibraryPaths } : {}),
 		});
 
 		// Add any additional preloads from the arg
@@ -1693,12 +1711,14 @@ async function muslLoader(
 
 type OptimizeLibraryPathsArg = {
 	executable?: string | tg.Template | tg.File | tg.Symlink;
+	getNeededLibrariesForFile?: (file: tg.File) => Promise<Array<string>>;
 	interpreter:
 		| wrap.DyLdInterpreter
 		| wrap.LdLinuxInterpreter
 		| wrap.LdMuslInterpreter;
 	libraryPaths?: Array<tg.Template.Arg>;
 	libraryPathStrategy?: wrap.LibraryPathStrategy;
+	retainedLibraryPaths?: Array<tg.Template.Arg>;
 };
 
 async function optimizeLibraryPaths(
@@ -1707,18 +1727,21 @@ async function optimizeLibraryPaths(
 	wrap.DyLdInterpreter | wrap.LdLinuxInterpreter | wrap.LdMuslInterpreter
 > {
 	const {
+		getNeededLibrariesForFile = getNeededLibraries,
 		interpreter,
 		libraryPaths: additionalLibraryPaths = [],
 		libraryPathStrategy: strategy = "isolate",
+		retainedLibraryPaths = [],
 	} = arg;
 
 	let executable = arg.executable;
 
 	// Set up the initial set of paths.
-	const paths = [
+	const optimizedLibraryPaths = [
 		...(interpreter.libraryPaths ?? []),
 		...additionalLibraryPaths,
 	];
+	const paths = [...optimizedLibraryPaths, ...retainedLibraryPaths];
 	const output = { ...interpreter, libraryPaths: paths };
 
 	if (strategy === "none") {
@@ -1727,7 +1750,10 @@ async function optimizeLibraryPaths(
 
 	// Isolate all available libraries without analyzing the executable.
 	if (strategy === "unfilteredIsolate") {
-		output.libraryPaths = await separateLibraries(paths);
+		output.libraryPaths = [
+			...(await separateLibraries(optimizedLibraryPaths)),
+			...retainedLibraryPaths,
+		];
 		return output;
 	}
 
@@ -1745,11 +1771,23 @@ async function optimizeLibraryPaths(
 	}
 
 	// Produce a set of the available library paths as directories with optional subpaths.
-	const libraryPathSet = await createLibraryPathSet(paths);
+	const optimizedLibraryPathSet = await createLibraryPathSet(
+		optimizedLibraryPaths,
+	);
+	const retainedLibraryPathSet =
+		await createLibraryPathSet(retainedLibraryPaths);
+	const libraryPathSet = new Set([
+		...optimizedLibraryPathSet,
+		...retainedLibraryPathSet,
+	]);
 
 	// Find any transitively needed libraries in the set and record their location.
 	const neededLibraries = executable
-		? await findTransitiveNeededLibraries(executable, libraryPathSet)
+		? await findTransitiveNeededLibraries(
+				executable,
+				libraryPathSet,
+				getNeededLibrariesForFile,
+			)
 		: new Map();
 
 	// All optimization strategies required filtering first.
@@ -1759,22 +1797,33 @@ async function optimizeLibraryPaths(
 			filteredNeededLibraries.set(name, referent);
 		}
 	});
-	const filteredLibraryPathSet = new Set(filteredNeededLibraries.values());
+	const filteredLibraryPathSet = new Set(
+		[...filteredNeededLibraries.values()].filter(
+			(referent) => !retainedLibraryPathSet.has(referent),
+		),
+	);
 	if (strategy === "filter") {
-		output.libraryPaths = await Promise.all(
+		const filteredLibraryPaths = await Promise.all(
 			[...filteredLibraryPathSet].map(templateArgFromDirWithSubpath),
 		);
+		output.libraryPaths = [...filteredLibraryPaths, ...retainedLibraryPaths];
 		return output;
 	}
 
 	switch (strategy) {
 		case "resolve": {
-			output.libraryPaths = await resolvePaths(filteredLibraryPathSet);
+			output.libraryPaths = [
+				...(await resolvePaths(filteredLibraryPathSet)),
+				...retainedLibraryPaths,
+			];
 			break;
 		}
 		case "isolate": {
 			const isolatedPaths: Array<tg.Directory> = [];
 			for (const [name, referent] of filteredNeededLibraries) {
+				if (retainedLibraryPathSet.has(referent)) {
+					continue;
+				}
 				const innerDir = await getInner(referent);
 				const libraryFile = await innerDir.tryGet(name);
 				if (libraryFile !== null) {
@@ -1783,12 +1832,15 @@ async function optimizeLibraryPaths(
 					isolatedPaths.push(isolatedDir);
 				}
 			}
-			output.libraryPaths = isolatedPaths;
+			output.libraryPaths = [...isolatedPaths, ...retainedLibraryPaths];
 			break;
 		}
 		case "combine": {
 			const entries: Record<string, tg.Artifact> = {};
 			for (const [name, referent] of filteredNeededLibraries) {
+				if (retainedLibraryPathSet.has(referent)) {
+					continue;
+				}
 				const innerDir = await getInner(referent);
 				const libraryFile = await innerDir.tryGet(name);
 				if (libraryFile !== null) {
@@ -1796,8 +1848,9 @@ async function optimizeLibraryPaths(
 					entries[name] = libraryFile;
 				}
 			}
-			output.libraryPaths =
+			const combinedLibraryPaths =
 				Object.keys(entries).length === 0 ? [] : [await tg.directory(entries)];
+			output.libraryPaths = [...combinedLibraryPaths, ...retainedLibraryPaths];
 			break;
 		}
 		default: {
@@ -2756,6 +2809,9 @@ export async function test() {
 		tg.build(testOptimizeLibraryPathsDoesNotMutateInput, {
 			name: "optimize library paths does not mutate input",
 		}),
+		tg.build(testRetainedLibraryPaths, {
+			name: "retained library paths",
+		}),
 		tg.build(testTransitiveNeededLibraries, {
 			name: "transitive needed libraries",
 		}),
@@ -3464,6 +3520,47 @@ export async function testOptimizeLibraryPathsDoesNotMutateInput() {
 		interpreter.libraryPaths === libraryPaths && libraryPaths.length === 1,
 		"expected library path optimization not to mutate its input",
 	);
+
+	return true;
+}
+
+export async function testRetainedLibraryPaths() {
+	const executable = await tg.file("executable");
+	const direct = await tg.file("direct");
+	const transitive = await tg.file("transitive");
+	const optimizedLibraryPath = await tg.directory({
+		"libtransitive.so": transitive,
+		"libunused.so": tg.file("unused"),
+	});
+	const retainedLibraryPath = await tg.directory({
+		"libdirect.so": direct,
+		resource: tg.file("resource"),
+	});
+	const interpreter: wrap.DyLdInterpreter = { kind: "dyld" };
+	const optimized = await optimizeLibraryPaths({
+		executable,
+		getNeededLibrariesForFile: async (file) => {
+			if (file.id === executable.id) {
+				return ["libdirect.so"];
+			} else if (file.id === direct.id) {
+				return ["libtransitive.so"];
+			} else {
+				return [];
+			}
+		},
+		interpreter,
+		libraryPaths: [optimizedLibraryPath],
+		retainedLibraryPaths: [retainedLibraryPath],
+	});
+
+	tg.assert(optimized.libraryPaths?.length === 2);
+	const [isolatedPath, retainedPath] = optimized.libraryPaths;
+	tg.assert(isolatedPath instanceof tg.Directory);
+	tg.assert(retainedPath instanceof tg.Directory);
+	tg.assert(retainedPath.id === retainedLibraryPath.id);
+	tg.assert((await isolatedPath.tryGet("libtransitive.so")) instanceof tg.File);
+	tg.assert((await isolatedPath.tryGet("libunused.so")) === null);
+	tg.assert((await retainedPath.tryGet("resource")) instanceof tg.File);
 
 	return true;
 }
