@@ -195,7 +195,7 @@ export namespace wrap {
 		/** Library paths to include. If the executable is wrapped, they will be merged. */
 		libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template> | null;
 
-		/** Which library path strategy should we use? The default is "unfilteredIsolate", which separates libraries into individual directories. */
+		/** Which library path strategy should we use? The default is "isolate", which retains each needed library in a separate directory. */
 		libraryPathStrategy?: LibraryPathStrategy | null;
 
 		/** Preloads to include. If the executable is wrapped, they will be merged. */
@@ -1705,7 +1705,7 @@ async function optimizeLibraryPaths(
 	const {
 		interpreter,
 		libraryPaths: additionalLibraryPaths = [],
-		libraryPathStrategy: strategy = "unfilteredIsolate",
+		libraryPathStrategy: strategy = "isolate",
 	} = arg;
 
 	let executable = arg.executable;
@@ -1721,7 +1721,7 @@ async function optimizeLibraryPaths(
 		return output;
 	}
 
-	// If we're using the default strategy, optimize the paths and return before analyzing the executable.
+	// Isolate all available libraries without analyzing the executable.
 	if (strategy === "unfilteredIsolate") {
 		output.libraryPaths = await separateLibraries(paths);
 		return output;
