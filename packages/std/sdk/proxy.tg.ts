@@ -977,7 +977,10 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 			tg.assert(component !== undefined);
 			tg.assert(component.kind === "artifact");
 			tg.assert(component.value.startsWith("dir_"));
-			const combinedDir = tg.Directory.withId(component.value);
+			const combinedDir = (await output.dependencyObjects).find(
+				(dependency) => dependency.id === component.value,
+			);
+			tg.assert(combinedDir instanceof tg.Directory);
 			const entries = await combinedDir.entries;
 
 			const expectedNumEntries = os === "linux" ? 5 : 4;

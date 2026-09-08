@@ -1,3 +1,6 @@
+// Directory keys hash stored IDs and paths, which do not change with handle metadata.
+#![allow(clippy::mutable_key_type)]
+
 use futures::{StreamExt as _, TryStreamExt as _};
 use itertools::Itertools;
 use std::{
@@ -614,12 +617,12 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 
 	// Handle an executable or a library.
 	let output_file = if is_executable {
-		// Obtain the output artifact ID.
-		let output_artifact_id = output_file.id().clone().into();
+		// Get the output artifact.
+		let output_artifact = output_file.clone().into();
 
 		// Create the manifest.
 		let mut manifest =
-			create_manifest(output_artifact_id, options, interpreter, library_paths).await?;
+			create_manifest(output_artifact, options, interpreter, library_paths).await?;
 		tracing::trace!(?manifest);
 
 		// If requested, embed the wrapper.
@@ -643,8 +646,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let dependencies = BTreeMap::from_iter(
 			futures::future::try_join_all(library_paths.into_iter().map(
 				|dir_with_subpath| async {
-					let key = tg::Reference::with_object(dir_with_subpath.id.clone().into());
-					let item = tg::Directory::with_id(dir_with_subpath.id).into();
+					let key = tg::Reference::with_object(dir_with_subpath.directory.id().into());
+					let item = dir_with_subpath.directory.into();
 					let value = tg::file::Dependency(tg::Referent::with_node(Some(item)));
 					Ok::<_, tg::Error>((key, Some(value)))
 				},
@@ -678,7 +681,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_path = cwd.join(&options.output_path);
 		let output_file_id = output_file.id();
 		tracing::debug!(?output_file_id, ?output_path, "checking out output file");
-		let artifact = tg::Artifact::from(output_file).id();
+		let artifact = tg::Artifact::from(output_file);
 		common::checkout_artifact_to_path(artifact, output_path.clone()).await?;
 
 		// Restore the original file permissions after checkout.
@@ -777,7 +780,7 @@ fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {
 /// Create a manifest.
 #[allow(clippy::too_many_lines)]
 async fn create_manifest<H: BuildHasher>(
-	ld_output_id: tg::artifact::Id,
+	ld_output: tg::Artifact,
 	options: &Options,
 	interpreter: InterpreterRequirement,
 	library_paths: Option<HashSet<DirectoryWithSubpath, H>>,
@@ -806,7 +809,7 @@ async fn create_manifest<H: BuildHasher>(
 		let library_paths = if let Some(library_paths) = library_paths {
 			let result = futures::future::try_join_all(library_paths.into_iter().map(
 				|dir_with_subpath| async move {
-					let directory = tg::Directory::with_id(dir_with_subpath.id);
+					let directory = dir_with_subpath.directory;
 					let template = if let Some(subpath) = dir_with_subpath.subpath {
 						common::template_from_artifact_and_subpath(directory.into(), subpath)
 					} else {
@@ -874,9 +877,8 @@ async fn create_manifest<H: BuildHasher>(
 	};
 
 	// Create the executable.
-	let executable = common::manifest::Executable::Path(
-		common::template_from_artifact(tg::Artifact::with_id(ld_output_id)).to_data(),
-	);
+	let executable =
+		common::manifest::Executable::Path(common::template_from_artifact(ld_output).to_data());
 
 	// Create empty values for env and args.
 	let env = options.wrapper_env_value.clone();
@@ -1194,34 +1196,35 @@ async fn cache_library_paths<H: BuildHasher + Default>(
 		return Ok(Vec::new());
 	}
 	let ordered_library_paths = library_paths.iter().cloned().collect_vec();
-	let ordered_roots = ordered_library_paths
-		.iter()
-		.map(|dir_with_subpath| (dir_with_subpath.id.clone(), dir_with_subpath.tokens.clone()))
-		.collect::<HashSet<_, Hasher>>()
-		.into_iter()
-		.collect_vec();
-	let artifacts = ordered_roots
-		.iter()
-		.map(|(id, tokens)| tg::Referent::with_node_and_tokens(id.clone().into(), tokens.clone()))
-		.collect();
+	let mut roots = BTreeMap::<tg::directory::Id, tg::Directory>::new();
+	for path in &ordered_library_paths {
+		let directory = roots
+			.entry(path.directory.id())
+			.or_insert_with(|| path.directory.clone());
+		directory
+			.state()
+			.inherit_location(path.directory.state().location().as_ref());
+		directory.state().set_tokens(common::merge_tokens(
+			&directory.id().into(),
+			&directory.state().tokens(),
+			&path.directory.state().tokens(),
+		));
+	}
+	let artifacts = roots.values().cloned().map(Into::into).collect();
 	tracing::debug!("caching libraries");
 	let paths = common::checkout_artifacts(artifacts)
 		.await
 		.map_err(|error| tg::error!(!error, "failed to cache libraries"))?;
-	if paths.len() != ordered_roots.len() {
+	if paths.len() != roots.len() {
 		return Err(tg::error!("expected one checkout path per library root"));
 	}
-	let paths: HashMap<_, _, Hasher> = ordered_roots
-		.into_iter()
-		.map(|(id, _)| id)
-		.zip(paths)
-		.collect();
+	let paths: BTreeMap<_, _> = roots.into_keys().zip(paths).collect();
 
 	let checkouts = ordered_library_paths
 		.into_iter()
 		.map(|dir_with_subpath| {
 			let path = paths
-				.get(&dir_with_subpath.id)
+				.get(&dir_with_subpath.directory.id())
 				.expect("every library root was checked out")
 				.clone();
 			let path = match dir_with_subpath.subpath {
@@ -1266,7 +1269,7 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 	// Read from the checkouts to avoid loading the directories again.
 	let futures = checkouts.iter().map(|(library_path, path)| async move {
 		let mut read_dir = tokio::fs::read_dir(path).await.map_err(
-			|error| tg::error!(!error, directory = %library_path.id, path = %path.display(), "failed to read the checked out library path"),
+			|error| tg::error!(!error, directory = %library_path.directory.id(), path = %path.display(), "failed to read the checked out library path"),
 		)?;
 		let mut names = Vec::new();
 		while let Some(entry) = read_dir.next_entry().await.map_err(
@@ -1371,15 +1374,20 @@ impl DirectoryCache {
 			.directory
 			.state()
 			.inherit_location(directory.state().location().as_ref());
-		cached
-			.directory
-			.state()
-			.inherit_tokens(&directory.state().tokens());
+		cached.directory.state().set_tokens(common::merge_tokens(
+			&cached.directory.id().into(),
+			&cached.directory.state().tokens(),
+			&directory.state().tokens(),
+		));
 		cached.clone()
 	}
 
 	fn insert_resolved(&self, dir_with_subpath: &DirectoryWithSubpath, directory: &tg::Directory) {
-		directory.state().inherit_tokens(&dir_with_subpath.tokens);
+		directory.state().set_tokens(common::merge_tokens(
+			&directory.id().into(),
+			&directory.state().tokens(),
+			&dir_with_subpath.directory.state().tokens(),
+		));
 		self.resolved
 			.lock()
 			.unwrap()
@@ -1419,26 +1427,30 @@ impl DirectoryCache {
 
 	async fn resolve(&self, dir_with_subpath: &DirectoryWithSubpath) -> tg::Result<tg::Directory> {
 		if let Some(directory) = self.resolved.lock().unwrap().get(dir_with_subpath).cloned() {
-			directory.state().inherit_tokens(&dir_with_subpath.tokens);
+			directory.state().set_tokens(common::merge_tokens(
+				&directory.id().into(),
+				&directory.state().tokens(),
+				&dir_with_subpath.directory.state().tokens(),
+			));
 			return Ok(directory);
 		}
-		let outer = self.intern(&{
-			let outer = tg::Directory::with_id(dir_with_subpath.id.clone());
-			outer.state().set_tokens(dir_with_subpath.tokens.clone());
-			outer
-		});
+		let outer = self.intern(&dir_with_subpath.directory);
 		let _walk = outer.walk.lock().await;
 		if let Some(directory) = self.resolved.lock().unwrap().get(dir_with_subpath).cloned() {
-			directory.state().inherit_tokens(&dir_with_subpath.tokens);
+			directory.state().set_tokens(common::merge_tokens(
+				&directory.id().into(),
+				&directory.state().tokens(),
+				&dir_with_subpath.directory.state().tokens(),
+			));
 			return Ok(directory);
 		}
 		let directory = if let Some(ref subpath) = dir_with_subpath.subpath {
 			let Some(inner) = outer.directory.try_get(subpath).await? else {
 				return Err(
-					tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
+					tg::error!(directory = %dir_with_subpath.directory.id(), subpath = %subpath.display(), "unable to retrieve subpath from directory"),
 				);
 			};
-			let inner = inner.try_unwrap_directory().map_err(|error| tg::error!(!error, outer = %dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?;
+			let inner = inner.try_unwrap_directory().map_err(|error| tg::error!(!error, outer = %dir_with_subpath.directory.id(), subpath = %subpath.display(), "expected a directory"))?;
 			self.intern(&inner).directory
 		} else {
 			outer.directory.clone()
@@ -1756,27 +1768,20 @@ pub async fn dir_with_subpath_from_directory(
 	subpath: Option<PathBuf>,
 ) -> tg::Result<DirectoryWithSubpath> {
 	directory.store().await?;
-	let id = directory.id();
-	let tokens = directory.state().tokens();
-	let ret = DirectoryWithSubpath {
-		id,
-		subpath,
-		tokens,
-	};
+	let directory = directory.clone();
+	let ret = DirectoryWithSubpath { directory, subpath };
 	Ok(ret)
 }
 
 #[derive(Clone, Debug)]
 pub struct DirectoryWithSubpath {
-	id: tg::directory::Id,
+	directory: tg::Directory,
 	subpath: Option<PathBuf>,
-	// Excluded from equality and hashing, since it does not change which directory is referenced.
-	tokens: tg::authorization::Tokens,
 }
 
 impl PartialEq for DirectoryWithSubpath {
 	fn eq(&self, other: &Self) -> bool {
-		self.id == other.id && self.subpath == other.subpath
+		self.directory.id() == other.directory.id() && self.subpath == other.subpath
 	}
 }
 
@@ -1784,7 +1789,7 @@ impl Eq for DirectoryWithSubpath {}
 
 impl std::hash::Hash for DirectoryWithSubpath {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.id.hash(state);
+		self.directory.id().hash(state);
 		self.subpath.hash(state);
 	}
 }

@@ -115,8 +115,30 @@ async fn run_proxy(
 	strip_program: &std::path::Path,
 	strip_args: &[String],
 	target_path: &std::path::Path,
-	manifest: Manifest,
+	mut manifest: Manifest,
 ) -> tg::Result<()> {
+	if matches!(&manifest.executable, manifest::Executable::Path(_)) {
+		// The bytes contain IDs only. Recover the wrapper's authorized dependencies before rebuilding it.
+		let path = std::fs::canonicalize(target_path)
+			.map_err(|error| tg::error!(!error, "failed to canonicalize the wrapper path"))?;
+		let file = tg::checkin(tg::checkin::Arg {
+			options: tg::checkin::Options {
+				destructive: false,
+				deterministic: true,
+				ignore: false,
+				lock: None,
+				root: true,
+				..tg::checkin::Options::default()
+			},
+			path,
+			updates: Vec::new(),
+		})
+		.await?
+		.try_unwrap_file()
+		.map_err(|error| tg::error!(!error, "expected a wrapper file"))?;
+		manifest.inherit_from_file(&file).await?;
+	}
+
 	// Handle the executable based on its type.
 	match manifest.executable {
 		manifest::Executable::Path(artifact_path) => {
@@ -180,9 +202,8 @@ async fn run_proxy(
 			.await?
 			.try_unwrap_file()
 			.map_err(|error| tg::error!(source = error, "expected a file"))?;
-			let stripped_file_id = stripped_file.id();
 			#[cfg(feature = "tracing")]
-			tracing::info!(?stripped_file_id, "checked in the stripped executable");
+			tracing::info!(stripped_file_id = ?stripped_file.id(), "checked in the stripped executable");
 
 			#[cfg(feature = "tracing")]
 			if let Err(e) = tmpdir.close() {
@@ -194,8 +215,7 @@ async fn run_proxy(
 			// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
 			let new_manifest = Manifest {
 				executable: manifest::Executable::Path(
-					common::template_from_artifact(tg::Artifact::with_id(stripped_file_id.into()))
-						.to_data(),
+					common::template_from_artifact(stripped_file.into()).to_data(),
 				),
 				..manifest
 			};
@@ -225,7 +245,7 @@ async fn run_proxy(
 				.await
 				.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
 
-			let artifact = tg::Artifact::from(new_wrapper).id();
+			let artifact = tg::Artifact::from(new_wrapper);
 			common::checkout_artifact_to_path(artifact, canonical_target_path).await?;
 			#[cfg(feature = "tracing")]
 			tracing::info!("checked out the new output file");

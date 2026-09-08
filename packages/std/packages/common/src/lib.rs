@@ -7,6 +7,65 @@ use tangram_client::prelude::*;
 pub mod manifest;
 pub use manifest::Manifest;
 
+/// Merge tokens from handles for an object or its ancestors.
+/// Prefer subtree access over node access, then the latest expiration for equivalent grants.
+#[must_use]
+pub fn merge_tokens(
+	object: &tg::object::Id,
+	existing: &tg::authorization::Tokens,
+	incoming: &tg::authorization::Tokens,
+) -> tg::authorization::Tokens {
+	let mut tokens = tg::authorization::Tokens::default();
+	for (location, token) in existing.iter().chain(incoming.iter()) {
+		let access = object_token_access(object, &token.body);
+		if access == Some(0) {
+			// A node grant for an ancestor does not authorize this object.
+			continue;
+		}
+		let replace = tokens.get(location).is_none_or(|existing| {
+			match (access, object_token_access(object, &existing.body)) {
+				(Some(incoming), Some(current)) => {
+					(incoming, token.body.expires_at) > (current, existing.body.expires_at)
+				},
+				_ => {
+					// Other permission types are comparable only for the same resource and grants.
+					token.body.resource == existing.body.resource
+						&& token
+							.body
+							.permissions
+							.iter()
+							.all(|permission| existing.body.permissions.contains(permission))
+						&& existing
+							.body
+							.permissions
+							.iter()
+							.all(|permission| token.body.permissions.contains(permission))
+						&& token.body.expires_at > existing.body.expires_at
+				},
+			}
+		});
+		if replace {
+			tokens.set(location.clone(), token.clone());
+		}
+	}
+	tokens
+}
+
+fn object_token_access(object: &tg::object::Id, body: &tg::authorization::Body) -> Option<u8> {
+	use tg::authorization::{
+		Permission::Object,
+		permission::object::Permission::{Node, Subtree},
+	};
+	if body.grants(Object(Subtree)) {
+		// The handle or dependency traversal supplies the ancestor relationship.
+		Some(2)
+	} else if body.grants(Object(Node)) {
+		Some(u8::from(body.resource == object.clone().into()))
+	} else {
+		None
+	}
+}
+
 #[cfg(feature = "tracing")]
 pub mod tracing;
 
@@ -95,12 +154,10 @@ fn store_root_at(index: usize) -> Option<String> {
 }
 
 /// Check out the given artifacts into the store, returning their paths.
-pub async fn checkout_artifacts(
-	artifacts: Vec<tg::Referent<tg::artifact::Id>>,
-) -> tg::Result<Vec<PathBuf>> {
+pub async fn checkout_artifacts(artifacts: Vec<tg::Artifact>) -> tg::Result<Vec<PathBuf>> {
 	let nodes = artifacts
 		.into_iter()
-		.map(|referent| referent.map(Into::into))
+		.map(|artifact| artifact.to_referent().map(Into::into))
 		.collect();
 	tg::checkout(tg::checkout::Arg {
 		dependencies: true,
@@ -114,8 +171,8 @@ pub async fn checkout_artifacts(
 }
 
 /// Check out a single artifact into the store, returning its path.
-pub async fn checkout_artifact(artifact: tg::artifact::Id) -> tg::Result<PathBuf> {
-	let mut paths = checkout_artifacts(vec![tg::Referent::with_node(artifact)]).await?;
+pub async fn checkout_artifact(artifact: tg::Artifact) -> tg::Result<PathBuf> {
+	let mut paths = checkout_artifacts(vec![artifact]).await?;
 	if paths.len() != 1 {
 		return Err(tg::error!("expected exactly one checkout path"));
 	}
@@ -123,16 +180,13 @@ pub async fn checkout_artifact(artifact: tg::artifact::Id) -> tg::Result<PathBuf
 }
 
 /// Check out a single artifact to the given path, overwriting whatever is already there.
-pub async fn checkout_artifact_to_path(
-	artifact: tg::artifact::Id,
-	path: PathBuf,
-) -> tg::Result<()> {
+pub async fn checkout_artifact_to_path(artifact: tg::Artifact, path: PathBuf) -> tg::Result<()> {
 	tg::checkout(tg::checkout::Arg {
 		dependencies: false,
 		extension: None,
 		force: true,
 		lock: Some(tg::checkout::Lock::Attr),
-		nodes: vec![tg::Referent::with_node(artifact.into())],
+		nodes: vec![artifact.to_referent().map(Into::into)],
 		path: Some(path),
 	})
 	.await?;

@@ -1131,8 +1131,15 @@ function setManifestReference(
 	object: tg.Object,
 ): void {
 	const existing = references.get(object.id);
-	if (existing === undefined || (!hasTokens(existing) && hasTokens(object))) {
+	if (existing === undefined) {
 		references.set(object.id, object);
+	} else {
+		tg.Object.inheritLocation(existing, object.state.location);
+		existing.state.tokens = mergeManifestTokens(
+			existing.id,
+			existing.state.tokens,
+			object.state.tokens,
+		);
 	}
 }
 
@@ -1141,11 +1148,104 @@ function inheritManifestReference<T extends tg.Object>(
 	references?: ManifestReferences,
 	tokens?: tg.Authorization.Tokens,
 ): T {
-	tg.Object.inheritTokens(object, tokens ?? {});
+	object.state.tokens = mergeManifestTokens(
+		object.id,
+		object.state.tokens,
+		tokens ?? {},
+	);
 	if (references !== undefined) {
 		setManifestReference(references, object);
+		return references.get(object.id) as T;
 	}
 	return object;
+}
+
+function mergeManifestTokens(
+	object: tg.Object.Id,
+	existing: tg.Authorization.Tokens,
+	incoming: tg.Authorization.Tokens,
+): tg.Authorization.Tokens {
+	const tokens: tg.Authorization.Tokens = {};
+	for (const [location, token] of [
+		...Object.entries(existing),
+		...Object.entries(incoming),
+	]) {
+		const body = authorizationTokenBody(token);
+		const access = objectTokenAccess(object, body);
+		if (access === 0) {
+			// A node grant for an ancestor does not authorize this object.
+			continue;
+		}
+		const previous = tokens[location];
+		if (previous === undefined) {
+			tokens[location] = token;
+			continue;
+		}
+		const previousBody = authorizationTokenBody(previous);
+		const previousAccess = objectTokenAccess(object, previousBody);
+		const newer = body.expires_at > previousBody.expires_at;
+		const replace =
+			access !== undefined && previousAccess !== undefined
+				? access > previousAccess || (access === previousAccess && newer)
+				: body.resource === previousBody.resource &&
+					body.permissions.every((permission) =>
+						previousBody.permissions.includes(permission),
+					) &&
+					previousBody.permissions.every((permission) =>
+						body.permissions.includes(permission),
+					) &&
+					newer;
+		if (replace) {
+			tokens[location] = token;
+		}
+	}
+	return tokens;
+}
+
+type AuthorizationTokenBody = {
+	expires_at: number;
+	permissions: Array<string>;
+	resource: string;
+};
+
+function authorizationTokenBody(
+	token: tg.Authorization.Token,
+): AuthorizationTokenBody {
+	const body = token.split(".")[1];
+	tg.assert(body !== undefined, "missing authorization token body");
+	const value = tg.encoding.json.decode(
+		tg.encoding.utf8.decode(tg.encoding.base64.decode(body)),
+	);
+	tg.assert(
+		value !== null &&
+			typeof value === "object" &&
+			"expires_at" in value &&
+			typeof value.expires_at === "number" &&
+			"resource" in value &&
+			typeof value.resource === "string" &&
+			"permissions" in value &&
+			Array.isArray(value.permissions) &&
+			value.permissions.every((permission) => typeof permission === "string"),
+		"invalid authorization token body",
+	);
+	return {
+		expires_at: value.expires_at,
+		permissions: value.permissions,
+		resource: value.resource,
+	};
+}
+
+function objectTokenAccess(
+	object: tg.Object.Id,
+	body: AuthorizationTokenBody,
+): number | undefined {
+	if (body.permissions.includes("object_subtree")) {
+		// The handle or dependency traversal supplies the ancestor relationship.
+		return 2;
+	} else if (body.permissions.includes("object_node")) {
+		return body.resource === object ? 1 : 0;
+	}
+	return undefined;
 }
 
 function existingManifestForWrap(
@@ -2800,6 +2900,15 @@ export async function test() {
 		tg.build(testManifestTemplateAuthorization, {
 			name: "manifest template authorization",
 		}),
+		tg.build(testManifestReferenceTokenExpiration, {
+			name: "manifest reference token expiration",
+		}),
+		tg.build(testManifestReferenceTokenPermissions, {
+			name: "manifest reference token permissions",
+		}),
+		tg.build(testManifestReferenceParentNodeToken, {
+			name: "manifest reference parent node token",
+		}),
 		tg.build(testManifestTemplatePlaceholderRoundTrip, {
 			name: "manifest template placeholder round trip",
 		}),
@@ -3178,6 +3287,14 @@ export async function testManifestTemplateAuthorization() {
 		serializedReferences,
 	);
 	tg.assert(serializedReferences.get(directory.id) === directory);
+	const reusedTemplate = await templateFromManifestTemplate(
+		manifestTemplate,
+		serializedReferences,
+	);
+	tg.assert(
+		reusedTemplate.components[0] === directory,
+		"expected the manifest template to reuse its authorized directory handle",
+	);
 
 	const parsedReferences: ManifestReferences = new Map();
 	const template = await templateFromManifestTemplate(
@@ -3200,6 +3317,124 @@ export async function testManifestTemplateAuthorization() {
 	tg.assert(parsedReferences.get(directory.id) === artifact);
 
 	return true;
+}
+
+export async function testManifestReferenceTokenExpiration() {
+	const directory = await tg.directory({ library: tg.file("library") });
+	await directory.store();
+	const token = (expires_at: number, permission = "object_subtree") =>
+		testAuthorizationToken(directory.id, permission, expires_at);
+	for (const permission of ["object_node", "object_subtree"]) {
+		for (const expirations of [
+			[100, 200],
+			[200, 100],
+		]) {
+			const references: ManifestReferences = new Map();
+			for (const expiration of expirations) {
+				const handle = tg.Directory.withId(directory.id);
+				handle.state.tokens = { local: token(expiration, permission) };
+				setManifestReference(references, handle);
+			}
+			const reused = await templateFromManifestTemplate(
+				{ components: [{ kind: "artifact", value: directory.id }] },
+				references,
+			);
+			const handle = reused.components[0];
+			tg.assert(handle instanceof tg.Directory);
+			tg.assert(
+				handle.state.tokens.local === token(200, permission),
+				"expected the newest token in either insertion order",
+			);
+		}
+	}
+	const references: ManifestReferences = new Map();
+	const local = tg.Directory.withId(directory.id);
+	local.state.tokens = { local: token(200) };
+	const remote = tg.Directory.withId(directory.id);
+	remote.state.tokens = { "remote=test": token(100) };
+	setManifestReference(references, local);
+	setManifestReference(references, remote);
+	tg.assert(references.get(directory.id)?.state.tokens.local === token(200));
+	tg.assert(
+		references.get(directory.id)?.state.tokens["remote=test"] === token(100),
+	);
+	return true;
+}
+
+export async function testManifestReferenceTokenPermissions() {
+	const directory = await tg.directory({ library: tg.file("library") });
+	const subtree = testAuthorizationToken(directory.id, "object_subtree", 100);
+	const node = testAuthorizationToken(directory.id, "object_node", 200);
+	for (const tokens of [
+		[subtree, node],
+		[node, subtree],
+	]) {
+		const references: ManifestReferences = new Map();
+		for (const token of tokens) {
+			const handle = tg.Directory.withId(directory.id);
+			handle.state.tokens = { local: token };
+			setManifestReference(references, handle);
+		}
+		const template = await templateFromManifestTemplate(
+			{ components: [{ kind: "artifact", value: directory.id }] },
+			references,
+		);
+		const handle = template.components[0];
+		tg.assert(handle instanceof tg.Directory);
+		tg.assert(
+			handle.state.tokens.local === subtree,
+			"a newer node token must not discard subtree access in either insertion order",
+		);
+	}
+	return true;
+}
+
+export async function testManifestReferenceParentNodeToken() {
+	const child = await tg.file("child");
+	const parent = await tg.file({
+		contents: "parent",
+		dependencies: { [child.id]: { node: child } },
+	});
+	const parentToken = testAuthorizationToken(parent.id, "object_node", 200);
+	for (const permission of [undefined, "object_node", "object_subtree"]) {
+		const childToken =
+			permission === undefined
+				? undefined
+				: testAuthorizationToken(child.id, permission, 100);
+		const handle = tg.File.withId(child.id);
+		handle.state.tokens = childToken === undefined ? {} : { local: childToken };
+		const references: ManifestReferences = new Map([[child.id, handle]]);
+		const template = await templateFromManifestTemplate(
+			{ components: [{ kind: "artifact", value: child.id }] },
+			references,
+			{ local: parentToken },
+		);
+		const restored = template.components[0];
+		tg.assert(restored instanceof tg.File);
+		tg.assert(
+			restored.state.tokens.local === childToken,
+			"a wrapper node token cannot authorize its child",
+		);
+	}
+	return true;
+}
+
+// Selection fixtures only; these tokens are never sent to the server.
+function testAuthorizationToken(
+	resource: tg.Object.Id,
+	permission: string,
+	expires_at: number,
+): tg.Authorization.Token {
+	const body = tg.encoding.base64.encode(
+		tg.encoding.utf8.encode(
+			JSON.stringify({
+				expires_at,
+				resource,
+				permissions: [permission],
+			}),
+		),
+	);
+	return `0.${body}.metadata.signature`;
 }
 
 export async function testManifestMutationPrependRoundTrip() {

@@ -93,7 +93,7 @@ pub async fn run() -> tg::Result<()> {
 		extension: None,
 		force: true,
 		lock: None,
-		nodes: vec![tg::Referent::with_node(build_dir.id().into())],
+		nodes: vec![build_dir.to_referent().map(Into::into)],
 		path: Some(std::path::PathBuf::from(&cargo_out_dir)),
 	})
 	.await
