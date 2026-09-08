@@ -236,15 +236,23 @@ pub fn render_template_data(data: &tg::template::Data) -> tg::Result<String> {
 
 /// Unrender a template string into a [`tg::Template`].
 pub fn unrender(string: &str) -> tg::Result<tg::Template> {
+	unrender_with(string, |_| Ok(None))
+}
+
+/// Unrender a template string, resolving artifact handles with the given callback.
+pub fn unrender_with<F>(string: &str, resolver: F) -> tg::Result<tg::Template>
+where
+	F: FnMut(tg::artifact::Id) -> tg::Result<Option<tg::Artifact>>,
+{
 	let mut i = 0;
 	while let Some(root) = store_root_at(i) {
 		if string.contains(&format!("{root}/")) {
-			return tg::Template::unrender(&root, string);
+			return tg::Template::unrender_with(&root, string, resolver);
 		}
 		i += 1;
 	}
 	if string.contains("/opt/tangram/store/") {
-		return tg::Template::unrender("/opt/tangram/store", string);
+		return tg::Template::unrender_with("/opt/tangram/store", string, resolver);
 	}
 	Ok(tg::Template::from(tg::template::Component::String(
 		string.to_owned(),

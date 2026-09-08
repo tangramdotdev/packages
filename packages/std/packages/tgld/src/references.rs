@@ -120,12 +120,15 @@ impl ArtifactReferences {
 		F: Fn(tg::Artifact) -> Fut,
 		Fut: Future<Output = tg::Result<()>>,
 	{
-		let mut template = common::unrender(string)?;
-		for component in &mut template.components {
-			let tg::template::Component::Artifact(artifact) = component else {
-				continue;
-			};
-			let cached = self.intern(artifact);
+		let mut artifacts = Vec::new();
+		let template = common::unrender_with(string, |id| {
+			let cached = self.intern(&tg::Artifact::with_id(id));
+			let artifact = cached.artifact.clone();
+			artifacts.push(cached);
+			Ok(Some(artifact))
+		})?;
+		// The synchronous resolver attaches shared handles; load missing authorization before serialization.
+		for cached in artifacts {
 			let mut loaded = cached.loaded.lock().await;
 			if !*loaded
 				&& cached.artifact.state().tokens().is_empty()
@@ -140,7 +143,6 @@ impl ArtifactReferences {
 				self.retain(&pending);
 				*loaded = true;
 			}
-			*artifact = cached.artifact;
 		}
 		Ok(template)
 	}
