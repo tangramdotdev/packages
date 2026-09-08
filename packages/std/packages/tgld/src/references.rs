@@ -3,6 +3,7 @@ use std::{
 	sync::{Arc, Mutex},
 };
 use tangram_client::prelude::*;
+use xattr::FileExt as _;
 
 /// Handles retained across the linker's rendered path boundary.
 #[derive(Default)]
@@ -17,6 +18,59 @@ struct CachedArtifact {
 }
 
 impl ArtifactReferences {
+	pub fn retain_from_current_executable(&self) -> tg::Result<()> {
+		// The wrapper sets this on Linux too, where current_exe can name the loader.
+		let path = std::env::var_os("TANGRAM_INJECTION_IDENTITY_PATH")
+			.map(std::path::PathBuf::from)
+			.map_or_else(std::env::current_exe, Ok)
+			.map_err(|error| tg::error!(!error, "failed to locate the linker wrapper"))?;
+		self.retain_from_wrapper(&path)
+	}
+
+	fn retain_from_wrapper(&self, path: &std::path::Path) -> tg::Result<()> {
+		// Read the checked-out dependency referents, rather than loading their bare IDs.
+		let file = std::fs::File::open(path).map_err(
+			|error| tg::error!(!error, path = %path.display(), "failed to open the linker wrapper"),
+		)?;
+		let dependencies = wrapper_dependencies(&file)?;
+		if dependencies.is_empty() {
+			return Ok(());
+		}
+		let token = file
+			.get_xattr(tg::file::TOKEN_XATTR_NAME)
+			.map_err(|error| tg::error!(!error, "failed to read the wrapper token"))?
+			.map(|value| {
+				std::str::from_utf8(&value)
+					.map_err(|error| tg::error!(!error, "invalid wrapper token encoding"))?
+					.parse::<tg::authorization::Token>()
+			})
+			.transpose()?;
+		let tokens = tg::authorization::Tokens::with_local(token);
+		for reference in dependencies {
+			let tg::reference::Node::Id(id) = reference.node() else {
+				continue;
+			};
+			let Ok(id) = tg::artifact::Id::try_from(id.clone()) else {
+				continue;
+			};
+			let options = reference.options();
+			let artifact = tg::Artifact::with_id(id);
+			artifact.state().set_location(
+				options
+					.location
+					.as_ref()
+					.and_then(tg::location::Arg::to_location),
+			);
+			artifact.state().set_tokens(common::merge_tokens(
+				&artifact.id().into(),
+				&options.tokens,
+				&tokens,
+			));
+			self.retain(&artifact);
+		}
+		Ok(())
+	}
+
 	pub fn with_options(options: &super::Options) -> Self {
 		let references = Self::default();
 		let mut dependencies = BTreeMap::new();
@@ -107,5 +161,56 @@ impl ArtifactReferences {
 	}
 }
 
+fn wrapper_dependencies(file: &std::fs::File) -> tg::Result<Vec<tg::Reference>> {
+	let names = match file.list_xattr() {
+		Ok(names) => names,
+		Err(error) if error.kind() == std::io::ErrorKind::Unsupported => return Ok(Vec::new()),
+		Err(error) => return Err(tg::error!(!error, "failed to list wrapper attributes")),
+	};
+	let mut base = false;
+	let mut shards = BTreeMap::new();
+	for name in names {
+		let Some(name) = name.to_str() else { continue };
+		if name == tg::file::DEPENDENCIES_XATTR_NAME {
+			base = true;
+		} else if let Some(suffix) = name
+			.strip_prefix(tg::file::DEPENDENCIES_XATTR_NAME)
+			.and_then(|name| name.strip_prefix('.'))
+		{
+			let index = suffix
+				.parse::<usize>()
+				.map_err(|error| tg::error!(!error, "invalid wrapper dependency shard"))?;
+			if suffix != index.to_string() {
+				return Err(tg::error!("invalid wrapper dependency shard"));
+			}
+			shards.insert(index, name.to_owned());
+		}
+	}
+	if base {
+		if !shards.is_empty() {
+			return Err(tg::error!("mixed wrapper dependency attributes"));
+		}
+		shards.insert(0, tg::file::DEPENDENCIES_XATTR_NAME.to_owned());
+	}
+	if shards.is_empty() {
+		return Ok(Vec::new());
+	}
+	let mut bytes = Vec::new();
+	for (expected, (index, name)) in shards.into_iter().enumerate() {
+		if index != expected {
+			return Err(tg::error!("missing wrapper dependency shard"));
+		}
+		let value = file
+			.get_xattr(name)
+			.map_err(|error| tg::error!(!error, "failed to read wrapper dependencies"))?
+			.ok_or_else(|| tg::error!("wrapper dependencies disappeared"))?;
+		bytes.extend_from_slice(&value);
+	}
+	tg::file::deserialize_dependencies_xattr(&bytes)
+}
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod wrapper_tests;

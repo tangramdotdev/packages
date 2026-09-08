@@ -2589,10 +2589,12 @@ dependencies = [
  "serde",
  "serde_json",
  "tangram_client",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
+ "xattr",
 ]
 
 [[package]]

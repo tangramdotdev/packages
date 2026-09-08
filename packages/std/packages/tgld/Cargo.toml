@@ -26,3 +26,7 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+xattr = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

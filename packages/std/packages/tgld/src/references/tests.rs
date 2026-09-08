@@ -1,7 +1,7 @@
 use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-fn authorized_file() -> tg::File {
+pub(super) fn authorized_file() -> tg::File {
 	let file = tg::File::with_contents("unrendered dependency");
 	let key = tg::authorization::PrivateKey::new(
 		"test",

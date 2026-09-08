@@ -54,6 +54,7 @@ tokio = { version = "1", default-features = false, features = [
 tokio-stream = { version = "0.1", default-features = false, features = ["fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
+xattr = "1"
 zerocopy = { version = "0.8", features = ["derive"] }
 
 

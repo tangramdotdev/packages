@@ -457,6 +457,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		tracing::info!("No interpreter needed for static executable. Exiting without wrapping.");
 		return Ok(());
 	}
+	directory_cache
+		.references
+		.retain_from_current_executable()?;
 
 	// Set the initially known needed libraries. This map will track which library path contains each needed library.
 	let mut needed_libraries: HashMap<String, Option<DirectoryWithSubpath>, Hasher> =
