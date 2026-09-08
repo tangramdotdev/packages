@@ -1,4 +1,26 @@
 use super::*;
+use xattr::FileExt as _;
+
+#[tokio::test]
+#[ignore = "requires a server, TANGRAM_INJECTION_IDENTITY_PATH, and TGLD_TEST_DEPENDENCY_ID"]
+async fn unrender_loads_checked_out_dependency_from_server() {
+	tg::init().unwrap();
+	let id = std::env::var("TGLD_TEST_DEPENDENCY_ID").unwrap();
+	let references = ArtifactReferences::default();
+	references.retain_from_current_executable().unwrap();
+	let template = references
+		.unrender(&format!("/opt/tangram/store/{id}"))
+		.await
+		.expect("the checkout must authorize the unrendered dependency");
+	let restored = tg::Template::try_from_data(template.to_data()).unwrap();
+	let artifact = restored.artifacts().next().unwrap();
+	assert_eq!(artifact.id().to_string(), id);
+	assert!(!artifact.state().tokens().is_empty());
+	artifact
+		.load()
+		.await
+		.expect("the recovered token must authorize a real object request");
+}
 
 #[tokio::test]
 async fn unrender_recovers_wrapper_authorization_in_child_process() {
