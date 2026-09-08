@@ -15,6 +15,11 @@ use tokio::io::AsyncReadExt as _;
 
 type Hasher = fnv::FnvBuildHasher;
 
+mod references;
+
+#[cfg(test)]
+mod authorization_tests;
+
 const MAX_DEPTH: usize = 16;
 
 fn main() {
@@ -432,7 +437,10 @@ fn read_options() -> tg::Result<Options> {
 
 #[allow(clippy::too_many_lines)]
 async fn create_wrapper(options: &Options) -> tg::Result<()> {
-	let directory_cache = DirectoryCache::default();
+	let directory_cache = DirectoryCache {
+		references: references::ArtifactReferences::with_options(options),
+		..Default::default()
+	};
 
 	// Analyze the output file.
 	let AnalyzeOutputFileOutput {
@@ -474,6 +482,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	let command_line_library_path = create_library_directory_for_command_line_libraries(
 		&options.additional_library_candidate_paths,
 		&mut needed_libraries,
+		&directory_cache.references,
 	)
 	.await?;
 
@@ -483,7 +492,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		.into_iter()
 		.chain(
 			futures::future::try_join_all(options.library_paths.iter().map(|library_path| async move {
-				let symlink = common::template_to_symlink(&common::unrender(library_path)?)?;
+				let template = directory_cache_ref.references.unrender(library_path).await?;
+				let symlink = common::template_to_symlink(&template)?;
 				let artifact = symlink.artifact().await?;
 				let path = symlink.path().await?;
 				let artifact_path = match (artifact, path) {
@@ -621,8 +631,14 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_artifact = output_file.clone().into();
 
 		// Create the manifest.
-		let mut manifest =
-			create_manifest(output_artifact, options, interpreter, library_paths).await?;
+		let mut manifest = create_manifest(
+			output_artifact,
+			options,
+			interpreter,
+			library_paths,
+			&directory_cache.references,
+		)
+		.await?;
 		tracing::trace!(?manifest);
 
 		// If requested, embed the wrapper.
@@ -784,7 +800,9 @@ async fn create_manifest<H: BuildHasher>(
 	options: &Options,
 	interpreter: InterpreterRequirement,
 	library_paths: Option<HashSet<DirectoryWithSubpath, H>>,
+	references: &references::ArtifactReferences,
 ) -> tg::Result<common::Manifest> {
+	let ld_output = references.retain(&ld_output);
 	// Create the interpreter.
 	let interpreter = {
 		let config = match interpreter {
@@ -809,11 +827,11 @@ async fn create_manifest<H: BuildHasher>(
 		let library_paths = if let Some(library_paths) = library_paths {
 			let result = futures::future::try_join_all(library_paths.into_iter().map(
 				|dir_with_subpath| async move {
-					let directory = dir_with_subpath.directory;
+					let directory = references.retain(&dir_with_subpath.directory.into());
 					let template = if let Some(subpath) = dir_with_subpath.subpath {
-						common::template_from_artifact_and_subpath(directory.into(), subpath)
+						common::template_from_artifact_and_subpath(directory, subpath)
 					} else {
-						common::template_from_artifact(directory.into())
+						common::template_from_artifact(directory)
 					};
 					let data = template.to_data();
 					Ok::<_, tg::Error>(data)
@@ -828,21 +846,21 @@ async fn create_manifest<H: BuildHasher>(
 
 		if let Some((path, interpreter_flavor)) = config {
 			// Unrender the interpreter path.
-			let path = common::unrender(&path)?;
+			let path = references.unrender(&path).await?;
 			let path = path.to_data();
 
 			// Unrender the preloads.
 			let mut preloads = None;
 			if let Some(injection_path) = options.injection_path.as_deref() {
-				preloads = Some(vec![common::unrender(injection_path)?.to_data()]);
+				preloads = Some(vec![references.unrender(injection_path).await?.to_data()]);
 			}
 
 			// Unrender the additional args.
 			let mut args = None;
 			if let Some(interpreter_args) = options.interpreter_args.as_deref() {
-				let interpreter_args = interpreter_args
-					.iter()
-					.map(|arg| async move { Ok::<_, tg::Error>(common::unrender(arg)?.to_data()) });
+				let interpreter_args = interpreter_args.iter().map(|arg| async move {
+					Ok::<_, tg::Error>(references.unrender(arg).await?.to_data())
+				});
 				args = Some(futures::future::try_join_all(interpreter_args).await?);
 			}
 
@@ -953,6 +971,7 @@ impl std::str::FromStr for LibraryPathStrategy {
 async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 	library_candidate_paths: &[PathBuf],
 	all_needed_libraries: &mut HashMap<String, Option<DirectoryWithSubpath>, H>,
+	references: &references::ArtifactReferences,
 ) -> tg::Result<Option<DirectoryWithSubpath>> {
 	let mut entries = BTreeMap::new();
 	for library_candidate_path in library_candidate_paths {
@@ -973,7 +992,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 				)?;
 				let library_candidate_file = if common::is_store_path(library_candidate_path_str) {
 					tracing::trace!("found an artifact, extracting file object");
-					let template = common::unrender(library_candidate_path_str)?;
+					let template = references.unrender(library_candidate_path_str).await?;
 					tracing::trace!(?template, "unrendered library candidate path");
 					// Obtain the file object from the artifact.
 					// We expect to underender one of two forms:
@@ -1036,7 +1055,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 				};
 
 				// Add an entry to the directory.
-				entries.insert(name, tg::Artifact::File(library_candidate_file));
+				entries.insert(name, references.retain(&library_candidate_file.into()));
 			}
 		}
 	}
@@ -1158,7 +1177,7 @@ async fn isolate_library_paths<H: BuildHasher + Default>(
 			continue;
 		};
 		let mut entries = BTreeMap::new();
-		entries.insert(name.clone(), artifact);
+		entries.insert(name.clone(), directory_cache.references.retain(&artifact));
 		let directory = tg::Directory::with_entries(entries);
 		let dir_with_subpath = dir_with_subpath_from_directory(&directory, None).await?;
 		isolated_library_paths.insert(dir_with_subpath);
@@ -1175,7 +1194,7 @@ async fn combine_library_paths<H: BuildHasher + Default>(
 	for (name, dir_with_subpath) in located_libraries(needed_libraries) {
 		let directory = directory_cache.resolve(dir_with_subpath).await?;
 		if let Ok(Some(artifact)) = directory.try_get(name).await {
-			entries.insert(name.clone(), artifact);
+			entries.insert(name.clone(), directory_cache.references.retain(&artifact));
 		}
 	}
 	if entries.is_empty() {
@@ -1351,6 +1370,7 @@ async fn resolve_directories<H: BuildHasher + Default>(
 /// Reuse handles and serialize cold walks through each directory.
 #[derive(Default)]
 struct DirectoryCache {
+	references: references::ArtifactReferences,
 	directories: Mutex<HashMap<tg::directory::Id, CachedDirectory, Hasher>>,
 	resolved: Mutex<HashMap<DirectoryWithSubpath, tg::Directory, Hasher>>,
 }
@@ -1363,6 +1383,11 @@ struct CachedDirectory {
 
 impl DirectoryCache {
 	fn intern(&self, directory: &tg::Directory) -> CachedDirectory {
+		let directory = self
+			.references
+			.retain(&directory.clone().into())
+			.try_unwrap_directory()
+			.unwrap();
 		let mut directories = self.directories.lock().unwrap();
 		let cached = directories
 			.entry(directory.id())
@@ -1370,15 +1395,6 @@ impl DirectoryCache {
 				directory: directory.clone(),
 				walk: Arc::new(futures::lock::Mutex::new(())),
 			});
-		cached
-			.directory
-			.state()
-			.inherit_location(directory.state().location().as_ref());
-		cached.directory.state().set_tokens(common::merge_tokens(
-			&cached.directory.id().into(),
-			&cached.directory.state().tokens(),
-			&directory.state().tokens(),
-		));
 		cached.clone()
 	}
 
@@ -1470,6 +1486,11 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 	max_depth: usize,
 	depth: usize,
 ) -> tg::Result<()> {
+	let file = directory_cache
+		.references
+		.retain(&file.clone().into())
+		.try_unwrap_file()
+		.unwrap();
 	// Check for transitive dependencies if we've recurred beyond the initial file.
 	if depth > 0 {
 		let id = file.id();
