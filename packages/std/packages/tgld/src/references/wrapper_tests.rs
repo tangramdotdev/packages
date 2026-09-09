@@ -1,4 +1,5 @@
 use super::*;
+use std::os::unix::process::CommandExt as _;
 use xattr::FileExt as _;
 
 #[tokio::test]
@@ -29,8 +30,7 @@ async fn unrender_recovers_wrapper_authorization_in_child_process() {
 		tg::init().unwrap();
 		let references = ArtifactReferences::default();
 		references.retain_from_current_executable().unwrap();
-		// No server is available in this child. The production unrender must reuse the
-		// checked-out token without attempting any authorization search.
+		// The recovered token must avoid a request to the unavailable server.
 		let template = references
 			.unrender(&format!("/opt/tangram/store/{}", dependency.id()))
 			.await
@@ -41,7 +41,8 @@ async fn unrender_recovers_wrapper_authorization_in_child_process() {
 		);
 		return;
 	}
-	let wrapper = tempfile::NamedTempFile::new().unwrap();
+	let directory = tempfile::tempdir().unwrap();
+	let wrapper = tempfile::NamedTempFile::new_in(directory.path()).unwrap();
 	let reference = tg::Reference::with_node_and_tokens(
 		tg::reference::Node::Id(dependency.id().into()),
 		dependency.state().tokens(),
@@ -53,26 +54,43 @@ async fn unrender_recovers_wrapper_authorization_in_child_process() {
 		.as_file()
 		.set_xattr(attribute.name, &attribute.value)
 		.unwrap();
-	let output = std::process::Command::new(std::env::current_exe().unwrap())
-		.args([
-			"--exact",
-			"references::wrapper_tests::unrender_recovers_wrapper_authorization_in_child_process",
-			"--nocapture",
-		])
-		.env("TGLD_TEST_WRAPPER_CHILD", "1")
-		.env("TANGRAM_INJECTION_IDENTITY_PATH", wrapper.path())
-		.env(
-			"TANGRAM_URL",
-			"http+unix://%2Fnonexistent-tgld-authorization-test.sock",
-		)
-		.output()
-		.unwrap();
-	assert!(
-		output.status.success(),
-		"{}\n{}",
-		String::from_utf8_lossy(&output.stdout),
-		String::from_utf8_lossy(&output.stderr)
-	);
+	let executable = std::env::current_exe().unwrap();
+	let name = wrapper.path().file_name().unwrap();
+	for (arg0, identity) in [
+		("missing-wrapper".into(), Some(wrapper.path())),
+		(executable.clone(), Some(wrapper.path())),
+		(wrapper.path().to_owned(), None),
+		(std::path::Path::new(".").join(name), None),
+		(std::path::PathBuf::from(name), None),
+		(wrapper.path().to_owned(), Some(executable.as_path())),
+	] {
+		let mut command = std::process::Command::new(&executable);
+		command
+			.arg0(&arg0)
+			.args([
+				"--exact",
+				"references::wrapper_tests::unrender_recovers_wrapper_authorization_in_child_process",
+				"--nocapture",
+			])
+			.current_dir(directory.path())
+			.env("PATH", directory.path())
+			.env("TGLD_TEST_WRAPPER_CHILD", "1")
+			.env_remove("TANGRAM_INJECTION_IDENTITY_PATH")
+			.env(
+				"TANGRAM_URL",
+				"http+unix://%2Fnonexistent-tgld-authorization-test.sock",
+			);
+		if let Some(identity) = identity {
+			command.env("TANGRAM_INJECTION_IDENTITY_PATH", identity);
+		}
+		let output = command.output().unwrap();
+		assert!(
+			output.status.success(),
+			"arg0={arg0:?}, identity={identity:?}\n{}\n{}",
+			String::from_utf8_lossy(&output.stdout),
+			String::from_utf8_lossy(&output.stderr)
+		);
+	}
 }
 
 #[tokio::test]
