@@ -2315,7 +2315,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b915f0a293274b6aeb8b63e4c0e7b644b700cf2e#b915f0a293274b6aeb8b63e4c0e7b644b700cf2e"
 dependencies = [
  "async-channel",
  "aws-lc-rs",
@@ -2371,7 +2371,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b915f0a293274b6aeb8b63e4c0e7b644b700cf2e#b915f0a293274b6aeb8b63e4c0e7b644b700cf2e"
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -2380,7 +2380,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b915f0a293274b6aeb8b63e4c0e7b644b700cf2e#b915f0a293274b6aeb8b63e4c0e7b644b700cf2e"
 dependencies = [
  "dashmap",
  "futures",
@@ -2394,7 +2394,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b915f0a293274b6aeb8b63e4c0e7b644b700cf2e#b915f0a293274b6aeb8b63e4c0e7b644b700cf2e"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2422,7 +2422,7 @@ dependencies = [
 [[package]]
 name = "tangram_pool"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b915f0a293274b6aeb8b63e4c0e7b644b700cf2e#b915f0a293274b6aeb8b63e4c0e7b644b700cf2e"
 dependencies = [
  "futures",
  "tangram_futures",
@@ -2432,7 +2432,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b915f0a293274b6aeb8b63e4c0e7b644b700cf2e#b915f0a293274b6aeb8b63e4c0e7b644b700cf2e"
 dependencies = [
  "bytes",
  "num",
@@ -2443,7 +2443,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b915f0a293274b6aeb8b63e4c0e7b644b700cf2e#b915f0a293274b6aeb8b63e4c0e7b644b700cf2e"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -2454,7 +2454,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b915f0a293274b6aeb8b63e4c0e7b644b700cf2e#b915f0a293274b6aeb8b63e4c0e7b644b700cf2e"
 dependencies = [
  "derive_more",
  "http",
@@ -2469,7 +2469,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b915f0a293274b6aeb8b63e4c0e7b644b700cf2e#b915f0a293274b6aeb8b63e4c0e7b644b700cf2e"
 dependencies = [
  "bytes",
  "data-encoding",

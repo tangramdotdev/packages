@@ -231,7 +231,7 @@ impl Manifest {
 		Ok(wrap::read_manifest(path, None).manifest)
 	}
 
-	/// Restore authorization from the wrapper's dependency handles and subtree token.
+	/// Restore authorization from the wrapper's dependency handles and tokens.
 	pub async fn inherit_from_file(&mut self, file: &tg::File) -> tg::Result<()> {
 		let dependencies = file.dependencies().await?;
 		let mut references = BTreeMap::new();
@@ -249,7 +249,7 @@ impl Manifest {
 				.and_then(|dependency| dependency.0.node.as_ref())
 				.map_or_else(|| parent.clone(), |object| object.to_referent().options);
 			options.location = options.location.take().or(source.location);
-			options.tokens.inherit_for_object(id, &source.tokens);
+			options.tokens.inherit(&source.tokens);
 		};
 		self.for_each_reference_mut(&mut restore);
 		Ok(())

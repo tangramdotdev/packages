@@ -31,7 +31,7 @@ fn dependencies_retain_tokens() {
 }
 
 #[tokio::test]
-async fn inherit_from_file_does_not_use_parent_node_token_for_dependencies() {
+async fn inherit_from_file_preserves_dependency_tokens_before_wrapper_tokens() {
 	use tg::authorization::permission::object::Permission::{Node, Subtree};
 	tg::init().unwrap();
 	for permission in [None, Some(Node), Some(Subtree)] {
@@ -39,7 +39,7 @@ async fn inherit_from_file_does_not_use_parent_node_token_for_dependencies() {
 		if let Some(permission) = permission {
 			set_file_token_with_permission(&file, 100, permission);
 		}
-		let expected = file.state().tokens();
+		let dependency_tokens = file.state().tokens();
 		let mut manifest = Manifest {
 			executable: Executable::Path(
 				crate::template_from_artifact(file.clone().into()).to_data(),
@@ -54,6 +54,11 @@ async fn inherit_from_file_does_not_use_parent_node_token_for_dependencies() {
 			.build()
 			.unwrap();
 		set_file_token_with_permission(&wrapper, 200, Node);
+		let expected = if permission.is_some() {
+			dependency_tokens
+		} else {
+			wrapper.state().tokens()
+		};
 		manifest = manifest.without_location_and_tokens();
 		manifest.inherit_from_file(&wrapper).await.unwrap();
 		let dependencies = manifest.dependencies();
@@ -61,7 +66,7 @@ async fn inherit_from_file_does_not_use_parent_node_token_for_dependencies() {
 		let tokens = dependency.0.node.as_ref().unwrap().state().tokens();
 		assert_eq!(
 			tokens, expected,
-			"a wrapper node token cannot authorize its child"
+			"dependency tokens take precedence over inherited wrapper tokens"
 		);
 	}
 }
@@ -185,8 +190,6 @@ async fn read_from_file_restores_dependency_tokens() {
 	.unwrap()
 	.try_unwrap_file()
 	.unwrap();
-	// A cached dependency may still carry an older token than its owning wrapper.
-	set_file_token(&files[0], 100);
 	for wrapper in [
 		wrapper.clone(),
 		tg::File::with_referent(wrapper.to_referent()),
@@ -197,7 +200,7 @@ async fn read_from_file_restores_dependency_tokens() {
 			owner_body.grants(tg::authorization::Permission::Object(
 				tg::authorization::permission::object::Permission::Subtree,
 			)),
-			"the refresh fixture requires a wrapper subtree token"
+			"the wrapper fixture requires a subtree token"
 		);
 		let restored = Manifest::read_from_file(wrapper).await.unwrap().unwrap();
 		let restored_dependencies = restored.dependencies();

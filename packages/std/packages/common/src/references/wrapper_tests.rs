@@ -172,7 +172,7 @@ fn incomplete_wrapper_dependency_attributes_are_rejected() {
 }
 
 #[tokio::test]
-async fn unrender_inherits_wrapper_subtree_but_not_node_authorization() {
+async fn unrender_preserves_wrapper_tokens_without_interpreting_permissions() {
 	use tg::authorization::permission::object::Permission::{Node, Subtree};
 	let dependency = tg::File::with_contents("injection library");
 	let parent = super::tests::authorized_file();
@@ -206,29 +206,20 @@ async fn unrender_inherits_wrapper_subtree_but_not_node_authorization() {
 			.unwrap();
 		let references = References::default();
 		references.retain_from_wrapper(wrapper.path()).unwrap();
-		if permission == Subtree {
-			let template = references
-				.unrender(&format!("/opt/tangram/store/{}", dependency.id()))
-				.await
-				.expect("the wrapper's subtree grant authorizes its dependency");
-			assert_eq!(
-				template
-					.artifacts()
-					.next()
-					.unwrap()
-					.state()
-					.tokens()
-					.local(),
-				Some(&token)
-			);
-		} else {
-			assert!(
-				references.artifacts.lock().unwrap()[&dependency.id().into()]
-					.state()
-					.tokens()
-					.is_empty(),
-				"a parent node grant cannot authorize a dependency"
-			);
-		}
+		// The client forwards tokens; the server decides whether they authorize a request.
+		let template = references
+			.unrender(&format!("/opt/tangram/store/{}", dependency.id()))
+			.await
+			.expect("the unrendered dependency retains the wrapper token");
+		assert_eq!(
+			template
+				.artifacts()
+				.next()
+				.unwrap()
+				.state()
+				.tokens()
+				.local(),
+			Some(&token)
+		);
 	}
 }
