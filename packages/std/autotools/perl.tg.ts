@@ -44,21 +44,30 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 
 	const sourceDir = source_ ?? source(os);
 
-	const configure = {
-		args: [
-			"-des",
-			tg`-Dscriptdir=${tg.output}/bin`,
-			"-Dinstallstyle=lib/perl5",
-			"-Dusethreads",
-			'-Doptimize="-O3 -pipe -fstack-protector -fwrapv -fno-strict-aliasing"',
-		],
-		command: "bash Configure",
-	};
-
-	// On Linux non-musl hosts, specify that LC_ALL uses name/value pairs.
+	let pre;
+	// The locale probe needs a non-C locale.
 	if (os === "linux" && std.triple.environment(host) !== "musl") {
-		configure.args.push("-Accflags=-DPERL_LC_ALL_USES_NAME_VALUE_PAIRS");
+		const config = tg.file(
+			"d_perl_lc_all_uses_name_value_pairs='define'\n" +
+				"d_perl_lc_all_separator='undef'\n" +
+				"d_perl_lc_all_category_positions_init='undef'\n",
+		);
+		pre = tg`cp ${config} config.over`;
 	}
+
+	const configure = {
+		body: {
+			args: [
+				"-des",
+				tg`-Dscriptdir=${tg.output}/bin`,
+				"-Dinstallstyle=lib/perl5",
+				"-Dusethreads",
+				'-Doptimize="-O3 -pipe -fstack-protector -fwrapv -fno-strict-aliasing"',
+			],
+			command: "bash Configure",
+		},
+		...(pre ? { pre } : {}),
+	};
 
 	const phases = { configure };
 
