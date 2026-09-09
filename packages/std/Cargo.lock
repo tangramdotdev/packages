@@ -444,6 +444,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wrap",
+ "xattr",
 ]
 
 [[package]]
@@ -2352,7 +2353,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=03767a45d97b2ff0e77be64878e38c7c36e1744e#03767a45d97b2ff0e77be64878e38c7c36e1744e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
 dependencies = [
  "async-channel",
  "aws-lc-rs",
@@ -2408,7 +2409,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=03767a45d97b2ff0e77be64878e38c7c36e1744e#03767a45d97b2ff0e77be64878e38c7c36e1744e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -2417,7 +2418,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=03767a45d97b2ff0e77be64878e38c7c36e1744e#03767a45d97b2ff0e77be64878e38c7c36e1744e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
 dependencies = [
  "dashmap",
  "futures",
@@ -2431,7 +2432,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=03767a45d97b2ff0e77be64878e38c7c36e1744e#03767a45d97b2ff0e77be64878e38c7c36e1744e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2459,7 +2460,7 @@ dependencies = [
 [[package]]
 name = "tangram_pool"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=03767a45d97b2ff0e77be64878e38c7c36e1744e#03767a45d97b2ff0e77be64878e38c7c36e1744e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
 dependencies = [
  "futures",
  "tangram_futures",
@@ -2469,7 +2470,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=03767a45d97b2ff0e77be64878e38c7c36e1744e#03767a45d97b2ff0e77be64878e38c7c36e1744e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
 dependencies = [
  "bytes",
  "num",
@@ -2480,7 +2481,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=03767a45d97b2ff0e77be64878e38c7c36e1744e#03767a45d97b2ff0e77be64878e38c7c36e1744e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
 dependencies = [
  "itertools 0.15.0",
  "proc-macro2",
@@ -2491,7 +2492,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=03767a45d97b2ff0e77be64878e38c7c36e1744e#03767a45d97b2ff0e77be64878e38c7c36e1744e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
 dependencies = [
  "derive_more",
  "http",
@@ -2506,7 +2507,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=03767a45d97b2ff0e77be64878e38c7c36e1744e#03767a45d97b2ff0e77be64878e38c7c36e1744e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=92a92b80292329d2497de486119e9b91934852ed#92a92b80292329d2497de486119e9b91934852ed"
 dependencies = [
  "bytes",
  "data-encoding",
@@ -2589,12 +2590,10 @@ dependencies = [
  "serde",
  "serde_json",
  "tangram_client",
- "tempfile",
  "tokio",
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
- "xattr",
 ]
 
 [[package]]

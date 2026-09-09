@@ -11,9 +11,6 @@ use tokio::io::AsyncWriteExt;
 // `/opt/tangram/store/<id>/...` into emitted `.d` depfiles.
 const SANDBOX_STORE_DIR: &str = "/opt/tangram/store";
 
-// Markers that prefix tangram artifact ids in rendered env-var strings.
-const ARTIFACT_ID_MARKERS: &[&str] = &["/dir_01", "/fil_01", "/sym_01"];
-
 // The phases of one wrapper invocation. `prepare` is the check-ins and the arg
 // and env rewriting before the spawn; `materialize` is the checkout and sidecar
 // write after it.
@@ -212,20 +209,24 @@ async fn build_env(
 	// `tg::process::env::env()` reconstitutes typed values from the parent's
 	// `TANGRAM_ENV_*` shadow vars; `std::env::vars()` would lose the typing.
 	let mut env = tg::process::env::env()?;
+	let references = common::References::default();
+	references.retain_from_current_executable()?;
+	references.retain(source_artifact);
+	for value in env.values() {
+		references.retain_value(value);
+	}
 	rewrite_dir_env(&mut env, "OUT_DIR").await?;
 	// Cargo populates these with paths embedding the outer cargo-sandbox's
 	// source artifact id, which varies per `cargo.build`. Re-anchor on the
 	// per-crate source artifact so they depend only on this crate's source.
 	override_manifest_env(&mut env, source_artifact);
 
-	let toolchain_artifact = resolve_toolchain(&mut env, rustc).await?;
+	let toolchain_artifact = resolve_toolchain(&mut env, rustc, &references).await?;
 
 	// `TGRUSTC_SANDBOX_SDK` provides a linker on PATH; final-binary crates
 	// shell out to `cc` which the bare host env does not resolve.
-	if let Some(sdk) = env
-		.remove("TGRUSTC_SANDBOX_SDK")
-		.as_ref()
-		.and_then(extract_artifact)
+	if let Some(value) = env.remove("TGRUSTC_SANDBOX_SDK")
+		&& let Some(sdk) = extract_artifact(&value, &references).await?
 	{
 		prepend_sdk_to_path(&mut env, sdk);
 	}
@@ -243,14 +244,16 @@ async fn build_env(
 	Ok((env, toolchain_artifact))
 }
 
-async fn resolve_toolchain(env: &mut tg::value::Map, rustc: &str) -> tg::Result<tg::Artifact> {
+async fn resolve_toolchain(
+	env: &mut tg::value::Map,
+	rustc: &str,
+	references: &common::References,
+) -> tg::Result<tg::Artifact> {
 	// `TGRUSTC_SANDBOX_TOOLCHAIN` is set by `cargo.run` to swap the host's
 	// rustup toolchain for a wrapped tangram-managed one. When unset (the
 	// `cargo.build` path), the host rustc is already wrapped.
-	if let Some(artifact) = env
-		.remove("TGRUSTC_SANDBOX_TOOLCHAIN")
-		.as_ref()
-		.and_then(extract_artifact)
+	if let Some(value) = env.remove("TGRUSTC_SANDBOX_TOOLCHAIN")
+		&& let Some(artifact) = extract_artifact(&value, references).await?
 	{
 		return Ok(artifact);
 	}
@@ -669,17 +672,19 @@ fn resolve_rustc(rustc: &str) -> tg::Result<PathBuf> {
 
 // Recover the artifact embedded in an env-var value. Templates carry it
 // directly; Strings come from `cargo.run`'s `export KEY="<rendered>"` form
-// which loses the typed shadow var — recover by unrendering at the
-// artifact-id prefix.
-pub(crate) fn extract_artifact(value: &tg::Value) -> Option<tg::Artifact> {
+// which loses the typed shadow var. Recover the retained handle by unrendering.
+pub(crate) async fn extract_artifact(
+	value: &tg::Value,
+	references: &common::References,
+) -> tg::Result<Option<tg::Artifact>> {
 	match value {
-		tg::Value::Template(t) => first_artifact_component(t),
-		tg::Value::String(s) => {
-			let prefix = &s[..artifact_marker_position(s)?];
-			let template = tg::Template::unrender(prefix, s).ok()?;
-			first_artifact_component(&template)
+		tg::Value::Template(template) => {
+			Ok(first_artifact_component(template).map(|artifact| references.retain(&artifact)))
 		},
-		_ => None,
+		tg::Value::String(string) => Ok(first_artifact_component(
+			&references.unrender(string).await?,
+		)),
+		_ => Ok(None),
 	}
 }
 
@@ -688,10 +693,6 @@ fn first_artifact_component(t: &tg::Template) -> Option<tg::Artifact> {
 		tg::template::Component::Artifact(a) => Some(a.clone()),
 		_ => None,
 	})
-}
-
-pub(crate) fn artifact_marker_position(s: &str) -> Option<usize> {
-	ARTIFACT_ID_MARKERS.iter().find_map(|m| s.find(m))
 }
 
 pub(crate) fn prepend_sdk_to_path(env: &mut tg::value::Map, sdk: tg::Artifact) {

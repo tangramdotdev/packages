@@ -33,3 +33,6 @@ wrap = { workspace = true }
 [features]
 tracing = ["dep:tracing", "dep:tracing-subscriber"]
 default = ["tracing"]
+
+[dev-dependencies]
+xattr = { workspace = true }

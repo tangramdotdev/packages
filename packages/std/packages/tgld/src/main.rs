@@ -15,8 +15,6 @@ use tokio::io::AsyncReadExt as _;
 
 type Hasher = fnv::FnvBuildHasher;
 
-mod references;
-
 #[cfg(test)]
 mod authorization_tests;
 
@@ -435,10 +433,25 @@ fn read_options() -> tg::Result<Options> {
 	Ok(options)
 }
 
+fn references_from_options(options: &Options) -> tg::Result<common::References> {
+	let references = common::References::default();
+	for template in options.wrapper_arg_value.iter().flatten() {
+		references.retain_value(&tg::Value::Template(tg::Template::try_from_data(
+			template.clone(),
+		)?));
+	}
+	if let Some(env) = &options.wrapper_env_value {
+		references.retain_value(&tg::Value::Mutation(tg::Mutation::try_from_data(
+			env.clone(),
+		)?));
+	}
+	Ok(references)
+}
+
 #[allow(clippy::too_many_lines)]
 async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	let directory_cache = DirectoryCache {
-		references: references::ArtifactReferences::with_options(options),
+		references: references_from_options(options)?,
 		..Default::default()
 	};
 
@@ -803,7 +816,7 @@ async fn create_manifest<H: BuildHasher>(
 	options: &Options,
 	interpreter: InterpreterRequirement,
 	library_paths: Option<HashSet<DirectoryWithSubpath, H>>,
-	references: &references::ArtifactReferences,
+	references: &common::References,
 ) -> tg::Result<common::Manifest> {
 	let ld_output = references.retain(&ld_output);
 	// Create the interpreter.
@@ -974,7 +987,7 @@ impl std::str::FromStr for LibraryPathStrategy {
 async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 	library_candidate_paths: &[PathBuf],
 	all_needed_libraries: &mut HashMap<String, Option<DirectoryWithSubpath>, H>,
-	references: &references::ArtifactReferences,
+	references: &common::References,
 ) -> tg::Result<Option<DirectoryWithSubpath>> {
 	let mut entries = BTreeMap::new();
 	for library_candidate_path in library_candidate_paths {
@@ -1226,11 +1239,9 @@ async fn cache_library_paths<H: BuildHasher + Default>(
 		directory
 			.state()
 			.inherit_location(path.directory.state().location().as_ref());
-		directory.state().set_tokens(common::merge_tokens(
-			&directory.id().into(),
-			&directory.state().tokens(),
-			&path.directory.state().tokens(),
-		));
+		directory
+			.state()
+			.inherit_tokens(&path.directory.state().tokens());
 	}
 	let artifacts = roots.values().cloned().map(Into::into).collect();
 	tracing::debug!("caching libraries");
@@ -1373,7 +1384,7 @@ async fn resolve_directories<H: BuildHasher + Default>(
 /// Reuse handles and serialize cold walks through each directory.
 #[derive(Default)]
 struct DirectoryCache {
-	references: references::ArtifactReferences,
+	references: common::References,
 	directories: Mutex<HashMap<tg::directory::Id, CachedDirectory, Hasher>>,
 	resolved: Mutex<HashMap<DirectoryWithSubpath, tg::Directory, Hasher>>,
 }
@@ -1402,11 +1413,9 @@ impl DirectoryCache {
 	}
 
 	fn insert_resolved(&self, dir_with_subpath: &DirectoryWithSubpath, directory: &tg::Directory) {
-		directory.state().set_tokens(common::merge_tokens(
-			&directory.id().into(),
-			&directory.state().tokens(),
-			&dir_with_subpath.directory.state().tokens(),
-		));
+		directory
+			.state()
+			.inherit_tokens(&dir_with_subpath.directory.state().tokens());
 		self.resolved
 			.lock()
 			.unwrap()
@@ -1446,21 +1455,17 @@ impl DirectoryCache {
 
 	async fn resolve(&self, dir_with_subpath: &DirectoryWithSubpath) -> tg::Result<tg::Directory> {
 		if let Some(directory) = self.resolved.lock().unwrap().get(dir_with_subpath).cloned() {
-			directory.state().set_tokens(common::merge_tokens(
-				&directory.id().into(),
-				&directory.state().tokens(),
-				&dir_with_subpath.directory.state().tokens(),
-			));
+			directory
+				.state()
+				.inherit_tokens(&dir_with_subpath.directory.state().tokens());
 			return Ok(directory);
 		}
 		let outer = self.intern(&dir_with_subpath.directory);
 		let _walk = outer.walk.lock().await;
 		if let Some(directory) = self.resolved.lock().unwrap().get(dir_with_subpath).cloned() {
-			directory.state().set_tokens(common::merge_tokens(
-				&directory.id().into(),
-				&directory.state().tokens(),
-				&dir_with_subpath.directory.state().tokens(),
-			));
+			directory
+				.state()
+				.inherit_tokens(&dir_with_subpath.directory.state().tokens());
 			return Ok(directory);
 		}
 		let directory = if let Some(ref subpath) = dir_with_subpath.subpath {

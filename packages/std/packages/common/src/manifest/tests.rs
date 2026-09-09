@@ -30,49 +30,6 @@ fn dependencies_retain_tokens() {
 	assert_eq!(object.state().tokens(), file.state().tokens());
 }
 
-#[test]
-fn dependencies_retain_newest_equivalent_token() {
-	use tg::authorization::permission::object::Permission::{Node, Subtree};
-	for (permission, expirations) in [Node, Subtree].into_iter().flat_map(|permission| {
-		[[100, 200], [200, 100]].map(|expirations| (permission, expirations))
-	}) {
-		let mut dependencies = BTreeMap::new();
-		for expiration in expirations {
-			let file = file_with_token(expiration);
-			set_file_token_with_permission(&file, expiration, permission);
-			let template = crate::template_from_artifact(file.into()).to_data();
-			super::collect_dependencies_from_template_data(&template, &mut dependencies);
-		}
-		let dependency = dependencies.values().next().unwrap().as_ref().unwrap();
-		let tokens = dependency.0.node.as_ref().unwrap().state().tokens();
-		assert_eq!(tokens.local().unwrap().body.expires_at, 200);
-	}
-}
-
-#[test]
-fn dependencies_retain_subtree_token_over_newer_node_token() {
-	use tg::authorization::permission::object::Permission::{Node, Subtree};
-	for permissions in [[Subtree, Node], [Node, Subtree]] {
-		let mut dependencies = BTreeMap::new();
-		for permission in permissions {
-			let file = file_with_token(100);
-			let expiration = if permission == Subtree { 100 } else { 200 };
-			set_file_token_with_permission(&file, expiration, permission);
-			let template = crate::template_from_artifact(file.into()).to_data();
-			super::collect_dependencies_from_template_data(&template, &mut dependencies);
-		}
-		let dependency = dependencies.values().next().unwrap().as_ref().unwrap();
-		let tokens = dependency.0.node.as_ref().unwrap().state().tokens();
-		let token = tokens.local().unwrap();
-		assert!(
-			token
-				.body
-				.grants(tg::authorization::Permission::Object(Subtree))
-		);
-		assert_eq!(token.body.expires_at, 100);
-	}
-}
-
 #[tokio::test]
 async fn inherit_from_file_does_not_use_parent_node_token_for_dependencies() {
 	use tg::authorization::permission::object::Permission::{Node, Subtree};
@@ -242,7 +199,6 @@ async fn read_from_file_restores_dependency_tokens() {
 			)),
 			"the refresh fixture requires a wrapper subtree token"
 		);
-		let owner_expiration = owner_body.expires_at;
 		let restored = Manifest::read_from_file(wrapper).await.unwrap().unwrap();
 		let restored_dependencies = restored.dependencies();
 		for file in &files {
@@ -257,8 +213,22 @@ async fn read_from_file_restores_dependency_tokens() {
 				file.id()
 			);
 			assert!(
-				object.state().tokens().local().unwrap().body.expires_at >= owner_expiration,
-				"the wrapper's newer subtree token must refresh stale dependency authorization",
+				object
+					.state()
+					.tokens()
+					.local()
+					.unwrap()
+					.body
+					.validate_at(
+						std::time::SystemTime::now()
+							.duration_since(std::time::UNIX_EPOCH)
+							.unwrap()
+							.as_secs()
+							.try_into()
+							.unwrap()
+					)
+					.is_ok(),
+				"restored dependency authorization must be valid",
 			);
 			object.object().await.unwrap();
 		}

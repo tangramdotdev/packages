@@ -8,10 +8,10 @@ const workspace = path self '../../..'
 def main [
 	--control: path # Optional test executable built with wrapper recovery disabled.
 ] {
-	let build = cargo test --manifest-path ($workspace | path join Cargo.toml) --package tgld --locked --no-run --message-format=json | complete
-	success $build 'the tgld tests should build'
+	let build = cargo test --manifest-path ($workspace | path join Cargo.toml) --package common --locked --no-run --message-format=json | complete
+	success $build 'the proxy tests should build'
 	let executable = $build.stdout | lines | each { from json }
-		| where { $in.reason == 'compiler-artifact' and $in.target.name == 'tgld' and $in.profile.test }
+		| where { $in.reason == 'compiler-artifact' and $in.target.name == 'common' and $in.profile.test }
 		| get executable | compact | first
 	let temporary = if (($env.TANGRAM_TEST_FSKIT? | default '') | str length) > 0 {
 		# FSKit's sandbox permits checkout paths beneath ~/.tangram.
@@ -22,7 +22,7 @@ def main [
 		mktemp -d
 	}
 	$env.TMPDIR = $temporary
-	let server = server spawn --preserve-keys --config {
+	let server = server spawn --config {
 		authentication: { users: { providers: { insecure: true } } }
 	}
 	let alice = tg login --verbose --name alice | from json
@@ -65,20 +65,20 @@ def main [
 		failure $output 'the bare dependency ID must exhaust authorization'
 		assert ($output.stderr | str contains 'the authorization search exhausted')
 
-		# Each fresh process runs tgld's resolver and then loads the serialized reference from the server.
+		# Each fresh process runs the shared resolver and then loads the serialized reference from the server.
 		let environment = {
 			TANGRAM_TOKEN: $bob.token
 			TANGRAM_INJECTION_IDENTITY_PATH: $wrapper_path
-			TGLD_TEST_DEPENDENCY_ID: $dependency
+			COMMON_TEST_DEPENDENCY_ID: $dependency
 		}
 		let test = 'references::wrapper_tests::unrender_loads_checked_out_dependency_from_server'
 		if $control != null {
 			let output = with-env $environment { ^$control --exact $test --ignored --nocapture | complete }
-			failure $output 'tgld without wrapper recovery must exhaust authorization'
+			failure $output 'proxy without wrapper recovery must exhaust authorization'
 			assert ($output.stderr | str contains 'the authorization search exhausted')
 		}
 		let output = with-env $environment { ^$executable --exact $test --ignored --nocapture | complete }
-		success $output 'tgld must recover the token and load the dependency'
+		success $output 'proxy must recover the token and load the dependency'
 	} catch { |error|
 		server stop $server
 		rm -rf $temporary

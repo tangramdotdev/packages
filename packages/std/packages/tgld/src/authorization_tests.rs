@@ -38,7 +38,7 @@ async fn manifest_unrender_retains_authorization() {
 				)]),
 			});
 		let cache = DirectoryCache {
-			references: references::ArtifactReferences::with_options(&options),
+			references: references_from_options(&options).unwrap(),
 			..Default::default()
 		};
 		if source == "directory cache" {

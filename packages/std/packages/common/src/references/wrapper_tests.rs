@@ -3,11 +3,11 @@ use std::os::unix::process::CommandExt as _;
 use xattr::FileExt as _;
 
 #[tokio::test]
-#[ignore = "requires a server, TANGRAM_INJECTION_IDENTITY_PATH, and TGLD_TEST_DEPENDENCY_ID"]
+#[ignore = "requires a server, TANGRAM_INJECTION_IDENTITY_PATH, and COMMON_TEST_DEPENDENCY_ID"]
 async fn unrender_loads_checked_out_dependency_from_server() {
 	tg::init().unwrap();
-	let id = std::env::var("TGLD_TEST_DEPENDENCY_ID").unwrap();
-	let references = ArtifactReferences::default();
+	let id = std::env::var("COMMON_TEST_DEPENDENCY_ID").unwrap();
+	let references = References::default();
 	references.retain_from_current_executable().unwrap();
 	let template = references
 		.unrender(&format!("/opt/tangram/store/{id}"))
@@ -26,9 +26,9 @@ async fn unrender_loads_checked_out_dependency_from_server() {
 #[tokio::test]
 async fn unrender_recovers_wrapper_authorization_in_child_process() {
 	let dependency = super::tests::authorized_file();
-	if std::env::var_os("TGLD_TEST_WRAPPER_CHILD").is_some() {
+	if std::env::var_os("COMMON_TEST_WRAPPER_CHILD").is_some() {
 		tg::init().unwrap();
-		let references = ArtifactReferences::default();
+		let references = References::default();
 		references.retain_from_current_executable().unwrap();
 		// The recovered token must avoid a request to the unavailable server.
 		let template = references
@@ -55,8 +55,25 @@ async fn unrender_recovers_wrapper_authorization_in_child_process() {
 		.set_xattr(attribute.name, &attribute.value)
 		.unwrap();
 	let executable = std::env::current_exe().unwrap();
+	let empty = tempfile::NamedTempFile::new_in(directory.path()).unwrap();
+	for attribute in tg::file::dependencies_xattrs(&[], usize::MAX).unwrap() {
+		empty
+			.as_file()
+			.set_xattr(attribute.name, &attribute.value)
+			.unwrap();
+	}
+	let unrelated = tempfile::NamedTempFile::new_in(directory.path()).unwrap();
+	let reference = tg::Reference::with_object(tg::File::with_contents("unrelated").id().into());
+	for attribute in tg::file::dependencies_xattrs(&[reference], usize::MAX).unwrap() {
+		unrelated
+			.as_file()
+			.set_xattr(attribute.name, &attribute.value)
+			.unwrap();
+	}
 	let name = wrapper.path().file_name().unwrap();
 	for (arg0, identity) in [
+		(empty.path().to_owned(), Some(wrapper.path())),
+		(unrelated.path().to_owned(), Some(wrapper.path())),
 		("missing-wrapper".into(), Some(wrapper.path())),
 		(executable.clone(), Some(wrapper.path())),
 		(wrapper.path().to_owned(), None),
@@ -74,11 +91,11 @@ async fn unrender_recovers_wrapper_authorization_in_child_process() {
 			])
 			.current_dir(directory.path())
 			.env("PATH", directory.path())
-			.env("TGLD_TEST_WRAPPER_CHILD", "1")
+			.env("COMMON_TEST_WRAPPER_CHILD", "1")
 			.env_remove("TANGRAM_INJECTION_IDENTITY_PATH")
 			.env(
 				"TANGRAM_URL",
-				"http+unix://%2Fnonexistent-tgld-authorization-test.sock",
+				"http+unix://%2Fnonexistent-common-authorization-test.sock",
 			);
 		if let Some(identity) = identity {
 			command.env("TANGRAM_INJECTION_IDENTITY_PATH", identity);
@@ -122,13 +139,10 @@ async fn unrender_recovers_checked_out_wrapper_dependencies() {
 		let directory = tempfile::tempdir().unwrap();
 		let path = directory.path().join("ld");
 		std::os::unix::fs::symlink(wrapper.path(), &path).unwrap();
-		let references = ArtifactReferences::default();
+		let references = References::default();
 		references.retain_from_wrapper(&path).unwrap();
 		let template = references
-			.unrender_with(
-				&format!("/opt/tangram/store/{}", dependency.id()),
-				|_| async { Err(tg::error!("the authorization search exhausted")) },
-			)
+			.unrender(&format!("/opt/tangram/store/{}", dependency.id()))
 			.await
 			.expect("the wrapper's dependency token must avoid the exhausted lookup");
 		let restored = tg::Template::try_from_data(template.to_data()).unwrap();
@@ -141,7 +155,7 @@ async fn unrender_recovers_checked_out_wrapper_dependencies() {
 #[test]
 fn wrapper_without_dependency_attributes_is_supported() {
 	let executable = tempfile::NamedTempFile::new().unwrap();
-	let references = ArtifactReferences::default();
+	let references = References::default();
 	references.retain_from_wrapper(executable.path()).unwrap();
 	assert!(references.artifacts.lock().unwrap().is_empty());
 }
@@ -153,7 +167,7 @@ fn incomplete_wrapper_dependency_attributes_are_rejected() {
 		.as_file()
 		.set_xattr(format!("{}.1", tg::file::DEPENDENCIES_XATTR_NAME), b"[]")
 		.unwrap();
-	let references = ArtifactReferences::default();
+	let references = References::default();
 	assert!(references.retain_from_wrapper(executable.path()).is_err());
 }
 
@@ -190,16 +204,13 @@ async fn unrender_inherits_wrapper_subtree_but_not_node_authorization() {
 			.as_file()
 			.set_xattr(attribute.name, &attribute.value)
 			.unwrap();
-		let references = ArtifactReferences::default();
+		let references = References::default();
 		references.retain_from_wrapper(wrapper.path()).unwrap();
-		let result = references
-			.unrender_with(
-				&format!("/opt/tangram/store/{}", dependency.id()),
-				|_| async { Err(tg::error!("the authorization search exhausted")) },
-			)
-			.await;
 		if permission == Subtree {
-			let template = result.expect("the wrapper's subtree grant authorizes its dependency");
+			let template = references
+				.unrender(&format!("/opt/tangram/store/{}", dependency.id()))
+				.await
+				.expect("the wrapper's subtree grant authorizes its dependency");
 			assert_eq!(
 				template
 					.artifacts()
@@ -212,7 +223,10 @@ async fn unrender_inherits_wrapper_subtree_but_not_node_authorization() {
 			);
 		} else {
 			assert!(
-				result.is_err(),
+				references.artifacts.lock().unwrap()[&dependency.id().into()]
+					.state()
+					.tokens()
+					.is_empty(),
 				"a parent node grant cannot authorize a dependency"
 			);
 		}

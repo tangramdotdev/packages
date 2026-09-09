@@ -243,20 +243,15 @@ impl Manifest {
 		let parent = file.to_referent().options;
 		let mut restore = |id: &tg::object::Id, options: &mut tg::referent::Options| {
 			let reference = tg::Reference::with_object(id.clone());
-			let mut source = references
+			let source = references
 				.get(&reference)
 				.and_then(Option::as_ref)
 				.and_then(|dependency| dependency.0.node.as_ref())
 				.map_or_else(|| parent.clone(), |object| object.to_referent().options);
-			// Client dependency traversal fills missing locations but does not refresh existing tokens.
-			source.tokens = crate::merge_tokens(id, &source.tokens, &parent.tokens);
 			options.location = options.location.take().or(source.location);
-			options.tokens = crate::merge_tokens(id, &options.tokens, &source.tokens);
+			options.tokens.inherit_for_object(id, &source.tokens);
 		};
-		self.for_each_template_mut(|template| visit_template_references(template, &mut restore));
-		if let Some(env) = &mut self.env {
-			visit_mutation_references(env, &mut restore);
-		}
+		self.for_each_reference_mut(&mut restore);
 		Ok(())
 	}
 
@@ -370,14 +365,22 @@ impl Manifest {
 	}
 
 	fn without_location_and_tokens(mut self) -> Self {
-		// Keep authorization metadata out of the executable bytes while retaining it for dependencies.
-		self.for_each_template_mut(|template| {
-			*template = template.clone().without_location_and_tokens();
+		// Keep authorization out of the executable bytes while retaining it for dependencies.
+		self.for_each_reference_mut(&mut |_, options| {
+			options.location = None;
+			options.tokens = tg::authorization::Tokens::default();
 		});
-		self.env = self
-			.env
-			.map(tg::mutation::Data::without_location_and_tokens);
 		self
+	}
+
+	fn for_each_reference_mut(
+		&mut self,
+		visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
+	) {
+		self.for_each_template_mut(|template| visit_template_references(template, visit));
+		if let Some(env) = &mut self.env {
+			visit_mutation_references(env, visit);
+		}
 	}
 
 	fn for_each_template_mut(&mut self, mut visit: impl FnMut(&mut tg::template::Data)) {
@@ -514,87 +517,24 @@ impl Manifest {
 	/// Collect the dependencies from a manifest.
 	#[must_use]
 	pub fn dependencies(&self) -> BTreeMap<tg::Reference, Option<tg::file::Dependency>> {
-		let mut dependencies = BTreeMap::default();
-
-		// Collect the references from the interpreter.
-		match &self.interpreter {
-			Some(Interpreter::Normal(interpreter)) => {
-				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
-				for arg in &interpreter.args {
-					collect_dependencies_from_template_data(arg, &mut dependencies);
-				}
-			},
-			Some(Interpreter::LdLinux(interpreter)) => {
-				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
-				for arg in interpreter.args.iter().flatten() {
-					collect_dependencies_from_template_data(arg, &mut dependencies);
-				}
-				if let Some(library_paths) = &interpreter.library_paths {
-					for library_path in library_paths {
-						collect_dependencies_from_template_data(library_path, &mut dependencies);
-					}
-				}
-				if let Some(preloads) = &interpreter.preloads {
-					for preload in preloads {
-						collect_dependencies_from_template_data(preload, &mut dependencies);
-					}
-				}
-			},
-			Some(Interpreter::LdMusl(interpreter)) => {
-				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
-				for arg in interpreter.args.iter().flatten() {
-					collect_dependencies_from_template_data(arg, &mut dependencies);
-				}
-				if let Some(library_paths) = &interpreter.library_paths {
-					for library_path in library_paths {
-						collect_dependencies_from_template_data(library_path, &mut dependencies);
-					}
-				}
-				if let Some(preloads) = &interpreter.preloads {
-					for preload in preloads {
-						collect_dependencies_from_template_data(preload, &mut dependencies);
-					}
-				}
-			},
-			Some(Interpreter::DyLd(interpreter)) => {
-				if let Some(library_paths) = &interpreter.library_paths {
-					for library_path in library_paths {
-						collect_dependencies_from_template_data(library_path, &mut dependencies);
-					}
-				}
-				if let Some(preloads) = &interpreter.preloads {
-					for preload in preloads {
-						collect_dependencies_from_template_data(preload, &mut dependencies);
-					}
-				}
-			},
-			None => {},
-		}
-
-		// Collect the references from the executable.
-		match &self.executable {
-			Executable::Path(path) => {
-				collect_dependencies_from_template_data(path, &mut dependencies);
-			},
-			Executable::Content(template) => {
-				collect_dependencies_from_template_data(template, &mut dependencies);
-			},
-			Executable::Address(_) => (),
-		}
-
-		// Collect the references from the env.
-		if let Some(env) = &self.env {
-			collect_dependencies_from_mutation_data(env, &mut dependencies);
-		}
-
-		// Collect the references from the args.
-		if let Some(args) = &self.args {
-			for arg in args {
-				collect_dependencies_from_template_data(arg, &mut dependencies);
-			}
-		}
-
+		let mut dependencies = BTreeMap::new();
+		self.clone().for_each_reference_mut(&mut |id, options| {
+			collect_reference(id, options, &mut dependencies);
+		});
 		dependencies
+	}
+}
+
+fn collect_reference(
+	id: &tg::object::Id,
+	options: &tg::referent::Options,
+	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
+) {
+	if tg::artifact::Id::try_from(id.clone()).is_ok() {
+		insert_dependency(
+			dependencies,
+			tg::Object::with_referent(tg::Referent::new(id.clone(), options.clone())),
+		);
 	}
 }
 
@@ -602,71 +542,27 @@ pub fn collect_dependencies_from_value_data(
 	value: &tg::value::Data,
 	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
-	match value {
-		tg::value::Data::Object(object) => {
-			if matches!(
-				object.node,
-				tg::object::Id::Directory(_) | tg::object::Id::File(_) | tg::object::Id::Symlink(_)
-			) {
-				insert_dependency(dependencies, tg::Object::with_referent(object.clone()));
-			}
-		},
-		tg::value::Data::Mutation(data) => {
-			collect_dependencies_from_mutation_data(data, dependencies);
-		},
-		tg::value::Data::Template(data) => {
-			collect_dependencies_from_template_data(data, dependencies);
-		},
-		tg::value::Data::Array(arr) => {
-			for value in arr {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
-		tg::value::Data::Map(map) => {
-			for value in map.values() {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
-		_ => {},
-	}
+	visit_value_references(&mut value.clone(), &mut |id, options| {
+		collect_reference(id, options, dependencies);
+	});
 }
 
 pub fn collect_dependencies_from_template_data(
 	value: &tg::template::Data,
 	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
-	for component in &value.components {
-		if let tg::template::data::Component::Artifact(artifact) = component {
-			let object = tg::Object::with_referent(artifact.clone().map(Into::into));
-			insert_dependency(dependencies, object);
-		}
-	}
+	visit_template_references(&mut value.clone(), &mut |id, options| {
+		collect_reference(id, options, dependencies);
+	});
 }
 
 pub fn collect_dependencies_from_mutation_data(
 	value: &tg::mutation::Data,
 	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
-	match value {
-		tg::mutation::Data::Unset => {},
-		tg::mutation::Data::Set { value } | tg::mutation::Data::SetIfUnset { value } => {
-			collect_dependencies_from_value_data(value, dependencies);
-		},
-		tg::mutation::Data::Prepend { values } | tg::mutation::Data::Append { values } => {
-			for value in values {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
-		tg::mutation::Data::Prefix { template, .. }
-		| tg::mutation::Data::Suffix { template, .. } => {
-			collect_dependencies_from_template_data(template, dependencies);
-		},
-		tg::mutation::Data::Merge { value } => {
-			for value in value.values() {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
-	}
+	visit_mutation_references(&mut value.clone(), &mut |id, options| {
+		collect_reference(id, options, dependencies);
+	});
 }
 
 fn insert_dependency(
@@ -680,11 +576,7 @@ fn insert_dependency(
 		existing
 			.state()
 			.inherit_location(object.state().location().as_ref());
-		existing.state().set_tokens(crate::merge_tokens(
-			&existing.id(),
-			&existing.state().tokens(),
-			&object.state().tokens(),
-		));
+		existing.state().inherit_tokens(&object.state().tokens());
 		return;
 	}
 	let dependency = tg::file::Dependency(tg::Referent::with_node(Some(object)));

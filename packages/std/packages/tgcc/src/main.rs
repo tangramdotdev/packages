@@ -77,7 +77,6 @@ impl Environment {
 				},
 				key if BLACKLISTED_ENV_VARS.contains(&key) => {},
 				_ => {
-					let value = common::unrender(&value)?;
 					env.insert(key, value.into());
 				},
 			}
@@ -312,7 +311,17 @@ fn main_inner() -> tg::Result<()> {
 }
 
 #[allow(clippy::too_many_lines)]
-async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
+async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
+	let references = common::References::default();
+	references.retain_from_current_executable()?;
+	for value in tg::process::env::env()?.values() {
+		references.retain_value(value);
+	}
+	for value in environment.env.values_mut() {
+		if let tg::Value::String(string) = value {
+			*value = references.unrender(string).await?.into();
+		}
+	}
 	let Args {
 		output,
 		remap_targets,
@@ -331,10 +340,13 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	}));
 
 	// Create the remapping table.
-	let remappings = create_remapping_table(remap_targets).await?;
+	let remappings = create_remapping_table(remap_targets, &references).await?;
 
 	// Create the arguments to the driver script.
-	let cc = common::unrender(environment.cc.to_str().unwrap())?.into();
+	let cc = references
+		.unrender(environment.cc.to_str().unwrap())
+		.await?
+		.into();
 	let mut args = std::iter::once("tangram_cc".to_string().into())
 		.chain(std::iter::once(cc))
 		.chain(cli_args.into_iter().map(tg::Value::from))
@@ -457,6 +469,7 @@ struct SourceTree {
 // Convert a list of sources into a corresponding list of tg::Template.
 async fn create_remapping_table(
 	remap_targets: Vec<RemapTarget>,
+	references: &common::References,
 ) -> tg::Result<BTreeMap<RemapTarget, tg::Template>> {
 	let mut table = BTreeMap::new();
 	let mut subtrees = Vec::new();
@@ -474,8 +487,8 @@ async fn create_remapping_table(
 		}
 
 		// Check if this is a path that should be a template. Needs to happen after canonicalization in case a local symlink was created pointing to an artifact.
-		if path.starts_with("/.tangram/store") || path.starts_with("/opt/tangram/store") {
-			let template = common::unrender(path.to_str().unwrap())?;
+		if common::is_store_path(path.to_str().unwrap()) {
+			let template = references.unrender(path.to_str().unwrap()).await?;
 			table.insert(remap_target, template);
 			continue;
 		}

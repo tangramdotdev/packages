@@ -7,64 +7,8 @@ use tangram_client::prelude::*;
 pub mod manifest;
 pub use manifest::Manifest;
 
-/// Merge tokens from handles for an object or its ancestors.
-/// Prefer subtree access over node access, then the latest expiration for equivalent grants.
-#[must_use]
-pub fn merge_tokens(
-	object: &tg::object::Id,
-	existing: &tg::authorization::Tokens,
-	incoming: &tg::authorization::Tokens,
-) -> tg::authorization::Tokens {
-	let mut tokens = tg::authorization::Tokens::default();
-	for (location, token) in existing.iter().chain(incoming.iter()) {
-		let access = object_token_access(object, &token.body);
-		if access == Some(0) {
-			// A node grant for an ancestor does not authorize this object.
-			continue;
-		}
-		let replace = tokens.get(location).is_none_or(|existing| {
-			match (access, object_token_access(object, &existing.body)) {
-				(Some(incoming), Some(current)) => {
-					(incoming, token.body.expires_at) > (current, existing.body.expires_at)
-				},
-				_ => {
-					// Other permission types are comparable only for the same resource and grants.
-					token.body.resource == existing.body.resource
-						&& token
-							.body
-							.permissions
-							.iter()
-							.all(|permission| existing.body.permissions.contains(permission))
-						&& existing
-							.body
-							.permissions
-							.iter()
-							.all(|permission| token.body.permissions.contains(permission))
-						&& token.body.expires_at > existing.body.expires_at
-				},
-			}
-		});
-		if replace {
-			tokens.set(location.clone(), token.clone());
-		}
-	}
-	tokens
-}
-
-fn object_token_access(object: &tg::object::Id, body: &tg::authorization::Body) -> Option<u8> {
-	use tg::authorization::{
-		Permission::Object,
-		permission::object::Permission::{Node, Subtree},
-	};
-	if body.grants(Object(Subtree)) {
-		// The handle or dependency traversal supplies the ancestor relationship.
-		Some(2)
-	} else if body.grants(Object(Node)) {
-		Some(u8::from(body.resource == object.clone().into()))
-	} else {
-		None
-	}
-}
+mod references;
+pub use references::References;
 
 #[cfg(feature = "tracing")]
 pub mod tracing;
@@ -232,11 +176,6 @@ pub fn render_template_data(data: &tg::template::Data) -> tg::Result<String> {
 			tg::template::data::Component::Placeholder(data) => Ok(data.name.clone()),
 		})
 		.collect()
-}
-
-/// Unrender a template string into a [`tg::Template`].
-pub fn unrender(string: &str) -> tg::Result<tg::Template> {
-	unrender_with(string, |_| Ok(None))
 }
 
 /// Unrender a template string, resolving artifact handles with the given callback.
