@@ -10,6 +10,11 @@ const OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_OUT_DIR@@";
 
 pub async fn run() -> tg::Result<()> {
 	let start = Instant::now();
+	let references = common::References::default();
+	references.retain_from_current_executable()?;
+	for value in tg::process::env::env()?.values() {
+		references.retain_value(value);
+	}
 
 	// argv: [self, "runner", <build-script>, <extra args>...]
 	let script_binary = std::env::args()
@@ -26,7 +31,15 @@ pub async fn run() -> tg::Result<()> {
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
 		.map_err(|_| tg::error!("CARGO_MANIFEST_DIR is not set"))?;
 	let (source_artifact, manifest_subpath) = match parse_artifact_path(&manifest_dir) {
-		Some((id, subpath)) => (tg::Artifact::with_id(id), subpath),
+		Some((_, subpath)) => {
+			let template = references.unrender(&manifest_dir).await?;
+			let artifact = template
+				.artifacts()
+				.next()
+				.cloned()
+				.ok_or_else(|| tg::error!("missing source artifact"))?;
+			(artifact, subpath)
+		},
 		None => (
 			outer::checkin(Path::new(&manifest_dir)).await?,
 			String::new(),
@@ -43,7 +56,7 @@ pub async fn run() -> tg::Result<()> {
 		.map_err(|_| tg::error!("the driver artifact must be a file"))?
 		.into();
 
-	let env = build_env(source_template, &manifest_subpath)?;
+	let env = build_env(source_template, &manifest_subpath, &references).await?;
 
 	let mut spawn_args: tg::value::Array = Vec::with_capacity(1 + extra_args.len());
 	spawn_args.push(tg::Value::Template(script_template));
@@ -93,7 +106,7 @@ pub async fn run() -> tg::Result<()> {
 		extension: None,
 		force: true,
 		lock: None,
-		nodes: vec![tg::Referent::with_node(build_dir.id().into())],
+		nodes: vec![build_dir.to_referent().map(Into::into)],
 		path: Some(std::path::PathBuf::from(&cargo_out_dir)),
 	})
 	.await
@@ -108,14 +121,22 @@ pub async fn run() -> tg::Result<()> {
 // exports applied by the cargo wrapper or `pre` script reach the sandbox.
 // Each value is unrendered to recover an artifact-bearing template when
 // tangram paths are embedded.
-fn build_env(source_template: tg::Template, manifest_subpath: &str) -> tg::Result<tg::value::Map> {
+async fn build_env(
+	source_template: tg::Template,
+	manifest_subpath: &str,
+	references: &common::References,
+) -> tg::Result<tg::value::Map> {
 	let typed = tg::process::env::env()?;
-	let toolchain_artifact = typed
-		.get("TGRUSTC_SANDBOX_TOOLCHAIN")
-		.and_then(outer::extract_artifact);
-	let sdk_artifact = typed
-		.get("TGRUSTC_SANDBOX_SDK")
-		.and_then(outer::extract_artifact);
+	let toolchain_artifact = if let Some(value) = typed.get("TGRUSTC_SANDBOX_TOOLCHAIN") {
+		outer::extract_artifact(value, references).await?
+	} else {
+		None
+	};
+	let sdk_artifact = if let Some(value) = typed.get("TGRUSTC_SANDBOX_SDK") {
+		outer::extract_artifact(value, references).await?
+	} else {
+		None
+	};
 
 	let mut env: tg::value::Map = std::collections::BTreeMap::new();
 	for (name, raw) in std::env::vars() {
@@ -129,7 +150,13 @@ fn build_env(source_template: tg::Template, manifest_subpath: &str) -> tg::Resul
 		if outer::is_denied_host_env(&name) {
 			continue;
 		}
-		env.insert(name, unrender_value(&raw));
+		let template = references.unrender(&raw).await?;
+		let value = if template.artifacts().next().is_some() {
+			tg::Value::Template(template)
+		} else {
+			tg::Value::String(raw)
+		};
+		env.insert(name, value);
 	}
 
 	if let Some(sdk) = sdk_artifact {
@@ -265,17 +292,4 @@ async fn checkin_script_binary(script_binary: &str) -> tg::Result<tg::Artifact> 
 		.build()
 		.map_err(|error| tg::error!(!error, "failed to build script file artifact"))?;
 	Ok(file.into())
-}
-
-// Unrender if the value embeds a tangram artifact id so artifact components
-// resolve inside the runner sandbox. Otherwise return as a plain String.
-fn unrender_value(raw: &str) -> tg::Value {
-	let Some(end) = outer::artifact_marker_position(raw) else {
-		return tg::Value::String(raw.to_owned());
-	};
-	let prefix = &raw[..end];
-	match tg::Template::unrender(prefix, raw) {
-		Ok(template) => tg::Value::Template(template),
-		Err(_) => tg::Value::String(raw.to_owned()),
-	}
 }

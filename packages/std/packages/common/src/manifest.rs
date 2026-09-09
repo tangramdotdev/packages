@@ -9,6 +9,9 @@ use tokio::io::AsyncWriteExt;
 
 use crate::checkout_artifact;
 
+#[cfg(test)]
+mod tests;
+
 /// The Tangram run entrypoint manifest.
 #[derive(
 	Clone,
@@ -208,20 +211,48 @@ impl Manifest {
 	/// Read a manifest from the end of the given `[tg::File]`.
 	pub async fn read_from_file(file: tg::File) -> tg::Result<Option<Self>> {
 		tracing::debug!(?file, "Reading manifest from file");
-		let path = checkout_artifact(file.id().into())
+		let path = checkout_artifact(file.clone().into())
 			.await
 			.map_err(|error| tg::error!(!error, "failed to check out the file"))?;
-		tokio::task::spawn_blocking(move || Self::read_from_path(path))
+		let mut manifest = tokio::task::spawn_blocking(move || Self::read_from_path(path))
 			.await
 			.map_err(|error| tg::error!(!error, "failed to read the manifest"))?
-			.map_err(|error| tg::error!(!error, "failed to read the manifest"))
+			.map_err(|error| tg::error!(!error, "failed to read the manifest"))?;
+		if let Some(manifest) = &mut manifest {
+			manifest.inherit_from_file(&file).await?;
+		}
+		Ok(manifest)
 	}
 
-	/// Read a manifest from the end of the file at the given path.
+	/// Read manifest bytes only. Use `read_from_file` or `inherit_from_file` before rebuilding a wrapper.
 	pub fn read_from_path(path: impl AsRef<Path>) -> std::io::Result<Option<Self>> {
 		let path = path.as_ref();
 		tracing::debug!(path = %path.display(), "Reading manifest from path");
 		Ok(wrap::read_manifest(path, None).manifest)
+	}
+
+	/// Restore authorization from the wrapper's dependency handles and tokens.
+	pub async fn inherit_from_file(&mut self, file: &tg::File) -> tg::Result<()> {
+		let dependencies = file.dependencies().await?;
+		let mut references = BTreeMap::new();
+		for dependency in dependencies.values().flatten() {
+			if let Some(object) = &dependency.0.node {
+				insert_dependency(&mut references, object.clone());
+			}
+		}
+		let parent = file.to_referent().options;
+		let mut restore = |id: &tg::object::Id, options: &mut tg::referent::Options| {
+			let reference = tg::Reference::with_object(id.clone());
+			let source = references
+				.get(&reference)
+				.and_then(Option::as_ref)
+				.and_then(|dependency| dependency.0.node.as_ref())
+				.map_or_else(|| parent.clone(), |object| object.to_referent().options);
+			options.location = options.location.take().or(source.location);
+			options.tokens.inherit(&source.tokens);
+		};
+		self.for_each_reference_mut(&mut restore);
+		Ok(())
 	}
 
 	#[allow(clippy::too_many_lines)]
@@ -237,7 +268,7 @@ impl Manifest {
 
 		// Check out the input file, which is not a dependency of this executable, to get its path on
 		// disk.
-		let input = checkout_artifact(file.id().into())
+		let input = checkout_artifact(file.clone().into())
 			.await
 			.map_err(|error| tg::error!(!error, "failed to check out the input file"))?;
 
@@ -259,7 +290,7 @@ impl Manifest {
 
 		// Embed the wrapper.
 		tokio::task::spawn_blocking({
-			let manifest = self.clone();
+			let manifest = self.clone().without_location_and_tokens();
 			let output = tempfile.path().to_owned();
 			move || wrap::embed(output, &manifest, None)
 		})
@@ -328,8 +359,69 @@ impl Manifest {
 	}
 
 	pub fn write_to_path(&self, path: &Path) -> tg::Result<()> {
-		wrap::write_manifest(path, self, None);
+		let manifest = self.clone().without_location_and_tokens();
+		wrap::write_manifest(path, &manifest, None);
 		Ok(())
+	}
+
+	fn without_location_and_tokens(mut self) -> Self {
+		// Keep authorization out of the executable bytes while retaining it for dependencies.
+		self.for_each_reference_mut(&mut |_, options| {
+			options.location = None;
+			options.tokens = tg::authorization::Tokens::default();
+		});
+		self
+	}
+
+	fn for_each_reference_mut(
+		&mut self,
+		visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
+	) {
+		self.for_each_template_mut(|template| visit_template_references(template, visit));
+		if let Some(env) = &mut self.env {
+			visit_mutation_references(env, visit);
+		}
+	}
+
+	fn for_each_template_mut(&mut self, mut visit: impl FnMut(&mut tg::template::Data)) {
+		fn visit_all(
+			templates: &mut Option<Vec<tg::template::Data>>,
+			visit: &mut impl FnMut(&mut tg::template::Data),
+		) {
+			for template in templates.iter_mut().flatten() {
+				visit(template);
+			}
+		}
+		visit_all(&mut self.args, &mut visit);
+		match &mut self.executable {
+			Executable::Address(_) => {},
+			Executable::Content(template) | Executable::Path(template) => visit(template),
+		}
+		match &mut self.interpreter {
+			Some(Interpreter::DyLd(interpreter)) => {
+				visit_all(&mut interpreter.library_paths, &mut visit);
+				visit_all(&mut interpreter.preloads, &mut visit);
+			},
+			Some(Interpreter::LdLinux(interpreter)) => {
+				visit(&mut interpreter.path);
+				visit_all(&mut interpreter.args, &mut visit);
+				visit_all(&mut interpreter.library_paths, &mut visit);
+				visit_all(&mut interpreter.preloads, &mut visit);
+			},
+			Some(Interpreter::LdMusl(interpreter)) => {
+				visit(&mut interpreter.path);
+				visit_all(&mut interpreter.args, &mut visit);
+				visit_all(&mut interpreter.library_paths, &mut visit);
+				visit_all(&mut interpreter.preloads, &mut visit);
+			},
+			Some(Interpreter::Normal(interpreter)) => {
+				visit(&mut interpreter.path);
+				for arg in &mut interpreter.args {
+					visit(arg);
+				}
+			},
+			None => {},
+		}
 	}
 
 	/// Create a new wrapper from a manifest. Will locate the wrapper file from the `TANGRAM_WRAPPER_EXE_PATH` environment variable.
@@ -425,81 +517,24 @@ impl Manifest {
 	/// Collect the dependencies from a manifest.
 	#[must_use]
 	pub fn dependencies(&self) -> BTreeMap<tg::Reference, Option<tg::file::Dependency>> {
-		let mut dependencies = BTreeMap::default();
-
-		// Collect the references from the interpreter.
-		match &self.interpreter {
-			Some(Interpreter::Normal(interpreter)) => {
-				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
-				for arg in &interpreter.args {
-					collect_dependencies_from_template_data(arg, &mut dependencies);
-				}
-			},
-			Some(Interpreter::LdLinux(interpreter)) => {
-				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
-				if let Some(library_paths) = &interpreter.library_paths {
-					for library_path in library_paths {
-						collect_dependencies_from_template_data(library_path, &mut dependencies);
-					}
-				}
-				if let Some(preloads) = &interpreter.preloads {
-					for preload in preloads {
-						collect_dependencies_from_template_data(preload, &mut dependencies);
-					}
-				}
-			},
-			Some(Interpreter::LdMusl(interpreter)) => {
-				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
-				if let Some(library_paths) = &interpreter.library_paths {
-					for library_path in library_paths {
-						collect_dependencies_from_template_data(library_path, &mut dependencies);
-					}
-				}
-				if let Some(preloads) = &interpreter.preloads {
-					for preload in preloads {
-						collect_dependencies_from_template_data(preload, &mut dependencies);
-					}
-				}
-			},
-			Some(Interpreter::DyLd(interpreter)) => {
-				if let Some(library_paths) = &interpreter.library_paths {
-					for library_path in library_paths {
-						collect_dependencies_from_template_data(library_path, &mut dependencies);
-					}
-				}
-				if let Some(preloads) = &interpreter.preloads {
-					for preload in preloads {
-						collect_dependencies_from_template_data(preload, &mut dependencies);
-					}
-				}
-			},
-			None => {},
-		}
-
-		// Collect the references from the executable.
-		match &self.executable {
-			Executable::Path(path) => {
-				collect_dependencies_from_template_data(path, &mut dependencies);
-			},
-			Executable::Content(template) => {
-				collect_dependencies_from_template_data(template, &mut dependencies);
-			},
-			Executable::Address(_) => (),
-		}
-
-		// Collect the references from the env.
-		if let Some(env) = &self.env {
-			collect_dependencies_from_mutation_data(env, &mut dependencies);
-		}
-
-		// Collect the references from the args.
-		if let Some(args) = &self.args {
-			for arg in args {
-				collect_dependencies_from_template_data(arg, &mut dependencies);
-			}
-		}
-
+		let mut dependencies = BTreeMap::new();
+		self.clone().for_each_reference_mut(&mut |id, options| {
+			collect_reference(id, options, &mut dependencies);
+		});
 		dependencies
+	}
+}
+
+fn collect_reference(
+	id: &tg::object::Id,
+	options: &tg::referent::Options,
+	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
+) {
+	if tg::artifact::Id::try_from(id.clone()).is_ok() {
+		insert_dependency(
+			dependencies,
+			tg::Object::with_referent(tg::Referent::new(id.clone(), options.clone())),
+		);
 	}
 }
 
@@ -507,98 +542,102 @@ pub fn collect_dependencies_from_value_data(
 	value: &tg::value::Data,
 	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
-	match value {
-		tg::value::Data::Object(id) => match &id.node {
-			tg::object::Id::File(id) => {
-				let id = tg::object::Id::from(id.clone());
-				dependencies.insert(
-					tg::Reference::with_object(id.clone()),
-					dependency_from_object_id(&id),
-				);
-			},
-			tg::object::Id::Symlink(id) => {
-				let id = tg::object::Id::from(id.clone());
-				dependencies.insert(
-					tg::Reference::with_object(id.clone()),
-					dependency_from_object_id(&id),
-				);
-			},
-			tg::object::Id::Directory(id) => {
-				let id = tg::object::Id::from(id.clone());
-				dependencies.insert(
-					tg::Reference::with_object(id.clone()),
-					dependency_from_object_id(&id),
-				);
-			},
-			_ => {},
-		},
-		tg::value::Data::Mutation(data) => {
-			collect_dependencies_from_mutation_data(data, dependencies);
-		},
-		tg::value::Data::Template(data) => {
-			collect_dependencies_from_template_data(data, dependencies);
-		},
-		tg::value::Data::Array(arr) => {
-			for value in arr {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
-		tg::value::Data::Map(map) => {
-			for value in map.values() {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
-		_ => {},
-	}
+	visit_value_references(&mut value.clone(), &mut |id, options| {
+		collect_reference(id, options, dependencies);
+	});
 }
 
 pub fn collect_dependencies_from_template_data(
 	value: &tg::template::Data,
 	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
-	for component in &value.components {
-		if let tg::template::data::Component::Artifact(id) = component {
-			let id = &id.node;
-			let id = tg::object::Id::from(id.clone());
-			dependencies.insert(
-				tg::Reference::with_object(id.clone()),
-				dependency_from_object_id(&id),
-			);
-		}
-	}
+	visit_template_references(&mut value.clone(), &mut |id, options| {
+		collect_reference(id, options, dependencies);
+	});
 }
 
 pub fn collect_dependencies_from_mutation_data(
 	value: &tg::mutation::Data,
 	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
-	match value {
-		tg::mutation::Data::Unset => {},
-		tg::mutation::Data::Set { value } | tg::mutation::Data::SetIfUnset { value } => {
-			collect_dependencies_from_value_data(value, dependencies);
-		},
-		tg::mutation::Data::Prepend { values } | tg::mutation::Data::Append { values } => {
-			for value in values {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
-		tg::mutation::Data::Prefix { template, .. }
-		| tg::mutation::Data::Suffix { template, .. } => {
-			collect_dependencies_from_template_data(template, dependencies);
-		},
-		tg::mutation::Data::Merge { value } => {
-			for value in value.values() {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
+	visit_mutation_references(&mut value.clone(), &mut |id, options| {
+		collect_reference(id, options, dependencies);
+	});
+}
+
+fn insert_dependency(
+	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
+	object: tg::Object,
+) {
+	let reference = tg::Reference::with_object(object.id());
+	if let Some(Some(dependency)) = dependencies.get(&reference)
+		&& let Some(existing) = &dependency.0.node
+	{
+		existing
+			.state()
+			.inherit_location(object.state().location().as_ref());
+		existing.state().inherit_tokens(&object.state().tokens());
+		return;
+	}
+	let dependency = tg::file::Dependency(tg::Referent::with_node(Some(object)));
+	dependencies.insert(reference, Some(dependency));
+}
+
+fn visit_template_references(
+	template: &mut tg::template::Data,
+	visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
+) {
+	for component in &mut template.components {
+		if let tg::template::data::Component::Artifact(artifact) = component {
+			visit(&artifact.node.clone().into(), &mut artifact.options);
+		}
 	}
 }
 
-#[allow(clippy::unnecessary_wraps)]
-fn dependency_from_object_id(id: &tg::object::Id) -> Option<tg::file::Dependency> {
-	Some(tg::file::Dependency(tg::Referent::with_node(Some(
-		tg::Object::with_id(id.clone()),
-	))))
+fn visit_value_references(
+	value: &mut tg::value::Data,
+	visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
+) {
+	match value {
+		tg::value::Data::Object(object) => visit(&object.node, &mut object.options),
+		tg::value::Data::Template(template) => visit_template_references(template, visit),
+		tg::value::Data::Mutation(mutation) => visit_mutation_references(mutation, visit),
+		tg::value::Data::Array(values) => {
+			for value in values {
+				visit_value_references(value, visit);
+			}
+		},
+		tg::value::Data::Map(values) => {
+			for value in values.values_mut() {
+				visit_value_references(value, visit);
+			}
+		},
+		_ => {},
+	}
+}
+
+fn visit_mutation_references(
+	mutation: &mut tg::mutation::Data,
+	visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
+) {
+	match mutation {
+		tg::mutation::Data::Unset => {},
+		tg::mutation::Data::Set { value } | tg::mutation::Data::SetIfUnset { value } => {
+			visit_value_references(value, visit);
+		},
+		tg::mutation::Data::Prepend { values } | tg::mutation::Data::Append { values } => {
+			for value in values {
+				visit_value_references(value, visit);
+			}
+		},
+		tg::mutation::Data::Prefix { template, .. }
+		| tg::mutation::Data::Suffix { template, .. } => visit_template_references(template, visit),
+		tg::mutation::Data::Merge { value } => {
+			for value in value.values_mut() {
+				visit_value_references(value, visit);
+			}
+		},
+	}
 }
 
 // These are rendered from artifacts in the manifest, so each is a dependency already present in an

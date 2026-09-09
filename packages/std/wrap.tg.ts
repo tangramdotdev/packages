@@ -1131,8 +1131,11 @@ function setManifestReference(
 	object: tg.Object,
 ): void {
 	const existing = references.get(object.id);
-	if (existing === undefined || (!hasTokens(existing) && hasTokens(object))) {
+	if (existing === undefined) {
 		references.set(object.id, object);
+	} else {
+		tg.Object.inheritLocation(existing, object.state.location);
+		tg.Object.inheritTokens(existing, object.state.tokens);
 	}
 }
 
@@ -1144,6 +1147,7 @@ function inheritManifestReference<T extends tg.Object>(
 	tg.Object.inheritTokens(object, tokens ?? {});
 	if (references !== undefined) {
 		setManifestReference(references, object);
+		return references.get(object.id) as T;
 	}
 	return object;
 }
@@ -3178,6 +3182,14 @@ export async function testManifestTemplateAuthorization() {
 		serializedReferences,
 	);
 	tg.assert(serializedReferences.get(directory.id) === directory);
+	const reusedTemplate = await templateFromManifestTemplate(
+		manifestTemplate,
+		serializedReferences,
+	);
+	tg.assert(
+		reusedTemplate.components[0] === directory,
+		"expected the manifest template to reuse its authorized directory handle",
+	);
 
 	const parsedReferences: ManifestReferences = new Map();
 	const template = await templateFromManifestTemplate(

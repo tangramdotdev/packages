@@ -7,6 +7,9 @@ use tangram_client::prelude::*;
 pub mod manifest;
 pub use manifest::Manifest;
 
+mod references;
+pub use references::References;
+
 #[cfg(feature = "tracing")]
 pub mod tracing;
 
@@ -95,12 +98,10 @@ fn store_root_at(index: usize) -> Option<String> {
 }
 
 /// Check out the given artifacts into the store, returning their paths.
-pub async fn checkout_artifacts(
-	artifacts: Vec<tg::Referent<tg::artifact::Id>>,
-) -> tg::Result<Vec<PathBuf>> {
+pub async fn checkout_artifacts(artifacts: Vec<tg::Artifact>) -> tg::Result<Vec<PathBuf>> {
 	let nodes = artifacts
 		.into_iter()
-		.map(|referent| referent.map(Into::into))
+		.map(|artifact| artifact.to_referent().map(Into::into))
 		.collect();
 	tg::checkout(tg::checkout::Arg {
 		dependencies: true,
@@ -114,8 +115,8 @@ pub async fn checkout_artifacts(
 }
 
 /// Check out a single artifact into the store, returning its path.
-pub async fn checkout_artifact(artifact: tg::artifact::Id) -> tg::Result<PathBuf> {
-	let mut paths = checkout_artifacts(vec![tg::Referent::with_node(artifact)]).await?;
+pub async fn checkout_artifact(artifact: tg::Artifact) -> tg::Result<PathBuf> {
+	let mut paths = checkout_artifacts(vec![artifact]).await?;
 	if paths.len() != 1 {
 		return Err(tg::error!("expected exactly one checkout path"));
 	}
@@ -123,16 +124,13 @@ pub async fn checkout_artifact(artifact: tg::artifact::Id) -> tg::Result<PathBuf
 }
 
 /// Check out a single artifact to the given path, overwriting whatever is already there.
-pub async fn checkout_artifact_to_path(
-	artifact: tg::artifact::Id,
-	path: PathBuf,
-) -> tg::Result<()> {
+pub async fn checkout_artifact_to_path(artifact: tg::Artifact, path: PathBuf) -> tg::Result<()> {
 	tg::checkout(tg::checkout::Arg {
 		dependencies: false,
 		extension: None,
 		force: true,
 		lock: Some(tg::checkout::Lock::Attr),
-		nodes: vec![tg::Referent::with_node(artifact.into())],
+		nodes: vec![artifact.to_referent().map(Into::into)],
 		path: Some(path),
 	})
 	.await?;
@@ -180,17 +178,20 @@ pub fn render_template_data(data: &tg::template::Data) -> tg::Result<String> {
 		.collect()
 }
 
-/// Unrender a template string into a [`tg::Template`].
-pub fn unrender(string: &str) -> tg::Result<tg::Template> {
+/// Unrender a template string, resolving artifact handles with the given callback.
+pub fn unrender_with<F>(string: &str, resolver: F) -> tg::Result<tg::Template>
+where
+	F: FnMut(tg::artifact::Id) -> tg::Result<Option<tg::Artifact>>,
+{
 	let mut i = 0;
 	while let Some(root) = store_root_at(i) {
 		if string.contains(&format!("{root}/")) {
-			return tg::Template::unrender(&root, string);
+			return tg::Template::unrender_with(&root, string, resolver);
 		}
 		i += 1;
 	}
 	if string.contains("/opt/tangram/store/") {
-		return tg::Template::unrender("/opt/tangram/store", string);
+		return tg::Template::unrender_with("/opt/tangram/store", string, resolver);
 	}
 	Ok(tg::Template::from(tg::template::Component::String(
 		string.to_owned(),

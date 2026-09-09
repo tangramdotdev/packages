@@ -41,9 +41,9 @@ paste = "1"
 rustix = { version = "1", features = ["all-apis"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "21038fa4cafb9f5edef8d99cabd96a15d21c2129" }
-tangram_either = { git = "https://github.com/tangramdotdev/tangram", rev = "21038fa4cafb9f5edef8d99cabd96a15d21c2129" }
-tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "21038fa4cafb9f5edef8d99cabd96a15d21c2129" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "b915f0a293274b6aeb8b63e4c0e7b644b700cf2e" }
+tangram_either = { git = "https://github.com/tangramdotdev/tangram", rev = "b915f0a293274b6aeb8b63e4c0e7b644b700cf2e" }
+tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "b915f0a293274b6aeb8b63e4c0e7b644b700cf2e" }
 tempfile = "3"
 tokio = { version = "1", default-features = false, features = [
   "rt",
@@ -54,6 +54,7 @@ tokio = { version = "1", default-features = false, features = [
 tokio-stream = { version = "0.1", default-features = false, features = ["fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
+xattr = "1"
 zerocopy = { version = "0.8", features = ["derive"] }
 
 
