@@ -16,23 +16,17 @@
  	    chmod($SO_MODE, "$installarchlib/CORE/$file");
  	} else {
  	    chmod($NON_SO_MODE, "$installarchlib/CORE/$file");
-@@ -556,6 +554,19 @@
+@@ -550,11 +548,10 @@
+ 	unless $opts{silent};
+     print "  creating new version of $xto\n"
+ 	if $Is_VMS and -e $to and !$opts{silent};
+-    unless ($opts{notify} or File::Copy::copy($from, $to)) {
+-	# Might have been that F::C::c can't overwrite the target
++    unless ($opts{notify} or system('cp', '--', $from, $to) == 0) {
+ 	warn "Couldn't copy $from to $to: $!\n"
  	    unless -f $to and (chmod(0666, $to), unlink $to)
- 		   and File::Copy::copy($from, $to);
+-		   and File::Copy::copy($from, $to);
++		   and system('cp', '--', $from, $to) == 0;
      }
-+    # Preserve the Tangram dependencies xattr, which File::Copy drops on macOS.
-+    # Without it the installed copy of a wrapped executable loses its dependency
-+    # edges at check-in, orphaning the interpreter it references so that the
-+    # object cannot be authorized to consumers of the build.
-+    unless ($opts{notify} or $^O ne 'darwin') {
-+	my $attr = 'user.tangram.dependencies';
-+	my $hex = `xattr -px '$attr' "$from" 2>/dev/null`;
-+	if ($? == 0 and $hex =~ /\S/) {
-+	    $hex =~ s/\s+//g;
-+	    system('xattr', '-wx', $attr, $hex, $to) == 0
-+		or warn "Couldn't preserve $attr on $to\n";
-+	}
-+    }
      $packlist->{$xto} = { type => 'file' };
  }
- 
