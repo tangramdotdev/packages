@@ -7,6 +7,7 @@ import cargoLock from "../Cargo.lock" with { type: "file" };
 
 import * as wrapperSrc from "./wrapper.tg.ts";
 import common from "../packages/common" with { type: "directory" };
+import proxy from "../packages/proxy" with { type: "directory" };
 import tgcc from "../packages/tgcc" with { type: "directory" };
 import tgld from "../packages/tgld" with { type: "directory" };
 import tgstrip from "../packages/tgstrip" with { type: "directory" };
@@ -38,6 +39,7 @@ export async function workspace(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	// Get the source.
 	const defaultSource = tg.directory({
 		common,
+		proxy,
 		tgcc,
 		tgld,
 		tgstrip,
