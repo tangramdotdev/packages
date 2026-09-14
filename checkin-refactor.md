@@ -18,10 +18,12 @@ is available. Formatting and source/diff review are the only validation so far.
   construction. Runtime templates can instead use the containing root and
   subpath to retain filenames and surrounding directory context.
 
-`common/src/paths.rs` centralizes this boundary and is also included by tgrustc
-from the std source tree already present in its source bundle. Revisit this
-helper when the final client API lands. The current pin drops the context, so
-successful compilation against that pin would not validate the intended behavior.
+`packages/std/packages/common/src/paths.rs` centralizes this boundary within std.
+`packages/rust/tgrustc/src/paths.rs` contains an independent copy for tgrustc;
+the packages must build as isolated units without depending on their relative
+locations or each other's Rust source trees. Revisit both helpers when the final
+client API lands. The current pin drops the context, so successful compilation
+against that pin would not validate the intended behavior.
 
 ## Prepared changes
 
@@ -32,8 +34,8 @@ successful compilation against that pin would not validate the intended behavior
   Handle interning, authorization caches, serialized directory walk locks,
   unrender resolvers, store-root discovery, and launching-wrapper metadata
   recovery are absent.
-- tgcc and tgrustc share path resolution. Existing structured environment
-  templates identify literal boundaries in rendered strings; checkin recovers
+- tgcc and tgrustc use equivalent, package-local path resolution. Existing
+  structured environment templates identify literal boundaries in rendered strings; checkin recovers
   the handles and verifies their identities. Stale shadow values fall back to
   the current string. Standalone store paths and named path-list variables are
   supported; unsupported embedded paths fail explicitly. Arbitrary shell flag
@@ -67,7 +69,8 @@ adding the older branch's handle-identity reuse change.
 ## After repinning
 
 Confirm the checkin contract above, especially root/subpath context through
-file/directory downcasts, symlinks, and local checkouts. Then build and run the
+file/directory downcasts, symlinks, and local checkouts. Build the Rust crates
+from their own package source bundles to verify isolation. Then run the
 prepared common regression tests plus SDK linker/wrapper, tgstrip, tgcc, and
 tgrustc coverage. Exercise all library optimization strategies, local SONAME
 selection, absent local store checkouts, local/remote tokens, wrapper rewrapping,
@@ -94,6 +97,11 @@ Explicit decisions from the conversation:
 - The assumed API is an artifact handle whose `to_referent()` retains full
   context, not a new checkin output return type. The user explicitly noted that
   this may need refinement once the final Tangram commit is visible.
+- After checkpoint `152095ec`, the user clarified that rust and std must be
+  isolated packages: do not include source across package boundaries or assume
+  stable monorepo layout. The tgrustc paths helper is now an intentional local
+  copy, including its prepared tests. Its source bundle no longer includes the
+  std workspace and places the crate directly at the bundle root.
 
 Implementation entry points:
 
@@ -107,13 +115,16 @@ Implementation entry points:
 - `packages/std/packages/common/src/manifest.rs`: dependency token preservation,
   token-free serialization, authorization restoration, and argument-file reads.
 - `packages/std/sdk/proxy.tg.ts`: structured interpreter argument-file producer.
-- `packages/rust/tgrustc/src/main.rs`: includes the shared paths module via a
-  relative source path. `packages/rust/proxy.tg.ts` already bundles the std
-  workspace, so no new Cargo dependency or lockfile update was needed.
+- `packages/rust/tgrustc/src/paths.rs`: independent copy of the checkin and path
+  helpers, included normally by `mod paths` in `main.rs`. Keep the incoming
+  client API refinements consistent with std's helper without introducing a
+  source dependency between the packages.
+- `packages/rust/proxy.tg.ts`: bundles only tgrustc's Cargo manifest, lockfile,
+  and source directory; builds the manifest at the bundle root.
 - `packages/rust/tgrustc/src/outer.rs` and `runner.rs`, plus tgcc and tgstrip:
   consumers of the new path and authorization behavior.
-- `common/src/manifest/tests.rs` and the tests in `common/src/paths.rs`: prepared
-  regression coverage, not executed.
+- `common/src/manifest/tests.rs` and the tests in both package-local `paths.rs`
+  modules: prepared regression coverage, not executed.
 
 Validation completed: Rust formatting with the repository's rustfmt settings,
 oxfmt on the changed TypeScript files, and `git diff --check`. Source searches

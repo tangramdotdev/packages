@@ -15,15 +15,12 @@ import src from "./tgrustc/src" with { type: "directory" };
 import probeFixture from "./tgrustc/tests/probe" with { type: "directory" };
 import tests from "./tests" with { type: "directory" };
 
-/** `../../std` from tgrustc's Cargo.toml resolves to the std Rust workspace. */
+/** The proxy crate's complete, self-contained source. */
 export async function source() {
 	return tg.directory({
-		"rust/tgrustc": {
-			"Cargo.toml": cargoToml,
-			"Cargo.lock": cargoLock,
-			src,
-		},
-		std: std.rustSource,
+		"Cargo.toml": cargoToml,
+		"Cargo.lock": cargoLock,
+		src,
 	});
 }
 
@@ -31,7 +28,6 @@ export async function proxy(...args: tg.Args<cargo.Arg>) {
 	return cargo.build(
 		{
 			source: source(),
-			manifestSubdir: "rust/tgrustc",
 			proxy: false,
 			profile: "dev",
 			useCargoVendor: true,
