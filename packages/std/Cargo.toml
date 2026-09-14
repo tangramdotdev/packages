@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "packages/common",
+  "packages/proxy",
   "packages/tgcc",
   "packages/tgld",
   "packages/tgstrip",
@@ -59,6 +60,7 @@ zerocopy = { version = "0.8", features = ["derive"] }
 
 
 common = { path = "packages/common" }
+proxy = { path = "packages/proxy" }
 wrap = { path = "packages/wrap" }
 tgcc = { path = "packages/tgcc" }
 tgld = { path = "packages/tgld" }

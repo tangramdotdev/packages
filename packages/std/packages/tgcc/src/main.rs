@@ -6,8 +6,6 @@ use std::{
 };
 use tangram_client::prelude::*;
 
-mod flags;
-
 // Data read from environment variables.
 #[derive(Debug)]
 struct Environment {
@@ -98,7 +96,9 @@ impl Environment {
 				name.as_str(),
 				"CFLAGS" | "CPPFLAGS" | "CXXFLAGS" | "LDFLAGS"
 			) {
-				*value = flags::compiler_flags(raw).await?;
+				*value =
+					proxy::compiler_flags(raw, async |path| common::template_from_path(path).await)
+						.await?;
 			} else if common::is_store_path(raw) {
 				let paths =
 					matches!(

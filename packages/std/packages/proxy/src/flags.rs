@@ -1,7 +1,11 @@
 use tangram_client::prelude::*;
 
-// C/C++ compiler flag environment values retain their shell word spelling.
-pub(super) async fn compiler_flags(raw: &str) -> tg::Result<tg::Value> {
+/// Preserve C/C++ flag spelling while checking in their path operands.
+/// The caller supplies its checkin policy for each already-separated path.
+pub async fn compiler_flags(
+	raw: &str,
+	mut template_from_path: impl AsyncFnMut(&str) -> tg::Result<tg::Template>,
+) -> tg::Result<tg::Value> {
 	let mut components = Vec::new();
 	let mut end = 0;
 	for range in flag_words(raw)? {
@@ -11,7 +15,7 @@ pub(super) async fn compiler_flags(raw: &str) -> tg::Result<tg::Value> {
 		let [decoded] = words.as_slice() else {
 			continue;
 		};
-		if !common::is_store_path(decoded) {
+		if !crate::is_store_path(decoded) {
 			continue;
 		}
 		components.push(tg::template::Component::String(
@@ -43,7 +47,7 @@ pub(super) async fn compiler_flags(raw: &str) -> tg::Result<tg::Value> {
 					.components
 					.push(tg::template::Component::String(":".into()));
 			}
-			if common::is_store_path(path) {
+			if crate::is_store_path(path) {
 				if !std::path::Path::new(path).is_absolute() {
 					return Err(tg::error!(
 						"unsupported embedded store path in compiler flags"
@@ -51,7 +55,7 @@ pub(super) async fn compiler_flags(raw: &str) -> tg::Result<tg::Value> {
 				}
 				template
 					.components
-					.extend(common::template_from_path(path).await?.components);
+					.extend(template_from_path(path).await?.components);
 			} else {
 				template
 					.components

@@ -434,6 +434,7 @@ dependencies = [
  "clap",
  "crossterm 0.28.1",
  "futures",
+ "proxy",
  "serde",
  "serde_json",
  "tangram_client",
@@ -1876,6 +1877,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "proxy"
+version = "0.0.0"
+dependencies = [
+ "shlex",
+ "tangram_client",
+]
+
+[[package]]
 name = "quick-xml"
 version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2705,9 +2714,9 @@ dependencies = [
  "common",
  "futures",
  "itertools 0.14.0",
+ "proxy",
  "serde",
  "serde_json",
- "shlex",
  "tangram_client",
  "tempfile",
  "tokio",

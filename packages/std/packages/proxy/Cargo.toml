@@ -1,0 +1,17 @@
+[package]
+name = "proxy"
+description = "Shared artifact and compiler flag handling for Tangram proxies"
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[lints]
+workspace = true
+
+[dependencies]
+shlex = { workspace = true }
+tangram_client = { workspace = true }

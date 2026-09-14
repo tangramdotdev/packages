@@ -15,7 +15,7 @@ import src from "./tgrustc/src" with { type: "directory" };
 import probeFixture from "./tgrustc/tests/probe" with { type: "directory" };
 import tests from "./tests" with { type: "directory" };
 
-/** The proxy crate's self-contained source. */
+/** Bundle std's Rust workspace so the proxy support dependency resolves within this source. */
 export async function source() {
 	return tg.directory({
 		"rust/tgrustc": {
@@ -23,6 +23,7 @@ export async function source() {
 			"Cargo.lock": cargoLock,
 			src,
 		},
+		std: std.rustSource,
 	});
 }
 

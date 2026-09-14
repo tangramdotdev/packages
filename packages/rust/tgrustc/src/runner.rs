@@ -35,21 +35,11 @@ pub async fn run() -> tg::Result<()> {
 
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
 		.map_err(|_| tg::error!("CARGO_MANIFEST_DIR is not set"))?;
-	let mut referent = outer::checkin(Path::new(&manifest_dir)).await?.artifact;
-	let manifest_subpath = if let Some(id) = referent.options.id.take() {
-		referent.node = id
-			.try_into()
-			.map_err(|_| tg::error!("expected a source directory root"))?;
-		referent
-			.options
-			.path
-			.take()
-			.map(|path| path.to_string_lossy().into_owned())
-			.unwrap_or_default()
-	} else {
-		String::new()
-	};
-	let source_artifact = tg::Artifact::with_referent(referent);
+	let output = outer::checkin(Path::new(&manifest_dir)).await?;
+	let (source_artifact, manifest_subpath) = proxy::artifact_path(&output.artifact)?;
+	let manifest_subpath = manifest_subpath
+		.map(|path| path.to_string_lossy().into_owned())
+		.unwrap_or_default();
 	let source_template =
 		tg::Template::with_components([tg::template::Component::Artifact(source_artifact)]);
 
@@ -67,7 +57,7 @@ pub async fn run() -> tg::Result<()> {
 	spawn_args.push(tg::Value::Template(script_template));
 	for arg in &extra_args {
 		// Cargo build-script arguments have no compiler-option grammar.
-		spawn_args.push(if outer::is_store_path(arg) {
+		spawn_args.push(if proxy::is_store_path(arg) {
 			outer::template_from_path(arg).await?.into()
 		} else {
 			arg.clone().into()
@@ -153,8 +143,8 @@ async fn build_env(
 			name.as_str(),
 			"CFLAGS" | "CPPFLAGS" | "CXXFLAGS" | "LDFLAGS"
 		) {
-			value = compiler_flags(&raw).await?;
-		} else if outer::is_store_path(&raw) {
+			value = proxy::compiler_flags(&raw, outer::template_from_path).await?;
+		} else if proxy::is_store_path(&raw) {
 			let paths = matches!(
 				name.as_str(),
 				"PATH"
@@ -176,7 +166,7 @@ async fn build_env(
 				if index > 0 {
 					template = template.string(":");
 				}
-				template = if outer::is_store_path(path) {
+				template = if proxy::is_store_path(path) {
 					template.components(
 						outer::template_from_path(path)
 							.await
@@ -298,128 +288,6 @@ fn toolchain_subpath(toolchain: &tg::Artifact, suffix: &str) -> tg::Value {
 	]))
 }
 
-pub(crate) async fn compiler_flags(raw: &str) -> tg::Result<tg::Value> {
-	let mut components = Vec::new();
-	let mut end = 0;
-	for range in flag_words(raw)? {
-		let word = &raw[range.clone()];
-		let words =
-			shlex::split(word).ok_or_else(|| tg::error!("invalid quoting in compiler flags"))?;
-		let [decoded] = words.as_slice() else {
-			continue;
-		};
-		if !outer::is_store_path(decoded) {
-			continue;
-		}
-		components.push(tg::template::Component::String(
-			raw[end..range.start].to_owned(),
-		));
-		let (prefix, path) = [
-			"-I",
-			"-L",
-			"-B",
-			"--sysroot=",
-			"-isystem",
-			"-iquote",
-			"-idirafter",
-			"-include",
-			"-imacros",
-			"-isysroot",
-			"-Wl,-rpath-link,",
-			"-Wl,-rpath,",
-			"-Wl,-dynamic-linker=",
-		]
-		.into_iter()
-		.find_map(|prefix| decoded.strip_prefix(prefix).map(|path| (prefix, path)))
-		.unwrap_or(("", decoded));
-		let separator = matches!(prefix, "-Wl,-rpath-link," | "-Wl,-rpath,").then_some(':');
-		let mut template = tg::Template::builder().string(prefix).build();
-		for (index, path) in path.split(|c| Some(c) == separator).enumerate() {
-			if index > 0 {
-				template
-					.components
-					.push(tg::template::Component::String(":".into()));
-			}
-			if outer::is_store_path(path) {
-				if !std::path::Path::new(path).is_absolute() {
-					return Err(tg::error!(
-						"unsupported embedded store path in compiler flags"
-					));
-				}
-				template
-					.components
-					.extend(outer::template_from_path(path).await?.components);
-			} else {
-				template
-					.components
-					.push(tg::template::Component::String(path.into()));
-			}
-		}
-		// Preserve plain words for consumers that split flags without shell unquoting.
-		// Re-quote decoded words as a whole, escaping apostrophes in path suffixes.
-		if word != decoded {
-			components.push(tg::template::Component::String("'".into()));
-			for component in &mut template.components {
-				if let tg::template::Component::String(string) = component {
-					*string = string.replace('\'', "'\\''");
-				}
-			}
-			template
-				.components
-				.push(tg::template::Component::String("'".into()));
-		}
-		components.extend(template.components);
-		end = range.end;
-	}
-	if components.is_empty() {
-		return Ok(raw.to_owned().into());
-	}
-	components.push(tg::template::Component::String(raw[end..].to_owned()));
-	Ok(tg::Template::with_components(components).into())
-}
-
-// Locate shell words without losing their spelling or surrounding whitespace.
-// shlex decodes each word; this scan only tracks quotes, escapes, and boundaries.
-fn flag_words(raw: &str) -> tg::Result<Vec<std::ops::Range<usize>>> {
-	let mut words = Vec::new();
-	let mut start = None;
-	let mut quote = None;
-	let mut chars = raw.char_indices();
-	while let Some((index, c)) = chars.next() {
-		if quote.is_none() && matches!(c, ' ' | '\t' | '\n') {
-			if let Some(start) = start.take() {
-				words.push(start..index);
-			}
-			continue;
-		}
-		if quote.is_none() && start.is_none() && c == '#' {
-			for (_, c) in chars.by_ref() {
-				if c == '\n' {
-					break;
-				}
-			}
-			continue;
-		}
-		start.get_or_insert(index);
-		if c == '\\' && quote != Some('\'') {
-			chars
-				.next()
-				.ok_or_else(|| tg::error!("trailing escape in compiler flags"))?;
-		} else if Some(c) == quote {
-			quote = None;
-		} else if quote.is_none() && matches!(c, '\'' | '"') {
-			quote = Some(c);
-		}
-	}
-	if quote.is_some() {
-		return Err(tg::error!("unterminated quote in compiler flags"));
-	}
-	if let Some(start) = start {
-		words.push(start..raw.len());
-	}
-	Ok(words)
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -459,7 +327,10 @@ mod tests {
 		] {
 			let prefix = r#" -DVERSION=\"1.0\"  "#;
 			let flags = format!("{prefix}{flag}\t-O2 ");
-			let template = compiler_flags(&flags).await?.try_unwrap_template().unwrap();
+			let template = proxy::compiler_flags(&flags, outer::template_from_path)
+				.await?
+				.try_unwrap_template()
+				.unwrap();
 			assert_eq!(template.artifacts().count(), 1);
 			let rendered = template
 				.try_render(|component| async move {

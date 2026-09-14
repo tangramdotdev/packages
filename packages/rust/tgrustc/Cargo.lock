@@ -1648,6 +1648,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "proxy"
+version = "0.0.0"
+dependencies = [
+ "shlex",
+ "tangram_client",
+]
+
+[[package]]
 name = "quick-xml"
 version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2441,9 +2449,9 @@ dependencies = [
 name = "tgrustc"
 version = "0.0.0"
 dependencies = [
+ "proxy",
  "rustix",
  "serde",
- "shlex",
  "tangram_client",
  "tempfile",
  "tokio",

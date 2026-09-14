@@ -1,4 +1,5 @@
 use crate::{args::Args, lock, sidecar};
+use proxy::is_store_path;
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	path::{Path, PathBuf},
@@ -227,7 +228,7 @@ async fn build_env(
 				name.as_str(),
 				"CFLAGS" | "CPPFLAGS" | "CXXFLAGS" | "LDFLAGS"
 			) {
-				*value = crate::runner::compiler_flags(&raw).await?;
+				*value = proxy::compiler_flags(&raw, template_from_path).await?;
 			} else if is_store_path(&raw) {
 				let paths =
 					matches!(
@@ -868,31 +869,6 @@ pub(crate) async fn template_from_path(path: &str) -> tg::Result<tg::Template> {
 	if !Path::new(path).is_absolute() {
 		return Err(tg::error!("unsupported embedded store path"));
 	}
-	let mut referent = checkin(Path::new(path)).await?.artifact;
-	let subpath = if let Some(id) = referent.options.id.take() {
-		referent.node = id
-			.try_into()
-			.map_err(|_| tg::error!("expected an artifact root"))?;
-		referent.options.path.take()
-	} else {
-		None
-	};
-	let mut template = tg::Template::builder().artifact(tg::Artifact::with_referent(referent));
-	if let Some(path) = subpath.filter(|path| !path.as_os_str().is_empty()) {
-		template = template.string(format!("/{}", path.display()));
-	}
-	Ok(template.build())
-}
-
-/// Only classify paths here. Checkin resolves their identity and authorization.
-#[must_use]
-pub(crate) fn is_store_path(path: &str) -> bool {
-	[
-		"/.tangram/store/",
-		"/.tangram/checkouts/",
-		"/opt/tangram/store/",
-		"/opt/tangram/checkouts/",
-	]
-	.into_iter()
-	.any(|prefix| path.contains(prefix))
+	let output = checkin(Path::new(path)).await?;
+	proxy::template_from_referent(&output.artifact)
 }
