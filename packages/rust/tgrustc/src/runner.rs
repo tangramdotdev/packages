@@ -19,8 +19,8 @@ pub async fn run() -> tg::Result<()> {
 
 	let crate_name = std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "unknown".into());
 
-	let script_artifact = outer::checkin(Path::new(&script_binary))
-		.await?
+	let output = outer::checkin(Path::new(&script_binary)).await?;
+	let script_artifact = tg::Artifact::with_referent(output.artifact)
 		.try_unwrap_file()
 		.map_err(|_| tg::error!("expected a build script file"))?;
 	let script_artifact = tg::Artifact::from(script_artifact);
@@ -30,7 +30,7 @@ pub async fn run() -> tg::Result<()> {
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
 		.map_err(|_| tg::error!("CARGO_MANIFEST_DIR is not set"))?;
 	let source = outer::checkin(Path::new(&manifest_dir)).await?;
-	let (source_artifact, manifest_subpath) = crate::paths::artifact_path(&source.to_referent())?;
+	let (source_artifact, manifest_subpath) = crate::paths::artifact_path(&source.artifact)?;
 	let manifest_subpath = manifest_subpath
 		.map(|path| path.to_string_lossy().into_owned())
 		.unwrap_or_default();
@@ -39,7 +39,7 @@ pub async fn run() -> tg::Result<()> {
 
 	let self_exe = std::env::current_exe()
 		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
-	let driver_artifact = outer::checkin(&self_exe).await?;
+	let driver_artifact = tg::Artifact::with_referent(outer::checkin(&self_exe).await?.artifact);
 	let executable: tg::command::Executable = driver_artifact
 		.try_unwrap_file()
 		.map_err(|_| tg::error!("the driver artifact must be a file"))?

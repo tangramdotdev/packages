@@ -121,7 +121,7 @@ async fn run_proxy(
 		// The bytes contain IDs only. Recover the wrapper's authorized dependencies before rebuilding it.
 		let path = std::fs::canonicalize(target_path)
 			.map_err(|error| tg::error!(!error, "failed to canonicalize the wrapper path"))?;
-		let file = tg::checkin(tg::checkin::Arg {
+		let output = tg::checkin(tg::checkin::Arg {
 			options: tg::checkin::Options {
 				destructive: false,
 				deterministic: true,
@@ -133,9 +133,10 @@ async fn run_proxy(
 			path,
 			updates: Vec::new(),
 		})
-		.await?
-		.try_unwrap_file()
-		.map_err(|error| tg::error!(!error, "expected a wrapper file"))?;
+		.await?;
+		let file = tg::Artifact::with_referent(output.artifact)
+			.try_unwrap_file()
+			.map_err(|error| tg::error!(!error, "expected a wrapper file"))?;
 		manifest.inherit_from_file(&file).await?;
 	}
 
@@ -188,7 +189,7 @@ async fn run_proxy(
 			tracing::info!(?local_executable_path, "strip succeeded");
 
 			// Check in the result.
-			let stripped_file = tg::checkin(tg::checkin::Arg {
+			let output = tg::checkin(tg::checkin::Arg {
 				options: tg::checkin::Options {
 					source_dependencies: true,
 					destructive: false,
@@ -202,9 +203,10 @@ async fn run_proxy(
 				path: local_executable_path,
 				updates: vec![],
 			})
-			.await?
-			.try_unwrap_file()
-			.map_err(|error| tg::error!(source = error, "expected a file"))?;
+			.await?;
+			let stripped_file = tg::Artifact::with_referent(output.artifact)
+				.try_unwrap_file()
+				.map_err(|error| tg::error!(source = error, "expected a file"))?;
 			#[cfg(feature = "tracing")]
 			tracing::info!(stripped_file_id = ?stripped_file.id(), "checked in the stripped executable");
 

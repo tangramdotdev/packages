@@ -2,8 +2,8 @@ use std::path::{Path, PathBuf};
 use tangram_client::prelude::*;
 
 /// Check in a path with its authorization and containing root/subpath context.
-/// Requires the incoming client contract: `Artifact::to_referent` preserves checkin context.
-pub async fn checkin_path(path: impl AsRef<Path>) -> tg::Result<tg::Artifact> {
+/// Keep the output referent until its context has been consumed; artifact handles retain only tokens and location.
+pub async fn checkin_path(path: impl AsRef<Path>) -> tg::Result<tg::checkin::Output> {
 	tg::checkin(tg::checkin::Arg {
 		options: tg::checkin::Options {
 			destructive: false,
@@ -44,8 +44,12 @@ pub fn artifact_path(
 }
 
 pub async fn template_from_path(path: impl AsRef<Path>) -> tg::Result<tg::Template> {
-	let artifact = checkin_path(path).await?;
-	let (artifact, subpath) = artifact_path(&artifact.to_referent())?;
+	let output = checkin_path(path).await?;
+	template_from_referent(&output.artifact)
+}
+
+fn template_from_referent(referent: &tg::Referent<tg::artifact::Id>) -> tg::Result<tg::Template> {
+	let (artifact, subpath) = artifact_path(referent)?;
 	let mut components = vec![tg::template::Component::Artifact(artifact)];
 	if let Some(subpath) = subpath {
 		components.push(tg::template::Component::String(format!(
@@ -59,7 +63,14 @@ pub async fn template_from_path(path: impl AsRef<Path>) -> tg::Result<tg::Templa
 /// Only classify paths here. Checkin resolves their identity and authorization.
 #[must_use]
 pub fn is_store_path(path: &str) -> bool {
-	path.contains("/.tangram/store/") || path.contains("/opt/tangram/store/")
+	[
+		"/.tangram/store/",
+		"/.tangram/checkouts/",
+		"/opt/tangram/store/",
+		"/opt/tangram/checkouts/",
+	]
+	.into_iter()
+	.any(|prefix| path.contains(prefix))
 }
 
 pub async fn render_template(template: &tg::Template) -> tg::Result<String> {
@@ -198,13 +209,14 @@ async fn checkin_rendered_template(
 				if !Path::new(path).is_absolute() {
 					return Ok(None);
 				}
-				let Ok(artifact) = checkin_path(path).await else {
+				let Ok(output) = checkin_path(path).await else {
 					return Ok(None);
 				};
-				if artifact.id() != expected.id() {
+				if output.artifact.node != expected.id() {
 					return Ok(None);
 				}
-				components.push(tg::template::Component::Artifact(artifact));
+				// Preserve any containing root/subpath even when the rendered component names a child.
+				components.extend(template_from_referent(&output.artifact)?.components);
 				raw = &raw[end..];
 			},
 			tg::template::Component::Placeholder(_) => return Ok(None),
@@ -220,7 +232,7 @@ mod tests {
 	use super::*;
 
 	fn referent() -> tg::Referent<tg::artifact::Id> {
-		let node = "fil_010000000000000000000000000000000000000000000000000000"
+		let node: tg::artifact::Id = "fil_010000000000000000000000000000000000000000000000000000"
 			.parse()
 			.unwrap();
 		let root: tg::artifact::Id = "dir_010000000000000000000000000000000000000000000000000000"
@@ -244,7 +256,9 @@ mod tests {
 			name: "test".into(),
 			region: None,
 		});
-		let mut tokens = tg::authorization::Tokens::with_local([token.clone()]);
+		let mut node_token = token.clone();
+		node_token.body.resource = node.clone().into();
+		let mut tokens = tg::authorization::Tokens::with_local([node_token, token.clone()]);
 		tokens.insert(location.clone(), token);
 		tg::Referent::new(
 			node,
@@ -278,6 +292,34 @@ mod tests {
 	}
 
 	#[test]
+	fn checkin_output_template_keeps_root_subpath_and_both_artifact_proofs() {
+		let output = tg::checkin::Output {
+			artifact: referent(),
+		};
+		let template = template_from_referent(&output.artifact).unwrap();
+		let [
+			tg::template::Component::Artifact(root),
+			tg::template::Component::String(path),
+		] = template.components()
+		else {
+			panic!("expected a root artifact followed by a subpath");
+		};
+		assert_eq!(
+			tg::object::Id::from(root.id()),
+			output.artifact.options.id.clone().unwrap()
+		);
+		assert_eq!(path, "/lib/libexample.so.1");
+		let tokens = root.to_referent().options.tokens;
+		assert_eq!(tokens.local().len(), 2);
+		assert_eq!(
+			tokens.local()[0].body.resource,
+			tg::Id::from(output.artifact.node)
+		);
+		assert_eq!(tokens.local()[1].body.resource, tg::Id::from(root.id()));
+		assert_eq!(tokens, output.artifact.options.tokens);
+	}
+
+	#[test]
 	fn missing_root_uses_resolved_node_without_a_subpath() {
 		let mut referent = referent();
 		referent.options.id = None;
@@ -302,16 +344,17 @@ mod tests {
 		let runtime = tokio::runtime::Builder::new_current_thread()
 			.build()
 			.unwrap();
-		let result = runtime.block_on(env_value(
-			"CFLAGS",
+		for raw in [
 			"-I/opt/tangram/store/example/include",
-			None,
-		));
-		assert!(
-			result
-				.unwrap_err()
-				.to_string()
-				.contains("structured template")
-		);
+			"-I/home/user/.tangram/checkouts/example/include",
+		] {
+			let result = runtime.block_on(env_value("CFLAGS", raw, None));
+			assert!(
+				result
+					.unwrap_err()
+					.to_string()
+					.contains("structured template")
+			);
+		}
 	}
 }

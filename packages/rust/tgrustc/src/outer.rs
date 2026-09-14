@@ -92,10 +92,10 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	// spawn-key cache. Fall back to CWD when cargo is absent.
 	let source_dir =
 		std::env::var_os("CARGO_MANIFEST_DIR").map_or_else(|| cwd.clone(), PathBuf::from);
-	let source_artifact = checkin(&source_dir).await?;
+	let source_artifact = tg::Artifact::with_referent(checkin(&source_dir).await?.artifact);
 	let self_exe = std::env::current_exe()
 		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
-	let driver_artifact = checkin(&self_exe).await?;
+	let driver_artifact = tg::Artifact::with_referent(checkin(&self_exe).await?.artifact);
 	let executable: tg::command::Executable = driver_artifact
 		.try_unwrap_file()
 		.map_err(|_| tg::error!("the driver artifact must be a file"))?
@@ -274,7 +274,9 @@ async fn resolve_toolchain(env: &mut tg::value::Map, rustc: &str) -> tg::Result<
 			)
 		})?
 		.to_path_buf();
-	checkin(&toolchain_dir).await
+	Ok(tg::Artifact::with_referent(
+		checkin(&toolchain_dir).await?.artifact,
+	))
 }
 
 // `TGRUSTC_SPAWN_LOG` is read by `test-remote-cache.nu` to enumerate sandbox
@@ -486,7 +488,7 @@ async fn rewrite_dir_env(env: &mut tg::value::Map, key: &str) -> tg::Result<()> 
 	if !path.is_absolute() || !path.is_dir() {
 		return Ok(());
 	}
-	let artifact = checkin(path).await?;
+	let artifact = tg::Artifact::with_referent(checkin(path).await?.artifact);
 	let template = tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
 	env.insert(key.to_owned(), tg::Value::Template(template));
 	Ok(())
@@ -609,7 +611,7 @@ async fn checkin_loadable_search_path(
 				continue;
 			}
 		}
-		let artifact = checkin(&path).await?;
+		let artifact = tg::Artifact::with_referent(checkin(&path).await?.artifact);
 		entries.insert(name.to_owned(), artifact);
 	}
 	let directory = tg::directory::Builder::with_entries(entries).build();
@@ -660,7 +662,7 @@ async fn rewrite_extern(value: &str) -> tg::Result<tg::Value> {
 		if sibling_stem != stem {
 			continue;
 		}
-		let artifact = checkin(&entry.path()).await?;
+		let artifact = tg::Artifact::with_referent(checkin(&entry.path()).await?.artifact);
 		entries.insert(sibling_str.to_owned(), artifact);
 	}
 
@@ -691,10 +693,14 @@ pub(crate) async fn extract_artifact(value: &tg::Value) -> tg::Result<Option<tg:
 				Some(artifact.clone())
 			} else {
 				let path = crate::paths::render_template(template).await?;
-				Some(checkin(Path::new(&path)).await?)
+				Some(tg::Artifact::with_referent(
+					checkin(Path::new(&path)).await?.artifact,
+				))
 			}
 		},
-		tg::Value::String(path) if !path.is_empty() => Some(checkin(Path::new(path)).await?),
+		tg::Value::String(path) if !path.is_empty() => Some(tg::Artifact::with_referent(
+			checkin(Path::new(path)).await?.artifact,
+		)),
 		_ => None,
 	};
 	Ok(artifact)
@@ -721,7 +727,7 @@ pub(crate) fn prepend_sdk_to_path(env: &mut tg::value::Map, sdk: tg::Artifact) {
 	);
 }
 
-pub(crate) async fn checkin(path: &Path) -> tg::Result<tg::Artifact> {
+pub(crate) async fn checkin(path: &Path) -> tg::Result<tg::checkin::Output> {
 	tg::checkin(tg::checkin::Arg {
 		options: tg::checkin::Options {
 			deterministic: true,
@@ -729,7 +735,8 @@ pub(crate) async fn checkin(path: &Path) -> tg::Result<tg::Artifact> {
 			root: true,
 			..Default::default()
 		},
-		path: path.to_path_buf(),
+		path: std::path::absolute(path)
+			.map_err(|error| tg::error!(!error, "invalid checkin path"))?,
 		updates: vec![],
 	})
 	.await

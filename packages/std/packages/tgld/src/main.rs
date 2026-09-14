@@ -534,8 +534,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 						}
 						return checkin_local_library_path(&path).await;
 					}
-					let artifact = common::checkin_path(&path).await?;
-					let referent = artifact.to_referent();
+					let output = common::checkin_path(&path).await?;
+					let referent = output.artifact;
+					let artifact = tg::Artifact::with_referent(referent.clone());
 					let Ok(directory) = artifact.try_unwrap_directory() else {
 						return Ok(None);
 					};
@@ -569,7 +570,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let original_permissions = original_metadata.permissions();
 
 		tracing::debug!(?output_path, "about to check in output file");
-		let output_file = tg::checkin(tg::checkin::Arg {
+		let output = tg::checkin(tg::checkin::Arg {
 			options: tg::checkin::Options {
 				destructive: false,
 				deterministic: true,
@@ -583,9 +584,10 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			path: output_path,
 			updates: vec![],
 		})
-		.await?
-		.try_unwrap_file()
-		.map_err(|error| tg::error!(source = error, "expected a file"))?;
+		.await?;
+		let output_file = tg::Artifact::with_referent(output.artifact)
+			.try_unwrap_file()
+			.map_err(|error| tg::error!(source = error, "expected a file"))?;
 
 		(output_file, original_permissions)
 	};
@@ -741,8 +743,8 @@ async fn checkin_local_library_path(
 			{
 				tracing::debug!(?name, "Found library candidate.");
 				// Check in the file.
-				let library_candidate_file = common::checkin_path(&library_candidate_path)
-					.await?
+				let output = common::checkin_path(&library_candidate_path).await?;
+				let library_candidate_file = tg::Artifact::with_referent(output.artifact)
 					.try_unwrap_file()
 					.map_err(|_| tg::error!("expected a library file"))?;
 
@@ -965,8 +967,8 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 					"verifying command line library candidate"
 				);
 
-				let library_candidate_file = common::checkin_path(library_candidate_path)
-					.await?
+				let output = common::checkin_path(library_candidate_path).await?;
+				let library_candidate_file = tg::Artifact::with_referent(output.artifact)
 					.try_unwrap_file()
 					.map_err(|_| tg::error!("expected a library file"))?;
 
@@ -1363,7 +1365,8 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 			{
 				continue;
 			}
-			let artifact = common::checkin_path(path.join(&library_name)).await?;
+			let output = common::checkin_path(path.join(&library_name)).await?;
+			let artifact = tg::Artifact::with_referent(output.artifact);
 			let Ok(found_library) = artifact.try_unwrap_file() else {
 				continue;
 			};

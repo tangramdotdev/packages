@@ -580,7 +580,7 @@ async fn check_in_source_tree(subtree: SourceTree) -> tg::Result<Vec<(RemapTarge
 			// Check if we're remapping a file, and check it in first.
 			if !is_directory {
 				// FIXME - destructive, followed by immediate checkout.
-				let artifact = tg::checkin(tg::checkin::Arg {
+				let output = tg::checkin(tg::checkin::Arg {
 					options: tg::checkin::Options {
 						destructive: false,
 						deterministic: true,
@@ -595,6 +595,7 @@ async fn check_in_source_tree(subtree: SourceTree) -> tg::Result<Vec<(RemapTarge
 					updates: vec![],
 				})
 				.await?;
+				let artifact = tg::Artifact::with_referent(output.artifact);
 				builder = builder
 					.add(&subpath, artifact.clone())
 					.await

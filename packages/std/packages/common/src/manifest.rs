@@ -477,7 +477,7 @@ impl Manifest {
 		}
 
 		// Check the temp in.
-		let wrapped = tg::checkin(tg::checkin::Arg {
+		let output = tg::checkin(tg::checkin::Arg {
 			options: tg::checkin::Options {
 				root: true,
 				..tg::checkin::Options::default()
@@ -486,9 +486,10 @@ impl Manifest {
 			updates: Vec::new(),
 		})
 		.await
-		.map_err(|error| tg::error!(!error, "failed to check in file"))?
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("expected a file"))?;
+		.map_err(|error| tg::error!(!error, "failed to check in file"))?;
+		let wrapped = tg::Artifact::with_referent(output.artifact)
+			.try_unwrap_file()
+			.map_err(|_| tg::error!("expected a file"))?;
 
 		// Obtain the dependencies from the manifest to add to the file.
 		// NOTE: We know the wrapper file has no dependencies, so there is no need to merge.
@@ -527,8 +528,8 @@ impl Manifest {
 
 /// Read serialized argument templates and restore authorization from their file dependencies.
 pub async fn read_template_array(path: &Path) -> tg::Result<Vec<tg::template::Data>> {
-	let file = crate::checkin_path(path)
-		.await?
+	let output = crate::checkin_path(path).await?;
+	let file = tg::Artifact::with_referent(output.artifact)
 		.try_unwrap_file()
 		.map_err(|_| tg::error!("expected a template argument file"))?;
 	let bytes = file.bytes().await?;
