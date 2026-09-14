@@ -342,17 +342,38 @@ async function ldProxy(arg: LdProxyArg) {
 		await codesign.store();
 	}
 
+	// Keep argument boundaries and artifact dependencies in a structured value file.
+	const interpreterArgs = arg.interpreterArgs
+		? await Promise.all(arg.interpreterArgs.map((arg) => tg.template(arg)))
+		: undefined;
+	const interpreterArgsFile = interpreterArgs
+		? await tg.file({
+				contents: tg.Value.stringify(
+					tg.Value.fromData(
+						tg.Value.Data.withoutLocationAndTokens(
+							tg.Value.toData(interpreterArgs),
+						),
+					),
+				),
+				dependencies: Object.fromEntries(
+					tg.Value.objects(interpreterArgs).map((object) => [
+						object.id,
+						{ node: object, options: {} },
+					]),
+				),
+			})
+		: undefined;
+
 	// Define environment for the linker proxy.
 	const env = {
 		TGLD_COMMAND_PATH: tg.Mutation.setIfUnset<
 			tg.File | tg.Symlink | tg.Template
 		>(arg.linker),
 		TGLD_INJECTION_PATH: tg.Mutation.set(hostInjectionLibrary),
-		...(arg.interpreterArgs
+		...(interpreterArgsFile
 			? {
-					TGLD_INTERPRETER_ARGS: tg.Mutation.setIfUnset(
-						tg.Template.join(" ", ...arg.interpreterArgs),
-					),
+					TGLD_INTERPRETER_ARGS_VALUE_PATH:
+						tg.Mutation.setIfUnset(interpreterArgsFile),
 				}
 			: {}),
 		TGLD_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
@@ -977,7 +998,10 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 			tg.assert(component !== undefined);
 			tg.assert(component.kind === "artifact");
 			tg.assert(component.value.startsWith("dir_"));
-			const combinedDir = tg.Directory.withId(component.value);
+			const combinedDir = (await output.dependencyObjects).find(
+				(dependency) => dependency.id === component.value,
+			);
+			tg.assert(combinedDir instanceof tg.Directory);
 			const entries = await combinedDir.entries;
 
 			const expectedNumEntries = os === "linux" ? 5 : 4;

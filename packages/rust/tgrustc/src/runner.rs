@@ -1,5 +1,5 @@
 use crate::outer;
-use std::{io::Cursor, path::Path, time::Instant};
+use std::{path::Path, time::Instant};
 use tangram_client::prelude::*;
 
 // Literal name used as `OUT_DIR` inside the runner sandbox. The driver
@@ -19,19 +19,21 @@ pub async fn run() -> tg::Result<()> {
 
 	let crate_name = std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "unknown".into());
 
-	let script_artifact = checkin_script_binary(&script_binary).await?;
+	let script_artifact = outer::checkin(Path::new(&script_binary))
+		.await?
+		.try_unwrap_file()
+		.map_err(|_| tg::error!("expected a build script file"))?;
+	let script_artifact = tg::Artifact::from(script_artifact);
 	let script_template =
 		tg::Template::with_components([tg::template::Component::Artifact(script_artifact)]);
 
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
 		.map_err(|_| tg::error!("CARGO_MANIFEST_DIR is not set"))?;
-	let (source_artifact, manifest_subpath) = match parse_artifact_path(&manifest_dir) {
-		Some((id, subpath)) => (tg::Artifact::with_id(id), subpath),
-		None => (
-			outer::checkin(Path::new(&manifest_dir)).await?,
-			String::new(),
-		),
-	};
+	let source = outer::checkin(Path::new(&manifest_dir)).await?;
+	let (source_artifact, manifest_subpath) = crate::paths::artifact_path(&source.to_referent())?;
+	let manifest_subpath = manifest_subpath
+		.map(|path| path.to_string_lossy().into_owned())
+		.unwrap_or_default();
 	let source_template =
 		tg::Template::with_components([tg::template::Component::Artifact(source_artifact)]);
 
@@ -43,12 +45,12 @@ pub async fn run() -> tg::Result<()> {
 		.map_err(|_| tg::error!("the driver artifact must be a file"))?
 		.into();
 
-	let env = build_env(source_template, &manifest_subpath)?;
+	let env = build_env(source_template, &manifest_subpath).await?;
 
 	let mut spawn_args: tg::value::Array = Vec::with_capacity(1 + extra_args.len());
 	spawn_args.push(tg::Value::Template(script_template));
 	for arg in &extra_args {
-		spawn_args.push(tg::Value::String(arg.clone()));
+		spawn_args.push(crate::paths::env_value("build script argument", arg, None).await?);
 	}
 
 	let process_arg = tg::process::Arg {
@@ -93,7 +95,7 @@ pub async fn run() -> tg::Result<()> {
 		extension: None,
 		force: true,
 		lock: None,
-		nodes: vec![tg::Referent::with_node(build_dir.id().into())],
+		nodes: vec![build_dir.to_referent().map(Into::into)],
 		path: Some(std::path::PathBuf::from(&cargo_out_dir)),
 	})
 	.await
@@ -104,18 +106,34 @@ pub async fn run() -> tg::Result<()> {
 	Ok(())
 }
 
-// Iterate `std::env::vars()` (not `tg::process::env::env()`) so shell
-// exports applied by the cargo wrapper or `pre` script reach the sandbox.
-// Each value is unrendered to recover an artifact-bearing template when
-// tangram paths are embedded.
-fn build_env(source_template: tg::Template, manifest_subpath: &str) -> tg::Result<tg::value::Map> {
+// Preserve shell exports, using a typed shadow value only while it still matches.
+async fn build_env(
+	source_template: tg::Template,
+	manifest_subpath: &str,
+) -> tg::Result<tg::value::Map> {
 	let typed = tg::process::env::env()?;
-	let toolchain_artifact = typed
-		.get("TGRUSTC_SANDBOX_TOOLCHAIN")
-		.and_then(outer::extract_artifact);
-	let sdk_artifact = typed
-		.get("TGRUSTC_SANDBOX_SDK")
-		.and_then(outer::extract_artifact);
+	let toolchain_artifact = if let Ok(raw) = std::env::var("TGRUSTC_SANDBOX_TOOLCHAIN") {
+		let value = crate::paths::env_value(
+			"TGRUSTC_SANDBOX_TOOLCHAIN",
+			&raw,
+			typed.get("TGRUSTC_SANDBOX_TOOLCHAIN"),
+		)
+		.await?;
+		outer::extract_artifact(&value).await?
+	} else {
+		None
+	};
+	let sdk_artifact = if let Ok(raw) = std::env::var("TGRUSTC_SANDBOX_SDK") {
+		let value = crate::paths::env_value(
+			"TGRUSTC_SANDBOX_SDK",
+			&raw,
+			typed.get("TGRUSTC_SANDBOX_SDK"),
+		)
+		.await?;
+		outer::extract_artifact(&value).await?
+	} else {
+		None
+	};
 
 	let mut env: tg::value::Map = std::collections::BTreeMap::new();
 	for (name, raw) in std::env::vars() {
@@ -129,7 +147,8 @@ fn build_env(source_template: tg::Template, manifest_subpath: &str) -> tg::Resul
 		if outer::is_denied_host_env(&name) {
 			continue;
 		}
-		env.insert(name, unrender_value(&raw));
+		let value = crate::paths::env_value(&name, &raw, typed.get(&name)).await?;
+		env.insert(name, value);
 	}
 
 	if let Some(sdk) = sdk_artifact {
@@ -166,22 +185,6 @@ fn build_env(source_template: tg::Template, manifest_subpath: &str) -> tg::Resul
 		);
 	}
 	Ok(env)
-}
-
-fn parse_artifact_path(path: &str) -> Option<(tg::artifact::Id, String)> {
-	for root in ["/opt/tangram/store/", "/.tangram/store/"] {
-		let Some(rest) = path.strip_prefix(root) else {
-			continue;
-		};
-		let (id_str, subpath) = match rest.find('/') {
-			Some(slash) => (&rest[..slash], rest[slash + 1..].to_owned()),
-			None => (rest, String::new()),
-		};
-		if let Ok(id) = id_str.parse::<tg::artifact::Id>() {
-			return Some((id, subpath));
-		}
-	}
-	None
 }
 
 pub fn run_driver() -> tg::Result<()> {
@@ -248,34 +251,4 @@ fn toolchain_subpath(toolchain: &tg::Artifact, suffix: &str) -> tg::Value {
 		tg::template::Component::Artifact(toolchain.clone()),
 		tg::template::Component::String(suffix.to_owned()),
 	]))
-}
-
-// Read the build script binary bytes and wrap them in a content-addressed
-// `tg::File`. Reading directly (vs `tg::checkin`) avoids inflating the
-// path-based checkin cache; cargo stages each build script under a per-
-// invocation sandbox prefix.
-async fn checkin_script_binary(script_binary: &str) -> tg::Result<tg::Artifact> {
-	let contents = tokio::fs::read(script_binary)
-		.await
-		.map_err(|error| tg::error!("failed to read build script {script_binary}: {error}"))?;
-	let blob = tg::Blob::with_reader(Cursor::new(contents)).await?;
-	let file = tg::File::builder()
-		.contents(blob)
-		.executable(true)
-		.build()
-		.map_err(|error| tg::error!(!error, "failed to build script file artifact"))?;
-	Ok(file.into())
-}
-
-// Unrender if the value embeds a tangram artifact id so artifact components
-// resolve inside the runner sandbox. Otherwise return as a plain String.
-fn unrender_value(raw: &str) -> tg::Value {
-	let Some(end) = outer::artifact_marker_position(raw) else {
-		return tg::Value::String(raw.to_owned());
-	};
-	let prefix = &raw[..end];
-	match tg::Template::unrender(prefix, raw) {
-		Ok(template) => tg::Value::Template(template),
-		Err(_) => tg::Value::String(raw.to_owned()),
-	}
 }

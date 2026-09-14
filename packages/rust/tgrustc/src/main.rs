@@ -5,6 +5,10 @@ mod driver;
 mod lock;
 mod outer;
 mod passthrough;
+// The proxy source bundle includes the std workspace. Share the path boundary without
+// depending on common's wrapper, manifest, and terminal UI dependencies.
+#[path = "../../../std/packages/common/src/paths.rs"]
+mod paths;
 mod runner;
 mod sidecar;
 

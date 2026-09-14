@@ -11,9 +11,6 @@ use tokio::io::AsyncWriteExt;
 // `/opt/tangram/store/<id>/...` into emitted `.d` depfiles.
 const SANDBOX_STORE_DIR: &str = "/opt/tangram/store";
 
-// Markers that prefix tangram artifact ids in rendered env-var strings.
-const ARTIFACT_ID_MARKERS: &[&str] = &["/dir_01", "/fil_01", "/sym_01"];
-
 // The phases of one wrapper invocation. `prepare` is the check-ins and the arg
 // and env rewriting before the spawn; `materialize` is the checkout and sidecar
 // write after it.
@@ -212,6 +209,22 @@ async fn build_env(
 	// `tg::process::env::env()` reconstitutes typed values from the parent's
 	// `TANGRAM_ENV_*` shadow vars; `std::env::vars()` would lose the typing.
 	let mut env = tg::process::env::env()?;
+	for (name, value) in &mut env {
+		if name == "OUT_DIR" || name.starts_with("CARGO_MANIFEST_") {
+			continue;
+		}
+		if is_denied_host_env(name)
+			&& !matches!(value, tg::Value::Template(_))
+			&& !matches!(
+				name.as_str(),
+				"TGRUSTC_SANDBOX_SDK" | "TGRUSTC_SANDBOX_TOOLCHAIN"
+			) {
+			continue;
+		}
+		if let Ok(raw) = std::env::var(name) {
+			*value = crate::paths::env_value(name, &raw, Some(value)).await?;
+		}
+	}
 	rewrite_dir_env(&mut env, "OUT_DIR").await?;
 	// Cargo populates these with paths embedding the outer cargo-sandbox's
 	// source artifact id, which varies per `cargo.build`. Re-anchor on the
@@ -222,10 +235,8 @@ async fn build_env(
 
 	// `TGRUSTC_SANDBOX_SDK` provides a linker on PATH; final-binary crates
 	// shell out to `cc` which the bare host env does not resolve.
-	if let Some(sdk) = env
-		.remove("TGRUSTC_SANDBOX_SDK")
-		.as_ref()
-		.and_then(extract_artifact)
+	if let Some(value) = env.remove("TGRUSTC_SANDBOX_SDK")
+		&& let Some(sdk) = extract_artifact(&value).await?
 	{
 		prepend_sdk_to_path(&mut env, sdk);
 	}
@@ -247,10 +258,8 @@ async fn resolve_toolchain(env: &mut tg::value::Map, rustc: &str) -> tg::Result<
 	// `TGRUSTC_SANDBOX_TOOLCHAIN` is set by `cargo.run` to swap the host's
 	// rustup toolchain for a wrapped tangram-managed one. When unset (the
 	// `cargo.build` path), the host rustc is already wrapped.
-	if let Some(artifact) = env
-		.remove("TGRUSTC_SANDBOX_TOOLCHAIN")
-		.as_ref()
-		.and_then(extract_artifact)
+	if let Some(value) = env.remove("TGRUSTC_SANDBOX_TOOLCHAIN")
+		&& let Some(artifact) = extract_artifact(&value).await?
 	{
 		return Ok(artifact);
 	}
@@ -364,7 +373,7 @@ pub(crate) async fn checkout_artifact_entries(
 				extension: None,
 				force: true,
 				lock: None,
-				nodes: vec![tg::Referent::with_node(artifact.id().into())],
+				nodes: vec![artifact.to_referent().map(Into::into)],
 				path: Some(dest),
 			})
 			.await
@@ -515,7 +524,13 @@ async fn build_spawn_args(
 			spawn_args.push(rewrite_search_path(value, closure).await?);
 			continue;
 		}
-		spawn_args.push(rewrite_arg(arg, source_artifact, source_dir, cwd));
+		let value = rewrite_arg(arg, source_artifact, source_dir, cwd);
+		let value = if let tg::Value::String(raw) = &value {
+			crate::paths::env_value("rustc argument", raw, None).await?
+		} else {
+			value
+		};
+		spawn_args.push(value);
 	}
 	Ok(spawn_args)
 }
@@ -667,31 +682,22 @@ fn resolve_rustc(rustc: &str) -> tg::Result<PathBuf> {
 	which::which(rustc).map_err(|error| tg::error!("could not find {rustc} on PATH: {error}"))
 }
 
-// Recover the artifact embedded in an env-var value. Templates carry it
-// directly; Strings come from `cargo.run`'s `export KEY="<rendered>"` form
-// which loses the typed shadow var — recover by unrendering at the
-// artifact-id prefix.
-pub(crate) fn extract_artifact(value: &tg::Value) -> Option<tg::Artifact> {
-	match value {
-		tg::Value::Template(t) => first_artifact_component(t),
-		tg::Value::String(s) => {
-			let prefix = &s[..artifact_marker_position(s)?];
-			let template = tg::Template::unrender(prefix, s).ok()?;
-			first_artifact_component(&template)
+// SDK and toolchain values identify one directory, either structured or as a path.
+pub(crate) async fn extract_artifact(value: &tg::Value) -> tg::Result<Option<tg::Artifact>> {
+	let artifact = match value {
+		tg::Value::Object(object) => tg::Artifact::try_from(object.clone()).ok(),
+		tg::Value::Template(template) => {
+			if let [tg::template::Component::Artifact(artifact)] = template.components() {
+				Some(artifact.clone())
+			} else {
+				let path = crate::paths::render_template(template).await?;
+				Some(checkin(Path::new(&path)).await?)
+			}
 		},
+		tg::Value::String(path) if !path.is_empty() => Some(checkin(Path::new(path)).await?),
 		_ => None,
-	}
-}
-
-fn first_artifact_component(t: &tg::Template) -> Option<tg::Artifact> {
-	t.components().iter().find_map(|c| match c {
-		tg::template::Component::Artifact(a) => Some(a.clone()),
-		_ => None,
-	})
-}
-
-pub(crate) fn artifact_marker_position(s: &str) -> Option<usize> {
-	ARTIFACT_ID_MARKERS.iter().find_map(|m| s.find(m))
+	};
+	Ok(artifact)
 }
 
 pub(crate) fn prepend_sdk_to_path(env: &mut tg::value::Map, sdk: tg::Artifact) {

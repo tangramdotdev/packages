@@ -1,3 +1,6 @@
+// Directory keys hash stored IDs and paths, which do not change with handle metadata.
+#![allow(clippy::mutable_key_type)]
+
 use futures::{StreamExt as _, TryStreamExt as _};
 use itertools::Itertools;
 use std::{
@@ -5,7 +8,7 @@ use std::{
 	hash::BuildHasher,
 	path::PathBuf,
 	str::FromStr,
-	sync::{Arc, Mutex},
+	sync::Mutex,
 };
 use tangram_client::prelude::*;
 use tokio::io::AsyncReadExt as _;
@@ -87,7 +90,10 @@ struct Options {
 	interpreter_path: Option<String>,
 
 	/// Any additional arguments to pass to the interpreter.
-	interpreter_args: Option<Vec<String>>,
+	interpreter_args: Option<Vec<tg::template::Data>>,
+
+	// A structured argument file with authorized artifact dependencies.
+	interpreter_args_path: Option<PathBuf>,
 
 	/// The path to the injection library.
 	injection_path: Option<String>,
@@ -139,13 +145,33 @@ fn read_options() -> tg::Result<Options> {
 	// Get the wrap binary.
 	let mut embed = std::env::var("TGLD_EMBED_WRAPPER").is_ok();
 
-	// Get additional interpreter args, if any.
-	let interpreter_args = std::env::var("TGLD_INTERPRETER_ARGS").ok().map(|combined| {
-		combined
-			.split_whitespace()
-			.map(std::string::ToString::to_string)
-			.collect_vec()
-	});
+	// Arguments are serialized templates, preserving boundaries and embedded artifacts.
+	let interpreter_args = std::env::var("TGLD_INTERPRETER_ARGS")
+		.ok()
+		.map(|value| {
+			value
+				.parse::<tg::Value>()
+				.map_err(|error| {
+					tg::error!(
+						!error,
+						"TGLD_INTERPRETER_ARGS must be an array of templates"
+					)
+				})?
+				.to_data()
+				.try_unwrap_array()
+				.map_err(|_| tg::error!("expected an array of interpreter argument templates"))?
+				.into_iter()
+				.map(|value| {
+					value
+						.try_unwrap_template()
+						.map_err(|_| tg::error!("expected an interpreter argument template"))
+				})
+				.collect::<tg::Result<Vec<_>>>()
+		})
+		.transpose()?;
+
+	let interpreter_args_path =
+		std::env::var_os("TGLD_INTERPRETER_ARGS_VALUE_PATH").map(PathBuf::from);
 
 	// Get the max depth.
 	let mut max_depth = std::env::var("TGLD_MAX_DEPTH")
@@ -398,7 +424,12 @@ fn read_options() -> tg::Result<Options> {
 		if is_library_candidate(&arg) {
 			// If the path can't be canonicalized, do nothing - it's not a valid library candidate.
 			if let Ok(canonical_path) = std::fs::canonicalize(&arg) {
-				additional_library_candidate_paths.push(canonical_path);
+				let path = if common::is_store_path(&arg) {
+					PathBuf::from(&arg)
+				} else {
+					canonical_path
+				};
+				additional_library_candidate_paths.push(path);
 			}
 		}
 	}
@@ -414,6 +445,7 @@ fn read_options() -> tg::Result<Options> {
 		embed,
 		interpreter_path,
 		interpreter_args,
+		interpreter_args_path,
 		injection_path,
 		library_path_strategy: library_path_optimization,
 		library_paths,
@@ -474,74 +506,57 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	)
 	.await?;
 
-	// Unrender all library paths to symlinks. If any library path points into the working directory, check in its contents.
+	// Check in store directories directly. Local directories retain selective library checkin.
 	let directory_cache_ref = &directory_cache;
 	let library_paths = command_line_library_path
 		.into_iter()
 		.chain(
-			futures::future::try_join_all(options.library_paths.iter().map(|library_path| async move {
-				let symlink = common::template_to_symlink(&common::unrender(library_path)?)?;
-				let artifact = symlink.artifact().await?;
-				let path = symlink.path().await?;
-				let artifact_path = match (artifact, path) {
-					(Some(artifact), path) => {
-						tracing::debug!(?artifact, ?path, "checking for entries");
-						if let Ok(directory) = artifact.try_unwrap_directory() {
-							let has_entries = match tokio::fs::read_dir(library_path).await {
-								Ok(mut entries) => entries.next_entry().await.map_err(
-									|error| tg::error!(!error, path = %library_path, "failed to read the library path's entries"),
-								)?.is_some(),
-								Err(error) if error.kind() == std::io::ErrorKind::NotADirectory => {
-									return Ok(None);
-								},
-								// The library path is not checked out yet, so consult the object graph instead.
-								Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-									return directory_cache_ref
-										.resolve_nonempty(&directory, path)
-										.await;
-								},
-								Err(error) => {
-									return Err(
-										tg::error!(!error, path = %library_path, "failed to read the library path"),
-									);
-								},
-							};
-							if has_entries {
-								tracing::debug!(?path, "found a directory with entries");
-								let root = directory_cache_ref.intern(&directory);
-								let dir_with_subpath =
-									dir_with_subpath_from_directory(&root.directory, path).await?;
-								Some(dir_with_subpath)
-							} else {
-								None
-							}
-						} else {
-							None
+			futures::future::try_join_all(options.library_paths.iter().map(
+				|library_path| async move {
+					// Preserve the original store root across symlinks so checkin can recover its context.
+					let path = if common::is_store_path(library_path) {
+						PathBuf::from(library_path)
+					} else {
+						match std::fs::canonicalize(library_path) {
+							Ok(path) => path,
+							Err(_) => {
+								tracing::warn!(
+									?library_path,
+									"Could not canonicalize library path. Skipping."
+								);
+								return Ok(None);
+							},
 						}
-					},
-					(None, Some(path)) => {
-						tracing::debug!(
-							"Library path points into working directory: {:?}. Creating directory.",
-							path
-						);
-						if let Ok(ref canonicalized_path) = std::fs::canonicalize(&path) {
-							checkin_local_library_path(canonicalized_path).await?
-						} else {
-							tracing::warn!(
-								"Could not canonicalize library path {path:?}. Skipping."
-							);
-							None
+					};
+					if !common::is_store_path(&path.to_string_lossy()) {
+						if !path.is_dir() {
+							return Ok(None);
 						}
-					},
-					(None, None) => None,
-				};
-				Ok::<_, tg::Error>(artifact_path)
-			}))
+						return checkin_local_library_path(&path).await;
+					}
+					let artifact = common::checkin_path(&path).await?;
+					let referent = artifact.to_referent();
+					let Ok(directory) = artifact.try_unwrap_directory() else {
+						return Ok(None);
+					};
+					if directory.entries().await?.is_empty() {
+						return Ok(None);
+					}
+					let (root, subpath) = common::artifact_path(&referent)?;
+					let root = root
+						.try_unwrap_directory()
+						.map_err(|_| tg::error!("expected a containing directory"))?;
+					let library_path = dir_with_subpath_from_directory(&root, subpath).await?;
+					directory_cache_ref.insert_resolved(&library_path, &directory);
+					Ok::<_, tg::Error>(Some(library_path))
+				},
+			))
 			.await?
 			.into_iter()
 			.flatten(),
 		)
 		.collect_vec();
+
 	tracing::debug!(?library_paths, "Library paths");
 
 	// Obtain the file artifact from the output path.
@@ -614,12 +629,12 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 
 	// Handle an executable or a library.
 	let output_file = if is_executable {
-		// Obtain the output artifact ID.
-		let output_artifact_id = output_file.id().clone().into();
+		// Keep the authorized output artifact.
+		let output_artifact = output_file.clone().into();
 
 		// Create the manifest.
 		let mut manifest =
-			create_manifest(output_artifact_id, options, interpreter, library_paths).await?;
+			create_manifest(output_artifact, options, interpreter, library_paths).await?;
 		tracing::trace!(?manifest);
 
 		// If requested, embed the wrapper.
@@ -643,8 +658,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let dependencies = BTreeMap::from_iter(
 			futures::future::try_join_all(library_paths.into_iter().map(
 				|dir_with_subpath| async {
-					let key = tg::Reference::with_object(dir_with_subpath.id.clone().into());
-					let item = tg::Directory::with_id(dir_with_subpath.id).into();
+					let key = tg::Reference::with_object(dir_with_subpath.directory.id().into());
+					let item = dir_with_subpath.directory.into();
 					let value = tg::file::Dependency(tg::Referent::with_node(Some(item)));
 					Ok::<_, tg::Error>((key, Some(value)))
 				},
@@ -678,7 +693,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_path = cwd.join(&options.output_path);
 		let output_file_id = output_file.id();
 		tracing::debug!(?output_file_id, ?output_path, "checking out output file");
-		let artifact = tg::Artifact::from(output_file).id();
+		let artifact = tg::Artifact::from(output_file);
 		common::checkout_artifact_to_path(artifact, output_path.clone()).await?;
 
 		// Restore the original file permissions after checkout.
@@ -726,23 +741,10 @@ async fn checkin_local_library_path(
 			{
 				tracing::debug!(?name, "Found library candidate.");
 				// Check in the file.
-				let library_candidate_file = tg::checkin(tg::checkin::Arg {
-					options: tg::checkin::Options {
-						destructive: false,
-						deterministic: true,
-						ignore: false,
-						source_dependencies: true,
-						locked: true,
-						lock: None,
-						root: true,
-						..tg::checkin::Options::default()
-					},
-					path: library_candidate_path,
-					updates: vec![],
-				})
-				.await?
-				.try_unwrap_file()
-				.map_err(|error| tg::error!(source = error, "expected a file"))?;
+				let library_candidate_file = common::checkin_path(&library_candidate_path)
+					.await?
+					.try_unwrap_file()
+					.map_err(|_| tg::error!("expected a library file"))?;
 
 				// Add an entry to the directory.
 				let id = library_candidate_file.id();
@@ -777,7 +779,7 @@ fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {
 /// Create a manifest.
 #[allow(clippy::too_many_lines)]
 async fn create_manifest<H: BuildHasher>(
-	ld_output_id: tg::artifact::Id,
+	ld_output: tg::Artifact,
 	options: &Options,
 	interpreter: InterpreterRequirement,
 	library_paths: Option<HashSet<DirectoryWithSubpath, H>>,
@@ -806,7 +808,7 @@ async fn create_manifest<H: BuildHasher>(
 		let library_paths = if let Some(library_paths) = library_paths {
 			let result = futures::future::try_join_all(library_paths.into_iter().map(
 				|dir_with_subpath| async move {
-					let directory = tg::Directory::with_id(dir_with_subpath.id);
+					let directory = dir_with_subpath.directory;
 					let template = if let Some(subpath) = dir_with_subpath.subpath {
 						common::template_from_artifact_and_subpath(directory.into(), subpath)
 					} else {
@@ -824,24 +826,23 @@ async fn create_manifest<H: BuildHasher>(
 		tracing::trace!(?library_paths, "Library paths");
 
 		if let Some((path, interpreter_flavor)) = config {
-			// Unrender the interpreter path.
-			let path = common::unrender(&path)?;
-			let path = path.to_data();
-
-			// Unrender the preloads.
-			let mut preloads = None;
-			if let Some(injection_path) = options.injection_path.as_deref() {
-				preloads = Some(vec![common::unrender(injection_path)?.to_data()]);
-			}
-
-			// Unrender the additional args.
-			let mut args = None;
-			if let Some(interpreter_args) = options.interpreter_args.as_deref() {
-				let interpreter_args = interpreter_args
-					.iter()
-					.map(|arg| async move { Ok::<_, tg::Error>(common::unrender(arg)?.to_data()) });
-				args = Some(futures::future::try_join_all(interpreter_args).await?);
-			}
+			let path = if interpreter_flavor == InterpreterFlavor::Dyld {
+				None
+			} else {
+				Some(common::template_from_path(&path).await?.to_data())
+			};
+			let preloads = if let Some(path) = &options.injection_path {
+				Some(vec![common::template_from_path(path).await?.to_data()])
+			} else {
+				None
+			};
+			let args = if let Some(args) = &options.interpreter_args {
+				Some(args.clone())
+			} else if let Some(path) = &options.interpreter_args_path {
+				Some(common::manifest::read_template_array(path).await?)
+			} else {
+				None
+			};
 
 			match interpreter_flavor {
 				InterpreterFlavor::Dyld => Some(common::manifest::Interpreter::DyLd(
@@ -852,7 +853,7 @@ async fn create_manifest<H: BuildHasher>(
 				)),
 				InterpreterFlavor::Gnu => Some(common::manifest::Interpreter::LdLinux(
 					common::manifest::LdLinuxInterpreter {
-						path,
+						path: path.unwrap(),
 						library_paths,
 						preloads,
 						args,
@@ -860,7 +861,7 @@ async fn create_manifest<H: BuildHasher>(
 				)),
 				InterpreterFlavor::Musl => Some(common::manifest::Interpreter::LdMusl(
 					common::manifest::LdMuslInterpreter {
-						path,
+						path: path.unwrap(),
 						library_paths,
 						preloads,
 						args,
@@ -874,9 +875,8 @@ async fn create_manifest<H: BuildHasher>(
 	};
 
 	// Create the executable.
-	let executable = common::manifest::Executable::Path(
-		common::template_from_artifact(tg::Artifact::with_id(ld_output_id)).to_data(),
-	);
+	let executable =
+		common::manifest::Executable::Path(common::template_from_artifact(ld_output).to_data());
 
 	// Create empty values for env and args.
 	let env = options.wrapper_env_value.clone();
@@ -965,73 +965,10 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 					"verifying command line library candidate"
 				);
 
-				// Obtain the file object.
-				let library_candidate_path_str = library_candidate_path.to_str().ok_or_else(
-					|| tg::error!(path = %library_candidate_path.display(), "unable to convert path to str"),
-				)?;
-				let library_candidate_file = if common::is_store_path(library_candidate_path_str) {
-					tracing::trace!("found an artifact, extracting file object");
-					let template = common::unrender(library_candidate_path_str)?;
-					tracing::trace!(?template, "unrendered library candidate path");
-					// Obtain the file object from the artifact.
-					// We expect to underender one of two forms:
-					// - A single file artifact.
-					// - Two components, a directory artifact and string subpath.
-					match template.components() {
-						[tg::template::Component::Artifact(artifact)] => artifact
-							.clone()
-							.try_unwrap_file()
-							.map_err(|error| tg::error!(!error, "expected a file"))?,
-						[
-							tg::template::Component::Artifact(artifact),
-							tg::template::Component::String(subpath),
-						] => {
-							let d = artifact
-								.clone()
-								.try_unwrap_directory()
-								.map_err(|error| tg::error!(!error, "expected a directory"))?;
-							if let Some(inner) = d
-								.try_get(subpath.strip_prefix('/').unwrap_or(subpath))
-								.await?
-							{
-								inner
-									.try_unwrap_file()
-									.map_err(|error| tg::error!(!error, "expected a file"))?
-							} else {
-								let artifact = artifact.id();
-								return Err(
-									tg::error!(%artifact, %subpath, "failed to get inner artifact at subpath"),
-								);
-							}
-						},
-						_ => {
-							return Err(tg::error!(
-								?template,
-								"expected a template with one artifact and zero or one string components"
-							));
-						},
-					}
-				} else {
-					tracing::trace!("found a path in the current build temp, checking in");
-					// The file is located in our own build directory. Check it in.
-					tg::checkin(tg::checkin::Arg {
-						options: tg::checkin::Options {
-							destructive: false,
-							deterministic: true,
-							ignore: false,
-							source_dependencies: true,
-							locked: true,
-							lock: None,
-							root: true,
-							..tg::checkin::Options::default()
-						},
-						path: library_candidate_path.clone(),
-						updates: vec![],
-					})
+				let library_candidate_file = common::checkin_path(library_candidate_path)
 					.await?
 					.try_unwrap_file()
-					.map_err(|error| tg::error!(source = error, "expected a file"))?
-				};
+					.map_err(|_| tg::error!("expected a library file"))?;
 
 				// Add an entry to the directory.
 				entries.insert(name, tg::Artifact::File(library_candidate_file));
@@ -1080,19 +1017,11 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 		return Ok(library_paths);
 	}
 
-	// Cache the library paths before searching them, so reads do not reassemble blobs.
-	let checkouts = cache_library_paths(&library_paths).await?;
+	// Check out the library paths before searching their filesystem entries.
+	let checkouts = checkout_library_paths(&library_paths).await?;
 
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
-	find_transitive_needed_libraries(
-		file,
-		&checkouts,
-		needed_libraries,
-		directory_cache,
-		max_depth,
-		0,
-	)
-	.await?;
+	find_transitive_needed_libraries(file, &checkouts, needed_libraries, max_depth, 0).await?;
 	tracing::debug!(?needed_libraries, "post-find");
 
 	let filtered_library_paths = needed_libraries.values().flatten().cloned().collect();
@@ -1187,7 +1116,7 @@ async fn combine_library_paths<H: BuildHasher + Default>(
 }
 
 /// Check out library paths and return their filesystem paths.
-async fn cache_library_paths<H: BuildHasher + Default>(
+async fn checkout_library_paths<H: BuildHasher + Default>(
 	library_paths: &HashSet<DirectoryWithSubpath, H>,
 ) -> tg::Result<Vec<(DirectoryWithSubpath, PathBuf)>> {
 	if library_paths.is_empty() {
@@ -1196,24 +1125,20 @@ async fn cache_library_paths<H: BuildHasher + Default>(
 	let ordered_library_paths = library_paths.iter().cloned().collect_vec();
 	let ordered_roots = ordered_library_paths
 		.iter()
-		.map(|dir_with_subpath| (dir_with_subpath.id.clone(), dir_with_subpath.tokens.clone()))
-		.collect::<HashSet<_, Hasher>>()
-		.into_iter()
+		.map(|path| path.directory.clone())
+		.unique_by(tg::Directory::id)
 		.collect_vec();
-	let artifacts = ordered_roots
-		.iter()
-		.map(|(id, tokens)| tg::Referent::with_node_and_tokens(id.clone().into(), tokens.clone()))
-		.collect();
-	tracing::debug!("caching libraries");
+	let artifacts = ordered_roots.iter().cloned().map(Into::into).collect();
+	tracing::debug!("checking out libraries");
 	let paths = common::checkout_artifacts(artifacts)
 		.await
-		.map_err(|error| tg::error!(!error, "failed to cache libraries"))?;
+		.map_err(|error| tg::error!(!error, "failed to check out libraries"))?;
 	if paths.len() != ordered_roots.len() {
 		return Err(tg::error!("expected one checkout path per library root"));
 	}
 	let paths: HashMap<_, _, Hasher> = ordered_roots
 		.into_iter()
-		.map(|(id, _)| id)
+		.map(|directory| directory.id())
 		.zip(paths)
 		.collect();
 
@@ -1221,7 +1146,7 @@ async fn cache_library_paths<H: BuildHasher + Default>(
 		.into_iter()
 		.map(|dir_with_subpath| {
 			let path = paths
-				.get(&dir_with_subpath.id)
+				.get(&dir_with_subpath.directory.id())
 				.expect("every library root was checked out")
 				.clone();
 			let path = match dir_with_subpath.subpath {
@@ -1241,7 +1166,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	library_paths: HashSet<DirectoryWithSubpath, H>,
 	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
 ) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
-	let checkouts = cache_library_paths(&library_paths).await?;
+	let checkouts = checkout_library_paths(&library_paths).await?;
 
 	// Warn or error if any required libraries are not included in the set.
 	verify_missing_libraries(disallow_missing, needed_libraries, &checkouts).await?;
@@ -1266,7 +1191,7 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 	// Read from the checkouts to avoid loading the directories again.
 	let futures = checkouts.iter().map(|(library_path, path)| async move {
 		let mut read_dir = tokio::fs::read_dir(path).await.map_err(
-			|error| tg::error!(!error, directory = %library_path.id, path = %path.display(), "failed to read the checked out library path"),
+			|error| tg::error!(!error, directory = %library_path.directory.id(), path = %path.display(), "failed to read the checked out library path"),
 		)?;
 		let mut names = Vec::new();
 		while let Some(entry) = read_dir.next_entry().await.map_err(
@@ -1345,106 +1270,36 @@ async fn resolve_directories<H: BuildHasher + Default>(
 	Ok(resolved_paths)
 }
 
-/// Reuse handles and serialize cold walks through each directory.
+/// Memoize directory subpath lookups used by library optimization.
+/// Handles and authorization are supplied by checkin, without interning or token merging.
 #[derive(Default)]
 struct DirectoryCache {
-	directories: Mutex<HashMap<tg::directory::Id, CachedDirectory, Hasher>>,
-	resolved: Mutex<HashMap<DirectoryWithSubpath, tg::Directory, Hasher>>,
-}
-
-#[derive(Clone)]
-struct CachedDirectory {
-	directory: tg::Directory,
-	walk: Arc<futures::lock::Mutex<()>>,
+	resolved: Mutex<HashMap<(tg::directory::Id, Option<PathBuf>), tg::Directory, Hasher>>,
 }
 
 impl DirectoryCache {
-	fn intern(&self, directory: &tg::Directory) -> CachedDirectory {
-		let mut directories = self.directories.lock().unwrap();
-		let cached = directories
-			.entry(directory.id())
-			.or_insert_with(|| CachedDirectory {
-				directory: directory.clone(),
-				walk: Arc::new(futures::lock::Mutex::new(())),
-			});
-		cached
-			.directory
-			.state()
-			.inherit_location(directory.state().location().as_ref());
-		cached
-			.directory
-			.state()
-			.inherit_tokens(&directory.state().tokens());
-		cached.clone()
+	fn insert_resolved(&self, path: &DirectoryWithSubpath, directory: &tg::Directory) {
+		self.resolved.lock().unwrap().insert(
+			(path.directory.id(), path.subpath.clone()),
+			directory.clone(),
+		);
 	}
 
-	fn insert_resolved(&self, dir_with_subpath: &DirectoryWithSubpath, directory: &tg::Directory) {
-		directory.state().inherit_tokens(&dir_with_subpath.tokens);
-		self.resolved
-			.lock()
-			.unwrap()
-			.insert(dir_with_subpath.clone(), directory.clone());
-	}
-
-	async fn resolve_nonempty(
-		&self,
-		directory: &tg::Directory,
-		path: Option<PathBuf>,
-	) -> tg::Result<Option<DirectoryWithSubpath>> {
-		let root = self.intern(directory);
-		let target = {
-			let _walk = root.walk.lock().await;
-			if let Some(ref path) = path {
-				root.directory.get(path).await?.try_unwrap_directory().ok()
-			} else {
-				Some(root.directory.clone())
-			}
+	async fn resolve(&self, path: &DirectoryWithSubpath) -> tg::Result<tg::Directory> {
+		let Some(subpath) = &path.subpath else {
+			return Ok(path.directory.clone());
 		};
-		let Some(target) = target else {
-			return Ok(None);
-		};
-		let target = self.intern(&target);
-		let has_entries = {
-			let _walk = target.walk.lock().await;
-			!target.directory.entries().await?.is_empty()
-		};
-		if !has_entries {
-			return Ok(None);
-		}
-		tracing::debug!(?path, "found a directory with entries");
-		let dir_with_subpath = dir_with_subpath_from_directory(&root.directory, path).await?;
-		self.insert_resolved(&dir_with_subpath, &target.directory);
-		Ok(Some(dir_with_subpath))
-	}
-
-	async fn resolve(&self, dir_with_subpath: &DirectoryWithSubpath) -> tg::Result<tg::Directory> {
-		if let Some(directory) = self.resolved.lock().unwrap().get(dir_with_subpath).cloned() {
-			directory.state().inherit_tokens(&dir_with_subpath.tokens);
+		let key = (path.directory.id(), path.subpath.clone());
+		if let Some(directory) = self.resolved.lock().unwrap().get(&key).cloned() {
 			return Ok(directory);
 		}
-		let outer = self.intern(&{
-			let outer = tg::Directory::with_id(dir_with_subpath.id.clone());
-			outer.state().set_tokens(dir_with_subpath.tokens.clone());
-			outer
-		});
-		let _walk = outer.walk.lock().await;
-		if let Some(directory) = self.resolved.lock().unwrap().get(dir_with_subpath).cloned() {
-			directory.state().inherit_tokens(&dir_with_subpath.tokens);
-			return Ok(directory);
-		}
-		let directory = if let Some(ref subpath) = dir_with_subpath.subpath {
-			let Some(inner) = outer.directory.try_get(subpath).await? else {
-				return Err(
-					tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
-				);
-			};
-			let inner = inner.try_unwrap_directory().map_err(|error| tg::error!(!error, outer = %dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?;
-			self.intern(&inner).directory
-		} else {
-			outer.directory.clone()
-		};
-		self.insert_resolved(dir_with_subpath, &directory);
-
+		let directory = path
+			.directory
+			.get(subpath)
+			.await?
+			.try_unwrap_directory()
+			.map_err(|_| tg::error!("expected a library directory"))?;
+		self.insert_resolved(path, &directory);
 		Ok(directory)
 	}
 }
@@ -1454,7 +1309,6 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 	file: &tg::File,
 	library_paths: &[(DirectoryWithSubpath, PathBuf)],
 	all_needed_libraries: &mut HashMap<String, Option<DirectoryWithSubpath>, H>,
-	directory_cache: &DirectoryCache,
 	max_depth: usize,
 	depth: usize,
 ) -> tg::Result<()> {
@@ -1494,7 +1348,6 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 			.map(|(name, _)| name.clone())
 			.collect_vec();
 		tracing::debug!(?names, "checking for libraries");
-		let mut directory = None;
 		for library_name in names {
 			// A recursion earlier in this pass may already have located the library.
 			if all_needed_libraries
@@ -1510,13 +1363,8 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 			{
 				continue;
 			}
-			let directory = match &directory {
-				Some(directory) => directory,
-				None => directory.insert(directory_cache.resolve(dir_with_subpath).await?),
-			};
-			let Ok(Some(tg::artifact::Handle::File(found_library))) =
-				directory.try_get(&library_name).await
-			else {
+			let artifact = common::checkin_path(path.join(&library_name)).await?;
+			let Ok(found_library) = artifact.try_unwrap_file() else {
 				continue;
 			};
 			let found_library_id = found_library.id();
@@ -1528,7 +1376,6 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 				&found_library,
 				library_paths,
 				all_needed_libraries,
-				directory_cache,
 				max_depth,
 				depth + 1,
 			))
@@ -1756,27 +1603,21 @@ pub async fn dir_with_subpath_from_directory(
 	subpath: Option<PathBuf>,
 ) -> tg::Result<DirectoryWithSubpath> {
 	directory.store().await?;
-	let id = directory.id();
-	let tokens = directory.state().tokens();
-	let ret = DirectoryWithSubpath {
-		id,
+	Ok(DirectoryWithSubpath {
+		directory: directory.clone(),
 		subpath,
-		tokens,
-	};
-	Ok(ret)
+	})
 }
 
 #[derive(Clone, Debug)]
 pub struct DirectoryWithSubpath {
-	id: tg::directory::Id,
+	directory: tg::Directory,
 	subpath: Option<PathBuf>,
-	// Excluded from equality and hashing, since it does not change which directory is referenced.
-	tokens: tg::authorization::Tokens,
 }
 
 impl PartialEq for DirectoryWithSubpath {
 	fn eq(&self, other: &Self) -> bool {
-		self.id == other.id && self.subpath == other.subpath
+		self.directory.id() == other.directory.id() && self.subpath == other.subpath
 	}
 }
 
@@ -1784,7 +1625,7 @@ impl Eq for DirectoryWithSubpath {}
 
 impl std::hash::Hash for DirectoryWithSubpath {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.id.hash(state);
+		self.directory.id().hash(state);
 		self.subpath.hash(state);
 	}
 }

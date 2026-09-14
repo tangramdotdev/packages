@@ -1131,8 +1131,11 @@ function setManifestReference(
 	object: tg.Object,
 ): void {
 	const existing = references.get(object.id);
-	if (existing === undefined || (!hasTokens(existing) && hasTokens(object))) {
+	if (existing === undefined) {
 		references.set(object.id, object);
+	} else {
+		tg.Object.inheritLocation(existing, object.state.location);
+		tg.Object.inheritTokens(existing, object.state.tokens);
 	}
 }
 

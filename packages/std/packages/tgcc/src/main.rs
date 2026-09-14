@@ -75,9 +75,9 @@ impl Environment {
 						tg::error!(source = error, "Failed to parse TGCC_ENABLE")
 					})?;
 				},
-				key if BLACKLISTED_ENV_VARS.contains(&key) => {},
+				key if BLACKLISTED_ENV_VARS.contains(&key)
+					|| key.starts_with(tg::process::env::PREFIX) => {},
 				_ => {
-					let value = common::unrender(&value)?;
 					env.insert(key, value.into());
 				},
 			}
@@ -312,7 +312,13 @@ fn main_inner() -> tg::Result<()> {
 }
 
 #[allow(clippy::too_many_lines)]
-async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
+async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
+	let typed = tg::process::env::env()?;
+	for (name, value) in &mut environment.env {
+		if let tg::Value::String(raw) = value {
+			*value = common::paths::env_value(name, raw, typed.get(name)).await?;
+		}
+	}
 	let Args {
 		output,
 		remap_targets,
@@ -320,6 +326,12 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		..
 	} = args;
 	let output = output.unwrap();
+	let cli_args = futures::future::try_join_all(
+		cli_args
+			.iter()
+			.map(|arg| common::paths::env_value("compiler argument", arg, None)),
+	)
+	.await?;
 
 	// Create the driver executable.
 	let contents = tg::Blob::with_reader(DRIVER_SH.as_bytes()).await?;
@@ -334,10 +346,10 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	let remappings = create_remapping_table(remap_targets).await?;
 
 	// Create the arguments to the driver script.
-	let cc = common::unrender(environment.cc.to_str().unwrap())?.into();
+	let cc = common::template_from_path(&environment.cc).await?.into();
 	let mut args = std::iter::once("tangram_cc".to_string().into())
 		.chain(std::iter::once(cc))
-		.chain(cli_args.into_iter().map(tg::Value::from))
+		.chain(cli_args)
 		.collect::<Vec<_>>();
 	for (target, value) in remappings {
 		match target.kind {
@@ -462,7 +474,13 @@ async fn create_remapping_table(
 	let mut subtrees = Vec::new();
 
 	for remap_target in remap_targets {
-		// Canonicalize the source path.
+		// Let checkin preserve the original store root, including symlink context.
+		if common::is_store_path(&remap_target.value) {
+			let template = common::template_from_path(&remap_target.value).await?;
+			table.insert(remap_target, template);
+			continue;
+		}
+		// Canonicalize local paths to detect symlinks into the store.
 		let path: &Path = remap_target.value.as_ref();
 		let path = path
 			.canonicalize()
@@ -474,8 +492,8 @@ async fn create_remapping_table(
 		}
 
 		// Check if this is a path that should be a template. Needs to happen after canonicalization in case a local symlink was created pointing to an artifact.
-		if path.starts_with("/.tangram/store") || path.starts_with("/opt/tangram/store") {
-			let template = common::unrender(path.to_str().unwrap())?;
+		if common::is_store_path(&path.to_string_lossy()) {
+			let template = common::template_from_path(&path).await?;
 			table.insert(remap_target, template);
 			continue;
 		}
