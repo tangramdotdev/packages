@@ -1536,7 +1536,7 @@ impl DirectoryWithSubpath {
 	}
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(test)]
 mod tests {
 	use super::{AnalyzeOutputFileOutput, InterpreterRequirement, analyze_output_file};
 
@@ -1581,29 +1581,32 @@ mod tests {
 		);
 
 		// Test analyzing a statically linked executable.
-		std::process::Command::new("cc")
-			.arg("main.c")
-			.arg("-static")
-			.arg("-static-libgcc")
-			.arg("-o")
-			.arg("a.out")
-			.status()
-			.unwrap();
-		let AnalyzeOutputFileOutput {
-			is_executable,
-			interpreter,
-			..
-		} = analyze_output_file("a.out").await.unwrap();
-		assert!(
-			is_executable,
-			"Statically linked executable was detected as a library."
-		);
-		assert!(
-			matches!(interpreter, InterpreterRequirement::None),
-			"Statically linked executables do not need an interpreter."
-		);
+		#[cfg(target_os = "linux")]
+		{
+			std::process::Command::new("cc")
+				.arg("main.c")
+				.arg("-static")
+				.arg("-static-libgcc")
+				.arg("-o")
+				.arg("a.out")
+				.status()
+				.unwrap();
+			let AnalyzeOutputFileOutput {
+				is_executable,
+				interpreter,
+				..
+			} = analyze_output_file("a.out").await.unwrap();
+			assert!(
+				is_executable,
+				"Statically linked executable was detected as a library."
+			);
+			assert!(
+				matches!(interpreter, InterpreterRequirement::None),
+				"Statically linked executables do not need an interpreter."
+			);
+		}
 
-		// Test analyzing a static-pie executable.
+		// Test analyzing a dynamically linked PIE executable.
 		std::process::Command::new("cc")
 			.arg("main.c")
 			.arg("-pie")
@@ -1623,27 +1626,30 @@ mod tests {
 		);
 
 		// Test analyzing a static-pie linked executable.
-		std::process::Command::new("cc")
-			.arg("main.c")
-			.arg("-static-pie")
-			.arg("-static-libgcc")
-			.arg("-o")
-			.arg("a.out")
-			.status()
-			.unwrap();
-		let AnalyzeOutputFileOutput {
-			is_executable,
-			interpreter,
-			..
-		} = analyze_output_file("a.out").await.unwrap();
-		assert!(
-			is_executable,
-			"Static-pie linked executable was detected as a library."
-		);
-		assert!(
-			matches!(interpreter, InterpreterRequirement::None),
-			"Static-PIE linked executables do not need an interpreter."
-		);
+		#[cfg(target_os = "linux")]
+		{
+			std::process::Command::new("cc")
+				.arg("main.c")
+				.arg("-static-pie")
+				.arg("-static-libgcc")
+				.arg("-o")
+				.arg("a.out")
+				.status()
+				.unwrap();
+			let AnalyzeOutputFileOutput {
+				is_executable,
+				interpreter,
+				..
+			} = analyze_output_file("a.out").await.unwrap();
+			assert!(
+				is_executable,
+				"Static-pie linked executable was detected as a library."
+			);
+			assert!(
+				matches!(interpreter, InterpreterRequirement::None),
+				"Static-PIE linked executables do not need an interpreter."
+			);
+		}
 
 		std::fs::remove_file("a.out").ok();
 		std::fs::remove_file("main.c").ok();
