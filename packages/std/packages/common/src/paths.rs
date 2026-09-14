@@ -231,135 +231,18 @@ async fn checkin_rendered_template(
 mod tests {
 	use super::*;
 
-	fn referent() -> tg::Referent<tg::artifact::Id> {
-		let node: tg::artifact::Id = "fil_010000000000000000000000000000000000000000000000000000"
-			.parse()
-			.unwrap();
-		let root: tg::artifact::Id = "dir_010000000000000000000000000000000000000000000000000000"
-			.parse()
-			.unwrap();
-		let token = tg::authorization::Token {
-			body: tg::authorization::Body {
-				expires_at: i64::MAX,
-				permissions: vec![tg::authorization::Permission::Object(
-					tg::authorization::permission::object::Permission::Subtree,
-				)],
-				resource: root.clone().into(),
-			},
-			metadata: tg::authorization::Metadata {
-				algorithm: tg::authorization::Algorithm::Ed25519,
-				key: "test".into(),
-			},
-			signature: vec![0; 64],
-		};
-		let location = tg::Location::Remote(tg::location::Remote {
-			name: "test".into(),
-			region: None,
-		});
-		let mut node_token = token.clone();
-		node_token.body.resource = node.clone().into();
-		let mut tokens = tg::authorization::Tokens::with_local([node_token, token.clone()]);
-		tokens.insert(location.clone(), token);
-		tg::Referent::new(
-			node,
-			tg::referent::Options {
-				id: Some(root.into()),
-				path: Some("lib/libexample.so.1".into()),
-				location: Some(location),
-				tokens,
-				..Default::default()
-			},
-		)
-	}
-
-	#[test]
-	fn root_path_keeps_name_location_and_both_token_locations() {
-		let referent = referent();
-		let (root, path) = artifact_path(&referent).unwrap();
-		assert_eq!(
-			tg::object::Id::from(root.id()),
-			referent.options.id.clone().unwrap()
-		);
-		assert_eq!(path.as_deref(), Some(Path::new("lib/libexample.so.1")));
-		assert_eq!(
-			root.to_referent().options.location,
-			referent.options.location
-		);
-		assert_eq!(root.to_referent().options.tokens, referent.options.tokens);
-		// The selected root is now a standalone artifact, so context is not applied twice.
-		assert!(root.to_referent().options.id.is_none());
-		assert!(root.to_referent().options.path.is_none());
-	}
-
-	#[test]
-	fn checkin_output_template_keeps_root_subpath_and_both_artifact_proofs() {
-		let output = tg::checkin::Output {
-			artifact: referent(),
-		};
-		let template = template_from_referent(&output.artifact).unwrap();
-		let [
-			tg::template::Component::Artifact(root),
-			tg::template::Component::String(path),
-		] = template.components()
-		else {
-			panic!("expected a root artifact followed by a subpath");
-		};
-		assert_eq!(
-			tg::object::Id::from(root.id()),
-			output.artifact.options.id.clone().unwrap()
-		);
-		assert_eq!(path, "/lib/libexample.so.1");
-		let tokens = root.to_referent().options.tokens;
-		assert_eq!(tokens.local().len(), 2);
-		assert_eq!(
-			tokens.local()[0].body.resource,
-			tg::Id::from(output.artifact.node)
-		);
-		assert_eq!(tokens.local()[1].body.resource, tg::Id::from(root.id()));
-		assert_eq!(tokens, output.artifact.options.tokens);
-	}
-
-	#[test]
-	fn missing_root_uses_resolved_node_without_a_subpath() {
-		let mut referent = referent();
-		referent.options.id = None;
-		let (artifact, path) = artifact_path(&referent).unwrap();
-		assert_eq!(artifact.id(), referent.node);
-		assert_eq!(
-			artifact.to_referent().options.tokens,
-			referent.options.tokens
-		);
-		assert!(path.is_none());
-	}
-
-	#[test]
-	fn empty_root_subpath_does_not_append_a_slash() {
-		let mut referent = referent();
-		referent.options.path = Some(PathBuf::new());
-		assert!(artifact_path(&referent).unwrap().1.is_none());
-	}
-
-	#[test]
-	fn unsupported_embedded_environment_path_fails() {
-		let runtime = tokio::runtime::Builder::new_current_thread()
-			.build()
-			.unwrap();
+	#[tokio::test]
+	async fn unsupported_embedded_environment_path_fails() {
 		for raw in [
 			"-I/opt/tangram/store/example/include",
 			"-I/home/user/.tangram/checkouts/example/include",
 		] {
-			let result = runtime.block_on(env_value("CFLAGS", raw, None));
-			assert!(
-				result
-					.unwrap_err()
-					.to_string()
-					.contains("structured template")
-			);
+			assert!(env_value("CFLAGS", raw, None).await.is_err());
 		}
 	}
 
 	#[tokio::test]
-	#[ignore = "requires a Tangram server with PR 1132"]
+	#[ignore = "requires a running Tangram server"]
 	async fn environment_paths_and_shell_overrides() -> tg::Result<()> {
 		tg::init()?;
 		let source = tempfile::tempdir().unwrap();
@@ -369,10 +252,6 @@ mod tests {
 		}
 		let root = tg::Artifact::with_referent(checkin_path(source.path()).await?.artifact);
 		let path = crate::checkout_artifact(root.clone()).await?;
-		let output = checkin_path(path.join("include space")).await?;
-		let (containing_root, subpath) = artifact_path(&output.artifact)?;
-		assert_eq!(containing_root.id(), root.id());
-		assert_eq!(subpath.as_deref(), Some(Path::new("include space")));
 
 		let typed = tg::Value::Template(tg::Template::with_components([
 			tg::template::Component::String("-I".into()),

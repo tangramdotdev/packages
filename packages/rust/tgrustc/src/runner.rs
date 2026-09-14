@@ -23,6 +23,12 @@ pub async fn run() -> tg::Result<()> {
 	let script_artifact = tg::Artifact::with_referent(output.artifact)
 		.try_unwrap_file()
 		.map_err(|_| tg::error!("expected a build script file"))?;
+	// Retain the executable flag enforced by the previous byte-copy path.
+	let script_artifact = tg::File::builder()
+		.contents(script_artifact.contents().await?)
+		.dependencies(script_artifact.dependencies().await?)
+		.executable(true)
+		.build()?;
 	let script_artifact = tg::Artifact::from(script_artifact);
 	let script_template =
 		tg::Template::with_components([tg::template::Component::Artifact(script_artifact)]);
