@@ -138,51 +138,7 @@ async fn build_env(
 		if outer::is_denied_host_env(&name) {
 			continue;
 		}
-		let value;
-		if matches!(
-			name.as_str(),
-			"CFLAGS" | "CPPFLAGS" | "CXXFLAGS" | "LDFLAGS"
-		) {
-			value = proxy::compiler_flags(&raw, outer::template_from_path).await?;
-		} else if proxy::is_store_path(&raw) {
-			let paths = matches!(
-				name.as_str(),
-				"PATH"
-					| "LD_LIBRARY_PATH"
-					| "DYLD_LIBRARY_PATH"
-					| "DYLD_FALLBACK_LIBRARY_PATH"
-					| "DYLD_INSERT_LIBRARIES"
-					| "LIBRARY_PATH"
-					| "CPATH" | "C_INCLUDE_PATH"
-					| "CPLUS_INCLUDE_PATH"
-					| "OBJC_INCLUDE_PATH"
-					| "PKG_CONFIG_PATH"
-					| "PKG_CONFIG_LIBDIR"
-					| "CMAKE_PREFIX_PATH"
-					| "NODE_PATH"
-			);
-			let mut template = tg::Template::builder();
-			for (index, path) in raw.split(|c| paths && c == ':').enumerate() {
-				if index > 0 {
-					template = template.string(":");
-				}
-				template = if proxy::is_store_path(path) {
-					template.components(
-						outer::template_from_path(path)
-							.await
-							.map_err(
-								|error| tg::error!(!error, variable = %name, "failed to check in environment path"),
-							)?
-							.components,
-					)
-				} else {
-					template.string(path)
-				};
-			}
-			value = template.build().into();
-		} else {
-			value = raw.into();
-		}
+		let value = proxy::environment_value(&name, &raw, outer::template_from_path).await?;
 		env.insert(name, value);
 	}
 
@@ -339,7 +295,9 @@ mod tests {
 						tg::template::Component::Artifact(artifact) => {
 							Ok(checkout(artifact.clone()).await?.display().to_string())
 						},
-						_ => Err(tg::error!("unexpected placeholder")),
+						tg::template::Component::Placeholder(_) => {
+							Err(tg::error!("unexpected placeholder"))
+						},
 					}
 				})
 				.await?;

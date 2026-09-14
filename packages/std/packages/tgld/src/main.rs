@@ -1,6 +1,3 @@
-// Directory keys hash stored IDs and paths, which do not change with handle metadata.
-#![allow(clippy::mutable_key_type)]
-
 use futures::{StreamExt as _, TryStreamExt as _};
 use itertools::Itertools;
 use std::{
@@ -27,11 +24,15 @@ fn main_inner() -> tg::Result<()> {
 	// Setup tracing.
 	common::tracing::setup("TGLD_TRACING");
 
-	// Read the options from the environment and arguments.
-	let options = read_options()?;
-	tracing::debug!(?options);
-
 	tg::init()?;
+	let runtime = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.unwrap();
+
+	// Read the options from the environment and arguments.
+	let options = runtime.block_on(read_options())?;
+	tracing::debug!(?options);
 
 	// Run the command.
 	let status = std::process::Command::new(&options.command_path)
@@ -58,11 +59,7 @@ fn main_inner() -> tg::Result<()> {
 	}
 
 	// Create the wrapper.
-	tokio::runtime::Builder::new_current_thread()
-		.enable_all()
-		.build()
-		.unwrap()
-		.block_on(create_wrapper(&options))?;
+	runtime.block_on(create_wrapper(&options))?;
 
 	Ok(())
 }
@@ -121,7 +118,7 @@ struct Options {
 
 // Read the options from the environment and arguments.
 #[allow(clippy::too_many_lines)]
-fn read_options() -> tg::Result<Options> {
+async fn read_options() -> tg::Result<Options> {
 	// Create the output.
 	let mut command_args = Vec::new();
 	let mut output_path = None;
@@ -198,10 +195,7 @@ fn read_options() -> tg::Result<Options> {
 
 	// Prepare to store wrapper arg values.
 	let mut wrapper_arg_value = if let Ok(path) = std::env::var("TGLD_WRAPPER_ARG_VALUE_PATH") {
-		let value = std::fs::read_to_string(&path)
-			.map_err(|error| tg::error!(!error, "failed to read TGLD_WRAPPER_ARG_VALUE_PATH"))?
-			.parse::<tg::Value>()
-			.map_err(|error| tg::error!(!error, "failed to parse wrapper arg value"))?;
+		let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
 		let data = value
 			.to_data()
 			.try_unwrap_array()
@@ -219,10 +213,7 @@ fn read_options() -> tg::Result<Options> {
 
 	// Prepare to store wrapper env values.
 	let mut wrapper_env_value = if let Ok(path) = std::env::var("TGLD_WRAPPER_ENV_VALUE_PATH") {
-		let value = std::fs::read_to_string(&path)
-			.map_err(|error| tg::error!(!error, "failed to read TGLD_WRAPPER_ENV_VALUE_PATH"))?
-			.parse::<tg::Value>()
-			.map_err(|error| tg::error!(!error, "failed to parse wrapper env value"))?;
+		let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
 		let data = value
 			.try_unwrap_mutation()
 			.map_err(|_| tg::error!("expected a mutation"))?
@@ -287,10 +278,7 @@ fn read_options() -> tg::Result<Options> {
 					wrapper_arg_value.replace(data);
 				}
 			} else if let Some(path) = arg.strip_prefix("--tangram-wrapper-arg-value-path=") {
-				let value = std::fs::read_to_string(path)
-					.map_err(|error| tg::error!(!error, "failed to read wrapper arg value path"))?
-					.parse::<tg::Value>()
-					.map_err(|error| tg::error!(!error, "failed to parse wrapper arg value"))?;
+				let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
 				let data = value
 					.to_data()
 					.try_unwrap_array()
@@ -304,12 +292,7 @@ fn read_options() -> tg::Result<Options> {
 				wrapper_arg_value.replace(data);
 			} else if arg == "--tangram-wrapper-arg-value-path" {
 				if let Some(path) = args.next() {
-					let value = std::fs::read_to_string(&path)
-						.map_err(|error| {
-							tg::error!(!error, "failed to read wrapper arg value path")
-						})?
-						.parse::<tg::Value>()
-						.map_err(|error| tg::error!(!error, "failed to parse wrapper arg value"))?;
+					let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
 					let data = value
 						.to_data()
 						.try_unwrap_array()
@@ -343,10 +326,7 @@ fn read_options() -> tg::Result<Options> {
 					wrapper_env_value.replace(data);
 				}
 			} else if let Some(path) = arg.strip_prefix("--tangram-wrapper-env-value-path=") {
-				let value = std::fs::read_to_string(path)
-					.map_err(|error| tg::error!(!error, "failed to read wrapper env value path"))?
-					.parse::<tg::Value>()
-					.map_err(|error| tg::error!(!error, "failed to parse wrapper env value"))?;
+				let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
 				let data = value
 					.try_unwrap_mutation()
 					.map_err(|_| tg::error!("expected a mutation"))?
@@ -354,12 +334,7 @@ fn read_options() -> tg::Result<Options> {
 				wrapper_env_value.replace(data);
 			} else if arg == "--tangram-wrapper-env-value-path" {
 				if let Some(path) = args.next() {
-					let value = std::fs::read_to_string(&path)
-						.map_err(|error| {
-							tg::error!(!error, "failed to read wrapper env value path")
-						})?
-						.parse::<tg::Value>()
-						.map_err(|error| tg::error!(!error, "failed to parse wrapper env value"))?;
+					let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
 					let data = value
 						.try_unwrap_mutation()
 						.map_err(|_| tg::error!("expected a mutation"))?
@@ -512,17 +487,14 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 					// Preserve the original store root across symlinks so checkin can recover its context.
 					let path = if common::is_store_path(library_path) {
 						PathBuf::from(library_path)
+					} else if let Ok(path) = std::fs::canonicalize(library_path) {
+						path
 					} else {
-						match std::fs::canonicalize(library_path) {
-							Ok(path) => path,
-							Err(_) => {
-								tracing::warn!(
-									?library_path,
-									"Could not canonicalize library path. Skipping."
-								);
-								return Ok(None);
-							},
-						}
+						tracing::warn!(
+							?library_path,
+							"Could not canonicalize library path. Skipping."
+						);
+						return Ok(None);
 					};
 					if !common::is_store_path(&path.to_string_lossy()) {
 						if !path.is_dir() {
@@ -592,9 +564,6 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	let library_paths = if library_paths.is_empty() {
 		None
 	} else {
-		let library_paths: HashSet<DirectoryWithSubpath, Hasher> =
-			library_paths.into_iter().collect();
-
 		let strategy = options.library_path_strategy;
 		tracing::trace!(
 			?library_paths,
@@ -651,17 +620,13 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		Some(new_wrapper)
 	} else if let Some(library_paths) = library_paths {
 		// If the linker generated a library, then add the library paths to its references.
-		let dependencies = BTreeMap::from_iter(
-			futures::future::try_join_all(library_paths.into_iter().map(
-				|dir_with_subpath| async {
-					let key = tg::Reference::with_object(dir_with_subpath.directory.id().into());
-					let item = dir_with_subpath.directory.into();
-					let value = tg::file::Dependency(tg::Referent::with_node(Some(item)));
-					Ok::<_, tg::Error>((key, Some(value)))
-				},
-			))
-			.await?,
-		);
+		let mut dependencies = output_file.dependencies().await?;
+		for path in library_paths {
+			common::manifest::collect_dependencies_from_template_data(
+				&common::template_from_artifact(path.directory.into()).to_data(),
+				&mut dependencies,
+			);
+		}
 		let output_file_contents = output_file.contents().await?;
 		// NOTE - in practice, `output_file_executable` will virtually always be false in this branch, but we don't want to lose the information if the caller is doing something fancy.
 		let output_file_executable = output_file.executable().await?;
@@ -774,11 +739,11 @@ fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {
 
 /// Create a manifest.
 #[allow(clippy::too_many_lines)]
-async fn create_manifest<H: BuildHasher>(
+async fn create_manifest(
 	ld_output: tg::Artifact,
 	options: &Options,
 	interpreter: InterpreterRequirement,
-	library_paths: Option<HashSet<DirectoryWithSubpath, H>>,
+	library_paths: Option<Vec<DirectoryWithSubpath>>,
 ) -> tg::Result<common::Manifest> {
 	// Create the interpreter.
 	let interpreter = {
@@ -1002,12 +967,12 @@ fn is_library_candidate(arg: &str) -> bool {
 /// Produce the library paths for the output wrapper according to the given configuration.
 async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	file: &tg::File,
-	library_paths: HashSet<DirectoryWithSubpath, H>,
+	library_paths: Vec<DirectoryWithSubpath>,
 	needed_libraries: &mut HashMap<String, Option<DirectoryWithSubpath>, H>,
 	strategy: LibraryPathStrategy,
 	max_depth: usize,
 	disallow_missing: bool,
-) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
+) -> tg::Result<Vec<DirectoryWithSubpath>> {
 	if matches!(strategy, LibraryPathStrategy::None) || library_paths.is_empty() {
 		return Ok(library_paths);
 	}
@@ -1019,7 +984,14 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	find_transitive_needed_libraries(file, &checkouts, needed_libraries, max_depth, 0).await?;
 	tracing::debug!(?needed_libraries, "post-find");
 
-	let filtered_library_paths = needed_libraries.values().flatten().cloned().collect();
+	let filtered_library_paths = library_paths
+		.into_iter()
+		.filter(|path| {
+			needed_libraries.values().flatten().any(|found| {
+				path.directory.id() == found.directory.id() && path.subpath == found.subpath
+			})
+		})
+		.collect();
 	tracing::debug!(?filtered_library_paths, "post-filter");
 
 	if matches!(strategy, LibraryPathStrategy::Filter) {
@@ -1029,8 +1001,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 
 	match strategy {
 		LibraryPathStrategy::Resolve => {
-			let resolved_library_paths: HashSet<DirectoryWithSubpath, H> =
-				resolve_directories(&filtered_library_paths).await?;
+			let resolved_library_paths = resolve_directories(&filtered_library_paths).await?;
 			tracing::trace!(?resolved_library_paths, "post-resolve");
 			return finalize_library_paths(
 				disallow_missing,
@@ -1069,8 +1040,8 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 
 async fn isolate_library_paths<H: BuildHasher + Default>(
 	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
-) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
-	let mut isolated_library_paths = HashSet::default();
+) -> tg::Result<Vec<DirectoryWithSubpath>> {
+	let mut isolated_library_paths = Vec::new();
 	for (name, dir_with_subpath) in located_libraries(needed_libraries) {
 		let directory = dir_with_subpath.resolve().await?;
 		let Ok(Some(artifact)) = directory.try_get(name).await else {
@@ -1080,7 +1051,7 @@ async fn isolate_library_paths<H: BuildHasher + Default>(
 		entries.insert(name.clone(), artifact);
 		let directory = tg::Directory::with_entries(entries);
 		let dir_with_subpath = dir_with_subpath_from_directory(&directory, None).await?;
-		isolated_library_paths.insert(dir_with_subpath);
+		isolated_library_paths.push(dir_with_subpath);
 	}
 
 	Ok(isolated_library_paths)
@@ -1088,7 +1059,7 @@ async fn isolate_library_paths<H: BuildHasher + Default>(
 
 async fn combine_library_paths<H: BuildHasher + Default>(
 	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
-) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
+) -> tg::Result<Vec<DirectoryWithSubpath>> {
 	let mut entries = BTreeMap::new();
 	for (name, dir_with_subpath) in located_libraries(needed_libraries) {
 		let directory = dir_with_subpath.resolve().await?;
@@ -1097,54 +1068,38 @@ async fn combine_library_paths<H: BuildHasher + Default>(
 		}
 	}
 	if entries.is_empty() {
-		return Ok(HashSet::default());
+		return Ok(Vec::new());
 	}
 	let directory = tg::Directory::with_entries(entries);
 	let dir_with_subpath = dir_with_subpath_from_directory(&directory, None).await?;
-	let combined_library_path = std::iter::once(dir_with_subpath).collect();
-
-	Ok(combined_library_path)
+	Ok(vec![dir_with_subpath])
 }
 
 /// Check out library paths and return their filesystem paths.
-async fn checkout_library_paths<H: BuildHasher + Default>(
-	library_paths: &HashSet<DirectoryWithSubpath, H>,
+async fn checkout_library_paths(
+	library_paths: &[DirectoryWithSubpath],
 ) -> tg::Result<Vec<(DirectoryWithSubpath, PathBuf)>> {
 	if library_paths.is_empty() {
 		return Ok(Vec::new());
 	}
-	let ordered_library_paths = library_paths.iter().cloned().collect_vec();
-	let ordered_roots = ordered_library_paths
+	let artifacts = library_paths
 		.iter()
-		.map(|path| path.directory.clone())
-		.unique_by(tg::Directory::id)
-		.collect_vec();
-	let artifacts = ordered_roots.iter().cloned().map(Into::into).collect();
-	tracing::debug!("checking out libraries");
-	let paths = common::checkout_artifacts(artifacts)
-		.await
-		.map_err(|error| tg::error!(!error, "failed to check out libraries"))?;
-	if paths.len() != ordered_roots.len() {
+		.map(|path| path.directory.clone().into())
+		.collect();
+	let paths = common::checkout_artifacts(artifacts).await?;
+	if paths.len() != library_paths.len() {
 		return Err(tg::error!("expected one checkout path per library root"));
 	}
-	let paths: HashMap<_, _, Hasher> = ordered_roots
-		.into_iter()
-		.map(|directory| directory.id())
+	let checkouts = library_paths
+		.iter()
+		.cloned()
 		.zip(paths)
-		.collect();
-
-	let checkouts = ordered_library_paths
-		.into_iter()
-		.map(|dir_with_subpath| {
-			let path = paths
-				.get(&dir_with_subpath.directory.id())
-				.expect("every library root was checked out")
-				.clone();
-			let path = match dir_with_subpath.subpath {
-				Some(ref subpath) => path.join(subpath),
+		.map(|(library_path, path)| {
+			let path = match &library_path.subpath {
+				Some(subpath) => path.join(subpath),
 				None => path,
 			};
-			(dir_with_subpath, path)
+			(library_path, path)
 		})
 		.collect();
 
@@ -1154,9 +1109,9 @@ async fn checkout_library_paths<H: BuildHasher + Default>(
 /// Produce the set of library paths to be written to the wrapper post-optimization.
 async fn finalize_library_paths<H: BuildHasher + Default>(
 	disallow_missing: bool,
-	library_paths: HashSet<DirectoryWithSubpath, H>,
+	library_paths: Vec<DirectoryWithSubpath>,
 	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
-) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
+) -> tg::Result<Vec<DirectoryWithSubpath>> {
 	let checkouts = checkout_library_paths(&library_paths).await?;
 
 	// Warn or error if any required libraries are not included in the set.
@@ -1241,23 +1196,18 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 }
 
 /// Given a set of directories which may contain subpaths, return structs with the item resolved to the inner directory.
-async fn resolve_directories<H: BuildHasher + Default>(
-	unresolved_paths: &HashSet<DirectoryWithSubpath, H>,
-) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
-	let resolved_paths =
-		futures::future::try_join_all(unresolved_paths.iter().map(|dir_with_subpath| async {
-			let resolved_dir_with_subpath = if dir_with_subpath.subpath.is_some() {
-				let inner = dir_with_subpath.resolve().await?;
-				dir_with_subpath_from_directory(&inner, None).await?
-			} else {
-				dir_with_subpath.clone()
-			};
-			Ok::<_, tg::Error>(resolved_dir_with_subpath)
-		}))
-		.await?
-		.into_iter()
-		.collect::<HashSet<_, H>>();
-	Ok(resolved_paths)
+async fn resolve_directories(
+	unresolved_paths: &[DirectoryWithSubpath],
+) -> tg::Result<Vec<DirectoryWithSubpath>> {
+	futures::future::try_join_all(unresolved_paths.iter().map(|dir_with_subpath| async {
+		if dir_with_subpath.subpath.is_some() {
+			let inner = dir_with_subpath.resolve().await?;
+			dir_with_subpath_from_directory(&inner, None).await
+		} else {
+			Ok(dir_with_subpath.clone())
+		}
+	}))
+	.await
 }
 
 /// Recursively find all needed libraries for an executable.
@@ -1583,21 +1533,6 @@ impl DirectoryWithSubpath {
 				.map_err(|_| tg::error!("expected a library directory")),
 			None => Ok(self.directory.clone()),
 		}
-	}
-}
-
-impl PartialEq for DirectoryWithSubpath {
-	fn eq(&self, other: &Self) -> bool {
-		self.directory.id() == other.directory.id() && self.subpath == other.subpath
-	}
-}
-
-impl Eq for DirectoryWithSubpath {}
-
-impl std::hash::Hash for DirectoryWithSubpath {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.directory.id().hash(state);
-		self.subpath.hash(state);
 	}
 }
 

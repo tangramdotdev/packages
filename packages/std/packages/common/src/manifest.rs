@@ -2,7 +2,6 @@ use std::{
 	collections::BTreeMap,
 	os::unix::fs::PermissionsExt,
 	path::{Path, PathBuf},
-	sync::LazyLock,
 };
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
@@ -261,10 +260,10 @@ impl Manifest {
 		tracing::debug!(?self, "Embedding manifest");
 
 		// Get the paths of the required files.
-		let wrapper_exe = TANGRAM_WRAPPER_EXE_PATH
-			.as_ref()
+		let wrapper_exe = std::env::var_os("TANGRAM_WRAPPER_EXE_PATH")
+			.map(PathBuf::from)
 			.ok_or_else(|| tg::error!("missing wrapper exe"))?;
-		let objcopy = TANGRAM_OBJCOPY_PATH.as_ref();
+		let objcopy = std::env::var_os("TANGRAM_OBJCOPY_PATH").map(PathBuf::from);
 
 		// Check out the input file, which is not a dependency of this executable, to get its path on
 		// disk.
@@ -273,9 +272,9 @@ impl Manifest {
 			.map_err(|error| tg::error!(!error, "failed to check out the input file"))?;
 
 		// Provide the context to wrap.
-		wrap::set_wrapper_exe_path(wrapper_exe.clone());
+		wrap::set_wrapper_exe_path(wrapper_exe);
 		if let Some(objcopy) = objcopy {
-			wrap::set_objcopy_path(objcopy.clone());
+			wrap::set_objcopy_path(objcopy);
 		}
 
 		// Copy the input file to a a temp.
@@ -306,8 +305,7 @@ impl Manifest {
 			Ok(Some(wrap::Format::Mach64))
 		) {
 			tracing::info!("codesigning binary");
-			let codesign = TANGRAM_CODESIGN_PATH
-				.as_ref()
+			let codesign = std::env::var_os("TANGRAM_CODESIGN_PATH")
 				.ok_or_else(|| tg::error!("missing the codesign binary"))?;
 			let output = tokio::process::Command::new(codesign)
 				.arg("sign")
@@ -429,8 +427,7 @@ impl Manifest {
 		tracing::debug!(?self, "Writing manifest");
 
 		// Get the path of the wrapper file.
-		let path = TANGRAM_WRAPPER_EXE_PATH
-			.as_ref()
+		let path = std::env::var_os("TANGRAM_WRAPPER_EXE_PATH")
 			.ok_or_else(|| tg::error!("missing wrapper exe"))?;
 
 		// Create a temp.
@@ -459,8 +456,7 @@ impl Manifest {
 		// Codesign if necessary.
 		if matches!(wrap::detect_format(&path), Ok(Some(wrap::Format::Mach64))) {
 			tracing::info!("codesigning binary");
-			let codesign = TANGRAM_CODESIGN_PATH
-				.as_ref()
+			let codesign = std::env::var_os("TANGRAM_CODESIGN_PATH")
 				.ok_or_else(|| tg::error!("missing the codesign binary"))?;
 			let output = tokio::process::Command::new(codesign)
 				.arg("sign")
@@ -526,18 +522,40 @@ impl Manifest {
 	}
 }
 
-/// Read serialized argument templates and restore authorization from their file dependencies.
-pub async fn read_template_array(path: &Path) -> tg::Result<Vec<tg::template::Data>> {
+/// Read a serialized value and recover authorization from its file dependencies.
+pub async fn read_value(path: &Path) -> tg::Result<tg::Value> {
 	let output = crate::checkin_path(path).await?;
 	let file = tg::Artifact::with_referent(output.artifact)
 		.try_unwrap_file()
-		.map_err(|_| tg::error!("expected a template argument file"))?;
+		.map_err(|_| tg::error!("expected a value file"))?;
 	let bytes = file.bytes().await?;
 	let value = std::str::from_utf8(&bytes)
-		.map_err(|error| tg::error!(!error, "argument templates must be UTF-8"))?
+		.map_err(|error| tg::error!(!error, "value must be UTF-8"))?
 		.parse::<tg::Value>()
-		.map_err(|error| tg::error!(!error, "failed to parse argument templates"))?;
-	let args = value
+		.map_err(|error| tg::error!(!error, "failed to parse value"))?;
+	let dependencies = file.dependencies().await?;
+	for object in value.objects() {
+		for dependency in dependencies.values().flatten() {
+			if let Some(source) = &dependency.0.node
+				&& source.id() == object.id()
+			{
+				object
+					.state()
+					.inherit_location(source.state().location().as_ref());
+				object.state().inherit_tokens(&source.state().tokens());
+			}
+		}
+		object
+			.state()
+			.inherit_location(file.state().location().as_ref());
+		object.state().inherit_tokens(&file.state().tokens());
+	}
+	Ok(value)
+}
+
+pub async fn read_template_array(path: &Path) -> tg::Result<Vec<tg::template::Data>> {
+	read_value(path)
+		.await?
 		.to_data()
 		.try_unwrap_array()
 		.map_err(|_| tg::error!("expected an array of argument templates"))?
@@ -547,15 +565,7 @@ pub async fn read_template_array(path: &Path) -> tg::Result<Vec<tg::template::Da
 				.try_unwrap_template()
 				.map_err(|_| tg::error!("expected an argument template"))
 		})
-		.collect::<tg::Result<Vec<_>>>()?;
-	let mut manifest = Manifest {
-		executable: Executable::Content(tg::Template::from("").to_data()),
-		interpreter: None,
-		env: None,
-		args: Some(args),
-	};
-	manifest.inherit_from_file(&file).await?;
-	Ok(manifest.args.unwrap())
+		.collect()
 }
 
 fn collect_reference(
@@ -672,24 +682,3 @@ fn visit_mutation_references(
 		},
 	}
 }
-
-// These are rendered from artifacts in the manifest, so each is a dependency already present in an
-// artifact root.
-static TANGRAM_WRAPPER_EXE_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
-	std::env::var("TANGRAM_WRAPPER_EXE_PATH")
-		.ok()
-		.map(PathBuf::from)
-});
-
-static TANGRAM_OBJCOPY_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
-	std::env::var("TANGRAM_OBJCOPY_PATH")
-		.ok()
-		.map(PathBuf::from)
-});
-
-// Only a proxy that targets Darwin sets this.
-static TANGRAM_CODESIGN_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
-	std::env::var("TANGRAM_CODESIGN_PATH")
-		.ok()
-		.map(PathBuf::from)
-});

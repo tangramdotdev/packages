@@ -346,6 +346,16 @@ async function ldProxy(arg: LdProxyArg) {
 	const interpreterArgs = arg.interpreterArgs
 		? await Promise.all(arg.interpreterArgs.map((arg) => tg.template(arg)))
 		: undefined;
+	const interpreterDependencies: Record<string, tg.Referent<tg.Object>> = {};
+	for (const object of tg.Value.objects(interpreterArgs ?? [])) {
+		const existing = interpreterDependencies[object.id];
+		if (existing) {
+			tg.Object.inheritLocation(existing.node, object.state.location);
+			tg.Object.inheritTokens(existing.node, object.state.tokens);
+		} else {
+			interpreterDependencies[object.id] = { node: object, options: {} };
+		}
+	}
 	const interpreterArgsFile = interpreterArgs
 		? await tg.file({
 				contents: tg.Value.stringify(
@@ -355,12 +365,7 @@ async function ldProxy(arg: LdProxyArg) {
 						),
 					),
 				),
-				dependencies: Object.fromEntries(
-					tg.Value.objects(interpreterArgs).map((object) => [
-						object.id,
-						{ node: object, options: {} },
-					]),
-				),
+				dependencies: interpreterDependencies,
 			})
 		: undefined;
 

@@ -55,6 +55,9 @@ pub fn template_from_artifact_and_subpath(
 
 /// Check out the given artifacts into the store, returning their paths.
 pub async fn checkout_artifacts(artifacts: Vec<tg::Artifact>) -> tg::Result<Vec<PathBuf>> {
+	for artifact in &artifacts {
+		artifact.store().await?;
+	}
 	let nodes = artifacts
 		.into_iter()
 		.map(|artifact| artifact.to_referent().map(Into::into))
@@ -81,6 +84,7 @@ pub async fn checkout_artifact(artifact: tg::Artifact) -> tg::Result<PathBuf> {
 
 /// Check out a single artifact to the given path, overwriting whatever is already there.
 pub async fn checkout_artifact_to_path(artifact: tg::Artifact, path: PathBuf) -> tg::Result<()> {
+	artifact.store().await?;
 	tg::checkout(tg::checkout::Arg {
 		dependencies: false,
 		extension: None,

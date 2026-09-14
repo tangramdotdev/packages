@@ -412,6 +412,17 @@ export namespace wrap {
 		const existingManifest =
 			await wrap.existingManifestFromExecutableArg(executable);
 		const tokens = tg.Artifact.is(executable) ? executable.state.tokens : {};
+		if (existingManifest !== undefined) {
+			const file =
+				executable instanceof tg.Symlink
+					? await executable.resolve()
+					: executable;
+			if (file instanceof tg.File) {
+				for (const dependency of await file.dependencyObjects) {
+					setManifestReference(references, dependency);
+				}
+			}
+		}
 
 		// Determine whether to try to merge this wrapper with an existing one. If the user specified `true`, only honor if an existing manifest was found.
 		const merge = merge_ && existingManifest !== undefined;
@@ -1146,6 +1157,11 @@ function inheritManifestReference<T extends tg.Object>(
 ): T {
 	tg.Object.inheritTokens(object, tokens ?? {});
 	if (references !== undefined) {
+		const existing = references.get(object.id);
+		if (existing !== undefined) {
+			tg.Object.inheritLocation(object, existing.state.location);
+			tg.Object.inheritTokens(object, existing.state.tokens);
+		}
 		setManifestReference(references, object);
 	}
 	return object;
@@ -1547,7 +1563,13 @@ async function interpreterFromExecutableArg(
 	// Handle the executable by its format.
 	switch (metadata.format) {
 		case "elf": {
-			return interpreterFromElf(metadata, buildToolchainArg, buildArg, hostArg);
+			return interpreterFromElf(
+				arg,
+				metadata,
+				buildToolchainArg,
+				buildArg,
+				hostArg,
+			);
 		}
 		case "mach-o": {
 			// Use default injection when no custom build, host, or buildToolchain is provided.
@@ -1608,6 +1630,7 @@ async function interpreterFromExecutableArg(
 
 /** Inspect an ELF file and produce the correct interpreter. */
 async function interpreterFromElf(
+	executable: tg.File,
 	metadata: std.file.ElfExecutableMetadata,
 	buildToolchainArg?: std.env.Arg,
 	buildArg?: string,
@@ -1671,7 +1694,11 @@ async function interpreterFromElf(
 	} else if (metadata.interpreter?.includes("ld-musl")) {
 		// Handle an ld-musl interpreter.
 		host = std.triple.create(host, { environment: "musl" });
-		const { ldso, libDir } = await muslLoader(metadata.interpreter, host);
+		const { ldso, libDir } = await muslLoader(
+			metadata.interpreter,
+			host,
+			executable,
+		);
 		return {
 			kind: "ld-musl",
 			executable: ldso,
@@ -1687,13 +1714,21 @@ async function interpreterFromElf(
 async function muslLoader(
 	interpreterPath: string,
 	host: string,
+	executable: tg.File,
 ): Promise<{ ldso: tg.File; libDir: tg.Directory }> {
 	const match = interpreterPath.match(/\/(dir_[0-9a-z]+)\/(.*)\/([^/]+)$/);
 	const [, directoryId, libSubpath, ldsoName] = match ?? [];
 	if (directoryId !== undefined && libSubpath && ldsoName !== undefined) {
-		const libDir = await tg.Directory.withId(directoryId)
-			.get(libSubpath)
-			.then(tg.Directory.expect);
+		const directory = tg.Directory.withId(directoryId);
+		for (const dependency of await executable.dependencyObjects) {
+			if (dependency.id === directoryId) {
+				tg.Object.inheritLocation(directory, dependency.state.location);
+				tg.Object.inheritTokens(directory, dependency.state.tokens);
+			}
+		}
+		tg.Object.inheritLocation(directory, executable.state.location);
+		tg.Object.inheritTokens(directory, executable.state.tokens);
+		const libDir = await directory.get(libSubpath).then(tg.Directory.expect);
 		let ldso = await libDir.get(ldsoName);
 		if (ldso instanceof tg.Symlink) {
 			ldso = await ldso.resolve().then((resolved) => {
@@ -3195,12 +3230,28 @@ export async function testManifestTemplateAuthorization() {
 	const locations = Object.keys(directoryTokens);
 	tg.assert(
 		locations.length === Object.keys(artifactTokens).length &&
-			locations.every(
-				(location) => artifactTokens[location] === directoryTokens[location],
+			locations.every((location) =>
+				directoryTokens[location]!.every((token) =>
+					artifactTokens[location]?.includes(token),
+				),
 			),
 		"expected the manifest template artifact to retain its authorization tokens",
 	);
 	tg.assert(parsedReferences.get(directory.id) === artifact);
+	const restored = await templateFromManifestTemplate(
+		manifestTemplate,
+		serializedReferences,
+	);
+	const [restoredArtifact] = restored.components;
+	tg.assert(restoredArtifact instanceof tg.Directory);
+	tg.assert(
+		Object.entries(directoryTokens).every(([location, tokens]) =>
+			tokens.every((token) =>
+				restoredArtifact.state.tokens[location]?.includes(token),
+			),
+		),
+		"expected known references to authorize reconstructed manifest artifacts",
+	);
 
 	return true;
 }

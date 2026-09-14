@@ -1,5 +1,5 @@
 import * as std from "./tangram.ts";
-import { wrap } from "./wrap.tg.ts";
+import { wrap, type ManifestReferences } from "./wrap.tg.ts";
 
 export async function env(...args: tg.Args<env.Arg>) {
 	return await std.wrap(await tg.build(std.buildGnuEnv).named("gnu env"), {
@@ -680,9 +680,19 @@ export async function envObjectFromArtifact(
 			throw new Error(`Could not read manifest from ${artifactId}.`);
 		}
 		// If the file was a wrapper, return its env.
+		const references: ManifestReferences = new Map();
+		for (const dependency of await artifact.dependencyObjects) {
+			const existing = references.get(dependency.id);
+			if (existing) {
+				tg.Object.inheritLocation(existing, dependency.state.location);
+				tg.Object.inheritTokens(existing, dependency.state.tokens);
+			} else {
+				references.set(dependency.id, dependency);
+			}
+		}
 		return await wrap.envObjectFromManifestEnv(
 			manifest.env,
-			undefined,
+			references,
 			artifact.state.tokens,
 		);
 	} else if (artifact instanceof tg.Directory) {

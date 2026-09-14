@@ -45,16 +45,10 @@ struct RemapTarget {
 // https://gcc.gnu.org/onlinedocs/gcc/Directory-Options.html
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum RemapKind {
-	// -I, -include
+	// -I
 	Include,
-	// -iquote
-	Quote,
-	// -isystem
-	System,
 	// -idirafter
 	DirAfter,
-	// -imacro
-	Macro,
 	// -L
 	Linker,
 	// -B
@@ -92,45 +86,10 @@ impl Environment {
 			let tg::Value::String(raw) = value else {
 				continue;
 			};
-			if matches!(
-				name.as_str(),
-				"CFLAGS" | "CPPFLAGS" | "CXXFLAGS" | "LDFLAGS"
-			) {
-				*value =
-					proxy::compiler_flags(raw, async |path| common::template_from_path(path).await)
-						.await?;
-			} else if common::is_store_path(raw) {
-				let paths =
-					matches!(
-						name.as_str(),
-						"PATH"
-							| "LD_LIBRARY_PATH" | "DYLD_LIBRARY_PATH"
-							| "DYLD_FALLBACK_LIBRARY_PATH"
-							| "DYLD_INSERT_LIBRARIES"
-							| "LIBRARY_PATH" | "CPATH"
-							| "C_INCLUDE_PATH" | "CPLUS_INCLUDE_PATH"
-							| "OBJC_INCLUDE_PATH" | "PKG_CONFIG_PATH"
-							| "PKG_CONFIG_LIBDIR" | "CMAKE_PREFIX_PATH"
-							| "NODE_PATH"
-					);
-				let mut template = tg::Template::builder();
-				for (index, path) in raw.split(|c| paths && c == ':').enumerate() {
-					if index > 0 {
-						template = template.string(":");
-					}
-					template = if common::is_store_path(path) {
-						if !Path::new(path).is_absolute() {
-							return Err(
-								tg::error!(variable = %name, "unsupported embedded environment path"),
-							);
-						}
-						template.components(common::template_from_path(path).await?.components)
-					} else {
-						template.string(path)
-					};
-				}
-				*value = template.build().into();
-			}
+			*value = proxy::environment_value(name, raw, async |path| {
+				common::template_from_path(path).await
+			})
+			.await?;
 		}
 		Ok(())
 	}
@@ -139,14 +98,14 @@ impl Environment {
 impl Args {
 	// Parse the cli arguments as if this program was gcc to extract the sources, search paths, and rest of the arguments.
 	#[allow(clippy::too_many_lines)]
-	fn parse() -> Self {
+	fn parse(args: impl Iterator<Item = String>) -> Self {
 		let mut remap_targets = vec![];
 		let mut output = None;
 		let mut cli_args = vec![];
 		let mut stdin = false;
 		let mut iprefix = String::new();
 
-		let mut args = std::env::args().skip(1).peekable();
+		let mut args = args.peekable();
 		while let Some(arg) = args.next() {
 			match arg.as_str() {
 				// By convention, '-' refers to using stdin as the source file.
@@ -202,47 +161,6 @@ impl Args {
 								});
 							}
 						},
-					}
-				},
-				// The long form include flags are treated differently by gcc.
-				"-include" => {
-					if args.peek().is_some() {
-						remap_targets.push(RemapTarget {
-							kind: RemapKind::Include,
-							value: args.next().unwrap(),
-						});
-					}
-				},
-				"-iquote" => {
-					if args.peek().is_some() {
-						remap_targets.push(RemapTarget {
-							kind: RemapKind::Quote,
-							value: args.next().unwrap(),
-						});
-					}
-				},
-				"-isystem" => {
-					if args.peek().is_some() {
-						remap_targets.push(RemapTarget {
-							kind: RemapKind::System,
-							value: args.next().unwrap(),
-						});
-					}
-				},
-				"-imacro" => {
-					if args.peek().is_some() {
-						remap_targets.push(RemapTarget {
-							kind: RemapKind::Macro,
-							value: args.next().unwrap(),
-						});
-					}
-				},
-				"-idirafter" => {
-					if args.peek().is_some() {
-						remap_targets.push(RemapTarget {
-							kind: RemapKind::DirAfter,
-							value: args.next().unwrap(),
-						});
 					}
 				},
 				// Handle prefixes. This is a stateful operation over the command line arguments, where subsequent -iprefix arguments will override any previous -iprefix.
@@ -360,7 +278,7 @@ fn main_inner() -> tg::Result<()> {
 	let environment = Environment::parse()?;
 
 	// Get the command line arguments.
-	let args = Args::parse();
+	let args = Args::parse(std::env::args().skip(1));
 
 	// If this invocation isn't being used to generate output or needs to read from stdin, fallback on the detected C compiler.
 	if !environment.enable || args.output.is_none() || args.stdin {
@@ -449,10 +367,7 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 	for (target, value) in remappings {
 		match target.kind {
 			RemapKind::Include => args.push("-I".to_owned().into()),
-			RemapKind::Quote => args.push("-iquote".to_owned().into()),
-			RemapKind::System => args.push("-isystem".to_owned().into()),
 			RemapKind::DirAfter => args.push("-idirafter".to_owned().into()),
-			RemapKind::Macro => args.push("-imacro".to_owned().into()),
 			RemapKind::Linker => args.push("-L".to_owned().into()),
 			RemapKind::Binary => args.push("-B".to_owned().into()),
 			RemapKind::Option(flag) => args.push(flag.to_owned().into()),
@@ -763,6 +678,30 @@ const CC_OPTIONS_WITH_VALUE: [&str; 18] = [
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn path_options_preserve_their_meaning() {
+		for flag in [
+			"-include",
+			"-imacros",
+			"-isystem",
+			"-iquote",
+			"-idirafter",
+			"--sysroot",
+		] {
+			let separator = if flag == "--sysroot" { "=" } else { "" };
+			for cli in [
+				vec![flag.to_owned(), "/include".to_owned()],
+				vec![format!("{flag}{separator}/include")],
+			] {
+				let args = Args::parse(cli.into_iter());
+				assert_eq!(args.remap_targets.len(), 1);
+				let target = &args.remap_targets[0];
+				assert!(matches!(target.kind, RemapKind::Option(option) if option == flag));
+				assert_eq!(target.value, "/include");
+			}
+		}
+	}
 
 	async fn check_env(name: &str, raw: &str) -> tg::Result<tg::Value> {
 		let mut environment = Environment {

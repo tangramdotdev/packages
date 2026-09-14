@@ -224,47 +224,7 @@ async fn build_env(
 			continue;
 		}
 		if let Ok(raw) = std::env::var(name) {
-			if matches!(
-				name.as_str(),
-				"CFLAGS" | "CPPFLAGS" | "CXXFLAGS" | "LDFLAGS"
-			) {
-				*value = proxy::compiler_flags(&raw, template_from_path).await?;
-			} else if is_store_path(&raw) {
-				let paths =
-					matches!(
-						name.as_str(),
-						"PATH"
-							| "LD_LIBRARY_PATH" | "DYLD_LIBRARY_PATH"
-							| "DYLD_FALLBACK_LIBRARY_PATH"
-							| "DYLD_INSERT_LIBRARIES"
-							| "LIBRARY_PATH" | "CPATH"
-							| "C_INCLUDE_PATH" | "CPLUS_INCLUDE_PATH"
-							| "OBJC_INCLUDE_PATH" | "PKG_CONFIG_PATH"
-							| "PKG_CONFIG_LIBDIR" | "CMAKE_PREFIX_PATH"
-							| "NODE_PATH"
-					);
-				let mut template = tg::Template::builder();
-				for (index, path) in raw.split(|c| paths && c == ':').enumerate() {
-					if index > 0 {
-						template = template.string(":");
-					}
-					template = if is_store_path(path) {
-						template.components(
-							template_from_path(path)
-								.await
-								.map_err(
-									|error| tg::error!(!error, variable = %name, "failed to check in environment path"),
-								)?
-								.components,
-						)
-					} else {
-						template.string(path)
-					};
-				}
-				*value = template.build().into();
-			} else {
-				*value = raw.into();
-			}
+			*value = proxy::environment_value(name, &raw, template_from_path).await?;
 		}
 	}
 	rewrite_dir_env(&mut env, "OUT_DIR").await?;
@@ -521,11 +481,12 @@ fn override_manifest_env(env: &mut tg::value::Map, source_artifact: &tg::Artifac
 // build-script-generated content (cargo writes it to `OUT_DIR`) becomes
 // visible to the proxied rustc that consumes it via `env!("OUT_DIR")`.
 async fn rewrite_dir_env(env: &mut tg::value::Map, key: &str) -> tg::Result<()> {
-	let Some(tg::Value::String(path_str)) = env.get(key) else {
+	let Ok(path_str) = std::env::var(key) else {
 		return Ok(());
 	};
-	let path = Path::new(path_str);
+	let path = Path::new(&path_str);
 	if !path.is_absolute() || !path.is_dir() {
+		env.insert(key.to_owned(), path_str.into());
 		return Ok(());
 	}
 	let artifact = tg::Artifact::with_referent(checkin(path).await?.artifact);

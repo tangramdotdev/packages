@@ -119,8 +119,8 @@ async fn run_proxy(
 ) -> tg::Result<()> {
 	if matches!(&manifest.executable, manifest::Executable::Path(_)) {
 		// The bytes contain IDs only. Recover the wrapper's authorized dependencies before rebuilding it.
-		let path = std::fs::canonicalize(target_path)
-			.map_err(|error| tg::error!(!error, "failed to canonicalize the wrapper path"))?;
+		let path = std::path::absolute(target_path)
+			.map_err(|error| tg::error!(!error, "invalid wrapper path"))?;
 		let output = tg::checkin(tg::checkin::Arg {
 			options: tg::checkin::Options {
 				destructive: false,
