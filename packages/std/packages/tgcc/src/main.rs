@@ -313,10 +313,9 @@ fn main_inner() -> tg::Result<()> {
 
 #[allow(clippy::too_many_lines)]
 async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
-	let typed = tg::process::env::env()?;
 	for (name, value) in &mut environment.env {
 		if let tg::Value::String(raw) = value {
-			*value = common::paths::env_value(name, raw, typed.get(name)).await?;
+			*value = common::paths::env_value(name, raw).await?;
 		}
 	}
 	let Args {
@@ -326,12 +325,9 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 		..
 	} = args;
 	let output = output.unwrap();
-	let cli_args = futures::future::try_join_all(
-		cli_args
-			.iter()
-			.map(|arg| common::paths::env_value("compiler argument", arg, None)),
-	)
-	.await?;
+	let cli_args =
+		futures::future::try_join_all(cli_args.iter().map(|arg| common::paths::arg_value(arg)))
+			.await?;
 
 	// Create the driver executable.
 	let contents = tg::Blob::with_reader(DRIVER_SH.as_bytes()).await?;

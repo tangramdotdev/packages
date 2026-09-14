@@ -36,7 +36,7 @@ pub async fn run() -> tg::Result<()> {
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
 		.map_err(|_| tg::error!("CARGO_MANIFEST_DIR is not set"))?;
 	let source = outer::checkin(Path::new(&manifest_dir)).await?;
-	let (source_artifact, manifest_subpath) = crate::paths::artifact_path(&source.artifact)?;
+	let (source_artifact, manifest_subpath) = common::artifact_path(&source.artifact)?;
 	let manifest_subpath = manifest_subpath
 		.map(|path| path.to_string_lossy().into_owned())
 		.unwrap_or_default();
@@ -56,7 +56,7 @@ pub async fn run() -> tg::Result<()> {
 	let mut spawn_args: tg::value::Array = Vec::with_capacity(1 + extra_args.len());
 	spawn_args.push(tg::Value::Template(script_template));
 	for arg in &extra_args {
-		spawn_args.push(crate::paths::env_value("build script argument", arg, None).await?);
+		spawn_args.push(common::paths::arg_value(arg).await?);
 	}
 
 	let process_arg = tg::process::Arg {
@@ -113,12 +113,11 @@ pub async fn run() -> tg::Result<()> {
 	Ok(())
 }
 
-// Preserve shell exports, using a typed shadow value only while it still matches.
+// Read the live environment so shell exports reach the sandbox.
 async fn build_env(
 	source_template: tg::Template,
 	manifest_subpath: &str,
 ) -> tg::Result<tg::value::Map> {
-	let typed = tg::process::env::env()?;
 	let toolchain_artifact = outer::checkin_env_artifact("TGRUSTC_SANDBOX_TOOLCHAIN").await?;
 	let sdk_artifact = outer::checkin_env_artifact("TGRUSTC_SANDBOX_SDK").await?;
 
@@ -134,7 +133,7 @@ async fn build_env(
 		if outer::is_denied_host_env(&name) {
 			continue;
 		}
-		let value = crate::paths::env_value(&name, &raw, typed.get(&name)).await?;
+		let value = common::paths::env_value(&name, &raw).await?;
 		env.insert(name, value);
 	}
 

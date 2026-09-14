@@ -207,8 +207,8 @@ async fn build_env(
 	rustc: &str,
 	source_artifact: &tg::Artifact,
 ) -> tg::Result<(tg::value::Map, tg::Artifact)> {
-	// `tg::process::env::env()` reconstitutes typed values from the parent's
-	// `TANGRAM_ENV_*` shadow vars; `std::env::vars()` would lose the typing.
+	// Retain the existing filter's distinction between host strings and typed values.
+	// Recover paths from the live strings so shell overrides take effect.
 	let mut env = tg::process::env::env()?;
 	for (name, value) in &mut env {
 		if name == "OUT_DIR"
@@ -223,7 +223,7 @@ async fn build_env(
 			continue;
 		}
 		if let Ok(raw) = std::env::var(name) {
-			*value = crate::paths::env_value(name, &raw, Some(value)).await?;
+			*value = common::paths::env_value(name, &raw).await?;
 		}
 	}
 	rewrite_dir_env(&mut env, "OUT_DIR").await?;
@@ -527,7 +527,7 @@ async fn build_spawn_args(
 		}
 		let value = rewrite_arg(arg, source_artifact, source_dir, cwd);
 		let value = if let tg::Value::String(raw) = &value {
-			crate::paths::env_value("rustc argument", raw, None).await?
+			common::paths::arg_value(raw).await?
 		} else {
 			value
 		};

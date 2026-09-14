@@ -18,6 +18,7 @@ pedantic = { level = "warn", priority = -1 }
 result_large_err = "allow"
 
 [dependencies]
+common = { path = "../../std/packages/common" }
 rustix = { version = "1", features = ["stdio"] }
 serde = { version = "1", default-features = false, features = ["derive", "std"] }
 tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "c7f17395df315bea20a0c5e60556cb9b5563da76" }

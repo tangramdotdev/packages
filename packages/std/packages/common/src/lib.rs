@@ -96,5 +96,19 @@ pub async fn checkout_artifact_to_path(artifact: tg::Artifact, path: PathBuf) ->
 
 /// Render a template by checking out its authorized artifact handles.
 pub async fn render_template_data(data: &tg::template::Data) -> tg::Result<String> {
-	paths::render_template(&tg::Template::try_from_data(data.clone())?).await
+	tg::Template::try_from_data(data.clone())?
+		.try_render(|component| async move {
+			match component {
+				tg::template::Component::String(string) => Ok(string.clone()),
+				tg::template::Component::Artifact(artifact) => checkout_artifact(artifact.clone())
+					.await?
+					.into_os_string()
+					.into_string()
+					.map_err(|_| tg::error!("checkout path is not UTF-8")),
+				tg::template::Component::Placeholder(_) => {
+					Err(tg::error!("cannot render an unresolved placeholder"))
+				},
+			}
+		})
+		.await
 }

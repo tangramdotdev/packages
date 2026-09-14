@@ -5,7 +5,6 @@ mod driver;
 mod lock;
 mod outer;
 mod passthrough;
-mod paths;
 mod runner;
 mod sidecar;
 
