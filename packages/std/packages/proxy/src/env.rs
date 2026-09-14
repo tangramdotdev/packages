@@ -12,6 +12,17 @@ pub async fn environment_value(
 	if !crate::is_store_path(raw) {
 		return Ok(raw.to_owned().into());
 	}
+	if name == "TGLD_INTERPRETER_ARGS" {
+		let args = crate::interpreter_args(raw, template_from_path).await?;
+		let mut template = tg::Template::builder();
+		for (index, arg) in args.into_iter().enumerate() {
+			if index > 0 {
+				template = template.string(" ");
+			}
+			template = template.components(crate::flags::quote(arg).components);
+		}
+		return Ok(template.build().into());
+	}
 	let paths = matches!(
 		name,
 		"PATH"

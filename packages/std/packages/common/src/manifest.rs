@@ -522,52 +522,6 @@ impl Manifest {
 	}
 }
 
-/// Read a serialized value and recover authorization from its file dependencies.
-pub async fn read_value(path: &Path) -> tg::Result<tg::Value> {
-	let output = crate::checkin_path(path).await?;
-	let file = tg::Artifact::with_referent(output.artifact)
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("expected a value file"))?;
-	let bytes = file.bytes().await?;
-	let value = std::str::from_utf8(&bytes)
-		.map_err(|error| tg::error!(!error, "value must be UTF-8"))?
-		.parse::<tg::Value>()
-		.map_err(|error| tg::error!(!error, "failed to parse value"))?;
-	let dependencies = file.dependencies().await?;
-	for object in value.objects() {
-		for dependency in dependencies.values().flatten() {
-			if let Some(source) = &dependency.0.node
-				&& source.id() == object.id()
-			{
-				object
-					.state()
-					.inherit_location(source.state().location().as_ref());
-				object.state().inherit_tokens(&source.state().tokens());
-			}
-		}
-		object
-			.state()
-			.inherit_location(file.state().location().as_ref());
-		object.state().inherit_tokens(&file.state().tokens());
-	}
-	Ok(value)
-}
-
-pub async fn read_template_array(path: &Path) -> tg::Result<Vec<tg::template::Data>> {
-	read_value(path)
-		.await?
-		.to_data()
-		.try_unwrap_array()
-		.map_err(|_| tg::error!("expected an array of argument templates"))?
-		.into_iter()
-		.map(|value| {
-			value
-				.try_unwrap_template()
-				.map_err(|_| tg::error!("expected an argument template"))
-		})
-		.collect()
-}
-
 fn collect_reference(
 	id: &tg::object::Id,
 	options: &tg::referent::Options,

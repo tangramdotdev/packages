@@ -342,31 +342,9 @@ async function ldProxy(arg: LdProxyArg) {
 		await codesign.store();
 	}
 
-	// Keep argument boundaries and artifact dependencies in a structured value file.
+	// Quote each argument while retaining artifact components in the environment template.
 	const interpreterArgs = arg.interpreterArgs
-		? await Promise.all(arg.interpreterArgs.map((arg) => tg.template(arg)))
-		: undefined;
-	const interpreterDependencies: Record<string, tg.Referent<tg.Object>> = {};
-	for (const object of tg.Value.objects(interpreterArgs ?? [])) {
-		const existing = interpreterDependencies[object.id];
-		if (existing) {
-			tg.Object.inheritLocation(existing.node, object.state.location);
-			tg.Object.inheritTokens(existing.node, object.state.tokens);
-		} else {
-			interpreterDependencies[object.id] = { node: object, options: {} };
-		}
-	}
-	const interpreterArgsFile = interpreterArgs
-		? await tg.file({
-				contents: tg.Value.stringify(
-					tg.Value.fromData(
-						tg.Value.Data.withoutLocationAndTokens(
-							tg.Value.toData(interpreterArgs),
-						),
-					),
-				),
-				dependencies: interpreterDependencies,
-			})
+		? await interpreterArgsTemplate(arg.interpreterArgs)
 		: undefined;
 
 	// Define environment for the linker proxy.
@@ -375,10 +353,9 @@ async function ldProxy(arg: LdProxyArg) {
 			tg.File | tg.Symlink | tg.Template
 		>(arg.linker),
 		TGLD_INJECTION_PATH: tg.Mutation.set(hostInjectionLibrary),
-		...(interpreterArgsFile
+		...(interpreterArgs
 			? {
-					TGLD_INTERPRETER_ARGS_VALUE_PATH:
-						tg.Mutation.setIfUnset(interpreterArgsFile),
+					TGLD_INTERPRETER_ARGS: tg.Mutation.setIfUnset(interpreterArgs),
 				}
 			: {}),
 		TGLD_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
@@ -405,6 +382,24 @@ async function ldProxy(arg: LdProxyArg) {
 		host: build,
 	});
 	return p;
+}
+
+async function interpreterArgsTemplate(args: Array<tg.Template.Arg>) {
+	return tg.Template.join(
+		" ",
+		...args.map(async (arg) => {
+			const template = await tg.template(arg);
+			return tg.template(
+				"'",
+				...template.components.map((component) =>
+					typeof component === "string"
+						? component.replaceAll("'", "'\\''")
+						: component,
+				),
+				"'",
+			);
+		}),
+	);
 }
 
 type StripProxyArg = {
@@ -478,7 +473,7 @@ export async function test() {
 	const tests = [
 		testBasic(),
 		testLdProxyDependencies(),
-		testLdProxyValueFiles(),
+		testLdProxyInterpreterArgs(),
 		testTransitiveAll(),
 		testTransitiveDiscovery(),
 		testSamePrefix(),
@@ -572,61 +567,33 @@ export async function testLdProxyDependencies() {
 	return true;
 }
 
-/** Link and run a wrapper whose argument and environment dependencies come from value files. */
-export async function testLdProxyValueFiles() {
-	const toolchain = await bootstrap.sdk();
-	const argument = await tg.file("argument dependency\n");
-	const environment = await tg.file("environment dependency\n");
-	const valueFile = async (value: tg.Value) =>
-		tg.file({
-			contents: tg.Value.stringify(
-				tg.Value.fromData(
-					tg.Value.Data.withoutLocationAndTokens(tg.Value.toData(value)),
-				),
-			),
-			dependencies: Object.fromEntries(
-				tg.Value.objects(value).map((object) => [object.id, object]),
-			),
-		});
-	const values = await tg.directory({
-		args: await valueFile([await tg`${argument}`]),
-		env: await valueFile(
-			await tg.Mutation.set({ VALUE_FILE: await tg`${environment}` }),
-		),
+/** Interpreter argument quoting must preserve shell words and artifact references. */
+export async function testLdProxyInterpreterArgs() {
+	const content = "read through a quoted path\n";
+	const directory = await tg.directory({
+		"lib with spaces": tg.directory({ "quote'file": tg.file(content) }),
 	});
-	const source = await tg.file`
-		#include <stdio.h>
-		#include <stdlib.h>
-		int main(int argc, char **argv) {
-			const char *paths[] = { argc == 2 ? argv[1] : NULL, getenv("VALUE_FILE") };
-			for (int i = 0; i < 2; i++) {
-				if (!paths[i]) return 1;
-				FILE *file = fopen(paths[i], "r");
-				if (!file) return 1;
-				int c;
-				while ((c = fgetc(file)) != EOF) putchar(c);
-				fclose(file);
-			}
-			return 0;
-		}`;
+	const literal = "a'b\"c\\d\n$HOME;$(false)";
+	const args = await interpreterArgsTemplate([
+		"--library-path",
+		await tg`${directory}/lib with spaces`,
+		"",
+		literal,
+		await tg`${directory}/lib with spaces/quote'file`,
+	]);
 	const output = await std
-		.build(std.shBootstrap`cc -xc ${source} -o ${tg.output}`)
-		.env(toolchain, {
-			TGLD_WRAPPER_ARG_VALUE_PATH: tg`${values}/args`,
-			TGLD_WRAPPER_ENV_VALUE_PATH: tg`${values}/env`,
-		})
+		.build(std.shBootstrap`
+			eval "set -- $TGLD_INTERPRETER_ARGS"
+			test "$#" -eq 5
+			test "$1" = --library-path
+			test -d "$2"
+			test -z "$3"
+			printf '%s\\n' "$4" > ${tg.output}
+			cat "$5" >> ${tg.output}
+		`)
+		.env(await bootstrap.utils(), { TGLD_INTERPRETER_ARGS: args })
 		.then(tg.File.expect);
-	const dependencies = new Set(
-		(await output.dependencyObjects).map((object) => object.id),
-	);
-	for (const dependency of [argument, environment]) {
-		tg.assert(dependencies.has(dependency.id), "missing value-file dependency");
-	}
-	// The execution gets only the wrapper; its dependencies must supply both files.
-	await std.assert.stdoutIncludes(
-		output,
-		"argument dependency\nenvironment dependency\n",
-	);
+	tg.assert((await output.text) === `${literal}\n${content}`);
 	return true;
 }
 

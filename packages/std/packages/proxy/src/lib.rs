@@ -3,8 +3,10 @@ use tangram_client::prelude::*;
 
 mod env;
 mod flags;
+mod interpreter;
 pub use env::environment_value;
 pub use flags::compiler_flags;
+pub use interpreter::interpreter_args;
 
 /// Interpret server-provided context; never extract artifact IDs from store paths.
 pub fn artifact_path(

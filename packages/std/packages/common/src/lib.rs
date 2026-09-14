@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use tangram_client::prelude::*;
 
-pub use proxy::{artifact_path, is_store_path};
+pub use proxy::{artifact_path, interpreter_args, is_store_path};
 
 pub mod manifest;
 pub use manifest::Manifest;

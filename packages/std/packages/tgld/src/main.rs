@@ -31,7 +31,7 @@ fn main_inner() -> tg::Result<()> {
 		.unwrap();
 
 	// Read the options from the environment and arguments.
-	let options = runtime.block_on(read_options())?;
+	let options = read_options()?;
 	tracing::debug!(?options);
 
 	// Run the command.
@@ -86,10 +86,7 @@ struct Options {
 	interpreter_path: Option<String>,
 
 	/// Any additional arguments to pass to the interpreter.
-	interpreter_args: Option<Vec<tg::template::Data>>,
-
-	// A structured argument file with authorized artifact dependencies.
-	interpreter_args_path: Option<PathBuf>,
+	interpreter_args: Option<String>,
 
 	/// The path to the injection library.
 	injection_path: Option<String>,
@@ -118,7 +115,7 @@ struct Options {
 
 // Read the options from the environment and arguments.
 #[allow(clippy::too_many_lines)]
-async fn read_options() -> tg::Result<Options> {
+fn read_options() -> tg::Result<Options> {
 	// Create the output.
 	let mut command_args = Vec::new();
 	let mut output_path = None;
@@ -141,33 +138,8 @@ async fn read_options() -> tg::Result<Options> {
 	// Get the wrap binary.
 	let mut embed = std::env::var("TGLD_EMBED_WRAPPER").is_ok();
 
-	// Arguments are serialized templates, preserving boundaries and embedded artifacts.
-	let interpreter_args = std::env::var("TGLD_INTERPRETER_ARGS")
-		.ok()
-		.map(|value| {
-			value
-				.parse::<tg::Value>()
-				.map_err(|error| {
-					tg::error!(
-						!error,
-						"TGLD_INTERPRETER_ARGS must be an array of templates"
-					)
-				})?
-				.to_data()
-				.try_unwrap_array()
-				.map_err(|_| tg::error!("expected an array of interpreter argument templates"))?
-				.into_iter()
-				.map(|value| {
-					value
-						.try_unwrap_template()
-						.map_err(|_| tg::error!("expected an interpreter argument template"))
-				})
-				.collect::<tg::Result<Vec<_>>>()
-		})
-		.transpose()?;
-
-	let interpreter_args_path =
-		std::env::var_os("TGLD_INTERPRETER_ARGS_VALUE_PATH").map(PathBuf::from);
+	// Get additional interpreter arguments, if any.
+	let interpreter_args = std::env::var("TGLD_INTERPRETER_ARGS").ok();
 
 	// Get the max depth.
 	let mut max_depth = std::env::var("TGLD_MAX_DEPTH")
@@ -194,34 +166,10 @@ async fn read_options() -> tg::Result<Options> {
 	let mut additional_library_candidate_paths = Vec::new();
 
 	// Prepare to store wrapper arg values.
-	let mut wrapper_arg_value = if let Ok(path) = std::env::var("TGLD_WRAPPER_ARG_VALUE_PATH") {
-		let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
-		let data = value
-			.to_data()
-			.try_unwrap_array()
-			.map_err(|_| tg::error!("expected an array"))?
-			.into_iter()
-			.map(|v| {
-				v.try_unwrap_template()
-					.map_err(|_| tg::error!("expected a template"))
-			})
-			.collect::<tg::Result<Vec<_>>>()?;
-		Some(data)
-	} else {
-		None
-	};
+	let mut wrapper_arg_value = None;
 
 	// Prepare to store wrapper env values.
-	let mut wrapper_env_value = if let Ok(path) = std::env::var("TGLD_WRAPPER_ENV_VALUE_PATH") {
-		let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
-		let data = value
-			.try_unwrap_mutation()
-			.map_err(|_| tg::error!("expected a mutation"))?
-			.to_data();
-		Some(data)
-	} else {
-		None
-	};
+	let mut wrapper_env_value = None;
 
 	// Handle the arguments.
 	while let Some(arg) = args.next() {
@@ -277,34 +225,6 @@ async fn read_options() -> tg::Result<Options> {
 						.collect::<tg::Result<Vec<_>>>()?;
 					wrapper_arg_value.replace(data);
 				}
-			} else if let Some(path) = arg.strip_prefix("--tangram-wrapper-arg-value-path=") {
-				let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
-				let data = value
-					.to_data()
-					.try_unwrap_array()
-					.map_err(|_| tg::error!("expected an array"))?
-					.into_iter()
-					.map(|v| {
-						v.try_unwrap_template()
-							.map_err(|_| tg::error!("expected a template"))
-					})
-					.collect::<tg::Result<Vec<_>>>()?;
-				wrapper_arg_value.replace(data);
-			} else if arg == "--tangram-wrapper-arg-value-path" {
-				if let Some(path) = args.next() {
-					let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
-					let data = value
-						.to_data()
-						.try_unwrap_array()
-						.map_err(|_| tg::error!("expected an array"))?
-						.into_iter()
-						.map(|v| {
-							v.try_unwrap_template()
-								.map_err(|_| tg::error!("expected a template"))
-						})
-						.collect::<tg::Result<Vec<_>>>()?;
-					wrapper_arg_value.replace(data);
-				}
 			} else if let Some(value) = arg.strip_prefix("--tangram-wrapper-env-value=") {
 				let value = value
 					.parse::<tg::Value>()
@@ -319,22 +239,6 @@ async fn read_options() -> tg::Result<Options> {
 					let value = value
 						.parse::<tg::Value>()
 						.map_err(|error| tg::error!(!error, "failed to parse wrapper env value"))?;
-					let data = value
-						.try_unwrap_mutation()
-						.map_err(|_| tg::error!("expected a mutation"))?
-						.to_data();
-					wrapper_env_value.replace(data);
-				}
-			} else if let Some(path) = arg.strip_prefix("--tangram-wrapper-env-value-path=") {
-				let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
-				let data = value
-					.try_unwrap_mutation()
-					.map_err(|_| tg::error!("expected a mutation"))?
-					.to_data();
-				wrapper_env_value.replace(data);
-			} else if arg == "--tangram-wrapper-env-value-path" {
-				if let Some(path) = args.next() {
-					let value = common::manifest::read_value(std::path::Path::new(&path)).await?;
 					let data = value
 						.try_unwrap_mutation()
 						.map_err(|_| tg::error!("expected a mutation"))?
@@ -419,7 +323,6 @@ async fn read_options() -> tg::Result<Options> {
 		embed,
 		interpreter_path,
 		interpreter_args,
-		interpreter_args_path,
 		injection_path,
 		library_path_strategy: library_path_optimization,
 		library_paths,
@@ -797,10 +700,16 @@ async fn create_manifest(
 			} else {
 				None
 			};
-			let args = if let Some(args) = &options.interpreter_args {
-				Some(args.clone())
-			} else if let Some(path) = &options.interpreter_args_path {
-				Some(common::manifest::read_template_array(path).await?)
+			let args = if let Some(value) = &options.interpreter_args {
+				Some(
+					common::interpreter_args(value, async |path| {
+						common::template_from_path(path).await
+					})
+					.await?
+					.into_iter()
+					.map(|template| template.to_data())
+					.collect(),
+				)
 			} else {
 				None
 			};

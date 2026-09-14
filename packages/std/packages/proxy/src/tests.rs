@@ -139,6 +139,15 @@ async fn environment_paths_and_flags_preserve_order_and_tokens() {
 		render_environment("CUSTOM", &include, &[&include]).await,
 		include
 	);
+	let quoted = format!("{ROOT}/lib'quote");
+	let flags = format!("--library-path '{include}:{library}' --preload=\"{quoted}\" ''");
+	let rendered = render_environment(
+		"TGLD_INTERPRETER_ARGS",
+		&flags,
+		&[&include, &library, &quoted],
+	)
+	.await;
+	assert_eq!(shlex::split(&rendered), shlex::split(&flags));
 }
 
 #[tokio::test]
@@ -172,6 +181,115 @@ async fn quoted_compiler_flags() {
 }
 
 #[tokio::test]
+async fn interpreter_arguments_preserve_paths_and_tokens() {
+	let library = format!("{ROOT}/lib space");
+	let preload = format!("{ROOT}/preload.so");
+	let audit = format!("{ROOT}/audit.so");
+	let quoted = format!("{ROOT}/path'quote:colon=equal");
+	let raw = format!(
+		"--library-path ':{library}::/usr/lib:{library}:' \
+		 --library-path='{library}:/usr/lib' \
+		 --preload '{preload} {preload}:/usr/lib/system.so' \
+		 --audit='{audit}:/usr/lib/audit.so' \"{quoted}\""
+	);
+	let mut calls = Vec::new();
+	let args = interpreter_args(&raw, async |path| {
+		let subpath = path.strip_prefix(ROOT).unwrap().strip_prefix('/').unwrap();
+		let referent = checkin_referent(subpath, 100 + i64::try_from(calls.len()).unwrap());
+		calls.push((path.to_owned(), referent.clone()));
+		template_from_referent(&referent)
+	})
+	.await
+	.unwrap();
+	assert_eq!(
+		calls.iter().map(|(path, _)| path).collect::<Vec<_>>(),
+		vec![
+			&library, &library, &library, &preload, &preload, &audit, &quoted
+		]
+	);
+	let artifacts = args
+		.iter()
+		.flat_map(tg::Template::artifacts)
+		.collect::<Vec<_>>();
+	assert_eq!(artifacts.len(), calls.len());
+	for (artifact, (_, referent)) in artifacts.iter().zip(&calls) {
+		assert_eq!(
+			artifact.id().to_string(),
+			referent.options.id.as_ref().unwrap().to_string()
+		);
+		assert_eq!(
+			artifact.to_referent().options.tokens,
+			referent.options.tokens
+		);
+		assert_eq!(
+			artifact.to_referent().options.location,
+			referent.options.location
+		);
+	}
+	let mut rendered = Vec::new();
+	for arg in args {
+		rendered.push(
+			arg.try_render(|component| async move {
+				match component {
+					tg::template::Component::String(string) => Ok(string.clone()),
+					tg::template::Component::Artifact(_) => Ok(ROOT.to_owned()),
+					tg::template::Component::Placeholder(_) => panic!("unexpected placeholder"),
+				}
+			})
+			.await
+			.unwrap(),
+		);
+	}
+	assert_eq!(
+		rendered,
+		vec![
+			"--library-path".to_owned(),
+			format!(":{library}::/usr/lib:{library}:"),
+			format!("--library-path={library}:/usr/lib"),
+			"--preload".to_owned(),
+			format!("{preload} {preload}:/usr/lib/system.so"),
+			format!("--audit={audit}:/usr/lib/audit.so"),
+			quoted,
+		]
+	);
+}
+
+#[tokio::test]
+async fn interpreter_arguments_decode_shell_quoting() {
+	let args = interpreter_args(
+		r#"'' 'literal words' "double\"quote" escaped\ space 'a'\''b' '$HOME;$(false)'"#,
+		async |_| panic!("unexpected checkin"),
+	)
+	.await
+	.unwrap();
+	assert_eq!(
+		args.iter().map(tg::Template::to_data).collect::<Vec<_>>(),
+		[
+			"",
+			"literal words",
+			"double\"quote",
+			"escaped space",
+			"a'b",
+			"$HOME;$(false)"
+		]
+		.into_iter()
+		.map(|string| tg::Template::from(string).to_data())
+		.collect::<Vec<_>>()
+	);
+	for raw in [
+		"'unterminated",
+		"trailing\\",
+		"prefix/opt/tangram/store/example",
+	] {
+		assert!(
+			interpreter_args(raw, async |_| panic!("unexpected checkin"))
+				.await
+				.is_err()
+		);
+	}
+}
+
+#[tokio::test]
 async fn unsupported_environment_paths_fail_before_checkin() {
 	for (name, raw) in [
 		("CFLAGS", "-DROOT=/opt/tangram/store/example/include"),
@@ -182,6 +300,10 @@ async fn unsupported_environment_paths_fail_before_checkin() {
 		("CFLAGS", "-I\"/opt/tangram/store/example/include space"),
 		("CFLAGS", "-I/opt/tangram/store/example/include\\"),
 		("CUSTOM", "prefix=/opt/tangram/store/example"),
+		(
+			"TGLD_INTERPRETER_ARGS",
+			"--library-path '/opt/tangram/store/example",
+		),
 	] {
 		assert!(
 			environment_value(name, raw, async |_| panic!("unexpected checkin"))

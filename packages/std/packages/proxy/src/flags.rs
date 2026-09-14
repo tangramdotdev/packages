@@ -65,15 +65,7 @@ pub async fn compiler_flags(
 		// Preserve plain words for consumers that split flags without shell unquoting.
 		// Re-quote decoded words as a whole, escaping apostrophes in path suffixes.
 		if word != decoded {
-			components.push(tg::template::Component::String("'".into()));
-			for component in &mut template.components {
-				if let tg::template::Component::String(string) = component {
-					*string = string.replace('\'', "'\\''");
-				}
-			}
-			template
-				.components
-				.push(tg::template::Component::String("'".into()));
+			template = quote(template);
 		}
 		components.extend(template.components);
 		end = range.end;
@@ -83,6 +75,20 @@ pub async fn compiler_flags(
 	}
 	components.push(tg::template::Component::String(raw[end..].to_owned()));
 	Ok(tg::Template::with_components(components).into())
+}
+
+// Quote a shell word without rendering its artifact components.
+pub(super) fn quote(mut template: tg::Template) -> tg::Template {
+	for component in &mut template.components {
+		if let tg::template::Component::String(string) = component {
+			*string = string.replace('\'', "'\\''");
+		}
+	}
+	tg::Template::builder()
+		.string("'")
+		.components(template.components)
+		.string("'")
+		.build()
 }
 
 // Locate shell words without losing their spelling or surrounding whitespace.
