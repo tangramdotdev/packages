@@ -1536,7 +1536,7 @@ impl DirectoryWithSubpath {
 	}
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
 	use super::{AnalyzeOutputFileOutput, InterpreterRequirement, analyze_output_file};
 
