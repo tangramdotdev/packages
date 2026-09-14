@@ -41,7 +41,7 @@ fn main_inner() -> tg::Result<()> {
 	let status = std::process::Command::new(&options.command_path)
 		.args(&options.command_args)
 		.status()
-		.map_err(|error| tg::error!(source = error, "failed to run the command"))?;
+		.map_err(|error| tg::error!(source = error, "failed to run the command!"))?;
 
 	// If the command did not exit successfully, then exit with its code.
 	if !status.success() {
