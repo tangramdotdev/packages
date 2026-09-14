@@ -1882,6 +1882,7 @@ version = "0.0.0"
 dependencies = [
  "shlex",
  "tangram_client",
+ "tokio",
 ]
 
 [[package]]
@@ -2718,7 +2719,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tangram_client",
- "tempfile",
  "tokio",
 ]
 

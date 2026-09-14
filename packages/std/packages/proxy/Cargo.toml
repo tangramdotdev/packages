@@ -15,3 +15,6 @@ workspace = true
 [dependencies]
 shlex = { workspace = true }
 tangram_client = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

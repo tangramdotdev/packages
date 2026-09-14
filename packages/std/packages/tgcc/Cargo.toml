@@ -22,6 +22,3 @@ serde_json = { workspace = true }
 proxy = { workspace = true }
 tangram_client = { workspace = true }
 tokio = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }

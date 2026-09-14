@@ -478,6 +478,7 @@ export async function test() {
 	const tests = [
 		testBasic(),
 		testLdProxyDependencies(),
+		testLdProxyValueFiles(),
 		testTransitiveAll(),
 		testTransitiveDiscovery(),
 		testSamePrefix(),
@@ -567,6 +568,64 @@ export async function testLdProxyDependencies() {
 	tg.assert(
 		missing.length === 0,
 		`the linker proxy env references artifacts that are not recorded as dependencies: ${missing.join(", ")}`,
+	);
+	return true;
+}
+
+/** Link and run a wrapper whose argument and environment dependencies come from value files. */
+export async function testLdProxyValueFiles() {
+	const toolchain = await bootstrap.sdk();
+	const argument = await tg.file("argument dependency\n");
+	const environment = await tg.file("environment dependency\n");
+	const valueFile = async (value: tg.Value) =>
+		tg.file({
+			contents: tg.Value.stringify(
+				tg.Value.fromData(
+					tg.Value.Data.withoutLocationAndTokens(tg.Value.toData(value)),
+				),
+			),
+			dependencies: Object.fromEntries(
+				tg.Value.objects(value).map((object) => [object.id, object]),
+			),
+		});
+	const values = await tg.directory({
+		args: await valueFile([await tg`${argument}`]),
+		env: await valueFile(
+			await tg.Mutation.set({ VALUE_FILE: await tg`${environment}` }),
+		),
+	});
+	const source = await tg.file`
+		#include <stdio.h>
+		#include <stdlib.h>
+		int main(int argc, char **argv) {
+			const char *paths[] = { argc == 2 ? argv[1] : NULL, getenv("VALUE_FILE") };
+			for (int i = 0; i < 2; i++) {
+				if (!paths[i]) return 1;
+				FILE *file = fopen(paths[i], "r");
+				if (!file) return 1;
+				int c;
+				while ((c = fgetc(file)) != EOF) putchar(c);
+				fclose(file);
+			}
+			return 0;
+		}`;
+	const output = await std
+		.build(std.shBootstrap`cc -xc ${source} -o ${tg.output}`)
+		.env(toolchain, {
+			TGLD_WRAPPER_ARG_VALUE_PATH: tg`${values}/args`,
+			TGLD_WRAPPER_ENV_VALUE_PATH: tg`${values}/env`,
+		})
+		.then(tg.File.expect);
+	const dependencies = new Set(
+		(await output.dependencyObjects).map((object) => object.id),
+	);
+	for (const dependency of [argument, environment]) {
+		tg.assert(dependencies.has(dependency.id), "missing value-file dependency");
+	}
+	// The execution gets only the wrapper; its dependencies must supply both files.
+	await std.assert.stdoutIncludes(
+		output,
+		"argument dependency\nenvironment dependency\n",
 	);
 	return true;
 }

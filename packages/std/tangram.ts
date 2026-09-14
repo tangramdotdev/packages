@@ -164,6 +164,7 @@ function testActions(): Record<string, () => any> {
 		env: env.test,
 		proxyBasic: sdk.proxy.testBasic,
 		proxyLdDependencies: sdk.proxy.testLdProxyDependencies,
+		proxyLdValueFiles: sdk.proxy.testLdProxyValueFiles,
 		proxyTransitiveAll: sdk.proxy.testTransitiveAll,
 		proxyNone: sdk.proxy.testTransitiveNone,
 		proxyFilter: sdk.proxy.testTransitive,
