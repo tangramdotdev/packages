@@ -72,7 +72,8 @@ pub async fn run() -> tg::Result<()> {
 		..Default::default()
 	};
 
-	let process: tg::Process = tg::Process::spawn(process_arg).await?;
+	let process: tg::Process =
+		tg::Process::spawn(process_arg, tg::process::spawn::Options::default()).await?;
 	let process_id = process.id().unwrap_right().clone();
 	let cached = process.cached().unwrap_or(false);
 	let command_id = process.command().await?.id();

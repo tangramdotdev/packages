@@ -147,7 +147,8 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	};
 
 	let spawn_start = Instant::now();
-	let process: tg::Process = tg::Process::spawn(process_arg).await?;
+	let process: tg::Process =
+		tg::Process::spawn(process_arg, tg::process::spawn::Options::default()).await?;
 	let process_id = process.id().unwrap_right().clone();
 	append_spawn_log(&process_id);
 	let cached = process.cached().unwrap_or(false);
