@@ -18,9 +18,11 @@ import tests from "./tests" with { type: "directory" };
 /** The proxy crate's complete, self-contained source. */
 export async function source() {
 	return tg.directory({
-		"Cargo.toml": cargoToml,
-		"Cargo.lock": cargoLock,
-		src,
+		"rust/tgrustc": {
+			"Cargo.toml": cargoToml,
+			"Cargo.lock": cargoLock,
+			src,
+		},
 	});
 }
 
@@ -28,6 +30,7 @@ export async function proxy(...args: tg.Args<cargo.Arg>) {
 	return cargo.build(
 		{
 			source: source(),
+			manifestSubdir: "rust/tgrustc",
 			proxy: false,
 			profile: "dev",
 			useCargoVendor: true,
