@@ -152,14 +152,14 @@ pub async fn env_value(name: &str, raw: &str, typed: Option<&tg::Value>) -> tg::
 		if is_store_path(path) {
 			if !Path::new(path).is_absolute() || path.contains(['\n', '\r', '\'', '"']) {
 				return Err(tg::error!(
-					variable = name,
+					variable = %name,
 					"unsupported embedded store path; pass a structured template"
 				));
 			}
 			let template = template_from_path(path).await.map_err(|error| {
 				tg::error!(
 					!error,
-					variable = name,
+					variable = %name,
 					"failed to check in environment path; use a structured template for embedded paths"
 				)
 			})?;
@@ -356,5 +356,60 @@ mod tests {
 					.contains("structured template")
 			);
 		}
+	}
+
+	#[tokio::test]
+	#[ignore = "requires a Tangram server with PR 1132"]
+	async fn environment_paths_and_shell_overrides() -> tg::Result<()> {
+		tg::init()?;
+		let source = tempfile::tempdir().unwrap();
+		for name in ["include space", "lib"] {
+			std::fs::create_dir(source.path().join(name)).unwrap();
+			std::fs::write(source.path().join(name).join("example"), name).unwrap();
+		}
+		let root = tg::Artifact::with_referent(checkin_path(source.path()).await?.artifact);
+		let path = crate::checkout_artifact(root.clone()).await?;
+		let output = checkin_path(path.join("include space")).await?;
+		let (containing_root, subpath) = artifact_path(&output.artifact)?;
+		assert_eq!(containing_root.id(), root.id());
+		assert_eq!(subpath.as_deref(), Some(Path::new("include space")));
+
+		let typed = tg::Value::Template(tg::Template::with_components([
+			tg::template::Component::String("-I".into()),
+			tg::template::Component::Artifact(root.clone()),
+			tg::template::Component::String("/include space -L".into()),
+			tg::template::Component::Artifact(root.clone()),
+			tg::template::Component::String("/lib".into()),
+		]));
+		let flags = format!("-I{0}/include space -L{0}/lib", path.display());
+		let paths = format!(":/usr/bin:{0}/include space::{0}/lib:", path.display());
+		for (name, raw, shadow) in [("CFLAGS", &flags, Some(&typed)), ("PATH", &paths, None)] {
+			let value = env_value(name, raw, shadow).await?;
+			let template = value.try_unwrap_template().unwrap();
+			assert_eq!(render_template(&template).await?, *raw);
+			let artifacts = template
+				.components()
+				.iter()
+				.filter_map(|component| match component {
+					tg::template::Component::Artifact(artifact) => Some(artifact.id()),
+					_ => None,
+				})
+				.collect::<Vec<_>>();
+			assert_eq!(artifacts, [root.id(), root.id()]);
+		}
+		assert_eq!(
+			env_value("CFLAGS", "-O2", Some(&typed))
+				.await?
+				.try_unwrap_string()
+				.unwrap(),
+			"-O2"
+		);
+		assert!(env_value("CFLAGS", &flags, None).await.is_err());
+		assert!(
+			env_value("CFLAGS", &format!("{flags} -DOVERRIDE"), Some(&typed))
+				.await
+				.is_err()
+		);
+		Ok(())
 	}
 }

@@ -210,15 +210,15 @@ async fn build_env(
 	// `TANGRAM_ENV_*` shadow vars; `std::env::vars()` would lose the typing.
 	let mut env = tg::process::env::env()?;
 	for (name, value) in &mut env {
-		if name == "OUT_DIR" || name.starts_with("CARGO_MANIFEST_") {
-			continue;
-		}
-		if is_denied_host_env(name)
-			&& !matches!(value, tg::Value::Template(_))
-			&& !matches!(
+		if name == "OUT_DIR"
+			|| name.starts_with("CARGO_MANIFEST_")
+			|| matches!(
 				name.as_str(),
 				"TGRUSTC_SANDBOX_SDK" | "TGRUSTC_SANDBOX_TOOLCHAIN"
 			) {
+			continue;
+		}
+		if is_denied_host_env(name) && !matches!(value, tg::Value::Template(_)) {
 			continue;
 		}
 		if let Ok(raw) = std::env::var(name) {
@@ -235,9 +235,8 @@ async fn build_env(
 
 	// `TGRUSTC_SANDBOX_SDK` provides a linker on PATH; final-binary crates
 	// shell out to `cc` which the bare host env does not resolve.
-	if let Some(value) = env.remove("TGRUSTC_SANDBOX_SDK")
-		&& let Some(sdk) = extract_artifact(&value).await?
-	{
+	env.remove("TGRUSTC_SANDBOX_SDK");
+	if let Some(sdk) = checkin_env_artifact("TGRUSTC_SANDBOX_SDK").await? {
 		prepend_sdk_to_path(&mut env, sdk);
 	}
 
@@ -258,9 +257,8 @@ async fn resolve_toolchain(env: &mut tg::value::Map, rustc: &str) -> tg::Result<
 	// `TGRUSTC_SANDBOX_TOOLCHAIN` is set by `cargo.run` to swap the host's
 	// rustup toolchain for a wrapped tangram-managed one. When unset (the
 	// `cargo.build` path), the host rustc is already wrapped.
-	if let Some(value) = env.remove("TGRUSTC_SANDBOX_TOOLCHAIN")
-		&& let Some(artifact) = extract_artifact(&value).await?
-	{
+	env.remove("TGRUSTC_SANDBOX_TOOLCHAIN");
+	if let Some(artifact) = checkin_env_artifact("TGRUSTC_SANDBOX_TOOLCHAIN").await? {
 		return Ok(artifact);
 	}
 	let rustc_path = resolve_rustc(rustc)?;
@@ -684,26 +682,14 @@ fn resolve_rustc(rustc: &str) -> tg::Result<PathBuf> {
 	which::which(rustc).map_err(|error| tg::error!("could not find {rustc} on PATH: {error}"))
 }
 
-// SDK and toolchain values identify one directory, either structured or as a path.
-pub(crate) async fn extract_artifact(value: &tg::Value) -> tg::Result<Option<tg::Artifact>> {
-	let artifact = match value {
-		tg::Value::Object(object) => tg::Artifact::try_from(object.clone()).ok(),
-		tg::Value::Template(template) => {
-			if let [tg::template::Component::Artifact(artifact)] = template.components() {
-				Some(artifact.clone())
-			} else {
-				let path = crate::paths::render_template(template).await?;
-				Some(tg::Artifact::with_referent(
-					checkin(Path::new(&path)).await?.artifact,
-				))
-			}
-		},
-		tg::Value::String(path) if !path.is_empty() => Some(tg::Artifact::with_referent(
-			checkin(Path::new(path)).await?.artifact,
-		)),
-		_ => None,
+// SDK and toolchain variables each name one directory, including after shell overrides.
+pub(crate) async fn checkin_env_artifact(name: &str) -> tg::Result<Option<tg::Artifact>> {
+	let Some(path) = std::env::var_os(name).filter(|path| !path.is_empty()) else {
+		return Ok(None);
 	};
-	Ok(artifact)
+	Ok(Some(tg::Artifact::with_referent(
+		checkin(Path::new(&path)).await?.artifact,
+	)))
 }
 
 pub(crate) fn prepend_sdk_to_path(env: &mut tg::value::Map, sdk: tg::Artifact) {

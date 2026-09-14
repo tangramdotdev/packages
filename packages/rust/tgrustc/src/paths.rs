@@ -76,39 +76,6 @@ pub fn is_store_path(path: &str) -> bool {
 	.any(|prefix| path.contains(prefix))
 }
 
-pub async fn render_template(template: &tg::Template) -> tg::Result<String> {
-	template
-		.try_render(|component| async move {
-			match component {
-				tg::template::Component::String(string) => Ok(string.clone()),
-				tg::template::Component::Artifact(artifact) => {
-					let mut paths = tg::checkout(tg::checkout::Arg {
-						dependencies: true,
-						extension: None,
-						force: false,
-						lock: None,
-						nodes: vec![artifact.to_referent().map(Into::into)],
-						path: None,
-					})
-					.await?;
-					if paths.len() != 1 {
-						return Err(tg::error!("expected one checkout path"));
-					}
-					paths
-						.pop()
-						.unwrap()
-						.into_os_string()
-						.into_string()
-						.map_err(|_| tg::error!("checkout path is not UTF-8"))
-				},
-				tg::template::Component::Placeholder(_) => {
-					Err(tg::error!("cannot render an unresolved placeholder"))
-				},
-			}
-		})
-		.await
-}
-
 /// Respect shell overrides of shadow values, retaining structured values when they still match.
 pub async fn env_value(name: &str, raw: &str, typed: Option<&tg::Value>) -> tg::Result<tg::Value> {
 	let template = match typed {
@@ -155,14 +122,14 @@ pub async fn env_value(name: &str, raw: &str, typed: Option<&tg::Value>) -> tg::
 		if is_store_path(path) {
 			if !Path::new(path).is_absolute() || path.contains(['\n', '\r', '\'', '"']) {
 				return Err(tg::error!(
-					variable = name,
+					variable = %name,
 					"unsupported embedded store path; pass a structured template"
 				));
 			}
 			let template = template_from_path(path).await.map_err(|error| {
 				tg::error!(
 					!error,
-					variable = name,
+					variable = %name,
 					"failed to check in environment path; use a structured template for embedded paths"
 				)
 			})?;
@@ -228,136 +195,4 @@ async fn checkin_rendered_template(
 	Ok(raw
 		.is_empty()
 		.then(|| tg::Template::with_components(components)))
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	fn referent() -> tg::Referent<tg::artifact::Id> {
-		let node: tg::artifact::Id = "fil_010000000000000000000000000000000000000000000000000000"
-			.parse()
-			.unwrap();
-		let root: tg::artifact::Id = "dir_010000000000000000000000000000000000000000000000000000"
-			.parse()
-			.unwrap();
-		let token = tg::authorization::Token {
-			body: tg::authorization::Body {
-				expires_at: i64::MAX,
-				permissions: vec![tg::authorization::Permission::Object(
-					tg::authorization::permission::object::Permission::Subtree,
-				)],
-				resource: root.clone().into(),
-			},
-			metadata: tg::authorization::Metadata {
-				algorithm: tg::authorization::Algorithm::Ed25519,
-				key: "test".into(),
-			},
-			signature: vec![0; 64],
-		};
-		let location = tg::Location::Remote(tg::location::Remote {
-			name: "test".into(),
-			region: None,
-		});
-		let mut node_token = token.clone();
-		node_token.body.resource = node.clone().into();
-		let mut tokens = tg::authorization::Tokens::with_local([node_token, token.clone()]);
-		tokens.insert(location.clone(), token);
-		tg::Referent::new(
-			node,
-			tg::referent::Options {
-				id: Some(root.into()),
-				path: Some("lib/libexample.so.1".into()),
-				location: Some(location),
-				tokens,
-				..Default::default()
-			},
-		)
-	}
-
-	#[test]
-	fn root_path_keeps_name_location_and_both_token_locations() {
-		let referent = referent();
-		let (root, path) = artifact_path(&referent).unwrap();
-		assert_eq!(
-			tg::object::Id::from(root.id()),
-			referent.options.id.clone().unwrap()
-		);
-		assert_eq!(path.as_deref(), Some(Path::new("lib/libexample.so.1")));
-		assert_eq!(
-			root.to_referent().options.location,
-			referent.options.location
-		);
-		assert_eq!(root.to_referent().options.tokens, referent.options.tokens);
-		// The selected root is now a standalone artifact, so context is not applied twice.
-		assert!(root.to_referent().options.id.is_none());
-		assert!(root.to_referent().options.path.is_none());
-	}
-
-	#[test]
-	fn checkin_output_template_keeps_root_subpath_and_both_artifact_proofs() {
-		let output = tg::checkin::Output {
-			artifact: referent(),
-		};
-		let template = template_from_referent(&output.artifact).unwrap();
-		let [
-			tg::template::Component::Artifact(root),
-			tg::template::Component::String(path),
-		] = template.components()
-		else {
-			panic!("expected a root artifact followed by a subpath");
-		};
-		assert_eq!(
-			tg::object::Id::from(root.id()),
-			output.artifact.options.id.clone().unwrap()
-		);
-		assert_eq!(path, "/lib/libexample.so.1");
-		let tokens = root.to_referent().options.tokens;
-		assert_eq!(tokens.local().len(), 2);
-		assert_eq!(
-			tokens.local()[0].body.resource,
-			tg::Id::from(output.artifact.node)
-		);
-		assert_eq!(tokens.local()[1].body.resource, tg::Id::from(root.id()));
-		assert_eq!(tokens, output.artifact.options.tokens);
-	}
-
-	#[test]
-	fn missing_root_uses_resolved_node_without_a_subpath() {
-		let mut referent = referent();
-		referent.options.id = None;
-		let (artifact, path) = artifact_path(&referent).unwrap();
-		assert_eq!(artifact.id(), referent.node);
-		assert_eq!(
-			artifact.to_referent().options.tokens,
-			referent.options.tokens
-		);
-		assert!(path.is_none());
-	}
-
-	#[test]
-	fn empty_root_subpath_does_not_append_a_slash() {
-		let mut referent = referent();
-		referent.options.path = Some(PathBuf::new());
-		assert!(artifact_path(&referent).unwrap().1.is_none());
-	}
-
-	#[test]
-	fn unsupported_embedded_environment_path_fails() {
-		let runtime = tokio::runtime::Builder::new_current_thread()
-			.build()
-			.unwrap();
-		for raw in [
-			"-I/opt/tangram/store/example/include",
-			"-I/home/user/.tangram/checkouts/example/include",
-		] {
-			let result = runtime.block_on(env_value("CFLAGS", raw, None));
-			assert!(
-				result
-					.unwrap_err()
-					.to_string()
-					.contains("structured template")
-			);
-		}
-	}
 }

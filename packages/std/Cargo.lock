@@ -453,8 +453,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "257c7085cbb71be72d8fb97edff08b03d86d5d9f2222b9cc34a6bec87093bc10"
 dependencies = [
  "compression-core",
- "zstd",
- "zstd-safe",
+ "zstd 0.14.0",
+ "zstd-safe 8.0.0",
 ]
 
 [[package]]
@@ -2485,7 +2485,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=49944570f7e131642525f7a7ff7ca513c35e559c#49944570f7e131642525f7a7ff7ca513c35e559c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=72729dd32b7458ea15259e366df5b8af1d137363#72729dd32b7458ea15259e366df5b8af1d137363"
 dependencies = [
  "async-channel",
  "aws-lc-rs",
@@ -2541,7 +2541,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=49944570f7e131642525f7a7ff7ca513c35e559c#49944570f7e131642525f7a7ff7ca513c35e559c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=72729dd32b7458ea15259e366df5b8af1d137363#72729dd32b7458ea15259e366df5b8af1d137363"
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -2550,7 +2550,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=49944570f7e131642525f7a7ff7ca513c35e559c#49944570f7e131642525f7a7ff7ca513c35e559c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=72729dd32b7458ea15259e366df5b8af1d137363#72729dd32b7458ea15259e366df5b8af1d137363"
 dependencies = [
  "dashmap",
  "futures",
@@ -2564,7 +2564,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=49944570f7e131642525f7a7ff7ca513c35e559c#49944570f7e131642525f7a7ff7ca513c35e559c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=72729dd32b7458ea15259e366df5b8af1d137363#72729dd32b7458ea15259e366df5b8af1d137363"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2587,13 +2587,13 @@ dependencies = [
  "tokio-util",
  "tower",
  "tracing",
- "zstd",
+ "zstd 0.13.3",
 ]
 
 [[package]]
 name = "tangram_pool"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=49944570f7e131642525f7a7ff7ca513c35e559c#49944570f7e131642525f7a7ff7ca513c35e559c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=72729dd32b7458ea15259e366df5b8af1d137363#72729dd32b7458ea15259e366df5b8af1d137363"
 dependencies = [
  "futures",
  "tangram_futures",
@@ -2603,7 +2603,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=49944570f7e131642525f7a7ff7ca513c35e559c#49944570f7e131642525f7a7ff7ca513c35e559c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=72729dd32b7458ea15259e366df5b8af1d137363#72729dd32b7458ea15259e366df5b8af1d137363"
 dependencies = [
  "bytes",
  "num",
@@ -2614,7 +2614,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=49944570f7e131642525f7a7ff7ca513c35e559c#49944570f7e131642525f7a7ff7ca513c35e559c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=72729dd32b7458ea15259e366df5b8af1d137363#72729dd32b7458ea15259e366df5b8af1d137363"
 dependencies = [
  "itertools 0.15.0",
  "proc-macro2",
@@ -2625,7 +2625,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=49944570f7e131642525f7a7ff7ca513c35e559c#49944570f7e131642525f7a7ff7ca513c35e559c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=72729dd32b7458ea15259e366df5b8af1d137363#72729dd32b7458ea15259e366df5b8af1d137363"
 dependencies = [
  "derive_more",
  "http",
@@ -2640,7 +2640,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=49944570f7e131642525f7a7ff7ca513c35e559c#49944570f7e131642525f7a7ff7ca513c35e559c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=72729dd32b7458ea15259e366df5b8af1d137363#72729dd32b7458ea15259e366df5b8af1d137363"
 dependencies = [
  "bytes",
  "data-encoding",
@@ -3547,11 +3547,29 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zstd"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
+dependencies = [
+ "zstd-safe 7.3.0",
+]
+
+[[package]]
+name = "zstd"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf06bd8162af0734b344780deb55b42a2429ae430870d13fcc12f238e880fe6e"
 dependencies = [
- "zstd-safe",
+ "zstd-safe 8.0.0",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "7.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64d80649ab6db9d9f6f9c80a40becd948eda4714a0a5ac8c4d157a32231c7882"
+dependencies = [
+ "zstd-sys",
 ]
 
 [[package]]

@@ -112,28 +112,8 @@ async fn build_env(
 	manifest_subpath: &str,
 ) -> tg::Result<tg::value::Map> {
 	let typed = tg::process::env::env()?;
-	let toolchain_artifact = if let Ok(raw) = std::env::var("TGRUSTC_SANDBOX_TOOLCHAIN") {
-		let value = crate::paths::env_value(
-			"TGRUSTC_SANDBOX_TOOLCHAIN",
-			&raw,
-			typed.get("TGRUSTC_SANDBOX_TOOLCHAIN"),
-		)
-		.await?;
-		outer::extract_artifact(&value).await?
-	} else {
-		None
-	};
-	let sdk_artifact = if let Ok(raw) = std::env::var("TGRUSTC_SANDBOX_SDK") {
-		let value = crate::paths::env_value(
-			"TGRUSTC_SANDBOX_SDK",
-			&raw,
-			typed.get("TGRUSTC_SANDBOX_SDK"),
-		)
-		.await?;
-		outer::extract_artifact(&value).await?
-	} else {
-		None
-	};
+	let toolchain_artifact = outer::checkin_env_artifact("TGRUSTC_SANDBOX_TOOLCHAIN").await?;
+	let sdk_artifact = outer::checkin_env_artifact("TGRUSTC_SANDBOX_SDK").await?;
 
 	let mut env: tg::value::Map = std::collections::BTreeMap::new();
 	for (name, raw) in std::env::vars() {
