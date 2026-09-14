@@ -223,7 +223,47 @@ async fn build_env(
 			continue;
 		}
 		if let Ok(raw) = std::env::var(name) {
-			*value = common::paths::env_value(name, &raw).await?;
+			if matches!(
+				name.as_str(),
+				"CFLAGS" | "CPPFLAGS" | "CXXFLAGS" | "LDFLAGS"
+			) {
+				*value = crate::runner::compiler_flags(&raw).await?;
+			} else if is_store_path(&raw) {
+				let paths =
+					matches!(
+						name.as_str(),
+						"PATH"
+							| "LD_LIBRARY_PATH" | "DYLD_LIBRARY_PATH"
+							| "DYLD_FALLBACK_LIBRARY_PATH"
+							| "DYLD_INSERT_LIBRARIES"
+							| "LIBRARY_PATH" | "CPATH"
+							| "C_INCLUDE_PATH" | "CPLUS_INCLUDE_PATH"
+							| "OBJC_INCLUDE_PATH" | "PKG_CONFIG_PATH"
+							| "PKG_CONFIG_LIBDIR" | "CMAKE_PREFIX_PATH"
+							| "NODE_PATH"
+					);
+				let mut template = tg::Template::builder();
+				for (index, path) in raw.split(|c| paths && c == ':').enumerate() {
+					if index > 0 {
+						template = template.string(":");
+					}
+					template = if is_store_path(path) {
+						template.components(
+							template_from_path(path)
+								.await
+								.map_err(
+									|error| tg::error!(!error, variable = %name, "failed to check in environment path"),
+								)?
+								.components,
+						)
+					} else {
+						template.string(path)
+					};
+				}
+				*value = template.build().into();
+			} else {
+				*value = raw.into();
+			}
 		}
 	}
 	rewrite_dir_env(&mut env, "OUT_DIR").await?;
@@ -525,9 +565,38 @@ async fn build_spawn_args(
 			spawn_args.push(rewrite_search_path(value, closure).await?);
 			continue;
 		}
+		if let Some(value) = arg.strip_prefix("--extern=") {
+			spawn_args.push("--extern".to_owned().into());
+			spawn_args.push(rewrite_extern(value).await?);
+			continue;
+		}
+		if let Some(value) = arg.strip_prefix("-L") {
+			spawn_args.push("-L".to_owned().into());
+			spawn_args.push(rewrite_search_path(value, closure).await?);
+			continue;
+		}
+		if arg == "--sysroot" || arg.starts_with("--sysroot=") {
+			let path = match arg.strip_prefix("--sysroot=") {
+				Some(path) => path,
+				None => iter
+					.next()
+					.ok_or_else(|| tg::error!("expected a sysroot path"))?,
+			};
+			spawn_args.push("--sysroot".to_owned().into());
+			spawn_args.push(if is_store_path(path) {
+				template_from_path(path).await?.into()
+			} else {
+				path.to_owned().into()
+			});
+			continue;
+		}
 		let value = rewrite_arg(arg, source_artifact, source_dir, cwd);
 		let value = if let tg::Value::String(raw) = &value {
-			common::paths::arg_value(raw).await?
+			if is_store_path(raw) {
+				template_from_path(raw).await?.into()
+			} else {
+				value
+			}
 		} else {
 			value
 		};
@@ -792,4 +861,38 @@ pub(crate) async fn forward_logs(
 			.map_err(|error| tg::error!("failed to forward stderr: {error}"))?;
 	}
 	Ok(())
+}
+
+// These paths have already been separated by the caller's argument/environment grammar.
+pub(crate) async fn template_from_path(path: &str) -> tg::Result<tg::Template> {
+	if !Path::new(path).is_absolute() {
+		return Err(tg::error!("unsupported embedded store path"));
+	}
+	let mut referent = checkin(Path::new(path)).await?.artifact;
+	let subpath = if let Some(id) = referent.options.id.take() {
+		referent.node = id
+			.try_into()
+			.map_err(|_| tg::error!("expected an artifact root"))?;
+		referent.options.path.take()
+	} else {
+		None
+	};
+	let mut template = tg::Template::builder().artifact(tg::Artifact::with_referent(referent));
+	if let Some(path) = subpath.filter(|path| !path.as_os_str().is_empty()) {
+		template = template.string(format!("/{}", path.display()));
+	}
+	Ok(template.build())
+}
+
+/// Only classify paths here. Checkin resolves their identity and authorization.
+#[must_use]
+pub(crate) fn is_store_path(path: &str) -> bool {
+	[
+		"/.tangram/store/",
+		"/.tangram/checkouts/",
+		"/opt/tangram/store/",
+		"/opt/tangram/checkouts/",
+	]
+	.into_iter()
+	.any(|prefix| path.contains(prefix))
 }

@@ -1,8 +1,5 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tangram_client::prelude::*;
-
-pub mod paths;
-pub use paths::{artifact_path, checkin_path, is_store_path, template_from_path};
 
 pub mod manifest;
 pub use manifest::Manifest;
@@ -111,4 +108,68 @@ pub async fn render_template_data(data: &tg::template::Data) -> tg::Result<Strin
 			}
 		})
 		.await
+}
+
+/// Check in a path with its authorization and containing root/subpath context.
+/// Keep the output referent until its context has been consumed; artifact handles retain only tokens and location.
+pub async fn checkin_path(path: impl AsRef<Path>) -> tg::Result<tg::checkin::Output> {
+	tg::checkin(tg::checkin::Arg {
+		options: tg::checkin::Options {
+			destructive: false,
+			deterministic: true,
+			ignore: false,
+			lock: None,
+			locked: true,
+			root: true,
+			..Default::default()
+		},
+		path: std::path::absolute(path)
+			.map_err(|error| tg::error!(!error, "invalid checkin path"))?,
+		updates: Vec::new(),
+	})
+	.await
+}
+
+/// Interpret server-provided context; never extract artifact IDs from store paths.
+pub fn artifact_path(
+	referent: &tg::Referent<tg::artifact::Id>,
+) -> tg::Result<(tg::Artifact, Option<PathBuf>)> {
+	let (id, path) = if let Some(id) = &referent.options.id {
+		let id = tg::artifact::Id::try_from(id.clone())
+			.map_err(|_| tg::error!("expected an artifact root in checkin referent"))?;
+		(id, referent.options.path.clone())
+	} else {
+		(referent.node.clone(), None)
+	};
+	let artifact = tg::Artifact::with_referent(tg::Referent::new(
+		id,
+		tg::referent::Options {
+			location: referent.options.location.clone(),
+			tokens: referent.options.tokens.clone(),
+			..Default::default()
+		},
+	));
+	Ok((artifact, path.filter(|path| !path.as_os_str().is_empty())))
+}
+
+pub async fn template_from_path(path: impl AsRef<Path>) -> tg::Result<tg::Template> {
+	let output = checkin_path(path).await?;
+	let (artifact, subpath) = artifact_path(&output.artifact)?;
+	Ok(match subpath {
+		Some(subpath) => crate::template_from_artifact_and_subpath(artifact, subpath),
+		None => crate::template_from_artifact(artifact),
+	})
+}
+
+/// Only classify paths here. Checkin resolves their identity and authorization.
+#[must_use]
+pub fn is_store_path(path: &str) -> bool {
+	[
+		"/.tangram/store/",
+		"/.tangram/checkouts/",
+		"/opt/tangram/store/",
+		"/opt/tangram/checkouts/",
+	]
+	.into_iter()
+	.any(|prefix| path.contains(prefix))
 }

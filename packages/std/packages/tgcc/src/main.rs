@@ -6,6 +6,8 @@ use std::{
 };
 use tangram_client::prelude::*;
 
+mod flags;
+
 // Data read from environment variables.
 #[derive(Debug)]
 struct Environment {
@@ -59,6 +61,8 @@ enum RemapKind {
 	Linker,
 	// -B
 	Binary,
+	// Other compiler options whose operand is a path.
+	Option(&'static str),
 	// Any source file input.
 	Source,
 }
@@ -84,6 +88,51 @@ impl Environment {
 		}
 		let cc = which_cc()?;
 		Ok(Self { enable, cc, env })
+	}
+	async fn checkin(&mut self) -> tg::Result<()> {
+		for (name, value) in &mut self.env {
+			let tg::Value::String(raw) = value else {
+				continue;
+			};
+			if matches!(
+				name.as_str(),
+				"CFLAGS" | "CPPFLAGS" | "CXXFLAGS" | "LDFLAGS"
+			) {
+				*value = flags::compiler_flags(raw).await?;
+			} else if common::is_store_path(raw) {
+				let paths =
+					matches!(
+						name.as_str(),
+						"PATH"
+							| "LD_LIBRARY_PATH" | "DYLD_LIBRARY_PATH"
+							| "DYLD_FALLBACK_LIBRARY_PATH"
+							| "DYLD_INSERT_LIBRARIES"
+							| "LIBRARY_PATH" | "CPATH"
+							| "C_INCLUDE_PATH" | "CPLUS_INCLUDE_PATH"
+							| "OBJC_INCLUDE_PATH" | "PKG_CONFIG_PATH"
+							| "PKG_CONFIG_LIBDIR" | "CMAKE_PREFIX_PATH"
+							| "NODE_PATH"
+					);
+				let mut template = tg::Template::builder();
+				for (index, path) in raw.split(|c| paths && c == ':').enumerate() {
+					if index > 0 {
+						template = template.string(":");
+					}
+					template = if common::is_store_path(path) {
+						if !Path::new(path).is_absolute() {
+							return Err(
+								tg::error!(variable = %name, "unsupported embedded environment path"),
+							);
+						}
+						template.components(common::template_from_path(path).await?.components)
+					} else {
+						template.string(path)
+					};
+				}
+				*value = template.build().into();
+			}
+		}
+		Ok(())
 	}
 }
 
@@ -245,6 +294,31 @@ impl Args {
 				},
 				// Anything starting with a '-' is an option. Check if we need to extract its value too.
 				option if option.starts_with('-') => {
+					if let Some((prefix, flag)) = [
+						("--sysroot=", "--sysroot"),
+						("--sysroot", "--sysroot"),
+						("-isysroot", "-isysroot"),
+						("-isystem", "-isystem"),
+						("-iquote", "-iquote"),
+						("-idirafter", "-idirafter"),
+						("-include", "-include"),
+						("-imacros", "-imacros"),
+					]
+					.into_iter()
+					.find(|(prefix, _)| option.starts_with(prefix))
+					{
+						let path = option.strip_prefix(prefix).unwrap();
+						let path = if path.is_empty() {
+							args.next().unwrap_or_default()
+						} else {
+							path.to_owned()
+						};
+						remap_targets.push(RemapTarget {
+							kind: RemapKind::Option(flag),
+							value: path,
+						});
+						continue;
+					}
 					cli_args.push(option.into());
 					if let Some(opt) = CC_OPTIONS_WITH_VALUE
 						.iter()
@@ -313,11 +387,7 @@ fn main_inner() -> tg::Result<()> {
 
 #[allow(clippy::too_many_lines)]
 async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
-	for (name, value) in &mut environment.env {
-		if let tg::Value::String(raw) = value {
-			*value = common::paths::env_value(name, raw).await?;
-		}
-	}
+	environment.checkin().await?;
 	let Args {
 		output,
 		remap_targets,
@@ -325,9 +395,38 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 		..
 	} = args;
 	let output = output.unwrap();
-	let cli_args =
-		futures::future::try_join_all(cli_args.iter().map(|arg| common::paths::arg_value(arg)))
-			.await?;
+	// Include/library/source operands were separated by Args::parse above.
+	// Remaining path-bearing options here are forwarded directly to the linker.
+	let mut forwarded = Vec::with_capacity(cli_args.len());
+	for arg in cli_args {
+		if !common::is_store_path(&arg) {
+			forwarded.push(arg.into());
+			continue;
+		}
+		let prefix = ["-Wl,-rpath-link,", "-Wl,-rpath,", "-Wl,-dynamic-linker="]
+			.into_iter()
+			.find(|prefix| arg.starts_with(prefix))
+			.ok_or_else(|| tg::error!("unsupported embedded store path in compiler argument"))?;
+		let paths = arg.strip_prefix(prefix).unwrap();
+		let mut template = tg::Template::builder().string(prefix);
+		for (index, path) in paths
+			.split(|c| prefix != "-Wl,-dynamic-linker=" && c == ':')
+			.enumerate()
+		{
+			if index > 0 {
+				template = template.string(":");
+			}
+			template = if common::is_store_path(path) {
+				if !Path::new(path).is_absolute() {
+					return Err(tg::error!("unsupported embedded linker path"));
+				}
+				template.components(common::template_from_path(path).await?.components)
+			} else {
+				template.string(path)
+			};
+		}
+		forwarded.push(template.build().into());
+	}
 
 	// Create the driver executable.
 	let contents = tg::Blob::with_reader(DRIVER_SH.as_bytes()).await?;
@@ -345,7 +444,7 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 	let cc = common::template_from_path(&environment.cc).await?.into();
 	let mut args = std::iter::once("tangram_cc".to_string().into())
 		.chain(std::iter::once(cc))
-		.chain(cli_args)
+		.chain(forwarded)
 		.collect::<Vec<_>>();
 	for (target, value) in remappings {
 		match target.kind {
@@ -356,6 +455,7 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 			RemapKind::Macro => args.push("-imacro".to_owned().into()),
 			RemapKind::Linker => args.push("-L".to_owned().into()),
 			RemapKind::Binary => args.push("-B".to_owned().into()),
+			RemapKind::Option(flag) => args.push(flag.to_owned().into()),
 			RemapKind::Source => (),
 		}
 		args.push(value.into());
@@ -659,3 +759,81 @@ const CC_OPTIONS_WITH_VALUE: [&str; 18] = [
 	"-Xpreprocessor",
 	"-z",
 ];
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	async fn check_env(name: &str, raw: &str) -> tg::Result<tg::Value> {
+		let mut environment = Environment {
+			enable: true,
+			cc: "/usr/bin/cc".into(),
+			env: [(name.to_owned(), raw.to_owned().into())].into(),
+		};
+		environment.checkin().await?;
+		Ok(environment.env.remove(name).unwrap())
+	}
+
+	#[tokio::test]
+	async fn unsupported_embedded_environment_path_fails() {
+		for raw in [
+			"-DROOT=/opt/tangram/store/example/include",
+			"-DROOT=/home/user/.tangram/checkouts/example/include",
+			"-I\"/opt/tangram/store/example/include space",
+			"-I/opt/tangram/store/example/include\\",
+		] {
+			assert!(check_env("CFLAGS", raw).await.is_err());
+		}
+		assert!(
+			check_env("CUSTOM", "prefix=/opt/tangram/store/example")
+				.await
+				.is_err()
+		);
+	}
+
+	#[tokio::test]
+	#[ignore = "requires a running Tangram server"]
+	async fn environment_paths_and_flags() -> tg::Result<()> {
+		tg::init()?;
+		let source = tempfile::tempdir().unwrap();
+		for name in ["include space", "lib"] {
+			std::fs::create_dir(source.path().join(name)).unwrap();
+			std::fs::write(source.path().join(name).join("example"), name).unwrap();
+		}
+		let root = tg::Artifact::with_referent(common::checkin_path(source.path()).await?.artifact);
+		let path = common::checkout_artifact(root).await?;
+		let paths = format!(":/usr/bin:{0}/include space::{0}/lib:", path.display());
+		let flags = format!(" -O2\t-I{0}/lib  -L {0}/lib ", path.display());
+		let linker_flags = format!("-Wl,-rpath-link,{0}/lib:/usr/lib:{0}/lib", path.display());
+		for (name, raw) in [
+			("PATH", &paths),
+			("CMAKE_PREFIX_PATH", &paths),
+			("CFLAGS", &flags),
+			("LDFLAGS", &linker_flags),
+		] {
+			let template = check_env(name, raw).await?.try_unwrap_template().unwrap();
+			assert_eq!(
+				common::render_template_data(&template.to_data()).await?,
+				*raw
+			);
+			assert_eq!(template.artifacts().count(), 2);
+		}
+		let argument = format!("-I{}/include space", path.display());
+		let (_, template) = create_remapping_table(vec![RemapTarget {
+			kind: RemapKind::Include,
+			value: argument.strip_prefix("-I").unwrap().to_owned(),
+		}])
+		.await?
+		.pop_first()
+		.unwrap();
+		let template = tg::Template::builder()
+			.string("-I")
+			.components(template.components)
+			.build();
+		assert_eq!(
+			common::render_template_data(&template.to_data()).await?,
+			argument
+		);
+		Ok(())
+	}
+}

@@ -35,11 +35,21 @@ pub async fn run() -> tg::Result<()> {
 
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
 		.map_err(|_| tg::error!("CARGO_MANIFEST_DIR is not set"))?;
-	let source = outer::checkin(Path::new(&manifest_dir)).await?;
-	let (source_artifact, manifest_subpath) = common::artifact_path(&source.artifact)?;
-	let manifest_subpath = manifest_subpath
-		.map(|path| path.to_string_lossy().into_owned())
-		.unwrap_or_default();
+	let mut referent = outer::checkin(Path::new(&manifest_dir)).await?.artifact;
+	let manifest_subpath = if let Some(id) = referent.options.id.take() {
+		referent.node = id
+			.try_into()
+			.map_err(|_| tg::error!("expected a source directory root"))?;
+		referent
+			.options
+			.path
+			.take()
+			.map(|path| path.to_string_lossy().into_owned())
+			.unwrap_or_default()
+	} else {
+		String::new()
+	};
+	let source_artifact = tg::Artifact::with_referent(referent);
 	let source_template =
 		tg::Template::with_components([tg::template::Component::Artifact(source_artifact)]);
 
@@ -56,7 +66,12 @@ pub async fn run() -> tg::Result<()> {
 	let mut spawn_args: tg::value::Array = Vec::with_capacity(1 + extra_args.len());
 	spawn_args.push(tg::Value::Template(script_template));
 	for arg in &extra_args {
-		spawn_args.push(common::paths::arg_value(arg).await?);
+		// Cargo build-script arguments have no compiler-option grammar.
+		spawn_args.push(if outer::is_store_path(arg) {
+			outer::template_from_path(arg).await?.into()
+		} else {
+			arg.clone().into()
+		});
 	}
 
 	let process_arg = tg::process::Arg {
@@ -133,7 +148,51 @@ async fn build_env(
 		if outer::is_denied_host_env(&name) {
 			continue;
 		}
-		let value = common::paths::env_value(&name, &raw).await?;
+		let value;
+		if matches!(
+			name.as_str(),
+			"CFLAGS" | "CPPFLAGS" | "CXXFLAGS" | "LDFLAGS"
+		) {
+			value = compiler_flags(&raw).await?;
+		} else if outer::is_store_path(&raw) {
+			let paths = matches!(
+				name.as_str(),
+				"PATH"
+					| "LD_LIBRARY_PATH"
+					| "DYLD_LIBRARY_PATH"
+					| "DYLD_FALLBACK_LIBRARY_PATH"
+					| "DYLD_INSERT_LIBRARIES"
+					| "LIBRARY_PATH"
+					| "CPATH" | "C_INCLUDE_PATH"
+					| "CPLUS_INCLUDE_PATH"
+					| "OBJC_INCLUDE_PATH"
+					| "PKG_CONFIG_PATH"
+					| "PKG_CONFIG_LIBDIR"
+					| "CMAKE_PREFIX_PATH"
+					| "NODE_PATH"
+			);
+			let mut template = tg::Template::builder();
+			for (index, path) in raw.split(|c| paths && c == ':').enumerate() {
+				if index > 0 {
+					template = template.string(":");
+				}
+				template = if outer::is_store_path(path) {
+					template.components(
+						outer::template_from_path(path)
+							.await
+							.map_err(
+								|error| tg::error!(!error, variable = %name, "failed to check in environment path"),
+							)?
+							.components,
+					)
+				} else {
+					template.string(path)
+				};
+			}
+			value = template.build().into();
+		} else {
+			value = raw.into();
+		}
 		env.insert(name, value);
 	}
 
@@ -237,4 +296,196 @@ fn toolchain_subpath(toolchain: &tg::Artifact, suffix: &str) -> tg::Value {
 		tg::template::Component::Artifact(toolchain.clone()),
 		tg::template::Component::String(suffix.to_owned()),
 	]))
+}
+
+pub(crate) async fn compiler_flags(raw: &str) -> tg::Result<tg::Value> {
+	let mut components = Vec::new();
+	let mut end = 0;
+	for range in flag_words(raw)? {
+		let word = &raw[range.clone()];
+		let words =
+			shlex::split(word).ok_or_else(|| tg::error!("invalid quoting in compiler flags"))?;
+		let [decoded] = words.as_slice() else {
+			continue;
+		};
+		if !outer::is_store_path(decoded) {
+			continue;
+		}
+		components.push(tg::template::Component::String(
+			raw[end..range.start].to_owned(),
+		));
+		let (prefix, path) = [
+			"-I",
+			"-L",
+			"-B",
+			"--sysroot=",
+			"-isystem",
+			"-iquote",
+			"-idirafter",
+			"-include",
+			"-imacros",
+			"-isysroot",
+			"-Wl,-rpath-link,",
+			"-Wl,-rpath,",
+			"-Wl,-dynamic-linker=",
+		]
+		.into_iter()
+		.find_map(|prefix| decoded.strip_prefix(prefix).map(|path| (prefix, path)))
+		.unwrap_or(("", decoded));
+		let separator = matches!(prefix, "-Wl,-rpath-link," | "-Wl,-rpath,").then_some(':');
+		let mut template = tg::Template::builder().string(prefix).build();
+		for (index, path) in path.split(|c| Some(c) == separator).enumerate() {
+			if index > 0 {
+				template
+					.components
+					.push(tg::template::Component::String(":".into()));
+			}
+			if outer::is_store_path(path) {
+				if !std::path::Path::new(path).is_absolute() {
+					return Err(tg::error!(
+						"unsupported embedded store path in compiler flags"
+					));
+				}
+				template
+					.components
+					.extend(outer::template_from_path(path).await?.components);
+			} else {
+				template
+					.components
+					.push(tg::template::Component::String(path.into()));
+			}
+		}
+		// Preserve plain words for consumers that split flags without shell unquoting.
+		// Re-quote decoded words as a whole, escaping apostrophes in path suffixes.
+		if word != decoded {
+			components.push(tg::template::Component::String("'".into()));
+			for component in &mut template.components {
+				if let tg::template::Component::String(string) = component {
+					*string = string.replace('\'', "'\\''");
+				}
+			}
+			template
+				.components
+				.push(tg::template::Component::String("'".into()));
+		}
+		components.extend(template.components);
+		end = range.end;
+	}
+	if components.is_empty() {
+		return Ok(raw.to_owned().into());
+	}
+	components.push(tg::template::Component::String(raw[end..].to_owned()));
+	Ok(tg::Template::with_components(components).into())
+}
+
+// Locate shell words without losing their spelling or surrounding whitespace.
+// shlex decodes each word; this scan only tracks quotes, escapes, and boundaries.
+fn flag_words(raw: &str) -> tg::Result<Vec<std::ops::Range<usize>>> {
+	let mut words = Vec::new();
+	let mut start = None;
+	let mut quote = None;
+	let mut chars = raw.char_indices();
+	while let Some((index, c)) = chars.next() {
+		if quote.is_none() && matches!(c, ' ' | '\t' | '\n') {
+			if let Some(start) = start.take() {
+				words.push(start..index);
+			}
+			continue;
+		}
+		if quote.is_none() && start.is_none() && c == '#' {
+			for (_, c) in chars.by_ref() {
+				if c == '\n' {
+					break;
+				}
+			}
+			continue;
+		}
+		start.get_or_insert(index);
+		if c == '\\' && quote != Some('\'') {
+			chars
+				.next()
+				.ok_or_else(|| tg::error!("trailing escape in compiler flags"))?;
+		} else if Some(c) == quote {
+			quote = None;
+		} else if quote.is_none() && matches!(c, '\'' | '"') {
+			quote = Some(c);
+		}
+	}
+	if quote.is_some() {
+		return Err(tg::error!("unterminated quote in compiler flags"));
+	}
+	if let Some(start) = start {
+		words.push(start..raw.len());
+	}
+	Ok(words)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	async fn checkout(artifact: tg::Artifact) -> tg::Result<std::path::PathBuf> {
+		let mut paths = tg::checkout(tg::checkout::Arg {
+			dependencies: true,
+			extension: None,
+			force: false,
+			lock: None,
+			nodes: vec![artifact.to_referent().map(Into::into)],
+			path: None,
+		})
+		.await?;
+		Ok(paths.pop().unwrap())
+	}
+
+	#[tokio::test]
+	#[ignore = "requires a running Tangram server"]
+	async fn quoted_compiler_flags() -> tg::Result<()> {
+		tg::init()?;
+		let source = tempfile::tempdir().unwrap();
+		for name in ["include space", "include'quote", "lib"] {
+			std::fs::create_dir(source.path().join(name)).unwrap();
+			std::fs::write(source.path().join(name).join("example.h"), "/* header */").unwrap();
+		}
+		let root = tg::Artifact::with_referent(outer::checkin(source.path()).await?.artifact);
+		let path = checkout(root).await?;
+		let path = path.display();
+		for (flag, directory) in [
+			(format!("-I\"{path}/include space\""), "include space"),
+			(format!("-I'{path}/include space'"), "include space"),
+			(format!("-I{path}/include\\ space"), "include space"),
+			(format!("\"-I{path}/include space\""), "include space"),
+			(format!("-I\"{path}/include'quote\""), "include'quote"),
+			(format!("-I{path}/lib"), "lib"),
+		] {
+			let prefix = r#" -DVERSION=\"1.0\"  "#;
+			let flags = format!("{prefix}{flag}\t-O2 ");
+			let template = compiler_flags(&flags).await?.try_unwrap_template().unwrap();
+			assert_eq!(template.artifacts().count(), 1);
+			let rendered = template
+				.try_render(|component| async move {
+					match component {
+						tg::template::Component::String(string) => Ok(string.clone()),
+						tg::template::Component::Artifact(artifact) => {
+							Ok(checkout(artifact.clone()).await?.display().to_string())
+						},
+						_ => Err(tg::error!("unexpected placeholder")),
+					}
+				})
+				.await?;
+			assert!(rendered.starts_with(prefix));
+			assert!(rendered.ends_with("\t-O2 "));
+			// Let a real shell interpret the forwarded flags, as a make recipe would.
+			let output = std::process::Command::new("/bin/sh")
+				.args(["-c", "eval \"set -- $CFLAGS\"; printf '%s\\n' \"$@\""])
+				.env("CFLAGS", &rendered)
+				.output()
+				.unwrap();
+			assert!(output.status.success());
+			assert_eq!(
+				String::from_utf8(output.stdout).unwrap(),
+				format!("-DVERSION=\"1.0\"\n-I{path}/{directory}\n-O2\n")
+			);
+		}
+		Ok(())
+	}
 }
