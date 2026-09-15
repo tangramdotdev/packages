@@ -855,8 +855,9 @@ export async function testLinkerControls() {
 		const manifest = await wrap.Manifest.read(executable);
 		tg.assert(manifest !== undefined);
 		const serialized = JSON.stringify(manifest);
-		for (const tokens of Object.values(directory.state.tokens)) {
-			for (const token of tokens) tg.assert(!serialized.includes(token));
+		for (const entry of Object.values(directory.state.tokens)) {
+			for (const token of entry.authorization ?? []) tg.assert(!serialized.includes(token));
+			if (entry.sync) tg.assert(!serialized.includes(entry.sync));
 		}
 	}
 	for (const mutation of ['tg.mutation({"kind":"set","value":{}})', 'tg.mutation({"kind":"unset"})']) {

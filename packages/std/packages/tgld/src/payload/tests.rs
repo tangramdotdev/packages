@@ -65,11 +65,22 @@ fn authorized_artifacts_and_subpaths_remain_intact() {
 		.as_ref()
 		.unwrap();
 	assert_eq!(dependency.state().tokens(), referent.options.tokens);
-	let bytes = serde_json::to_string(&manifest.to_data()).unwrap();
-	assert!(
-		!bytes.contains(&referent.options.tokens.local().unwrap().authorization[0].to_string())
-	);
-	assert!(!bytes.contains("expires_at"));
+	let output = tempfile::NamedTempFile::new().unwrap();
+	std::fs::copy(std::env::current_exe().unwrap(), output.path()).unwrap();
+	manifest.write_to_path(output.path());
+	let bytes = std::fs::read(output.path()).unwrap();
+	let bytes = String::from_utf8_lossy(&bytes);
+	for token in &referent.options.tokens.local().unwrap().authorization {
+		assert!(!bytes.contains(&token.to_string()));
+	}
+	let restored = common::Manifest::read_from_path(output.path())
+		.unwrap()
+		.unwrap();
+	for dependency in restored.dependencies().values().flatten() {
+		let object = dependency.0.node.as_ref().unwrap();
+		assert!(object.state().tokens().is_empty());
+		assert!(object.state().location().is_none());
+	}
 
 	// Context from a root checkin becomes an artifact component followed by a literal subpath.
 	let root = tg::Directory::with_entries(std::collections::BTreeMap::new());
