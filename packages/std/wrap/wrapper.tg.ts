@@ -301,7 +301,7 @@ export async function testCompile() {
 		gcc ${source}/main.c -o ${tg.output}
 	`)
 		.env(toolchain, {
-			TANGRAM_TRACING: "true",
+			TANGRAM_WRAPPER_TRACING: "true",
 			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 		})
 		.then(tg.File.expect);
@@ -734,7 +734,7 @@ export async function testFull() {
 		.env(toolchain)
 		.then(tg.File.expect);
 	return std.wrap(file, {
-		env: { CUSTOM_ENV: "true", TANGRAM_SUPPRESS_ENV: "true" },
+		env: { CUSTOM_ENV: "true", TANGRAM_WRAPPER_SUPPRESS_ENV: "true" },
 	});
 }
 
@@ -767,10 +767,96 @@ export async function testStrip() {
 		echo "Stripped ${tg.output}/stripped"
 	`)
 		.env(toolchain, {
-			TANGRAM_TRACING: "true",
+			TANGRAM_WRAPPER_TRACING: "true",
 			TGLD_TRACING: "tgld=trace",
 			TGSTRIP_TRACING: "tgstrip=trace",
 		});
+}
+
+/** The native wrapper implements the shared control grammar and precedence. */
+export async function testControls() {
+	const toolchain = await bootstrap.sdk();
+	const source = await tg.file`
+		#include <stdio.h>
+		#include <stdlib.h>
+		#include <string.h>
+		int main(int argc, char **argv) {
+			const char *value = getenv("INHERITED");
+			printf("%s%c%s%c", value ? value : "unset", 0, getenv("MANIFEST"), 0);
+			for (int i = 1; i < argc; i++) fwrite(argv[i], 1, strlen(argv[i]) + 1, stdout);
+		}
+	`;
+	const executable = await std
+		.build(std.shBootstrap`cc -xc ${source} -o ${tg.output}`)
+		.env(toolchain)
+		.then(tg.File.expect);
+	const manifestArgs = ["manifest", "--tg-wrapper-suppress-args", "--"];
+	const wrapper = await std.wrap(executable, {
+		args: manifestArgs,
+		env: { MANIFEST: "kept" },
+	});
+	const quote = (word: string) => `'${word.replaceAll("'", "'\\''")}'`;
+	const check = async (
+		args: string[],
+		expected: string[],
+		environment: Record<string, string> = {},
+		inherited = "incoming",
+		file = wrapper,
+	) => {
+		const env = Object.entries(environment)
+			.map(([key, value]) => `${key}=${quote(value)}`).join(" ");
+		const output = await std.build(std.shBootstrap`
+			INHERITED=incoming ${env} ${file} ${args.map(quote).join(" ")} > ${tg.output}
+		`).then(tg.File.expect);
+		tg.assert((await output.text) === [inherited, "kept", ...expected, ""].join("\0"));
+	};
+	const words = ["", "repeat", "a b=c,d", "repeat", "--tg-wrapper-extra=1", "--tangram-suppress-args"];
+	await check(words, [...manifestArgs, ...words]);
+	for (const alias of ["tg", "tangram"]) {
+		for (const value of ["true", "TRUE", "1"]) {
+			await check([`--${alias}-wrapper-suppress-args=${value}`, ...words], manifestArgs);
+			await check(words, manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ARGS: value });
+			await check([`--${alias}-wrapper-suppress-env=${value}`], manifestArgs, {}, "unset");
+			await check([], manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ENV: value }, "unset");
+		}
+		for (const value of ["false", "FALSE", "0"]) {
+			await check([`--${alias}-wrapper-suppress-args=${value}`, ...words], [...manifestArgs, ...words], { TANGRAM_WRAPPER_SUPPRESS_ARGS: "true" });
+			await check([`--${alias}-wrapper-suppress-env=${value}`], manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ENV: "true" });
+			await check([`--${alias}-wrapper-print-manifest=${value}`], manifestArgs, { TANGRAM_WRAPPER_PRINT_MANIFEST: "true" });
+			await check(words, [...manifestArgs, ...words], { TANGRAM_WRAPPER_SUPPRESS_ARGS: value, TANGRAM_WRAPPER_PRINT_MANIFEST: value, TANGRAM_WRAPPER_TRACING: value });
+		}
+		await check([`--${alias}-wrapper-suppress-args`], manifestArgs);
+		await check([`--${alias}-wrapper-suppress-env`], manifestArgs, {}, "unset");
+		const printed = await std.build(std.shBootstrap`
+			${wrapper} --${alias}-wrapper-print-manifest > ${tg.output}
+		`).then(tg.File.expect);
+		tg.assert(tg.encoding.json.decode(await printed.text) !== undefined);
+	}
+	await check(["--tg-wrapper-suppress-args", "--tangram-wrapper-suppress-args=0", "last"], [...manifestArgs, "last"]);
+	await check(["--", "--tg-wrapper-suppress-env", ""], [...manifestArgs, "--", "--tg-wrapper-suppress-env", ""]);
+	await check(words, [...manifestArgs, ...words], { TANGRAM_SUPPRESS_ARGS: "1", TANGRAM_WRAPPER_SUPPRESS_ARGS_EXTRA: "1" });
+	for (const suffix of ["suppress-args", "suppress-env", "print-manifest", "tracing"]) {
+		const key = `TANGRAM_WRAPPER_${suffix.replaceAll("-", "_").toUpperCase()}`;
+		for (const value of ["", " true", "false ", "yes"]) {
+			const error = await std.build(std.shBootstrap`
+				if ${key}=${quote(value)} ${wrapper} --tg-wrapper-suppress-args=false > /dev/null 2> ${tg.output}; then exit 1; fi
+			`).then(tg.File.expect);
+			tg.assert((await error.text).includes(key));
+			if (suffix !== "tracing") {
+				const cliError = await std.build(std.shBootstrap`
+					if ${wrapper} ${quote(`--tg-wrapper-${suffix}=${value}`)} --tangram-wrapper-${suffix}=false > /dev/null 2> ${tg.output}; then exit 1; fi
+				`).then(tg.File.expect);
+				tg.assert((await cliError.text).includes(`--tg-wrapper-${suffix}`));
+			}
+		}
+	}
+	// The current wrapper's manifest configures its child, and incoming environment controls survive local overrides.
+	const inner = await std.wrap(executable, { args: ["inner"], env: { MANIFEST: "kept" } });
+	const outer = await std.wrap(inner, { args: ["--tg-wrapper-suppress-args"], merge: false });
+	await check(["ignored"], ["inner"], {}, "incoming", outer);
+	const nested = await std.wrap(inner, { merge: false });
+	await check(["--tg-wrapper-suppress-args=false", "ignored"], ["inner"], { TANGRAM_WRAPPER_SUPPRESS_ARGS: "true" }, "incoming", nested);
+	return true;
 }
 
 export async function testPrintManifest() {
@@ -801,9 +887,9 @@ export async function testPrintManifest() {
 	const wrapperId = wrapper.id;
 	console.log("testPrintManifest wrapper ID", wrapperId);
 
-	// Run the wrapper with --tangram-print-manifest and capture stdout.
+	// Run the wrapper with --tg-wrapper-print-manifest and capture stdout.
 	const output = await std
-		.build(std.shBootstrap`${wrapper} --tangram-print-manifest > ${tg.output}`)
+		.build(std.shBootstrap`${wrapper} --tg-wrapper-print-manifest > ${tg.output}`)
 		.then(tg.File.expect);
 	const text = await output.text;
 	console.log("manifest output", text);

@@ -2763,7 +2763,7 @@ export async function argAndEnvDump(arg?: BuildAndHostArg) {
 		)
 		.env(buildToolchain, {
 			TGLD_TRACING: "tgld=trace",
-			TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
+			TANGRAM_WRAPPER_TRACING: "true",
 		})
 		.then(tg.File.expect);
 }
@@ -3091,7 +3091,7 @@ export async function testContentExecutable() {
 	// Check the output matches the expected output.
 	const output = await std
 		.build(std.shBootstrap`set -x; ${wrapper} > ${tg.output}`)
-		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
+		.env({ TANGRAM_WRAPPER_TRACING: "true" })
 		.then(tg.File.expect);
 	const text = await output.text.then((t) => t.trim());
 	console.log("text", text);
@@ -3114,7 +3114,7 @@ export async function testContentExecutableVariadic() {
 	// Check the output matches the expected output.
 	const output = await std
 		.build(std.shBootstrap`set -x; ${wrapper} > ${tg.output}`)
-		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
+		.env({ TANGRAM_WRAPPER_TRACING: "true" })
 		.then(tg.File.expect);
 	const text = await output.text.then((t) => t.trim());
 	console.log("text", text);
@@ -3300,7 +3300,7 @@ export async function testDarwinLargeManifestOverwrite() {
 
 	const output = await tg
 		.build(
-			std.shBootstrap`${rewritten} --tangram-print-manifest > ${tg.output}`,
+			std.shBootstrap`${rewritten} --tg-wrapper-print-manifest > ${tg.output}`,
 		)
 		.then(tg.File.expect);
 	const manifest = tg.encoding.json.decode(await output.text) as wrap.Manifest;
@@ -3916,7 +3916,7 @@ export async function testLoadThroughEnvLdLibraryPath() {
 		gcc dlopen.c -o dlopen
 
 		export LD_LIBRARY_PATH=${libHello}/lib
-		sh -c 'TANGRAM_TRACING=1 ./dlopen > ${tg.output}'
+		sh -c 'TANGRAM_WRAPPER_TRACING=1 ./dlopen > ${tg.output}'
 	`)
 		.env(toolchain)
 		.then(tg.File.expect);
@@ -3970,7 +3970,7 @@ export async function testLdLibraryPathPreservedThroughNestedWrapping() {
 		sh -c '
 			echo "inner shell: LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >&2
 			# Level 2: wrapped print_env (simulates python loading a module)
-			TANGRAM_TRACING=1 ./print_env ./call_hello.so > ${tg.output}
+			TANGRAM_WRAPPER_TRACING=1 ./print_env ./call_hello.so > ${tg.output}
 		'
 	`)
 		.env(toolchain)

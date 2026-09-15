@@ -799,7 +799,7 @@ export async function stdoutIncludes(
 ) {
 	const stdout = await $(std.shBootstrap`${file} > ${tg.output}`)
 		.env({
-			TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
+			TANGRAM_WRAPPER_TRACING: "true",
 		})
 		.then(tg.File.expect)
 		.then((f) => f.text);

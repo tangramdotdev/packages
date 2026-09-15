@@ -1055,7 +1055,7 @@ export namespace sdk {
 		if (!isCross && proxiedLinker) {
 			const testOutput = await std
 				.build(std.shBootstrap`${compiledProgram} > ${tg.output}`)
-				.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
+				.env({ TANGRAM_WRAPPER_TRACING: "true" })
 				.host(std.triple.archAndOs(expectedHost))
 				.then(tg.File.expect);
 			const outputText = (await testOutput.text).trim();
