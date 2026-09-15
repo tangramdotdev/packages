@@ -1621,11 +1621,14 @@ export async function testTransitiveDiscovery(target?: string) {
 	// TGLD must discover bottom by analyzing top's dependencies.
 	// On Linux, we need -rpath-link to help the linker find transitive dependencies at link time.
 	const rpathLink = os === "linux" ? tg`-Wl,-rpath-link,${combined}/lib` : "";
+	// Native outputs must run before the build returns and checks out their dependencies.
+	const runInBuild = target === undefined ? tg`${tg.output}` : "";
 	const output = await std
 		.build(
 			(target
 				? std.sh
-				: std.shBootstrap)`set -x && cc -v -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output}`,
+				: std.shBootstrap)`set -x && cc -v -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output}
+			${runInBuild}`,
 		)
 		.env(
 			std.env.compose(testSDK, {
