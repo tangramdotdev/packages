@@ -896,11 +896,24 @@ export async function testSdkControlPrecedence() {
 			["true", "false", false],
 			["false", "true", true],
 		] as const) {
-			const output = await std.build(std.shBootstrap`
-				${environment === undefined ? "" : `TANGRAM_LINKER_EMBED_WRAPPER=${environment}`} cc -xc ${source} -o ${tg.output} ${cli === undefined ? "" : `-Wl,--tg-linker-embed-wrapper=${cli}`}
-			`).env(toolchain).then(tg.File.expect);
+			// Mach-O embedding does not install the runtime wrapper, so test enabled controls with passthrough on macOS.
+			const passthrough = !linux && expected;
+			const result = await std.build(std.shBootstrap`
+				mkdir -p ${tg.output}
+				TANGRAM_LINKER_TRACING=tgld=debug ${environment === undefined ? "" : `TANGRAM_LINKER_EMBED_WRAPPER=${environment}`} cc -xc ${source} -o ${tg.output}/program ${cli === undefined ? "" : `-Wl,--tg-linker-embed-wrapper=${cli}`} ${passthrough ? "-Wl,--tg-linker-passthrough" : ""} 2> ${tg.output}/log
+			`).env(toolchain).then(tg.Directory.expect);
+			const log = await result.get("log").then(tg.File.expect).then((file) => file.text);
+			const context = `SDK default ${defaultValue}, environment ${environment}, CLI ${cli}`;
+			tg.assert(
+				log.split("\n").some((line) => line.includes("parsed the controls") && line.includes(`embed=${expected}`)),
+				`expected embedding ${expected} for ${context}`,
+			);
+			const output = await result.get("program").then(tg.File.expect);
 			const manifest = await wrap.Manifest.read(output);
-			tg.assert(manifest !== undefined && (manifest.executable.kind === "address") === expected);
+			tg.assert(
+				passthrough ? manifest === undefined : manifest !== undefined && (manifest.executable.kind === "address") === expected,
+				`unexpected manifest for ${context}: ${manifest?.executable.kind}`,
+			);
 			await std.assert.stdoutIncludes(output, "");
 		}
 	}
@@ -1305,7 +1318,10 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 			// All the paths are retained.
 			// On Linux, we get the 6 from our libraries plus an additional set of internal paths from the toolchain, none of which are filtered out.
 			const expectedNumLibraryPaths = os === "linux" ? 15 : 6;
-			tg.assert(numLibraryPaths === expectedNumLibraryPaths);
+			tg.assert(
+				numLibraryPaths === expectedNumLibraryPaths,
+				`expected ${expectedNumLibraryPaths} library paths for ${opt} on ${os}, got ${numLibraryPaths}: ${JSON.stringify(libraryPaths)}`,
+			);
 			break;
 		}
 		case "filter": {
@@ -1647,11 +1663,14 @@ export async function testStripControls() {
 	const output = await std.build(std.shBootstrap`
 		mkdir -p ${tg.output}
 		cc -g -xc ${source} -Wl,--tg-linker-embed-wrapper=false -o wrapped
+		chmod 751 wrapped
 		TANGRAM_LINKER_PASSTHROUGH=true cc -g -xc ${source} -o plain
 		cp wrapped ./--tg-strip-passthrough
 		export STRIP_LOG="$PWD/log" REAL_STRIP=${realStrip}
 		export TANGRAM_STRIP_COMMAND_PATH=${recorder}
 		TANGRAM_STRIP_PASSTHROUGH=true strip --tg-strip-passthrough=false wrapped -S plain wrapped -- --tg-strip-passthrough plain
+		test "$(stat -c %a wrapped)" = 751
+		test -x ./--tg-strip-passthrough
 		./wrapped
 		./--tg-strip-passthrough
 		${std.triple.os(std.triple.host()) === "darwin" ? "./plain" : ""}

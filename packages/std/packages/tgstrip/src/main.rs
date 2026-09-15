@@ -133,6 +133,10 @@ async fn run_proxy(
 	// Handle the executable based on its type.
 	match manifest.executable {
 		manifest::Executable::Path(artifact_path) => {
+			let original_permissions = tokio::fs::metadata(target_path)
+				.await
+				.map_err(|error| tg::error!(!error, "failed to read the wrapper permissions"))?
+				.permissions();
 			#[cfg(feature = "tracing")]
 			tracing::info!(?artifact_path, "found executable artifact path");
 
@@ -256,7 +260,10 @@ async fn run_proxy(
 				.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
 
 			let artifact = tg::Artifact::from(new_wrapper);
-			common::checkout_artifact_to_path(artifact, canonical_target_path).await?;
+			common::checkout_artifact_to_path(artifact, canonical_target_path.clone()).await?;
+			tokio::fs::set_permissions(&canonical_target_path, original_permissions)
+				.await
+				.map_err(|error| tg::error!(!error, "failed to restore the wrapper permissions"))?;
 			#[cfg(feature = "tracing")]
 			tracing::info!("checked out the new output file");
 		},
