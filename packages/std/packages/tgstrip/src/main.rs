@@ -142,10 +142,27 @@ async fn run_proxy(
 			tracing::info!(?artifact_path, "found executable artifact path");
 
 			// Get the path to the actual executable.
-			let executable_path =
-				std::path::PathBuf::from(common::render_template(&artifact_path).await.map_err(
-					|error| tg::error!(!error, ?artifact_path, "unable to render executable path"),
-				)?);
+			let executable_path = artifact_path
+				.try_render(|component| async move {
+					match component {
+						tg::template::Component::String(string) => Ok(string.clone()),
+						tg::template::Component::Artifact(artifact) => {
+							common::checkout_artifact(artifact.clone())
+								.await?
+								.into_os_string()
+								.into_string()
+								.map_err(|_| tg::error!("checkout path is not UTF-8"))
+						},
+						tg::template::Component::Placeholder(_) => {
+							Err(tg::error!("cannot render an unresolved placeholder"))
+						},
+					}
+				})
+				.await
+				.map(std::path::PathBuf::from)
+				.map_err(|error| {
+					tg::error!(!error, ?artifact_path, "unable to render executable path")
+				})?;
 
 			#[cfg(feature = "tracing")]
 			tracing::info!(?executable_path, "found executable path");
