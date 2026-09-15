@@ -623,17 +623,26 @@ export async function testProxyArguments() {
 		buildToolchain,
 		args: ["manifest argument"],
 	});
+	// The proxies exec their command directly, so it must run without a wrapper
+	// or a system musl loader. Keep the dynamic recorder for the wrapper checks.
+	const commandRecorder =
+		std.triple.os(std.triple.host()) === "linux"
+			? await std
+					.build(std.shBootstrap`cc -static -xc ${source} -o ${tg.output}`)
+					.env(buildToolchain, { TGLD_PASSTHROUGH: true })
+					.then(tg.File.expect)
+			: recorder;
 	const linker = await std.wrap(await workspace.ldProxy({}), {
 		buildToolchain,
 		env: {
-			TGLD_COMMAND_PATH: recorder,
+			TGLD_COMMAND_PATH: commandRecorder,
 			TGLD_PASSTHROUGH: tg.Mutation.unset(),
 		},
 	});
 	const strip = await std.wrap(await workspace.stripProxy({}), {
 		buildToolchain,
 		env: {
-			TGSTRIP_COMMAND_PATH: recorder,
+			TGSTRIP_COMMAND_PATH: commandRecorder,
 			TGSTRIP_PASSTHROUGH: tg.Mutation.unset(),
 		},
 	});
@@ -675,6 +684,8 @@ export async function testProxyArguments() {
 		"--tangram-unknown",
 		"repeated",
 	];
+	await check(wrapper, [], ["manifest argument"]);
+	await check(wrapper, ["hello"], ["manifest argument", "hello"]);
 	await check(wrapper, unknown, ["manifest argument", ...unknown]);
 	await check(
 		wrapper,
