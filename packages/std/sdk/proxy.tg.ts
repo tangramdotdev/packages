@@ -1666,7 +1666,7 @@ export async function testStripControls() {
 		cc -g -xc ${source} -Wl,--tg-linker-embed-wrapper=false -o wrapped
 		chmod 751 wrapped
 		TANGRAM_LINKER_PASSTHROUGH=true cc -g -xc ${source} -o plain
-		cp wrapped ./--tg-strip-passthrough
+		cc -g -xc ${source} -Wl,--tg-linker-embed-wrapper=false -o ./--tg-strip-passthrough
 		export STRIP_LOG="$PWD/log" REAL_STRIP=${realStrip}
 		export TANGRAM_STRIP_COMMAND_PATH=${recorder}
 		TANGRAM_STRIP_PASSTHROUGH=true strip --tg-strip-passthrough=false wrapped -S plain wrapped -- --tg-strip-passthrough plain

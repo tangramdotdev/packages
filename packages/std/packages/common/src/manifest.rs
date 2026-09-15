@@ -318,6 +318,17 @@ impl Manifest {
 		for object in objects {
 			dependencies
 				.entry(tg::Reference::with_object(object.id()))
+				.and_modify(|dependency: &mut Option<tg::file::Dependency>| {
+					// Repeated references can carry complementary authorization.
+					if let Some(existing) =
+						dependency.as_ref().and_then(|value| value.0.node.as_ref())
+					{
+						existing.state().inherit_tokens(&object.state().tokens());
+						existing
+							.state()
+							.inherit_location(object.state().location().as_ref());
+					}
+				})
 				.or_insert_with(|| {
 					Some(tg::file::Dependency(tg::Referent::with_node(Some(object))))
 				});

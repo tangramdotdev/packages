@@ -43,8 +43,15 @@ fn authorized_artifacts_and_subpaths_remain_intact() {
 		tg::template::data::Component::String("/subpath".into())
 	);
 	assert_eq!(data[1].components[0], data[0].components[0]);
+	let mut other = referent.clone();
+	let mut token = referent.options.tokens.local().unwrap().authorization[0].clone();
+	token.metadata.key = "another-signer".into();
+	other.options.tokens = tg::Tokens::with_local_entry(tg::tokens::Entry {
+		authorization: vec![token],
+		sync: None,
+	});
 	let env = env(&format!(
-		"tg.mutation({{\"kind\":\"set\",\"value\":{{\"ARTIFACT\":{referent}}}}})"
+		"tg.mutation({{\"kind\":\"set\",\"value\":{{\"ARTIFACT\":{other}}}}})"
 	))
 	.unwrap();
 	let manifest = common::Manifest {
@@ -64,23 +71,10 @@ fn authorized_artifacts_and_subpaths_remain_intact() {
 		.node
 		.as_ref()
 		.unwrap();
-	assert_eq!(dependency.state().tokens(), referent.options.tokens);
-	let output = tempfile::NamedTempFile::new().unwrap();
-	std::fs::copy(std::env::current_exe().unwrap(), output.path()).unwrap();
-	manifest.write_to_path(output.path());
-	let bytes = std::fs::read(output.path()).unwrap();
-	let bytes = String::from_utf8_lossy(&bytes);
-	for token in &referent.options.tokens.local().unwrap().authorization {
-		assert!(!bytes.contains(&token.to_string()));
-	}
-	let restored = common::Manifest::read_from_path(output.path())
-		.unwrap()
-		.unwrap();
-	for dependency in restored.dependencies().values().flatten() {
-		let object = dependency.0.node.as_ref().unwrap();
-		assert!(object.state().tokens().is_empty());
-		assert!(object.state().location().is_none());
-	}
+	let mut expected = referent.options.tokens.clone();
+	expected.inherit(&other.options.tokens);
+	assert_eq!(dependency.state().tokens(), expected);
+	assert_manifest_omits_credentials(&manifest, &expected);
 
 	// Context from a root checkin becomes an artifact component followed by a literal subpath.
 	let root = tg::Directory::with_entries(std::collections::BTreeMap::new());
@@ -101,6 +95,25 @@ fn authorized_artifacts_and_subpaths_remain_intact() {
 		template.components[1],
 		tg::template::data::Component::String("/lib".into())
 	);
+}
+
+fn assert_manifest_omits_credentials(manifest: &common::Manifest, tokens: &tg::Tokens) {
+	let output = tempfile::NamedTempFile::new().unwrap();
+	std::fs::copy(std::env::current_exe().unwrap(), output.path()).unwrap();
+	manifest.write_to_path(output.path());
+	let bytes = std::fs::read(output.path()).unwrap();
+	let bytes = String::from_utf8_lossy(&bytes);
+	for token in &tokens.local().unwrap().authorization {
+		assert!(!bytes.contains(&token.to_string()));
+	}
+	let restored = common::Manifest::read_from_path(output.path())
+		.unwrap()
+		.unwrap();
+	for dependency in restored.dependencies().values().flatten() {
+		let object = dependency.0.node.as_ref().unwrap();
+		assert!(object.state().tokens().is_empty());
+		assert!(object.state().location().is_none());
+	}
 }
 
 #[test]
