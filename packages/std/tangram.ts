@@ -163,6 +163,7 @@ function testActions(): Record<string, () => any> {
 		wrap: wrap.test,
 		env: env.test,
 		proxyBasic: sdk.proxy.testBasic,
+		proxyArguments: sdk.proxy.testProxyArguments,
 		proxyLdDependencies: sdk.proxy.testLdProxyDependencies,
 		proxyLdInterpreterArgs: sdk.proxy.testLdProxyInterpreterArgs,
 		proxyCompilerLocalPaths: sdk.proxy.testCompilerLocalPaths,

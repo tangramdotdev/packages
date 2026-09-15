@@ -172,30 +172,57 @@ fn read_options() -> tg::Result<Options> {
 
 	// Handle the arguments.
 	while let Some(arg) = args.next() {
-		// Pass through any arg that isn't a tangram arg.
-		if arg.starts_with("--tg-") || arg.starts_with("--tangram-") {
-			// Handle setting combined library paths. Will override the env var if set.
-			if arg.starts_with("--tg-library-path-opt-level=") {
-				let option = arg.strip_prefix("--tg-library-path-opt-level=").unwrap();
-				library_path_optimization =
-					LibraryPathStrategy::from_str(option).unwrap_or_default();
-			} else if arg.starts_with("--tg-max-depth=") {
-				let option = arg.strip_prefix("--tg-max-depth=").unwrap();
-				if let Ok(max_depth_arg) = option.parse() {
-					max_depth = max_depth_arg;
-				} else {
-					tracing::warn!("Invalid max depth argument {option}. Using default.");
+		if arg == "--" {
+			command_args.push(arg);
+			for arg in args {
+				if is_library_candidate(&arg) {
+					additional_library_candidate_paths.push(PathBuf::from(&arg));
 				}
-			} else if arg.starts_with("--tg-passthrough") {
+				command_args.push(arg);
+			}
+			break;
+		}
+
+		// Consume only this proxy's options. Other components own other flags.
+		match arg.as_str() {
+			"--tangram-linker-passthrough" => {
 				passthrough = true;
-			} else if arg.starts_with("--tg-disallow-missing") {
+				continue;
+			},
+			"--tg-disallow-missing" => {
 				disallow_missing = true;
-			} else if arg.starts_with("--tg-embed-wrapper") {
+				continue;
+			},
+			"--tg-embed-wrapper" => {
 				embed = true;
-			} else if let Some(value) = arg.strip_prefix("--tangram-wrapper-arg-value=") {
-				let value = value
-					.parse::<tg::Value>()
-					.map_err(|error| tg::error!(!error, "failed to parse wrapper arg value"))?;
+				continue;
+			},
+			_ => {},
+		}
+		if let Some(option) = arg.strip_prefix("--tg-library-path-opt-level=") {
+			library_path_optimization = LibraryPathStrategy::from_str(option).unwrap_or_default();
+			continue;
+		}
+		if let Some(option) = arg.strip_prefix("--tg-max-depth=") {
+			if let Ok(max_depth_arg) = option.parse() {
+				max_depth = max_depth_arg;
+			} else {
+				tracing::warn!("Invalid max depth argument {option}. Using default.");
+			}
+			continue;
+		}
+		let (name, value) = arg
+			.split_once('=')
+			.map_or((arg.as_str(), None), |(name, value)| (name, Some(value)));
+		if name == "--tangram-wrapper-arg-value" || name == "--tangram-wrapper-env-value" {
+			let value = value
+				.map(str::to_owned)
+				.or_else(|| args.next())
+				.ok_or_else(|| tg::error!(%name, "missing option value"))?;
+			let value = value
+				.parse::<tg::Value>()
+				.map_err(|error| tg::error!(!error, %name, "failed to parse wrapper value"))?;
+			if name == "--tangram-wrapper-arg-value" {
 				let data = value
 					.to_data()
 					.try_unwrap_array()
@@ -207,49 +234,16 @@ fn read_options() -> tg::Result<Options> {
 					})
 					.collect::<tg::Result<Vec<_>>>()?;
 				wrapper_arg_value.replace(data);
-			} else if arg == "--tangram-wrapper-arg-value" {
-				if let Some(value) = args.next() {
-					let value = value
-						.parse::<tg::Value>()
-						.map_err(|error| tg::error!(!error, "failed to parse wrapper arg value"))?;
-					let data = value
-						.to_data()
-						.try_unwrap_array()
-						.map_err(|_| tg::error!("expected an array"))?
-						.into_iter()
-						.map(|v| {
-							v.try_unwrap_template()
-								.map_err(|_| tg::error!("expected a template"))
-						})
-						.collect::<tg::Result<Vec<_>>>()?;
-					wrapper_arg_value.replace(data);
-				}
-			} else if let Some(value) = arg.strip_prefix("--tangram-wrapper-env-value=") {
-				let value = value
-					.parse::<tg::Value>()
-					.map_err(|error| tg::error!(!error, "failed to parse wrapper env value"))?;
+			} else {
 				let data = value
 					.try_unwrap_mutation()
 					.map_err(|_| tg::error!("expected a mutation"))?
 					.to_data();
 				wrapper_env_value.replace(data);
-			} else if arg == "--tangram-wrapper-env-value" {
-				if let Some(value) = args.next() {
-					let value = value
-						.parse::<tg::Value>()
-						.map_err(|error| tg::error!(!error, "failed to parse wrapper env value"))?;
-					let data = value
-						.try_unwrap_mutation()
-						.map_err(|_| tg::error!("expected a mutation"))?
-						.to_data();
-					wrapper_env_value.replace(data);
-				}
-			} else {
-				command_args.push(arg.clone());
 			}
-		} else {
-			command_args.push(arg.clone());
+			continue;
 		}
+		command_args.push(arg.clone());
 
 		// Handle the output path argument.
 		if arg == "-o" || arg == "--output" {
@@ -266,6 +260,7 @@ fn read_options() -> tg::Result<Options> {
 		// Handle the library path argument.
 		if arg == "-L" || arg == "--library_path" {
 			if let Some(library_path) = args.next() {
+				command_args.push(library_path.clone());
 				library_paths.push(library_path);
 			}
 		} else if let Some(library_arg) = arg.strip_prefix("--library-path=") {

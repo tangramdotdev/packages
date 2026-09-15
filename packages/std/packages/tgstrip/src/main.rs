@@ -33,12 +33,7 @@ fn main_inner() -> tg::Result<()> {
 	if options.passthrough || options.strip_targets.is_empty() {
 		#[cfg(feature = "tracing")]
 		tracing::info!("passing through, running strip with unmodified arguments");
-		let target_refs: Vec<&std::path::Path> = options
-			.strip_targets
-			.iter()
-			.map(std::path::PathBuf::as_path)
-			.collect();
-		run_strip(&options.strip_program, &options.strip_args, &target_refs)?;
+		run_strip(&options.strip_program, &options.command_args, &[])?;
 		return Ok(());
 	}
 
@@ -281,6 +276,9 @@ struct Options {
 	/// Should we skip the proxy and pass through the arguments to strip unchanged?
 	passthrough: bool,
 
+	/// Original arguments, excluding this proxy's controls, for passthrough.
+	command_args: Vec<String>,
+
 	/// Arguments to pass to strip.
 	strip_args: Vec<String>,
 
@@ -312,28 +310,29 @@ impl Options {
 		// Parse the arguments.
 		let mut strip_targets = Vec::new();
 		let mut strip_args = vec![];
+		let mut command_args = Vec::new();
+		let mut parse_options = true;
 
 		for arg in std::env::args().skip(1) {
-			// Catch any --tg- args.
-			if arg.starts_with("--tg-") {
-				// Handle --tg-passthrough.
-				if arg == "--tg-passthrough" {
-					passthrough = true;
-				}
+			if parse_options && arg == "--tangram-strip-passthrough" {
+				passthrough = true;
+				continue;
+			}
+			command_args.push(arg.clone());
+			if parse_options && arg == "--" {
+				parse_options = false;
+				strip_args.push(arg);
+			} else if parse_options && arg.starts_with('-') {
+				strip_args.push(arg);
 			} else {
-				// If the argument starts with `-`, it's an argument to strip.
-				if arg.starts_with('-') {
-					strip_args.push(arg);
-				} else {
-					// This is a target file to strip.
-					strip_targets.push(arg.into());
-				}
+				strip_targets.push(arg.into());
 			}
 		}
 
 		// Construct options struct.
 		let options = Options {
 			passthrough,
+			command_args,
 			strip_args,
 			strip_targets,
 			strip_program,
