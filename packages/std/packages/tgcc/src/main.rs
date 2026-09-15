@@ -539,12 +539,6 @@ async fn create_remapping_table(
 			);
 		let subpath = path.strip_prefix("/").unwrap().to_owned();
 		let artifact = tg::Artifact::with_referent(output.artifact);
-		if let Some(existing) = files.get(&subpath) {
-			artifact.state().inherit_tokens(&existing.state().tokens());
-			artifact
-				.state()
-				.inherit_location(existing.state().location().as_ref());
-		}
 		files.insert(subpath.clone(), artifact);
 		local_targets.push((table.len(), subpath));
 		// Filled once the selected files have been assembled into their common root.

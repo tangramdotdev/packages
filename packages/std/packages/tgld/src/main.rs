@@ -106,10 +106,10 @@ struct Options {
 	passthrough: bool,
 
 	/// Additional argument values to set in the wrapper.
-	wrapper_arg_value: Option<Vec<tg::template::Data>>,
+	wrapper_arg_value: Option<Vec<tg::Template>>,
 
 	/// Additional environment variable values to set in the wrapper.
-	wrapper_env_value: Option<tg::mutation::Data>,
+	wrapper_env_value: Option<tg::Mutation>,
 }
 
 // Read the options from the environment and arguments.
@@ -225,8 +225,7 @@ fn read_options() -> tg::Result<Options> {
 				.parse::<tg::Value>()
 				.map_err(|error| tg::error!(!error, %name, "failed to parse wrapper value"))?;
 			if name == "--tangram-wrapper-arg-value" {
-				let data = value
-					.to_data()
+				let templates = value
 					.try_unwrap_array()
 					.map_err(|_| tg::error!("expected an array"))?
 					.into_iter()
@@ -235,13 +234,12 @@ fn read_options() -> tg::Result<Options> {
 							.map_err(|_| tg::error!("expected a template"))
 					})
 					.collect::<tg::Result<Vec<_>>>()?;
-				wrapper_arg_value.replace(data);
+				wrapper_arg_value.replace(templates);
 			} else {
-				let data = value
+				let mutation = value
 					.try_unwrap_mutation()
-					.map_err(|_| tg::error!("expected a mutation"))?
-					.to_data();
-				wrapper_env_value.replace(data);
+					.map_err(|_| tg::error!("expected a mutation"))?;
+				wrapper_env_value.replace(mutation);
 			}
 			continue;
 		}
@@ -487,10 +485,11 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		// If the linker generated a library, then add the library paths to its references.
 		let mut dependencies = output_file.dependencies().await?;
 		for path in library_paths {
-			common::manifest::collect_dependencies_from_template_data(
-				&common::template_from_artifact(path.directory.into()).to_data(),
-				&mut dependencies,
-			);
+			let reference = tg::Reference::with_object(path.directory.id().into());
+			let object = path.directory.into();
+			dependencies.entry(reference).or_insert_with(|| {
+				Some(tg::file::Dependency(tg::Referent::with_node(Some(object))))
+			});
 		}
 		let output_file_contents = output_file.contents().await?;
 		// NOTE - in practice, `output_file_executable` will virtually always be false in this branch, but we don't want to lose the information if the caller is doing something fancy.
@@ -533,25 +532,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 }
 
 fn deduplicate_library_paths(library_paths: &mut Vec<DirectoryWithSubpath>) {
-	let mut seen = HashMap::<_, tg::Directory, Hasher>::default();
-	library_paths.retain(
-		|path| match seen.entry((path.directory.id(), path.subpath.clone())) {
-			std::collections::hash_map::Entry::Occupied(entry) => {
-				let retained = entry.get();
-				retained
-					.state()
-					.inherit_location(path.directory.state().location().as_ref());
-				retained
-					.state()
-					.inherit_tokens(&path.directory.state().tokens());
-				false
-			},
-			std::collections::hash_map::Entry::Vacant(entry) => {
-				entry.insert(path.directory.clone());
-				true
-			},
-		},
-	);
+	let mut seen = HashSet::<_, Hasher>::default();
+	library_paths.retain(|path| seen.insert((path.directory.id(), path.subpath.clone())));
 }
 
 // Keep the server's containing root, adding aliases for local libraries whose SONAME or install name differs from their filename.
@@ -674,30 +656,24 @@ async fn create_manifest(
 		};
 		tracing::trace!(?config, "Interpreter configuration");
 
-		// Render the library paths.
-		let library_paths = if let Some(library_paths) = library_paths {
-			let result = futures::future::try_join_all(library_paths.into_iter().map(
-				|dir_with_subpath| async move {
-					let directory = dir_with_subpath.directory;
-					let template = if let Some(subpath) = dir_with_subpath.subpath {
-						common::template_from_artifact_and_subpath(directory.into(), subpath)
+		// Keep the library directory handles and their subpaths.
+		let library_paths = library_paths.map(|paths| {
+			paths
+				.into_iter()
+				.map(|path| {
+					if let Some(subpath) = path.subpath {
+						common::template_from_artifact_and_subpath(path.directory.into(), subpath)
 					} else {
-						common::template_from_artifact(directory.into())
-					};
-					let data = template.to_data();
-					Ok::<_, tg::Error>(data)
-				},
-			))
-			.await?;
-			Some(result)
-		} else {
-			None
-		};
+						common::template_from_artifact(path.directory.into())
+					}
+				})
+				.collect()
+		});
 		tracing::trace!(?library_paths, "Library paths");
 
 		if let Some((path, interpreter_flavor)) = config {
 			let preloads = if let Some(path) = &options.injection_path {
-				Some(vec![common::template_from_path(path).await?.to_data()])
+				Some(vec![common::template_from_path(path).await?])
 			} else {
 				None
 			};
@@ -706,10 +682,7 @@ async fn create_manifest(
 					common::interpreter_args(value, async |path| {
 						common::template_from_path(path).await
 					})
-					.await?
-					.into_iter()
-					.map(|template| template.to_data())
-					.collect(),
+					.await?,
 				)
 			} else {
 				None
@@ -723,7 +696,7 @@ async fn create_manifest(
 					},
 				)),
 				InterpreterFlavor::Gnu => {
-					let path = common::template_from_path(&path).await?.to_data();
+					let path = common::template_from_path(&path).await?;
 					Some(common::manifest::Interpreter::LdLinux(
 						common::manifest::LdLinuxInterpreter {
 							args,
@@ -734,7 +707,7 @@ async fn create_manifest(
 					))
 				},
 				InterpreterFlavor::Musl => {
-					let path = common::template_from_path(&path).await?.to_data();
+					let path = common::template_from_path(&path).await?;
 					Some(common::manifest::Interpreter::LdMusl(
 						common::manifest::LdMuslInterpreter {
 							args,
@@ -752,8 +725,7 @@ async fn create_manifest(
 	};
 
 	// Create the executable.
-	let executable =
-		common::manifest::Executable::Path(common::template_from_artifact(ld_output).to_data());
+	let executable = common::manifest::Executable::Path(common::template_from_artifact(ld_output));
 
 	// Create empty values for env and args.
 	let env = options.wrapper_env_value.clone();
@@ -1481,40 +1453,10 @@ mod tests {
 
 	#[test]
 	fn library_paths_keep_the_first_handle_and_search_order() {
-		let first = tg::Directory::with_id(tg::directory::Id::new(b"first"));
+		let first = tg::Directory::with_entries(std::collections::BTreeMap::new());
 		let duplicate = tg::Directory::with_id(first.id());
 		let second = tg::Directory::with_id(tg::directory::Id::new(b"second"));
-		for (directory, expires_at) in [(&first, 100), (&duplicate, 200)] {
-			let token = tg::authorization::Token {
-				body: tg::authorization::Body {
-					expires_at,
-					permissions: vec![tg::authorization::Permission::Object(
-						tg::authorization::permission::object::Permission::Subtree,
-					)],
-					resource: directory.id().into(),
-				},
-				metadata: tg::authorization::Metadata {
-					algorithm: tg::authorization::Algorithm::Ed25519,
-					key: "test".into(),
-				},
-				signature: vec![0; 64],
-			};
-			directory
-				.state()
-				.set_tokens(tg::Tokens::with_authorization([token]));
-		}
-		// Keep an independent proof that the newer token does not cover.
-		let mut complementary = first.state().tokens().local_authorization()[0].clone();
-		complementary.metadata.key = "other-signer".into();
-		first
-			.state()
-			.inherit_tokens(&tg::Tokens::with_authorization([complementary.clone()]));
-		let newer = duplicate.state().tokens().local_authorization()[0].clone();
-		let location = tg::Location::Remote(tg::location::Remote {
-			name: "test".into(),
-			region: None,
-		});
-		duplicate.state().set_location(Some(location.clone()));
+
 		let mut paths = vec![
 			DirectoryWithSubpath {
 				directory: first.clone(),
@@ -1554,17 +1496,7 @@ mod tests {
 				(first.id(), None),
 			],
 		);
-		let tokens = paths[0].directory.state().tokens();
-		assert_eq!(tokens.local_authorization().len(), 2);
-		assert!(tokens.local_authorization().contains(&newer));
-		assert!(tokens.local_authorization().contains(&complementary));
-		assert_eq!(
-			paths[0].directory.state().location(),
-			Some(location.clone())
-		);
-		// Existing clones must observe the merged context on the first handle.
-		assert_eq!(first.state().tokens(), tokens);
-		assert_eq!(first.state().location(), Some(location));
+		assert!(paths[0].directory.state().object().is_some());
 	}
 
 	#[tokio::test]

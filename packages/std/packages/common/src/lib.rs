@@ -98,8 +98,8 @@ pub async fn checkout_artifact_to_path(artifact: tg::Artifact, path: PathBuf) ->
 }
 
 /// Render a template by checking out its authorized artifact handles.
-pub async fn render_template_data(data: &tg::template::Data) -> tg::Result<String> {
-	tg::Template::try_from_data(data.clone())?
+pub async fn render_template(template: &tg::Template) -> tg::Result<String> {
+	template
 		.try_render(|component| async move {
 			match component {
 				tg::template::Component::String(string) => Ok(string.clone()),

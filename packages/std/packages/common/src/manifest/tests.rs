@@ -1,149 +1,156 @@
 use {
-	super::{Executable, Interpreter, LdLinuxInterpreter, LdMuslInterpreter, Manifest},
+	super::{
+		DyLdInterpreter, Executable, Interpreter, LdLinuxInterpreter, LdMuslInterpreter, Manifest,
+		NormalInterpreter,
+	},
 	std::collections::BTreeMap,
 	tangram_client::prelude::*,
 };
 
 #[test]
-fn interpreter_and_environment_dependencies_preserve_authorization() {
-	let local = file_with_token(100);
-	let remote = file_with_token(200);
-	let location = tg::Location::Remote(tg::location::Remote {
-		name: "test".to_owned(),
-		region: None,
-	});
-	let mut tokens = tg::Tokens::default();
-	tokens.insert_authorization(
-		location,
-		remote.state().tokens().local_authorization()[0].clone(),
-	);
-	remote.state().set_tokens(tokens);
-	let mut expected = local.state().tokens();
-	expected.inherit(&remote.state().tokens());
-	let template = crate::template_from_artifact(local.into()).to_data();
-	for interpreter in [
-		Interpreter::LdLinux(LdLinuxInterpreter {
-			path: tg::Template::from("/lib/ld-linux.so").to_data(),
-			args: Some(vec![template.clone()]),
-			library_paths: None,
-			preloads: None,
-		}),
-		Interpreter::LdMusl(LdMuslInterpreter {
-			path: tg::Template::from("/lib/ld-musl.so").to_data(),
-			args: Some(vec![template.clone()]),
-			library_paths: None,
-			preloads: None,
-		}),
-	] {
-		let manifest = Manifest {
-			interpreter: Some(interpreter),
-			executable: Executable::Content(tg::Template::from("echo").to_data()),
-			env: Some(tg::mutation::Data::Merge {
-				value: BTreeMap::from([(
-					"file".to_owned(),
-					tg::value::Data::Object(remote.to_referent().map(Into::into)),
-				)]),
-			}),
-			args: None,
-		};
-		let mut dependencies = manifest.dependencies();
-		// A later bare reference must not erase the authorization already collected.
-		super::collect_dependencies_from_template_data(
-			&template.clone().without_location_and_tokens(),
-			&mut dependencies,
-		);
-		assert_eq!(dependencies.len(), 1);
-		let reference = tg::Reference::with_object(remote.id().into());
-		let object = dependencies[&reference]
-			.as_ref()
-			.unwrap()
-			.0
-			.node
-			.as_ref()
-			.unwrap();
-		assert_eq!(object.state().tokens(), expected);
+fn dependencies_include_every_manifest_field() {
+	for manifest in manifests() {
+		let dependencies = manifest.dependencies();
+		let mut expected = vec![
+			"executable",
+			"argument",
+			"environment",
+			"environment template",
+		];
+		match &manifest.interpreter {
+			Some(Interpreter::Normal(_)) => {
+				expected.extend(["interpreter", "interpreter argument"]);
+			},
+			Some(Interpreter::LdLinux(_) | Interpreter::LdMusl(_)) => {
+				expected.extend(["interpreter", "interpreter argument", "library", "preload"]);
+			},
+			Some(Interpreter::DyLd(_)) => expected.extend(["library", "preload"]),
+			None => {},
+		}
+		assert_eq!(dependencies.len(), expected.len());
+		for name in expected {
+			let id = tg::File::with_contents(name).id();
+			assert!(
+				dependencies.contains_key(&tg::Reference::with_object(id.into())),
+				"missing {name}"
+			);
+		}
 	}
 }
 
 #[tokio::test]
-async fn serialized_manifest_omits_credentials_and_can_restore_dependencies() {
+async fn serialized_manifests_restore_dependency_handles() {
 	tg::init().unwrap();
-	let manifest = manifest_with_token(100);
-	let wrapper = tg::File::builder()
-		.contents("wrapper")
-		.dependencies(manifest.dependencies())
-		.build()
-		.unwrap();
-	let mut serialized = manifest.clone().without_location_and_tokens();
-	assert_eq!(
-		serde_json::to_vec(&serialized).unwrap(),
-		serde_json::to_vec(&manifest_with_token(200).without_location_and_tokens()).unwrap(),
-	);
-	for dependency in serialized.dependencies().values().flatten() {
-		assert!(
+	for manifest in manifests() {
+		let wrapper = tg::File::builder()
+			.contents("wrapper")
+			.dependencies(manifest.dependencies())
+			.build()
+			.unwrap();
+		let bytes = serde_json::to_vec(&manifest.to_data()).unwrap();
+		let mut restored =
+			Manifest::try_from_data(serde_json::from_slice(&bytes).unwrap()).unwrap();
+		restored.resolve_from_file(&wrapper).await.unwrap();
+		assert_eq!(serde_json::to_vec(&restored.to_data()).unwrap(), bytes);
+		let expected = manifest.dependencies();
+		let actual = restored.dependencies();
+		assert_eq!(
+			actual.keys().collect::<Vec<_>>(),
+			expected.keys().collect::<Vec<_>>()
+		);
+		for (reference, dependency) in actual {
+			let file = dependency
+				.unwrap()
+				.0
+				.node
+				.unwrap()
+				.try_unwrap_file()
+				.unwrap();
+			let original = expected[&reference]
+				.as_ref()
+				.unwrap()
+				.0
+				.node
+				.as_ref()
+				.unwrap()
+				.clone()
+				.try_unwrap_file()
+				.unwrap();
+			// Rebuilding must use the dependency's in-memory object, not a fresh handle from its ID.
+			assert!(std::sync::Arc::ptr_eq(
+				&file.object().await.unwrap(),
+				&original.object().await.unwrap(),
+			));
+		}
+	}
+}
+
+#[test]
+fn serialized_manifests_omit_location() {
+	for manifest in manifests() {
+		let expected = serde_json::to_vec(&manifest.to_data()).unwrap();
+		for dependency in manifest.dependencies().values().flatten() {
 			dependency
 				.0
 				.node
 				.as_ref()
 				.unwrap()
 				.state()
-				.tokens()
-				.is_empty()
-		);
-	}
-	serialized.inherit_from_file(&wrapper).await.unwrap();
-	let restored = serialized.dependencies();
-	for (reference, dependency) in manifest.dependencies() {
-		let expected = dependency.unwrap().0.node.unwrap();
-		let actual = restored[&reference]
-			.as_ref()
-			.unwrap()
-			.0
-			.node
-			.as_ref()
-			.unwrap();
-		assert_eq!(actual.state().tokens(), expected.state().tokens());
+				.set_location(Some(tg::Location::Remote(tg::location::Remote {
+					name: "test".into(),
+					region: None,
+				})));
+		}
+		assert_eq!(serde_json::to_vec(&manifest.to_data()).unwrap(), expected);
 	}
 }
 
-fn manifest_with_token(expires_at: i64) -> Manifest {
-	let file = file_with_token(expires_at);
-	let template = crate::template_from_artifact(file.clone().into()).to_data();
-	let interpreter = LdLinuxInterpreter {
-		args: Some(vec![template.clone()]),
-		library_paths: Some(vec![template.clone()]),
-		path: template.clone(),
-		preloads: Some(vec![template.clone()]),
-	};
-	let value = tg::value::Data::Object(file.to_referent().map(Into::into));
-	let env = tg::mutation::Data::Merge {
-		value: BTreeMap::from([("file".to_owned(), value)]),
-	};
-	Manifest {
-		args: Some(vec![template.clone()]),
-		env: Some(env),
-		executable: Executable::Path(template),
-		interpreter: Some(Interpreter::LdLinux(interpreter)),
-	}
+fn template(name: &str) -> tg::Template {
+	crate::template_from_artifact(tg::File::with_contents(name).into())
 }
 
-fn file_with_token(expires_at: i64) -> tg::File {
-	let file = tg::File::with_contents("manifest dependency");
-	let token = tg::authorization::Token {
-		body: tg::authorization::Body {
-			expires_at,
-			permissions: vec![tg::authorization::Permission::Object(
-				tg::authorization::permission::object::Permission::Subtree,
-			)],
-			resource: file.id().into(),
-		},
-		metadata: tg::authorization::Metadata {
-			algorithm: tg::authorization::Algorithm::Ed25519,
-			key: "test".into(),
-		},
-		signature: vec![0; 64],
-	};
-	file.state()
-		.set_tokens(tg::Tokens::with_authorization([token]));
-	file
+fn manifests() -> Vec<Manifest> {
+	let interpreters = [
+		None,
+		Some(Interpreter::Normal(NormalInterpreter {
+			path: template("interpreter"),
+			args: vec![template("interpreter argument")],
+		})),
+		Some(Interpreter::LdLinux(LdLinuxInterpreter {
+			path: template("interpreter"),
+			args: Some(vec![template("interpreter argument")]),
+			library_paths: Some(vec![template("library")]),
+			preloads: Some(vec![template("preload")]),
+		})),
+		Some(Interpreter::LdMusl(LdMuslInterpreter {
+			path: template("interpreter"),
+			args: Some(vec![template("interpreter argument")]),
+			library_paths: Some(vec![template("library")]),
+			preloads: Some(vec![template("preload")]),
+		})),
+		Some(Interpreter::DyLd(DyLdInterpreter {
+			library_paths: Some(vec![template("library")]),
+			preloads: Some(vec![template("preload")]),
+		})),
+	];
+	interpreters
+		.into_iter()
+		.map(|interpreter| {
+			let argument = template("argument");
+			Manifest {
+				interpreter,
+				executable: Executable::Path(template("executable")),
+				args: Some(vec![argument.clone(), argument]),
+				env: Some(tg::Mutation::Merge {
+					value: BTreeMap::from([(
+						"files".into(),
+						tg::Value::Array(vec![
+							tg::File::with_contents("environment").into(),
+							template("environment template").into(),
+						]),
+					)]),
+				}),
+			}
+		})
+		.collect()
 }

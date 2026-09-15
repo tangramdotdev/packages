@@ -132,7 +132,7 @@ async fn run_proxy(
 		let file = tg::Artifact::with_referent(output.artifact)
 			.try_unwrap_file()
 			.map_err(|error| tg::error!(!error, "expected a wrapper file"))?;
-		manifest.inherit_from_file(&file).await?;
+		manifest.resolve_from_file(&file).await?;
 	}
 
 	// Handle the executable based on its type.
@@ -142,13 +142,10 @@ async fn run_proxy(
 			tracing::info!(?artifact_path, "found executable artifact path");
 
 			// Get the path to the actual executable.
-			let executable_path = std::path::PathBuf::from(
-				common::render_template_data(&artifact_path)
-					.await
-					.map_err(|error| {
-						tg::error!(!error, ?artifact_path, "unable to render executable path")
-					})?,
-			);
+			let executable_path =
+				std::path::PathBuf::from(common::render_template(&artifact_path).await.map_err(
+					|error| tg::error!(!error, ?artifact_path, "unable to render executable path"),
+				)?);
 
 			#[cfg(feature = "tracing")]
 			tracing::info!(?executable_path, "found executable path");
@@ -214,9 +211,9 @@ async fn run_proxy(
 
 			// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
 			let new_manifest = Manifest {
-				executable: manifest::Executable::Path(
-					common::template_from_artifact(stripped_file.into()).to_data(),
-				),
+				executable: manifest::Executable::Path(common::template_from_artifact(
+					stripped_file.into(),
+				)),
 				..manifest
 			};
 			#[cfg(feature = "tracing")]

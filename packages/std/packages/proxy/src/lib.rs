@@ -19,14 +19,7 @@ pub fn artifact_path(
 	} else {
 		(referent.node.clone(), None)
 	};
-	let artifact = tg::Artifact::with_referent(tg::Referent::new(
-		id,
-		tg::referent::Options {
-			location: referent.options.location.clone(),
-			tokens: referent.options.tokens.clone(),
-			..Default::default()
-		},
-	));
+	let artifact = tg::Artifact::with_referent(referent.clone().map(|_| id));
 	Ok((artifact, path.filter(|path| !path.as_os_str().is_empty())))
 }
 

@@ -1,8 +1,8 @@
 use super::*;
 
 #[test]
-fn checkin_template_retains_root_subpath_and_all_tokens() {
-	let referent = checkin_referent("lib", 100);
+fn checkin_template_retains_root_and_subpath() {
+	let referent = checkin_referent("lib");
 	let template = template_from_referent(&referent).unwrap();
 	let [
 		tg::template::Component::Artifact(artifact),
@@ -16,48 +16,16 @@ fn checkin_template_retains_root_subpath_and_all_tokens() {
 		referent.options.id.unwrap().to_string()
 	);
 	assert_eq!(path, "/lib");
-	assert_eq!(
-		artifact.to_referent().options.tokens,
-		referent.options.tokens
-	);
-	assert_eq!(
-		artifact.to_referent().options.location,
-		referent.options.location
-	);
 }
 
-fn checkin_referent(path: &str, expires_at: i64) -> tg::Referent<tg::artifact::Id> {
+fn checkin_referent(path: &str) -> tg::Referent<tg::artifact::Id> {
 	let file = tg::File::with_contents("library");
 	let root = tg::Directory::with_entries([("lib".to_owned(), file.clone().into())].into());
-	let mut tokens = tg::Tokens::default();
-	for resource in [file.id().into(), root.id().into()] {
-		tokens.insert_local_authorization(tg::authorization::Token {
-			body: tg::authorization::Body {
-				expires_at,
-				permissions: vec![tg::authorization::Permission::Object(
-					tg::authorization::permission::object::Permission::Subtree,
-				)],
-				resource,
-			},
-			metadata: tg::authorization::Metadata {
-				algorithm: tg::authorization::Algorithm::Ed25519,
-				key: "test".into(),
-			},
-			signature: vec![0; 64],
-		});
-	}
-	let remote = tg::Location::Remote(tg::location::Remote {
-		name: "test".into(),
-		region: None,
-	});
-	tokens.insert_authorization(remote.clone(), tokens.local_authorization()[0].clone());
 	tg::Referent::new(
 		file.id().into(),
 		tg::referent::Options {
 			id: Some(root.id().into()),
 			path: Some(path.into()),
-			location: Some(remote),
-			tokens,
 			..Default::default()
 		},
 	)
@@ -73,11 +41,8 @@ fn root() -> String {
 async fn render_environment(name: &str, raw: &str, expected_paths: &[&str]) -> String {
 	let mut calls = Vec::new();
 	let template = environment_value(name, raw, async |path| {
-		// Return distinct proofs on repeated calls, and an identity supplied by checkin.
-		let referent = checkin_referent(
-			path.trim_start_matches('/'),
-			100 + i64::try_from(calls.len()).unwrap(),
-		);
+		// Use the identity and subpath supplied by checkin.
+		let referent = checkin_referent(path.trim_start_matches('/'));
 		calls.push((path.to_owned(), referent.clone()));
 		template_from_referent(&referent)
 	})
@@ -98,20 +63,12 @@ async fn render_environment(name: &str, raw: &str, expected_paths: &[&str]) -> S
 			artifact.id().to_string(),
 			referent.options.id.as_ref().unwrap().to_string()
 		);
-		assert_eq!(
-			artifact.to_referent().options.tokens,
-			referent.options.tokens
-		);
-		assert_eq!(
-			artifact.to_referent().options.location,
-			referent.options.location
-		);
 	}
 	render(&template)
 }
 
 #[tokio::test]
-async fn environment_references_preserve_text_order_and_tokens() {
+async fn environment_references_preserve_text_and_order() {
 	let root = root();
 	let checkout = root.replace("/store/", "/checkouts/");
 	let raw =
@@ -171,7 +128,7 @@ async fn quoted_compiler_flags_keep_their_spelling() {
 }
 
 #[tokio::test]
-async fn interpreter_arguments_preserve_boundaries_and_tokens() {
+async fn interpreter_arguments_preserve_boundaries() {
 	let root = root();
 	let raw = format!(
 		"--library-path ':{root}/lib space:/usr/lib:$ORIGIN/lib:' --preload='{root}/a.so {root}/b.so' --argv0 /literal/name '' \"{root}/path'quote:colon=equal\""
@@ -179,10 +136,7 @@ async fn interpreter_arguments_preserve_boundaries_and_tokens() {
 	let mut calls = Vec::new();
 	let args = interpreter_args(&raw, async |path| {
 		assert_eq!(path, root);
-		let referent = checkin_referent(
-			path.trim_start_matches('/'),
-			100 + i64::try_from(calls.len()).unwrap(),
-		);
+		let referent = checkin_referent(path.trim_start_matches('/'));
 		calls.push(referent.clone());
 		template_from_referent(&referent)
 	})
@@ -196,12 +150,8 @@ async fn interpreter_arguments_preserve_boundaries_and_tokens() {
 	assert_eq!(artifacts.len(), calls.len());
 	for (artifact, referent) in artifacts.into_iter().zip(calls) {
 		assert_eq!(
-			artifact.to_referent().options.tokens,
-			referent.options.tokens
-		);
-		assert_eq!(
-			artifact.to_referent().options.location,
-			referent.options.location
+			artifact.id().to_string(),
+			referent.options.id.unwrap().to_string()
 		);
 	}
 	assert_eq!(
