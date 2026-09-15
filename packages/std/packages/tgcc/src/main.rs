@@ -219,12 +219,15 @@ impl Args {
 						("-isystem", "-isystem"),
 						("-iquote", "-iquote"),
 						("-idirafter", "-idirafter"),
+						("-include-pch", "-include-pch"),
 						("-include", "-include"),
 						("-imacros", "-imacros"),
 					]
 					.into_iter()
-					.find(|(prefix, _)| option.starts_with(prefix))
-					{
+					.find(|(prefix, _)| {
+						option == *prefix
+							|| (*prefix != "-include-pch" && option.starts_with(prefix))
+					}) {
 						let path = option.strip_prefix(prefix).unwrap();
 						let path = if path.is_empty() {
 							args.next().unwrap_or_default()
@@ -303,29 +306,62 @@ fn main_inner() -> tg::Result<()> {
 	Ok(())
 }
 
-struct LinkerPathOption {
-	prefix: &'static str,
-	separator: Option<char>,
-	should_check_in: fn(&str) -> bool,
+async fn linker_argument(
+	raw: &str,
+	mut template_from_path: impl AsyncFnMut(&str) -> tg::Result<tg::Template>,
+) -> tg::Result<tg::Template> {
+	let Some(args) = raw.strip_prefix("-Wl,") else {
+		return Ok(raw.into());
+	};
+	let mut args = args.split(',');
+	let mut template = tg::Template::builder().string("-Wl");
+	while let Some(arg) = args.next() {
+		template = template.string(",");
+		let (option, path) = arg
+			.split_once('=')
+			.map_or((arg, None), |(option, path)| (option, Some(path)));
+		if !matches!(option, "-rpath" | "-rpath-link" | "-dynamic-linker") {
+			template = template.string(arg);
+			continue;
+		}
+		template = template.string(option);
+		let paths = if let Some(path) = path {
+			template = template.string("=");
+			path
+		} else if let Some(path) = args.next() {
+			template = template.string(",");
+			path
+		} else {
+			break;
+		};
+		if option == "-rpath" {
+			// Runtime paths need not exist at build time. Only recover Tangram references.
+			template = template.components(
+				proxy::template_from_string(paths, &mut template_from_path)
+					.await?
+					.components,
+			);
+			continue;
+		}
+		for (index, path) in paths
+			.split(|c| option == "-rpath-link" && c == ':')
+			.enumerate()
+		{
+			if index > 0 {
+				template = template.string(":");
+			}
+			let should_check_in = !path.is_empty()
+				&& !path.starts_with('@')
+				&& (option == "-dynamic-linker" || !path.contains('$'));
+			template = if should_check_in {
+				template.components(template_from_path(path).await?.components)
+			} else {
+				template.string(path)
+			};
+		}
+	}
+	Ok(template.build())
 }
-
-const LINKER_PATH_OPTIONS: [LinkerPathOption; 3] = [
-	LinkerPathOption {
-		prefix: "-Wl,-rpath-link,",
-		separator: Some(':'),
-		should_check_in: |path| !path.contains('$'),
-	},
-	LinkerPathOption {
-		prefix: "-Wl,-rpath,",
-		separator: Some(':'),
-		should_check_in: |path| Path::new(path).is_absolute() && !path.contains('$'),
-	},
-	LinkerPathOption {
-		prefix: "-Wl,-dynamic-linker=",
-		separator: None,
-		should_check_in: |_| true,
-	},
-];
 
 #[allow(clippy::too_many_lines)]
 async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
@@ -341,27 +377,9 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 	// Remaining path-bearing options here are forwarded directly to the linker.
 	let mut forwarded = Vec::with_capacity(cli_args.len());
 	for arg in cli_args {
-		let Some((option, paths)) = LINKER_PATH_OPTIONS
-			.iter()
-			.find_map(|option| arg.strip_prefix(option.prefix).map(|paths| (option, paths)))
-		else {
-			forwarded.push(arg.into());
-			continue;
-		};
-		let mut template = tg::Template::builder().string(option.prefix);
-		for (index, path) in paths.split(|c| option.separator == Some(c)).enumerate() {
-			if let Some(separator) = option.separator.filter(|_| index > 0) {
-				template = template.string(separator.to_string());
-			}
-			let should_check_in =
-				!path.is_empty() && !path.starts_with('@') && (option.should_check_in)(path);
-			template = if should_check_in {
-				template.components(common::template_from_path(path).await?.components)
-			} else {
-				template.string(path)
-			};
-		}
-		forwarded.push(template.build().into());
+		let template =
+			linker_argument(&arg, async |path| common::template_from_path(path).await).await?;
+		forwarded.push(template.into());
 	}
 
 	// Create the driver executable.
@@ -586,25 +604,129 @@ mod tests {
 
 	#[test]
 	fn path_options_preserve_their_meaning() {
-		for flag in [
-			"-include",
-			"-imacros",
-			"-isystem",
-			"-iquote",
-			"-idirafter",
-			"--sysroot",
+		for (flag, path) in [
+			("-include-pch", "header.pch"),
+			("-include", "/include"),
+			("-include", "-pch.h"),
+			("-imacros", "/include"),
+			("-isystem", "/include"),
+			("-iquote", "/include"),
+			("-idirafter", "/include"),
+			("--sysroot", "/include"),
 		] {
 			let separator = if flag == "--sysroot" { "=" } else { "" };
-			for cli in [
-				vec![flag.to_owned(), "/include".to_owned()],
-				vec![format!("{flag}{separator}/include")],
+			for mut cli in [
+				vec![flag.to_owned(), path.to_owned()],
+				vec![format!("{flag}{separator}{path}")],
 			] {
+				// Clang accepts -include-pch with a separate operand.
+				if flag == "-include-pch" && cli.len() == 1 {
+					continue;
+				}
+				cli.extend(["main.c".to_owned(), "-o".to_owned(), "main".to_owned()]);
 				let args = Args::parse(cli.into_iter());
-				assert_eq!(args.remap_targets.len(), 1);
-				let target = &args.remap_targets[0];
-				assert!(matches!(target.kind, RemapKind::Option(option) if option == flag));
-				assert_eq!(target.value, "/include");
+				assert_eq!(
+					args.remap_targets,
+					vec![
+						RemapTarget {
+							kind: RemapKind::Option(flag),
+							value: path.into(),
+						},
+						RemapTarget {
+							kind: RemapKind::Source,
+							value: "main.c".into(),
+						},
+					]
+				);
+				assert!(args.cli.is_empty());
+				assert_eq!(args.output.as_deref(), Some("main"));
 			}
 		}
+	}
+
+	#[tokio::test]
+	async fn runtime_paths_stay_literal() {
+		for raw in [
+			"-Wl,-rpath,/future/install/lib,-z,now",
+			"-Wl,-rpath,/tmp:./lib::$ORIGIN/../lib:@loader_path:",
+			"-Wl,-z,now,-rpath=/future/install/lib",
+			"-Wl,-rpath,",
+			"-Wl,-rpath",
+			"-Wl,--as-needed,,",
+			"-pthread",
+		] {
+			let template = linker_argument(raw, async |_| panic!("unexpected checkin"))
+				.await
+				.unwrap();
+			assert_eq!(render(&template), raw);
+		}
+	}
+
+	#[tokio::test]
+	async fn runtime_paths_recover_embedded_references() {
+		let directory = tg::Directory::with_id(tg::directory::Id::new(b"runtime libraries"));
+		let root = format!("/opt/tangram/store/{}", directory.id());
+		let raw = format!("-Wl,-rpath,/future/lib:{root}/lib:$ORIGIN,-z,now");
+		let mut calls = Vec::new();
+		let template = linker_argument(&raw, async |path| {
+			calls.push(path.to_owned());
+			Ok(tg::Template::builder().artifact(directory.clone()).build())
+		})
+		.await
+		.unwrap();
+		assert_eq!(calls, [root]);
+		assert_eq!(template.artifacts().count(), 1);
+		assert_eq!(
+			render(&template),
+			"-Wl,-rpath,/future/lib:/checked-in/lib:$ORIGIN,-z,now"
+		);
+	}
+
+	#[tokio::test]
+	async fn linker_paths_preserve_comma_separated_options() {
+		for (raw, paths, expected) in [
+			(
+				"-Wl,-rpath-link,/one:/two,-z,now",
+				vec!["/one", "/two"],
+				"-Wl,-rpath-link,/checked-in:/checked-in,-z,now",
+			),
+			(
+				"-Wl,-dynamic-linker=/loader,-z,now",
+				vec!["/loader"],
+				"-Wl,-dynamic-linker=/checked-in,-z,now",
+			),
+			(
+				"-Wl,-z,now,-rpath-link=/lib,-rpath,/future/lib,-dynamic-linker,/loader,-z,relro",
+				vec!["/lib", "/loader"],
+				"-Wl,-z,now,-rpath-link=/checked-in,-rpath,/future/lib,-dynamic-linker,/checked-in,-z,relro",
+			),
+			(
+				"-Wl,-rpath-link,:./local::$ORIGIN:@loader_path:,-z,now",
+				vec!["./local"],
+				"-Wl,-rpath-link,:/checked-in::$ORIGIN:@loader_path:,-z,now",
+			),
+		] {
+			let directory = tg::Directory::with_id(tg::directory::Id::new(b"linker input"));
+			let mut calls = Vec::new();
+			let template = linker_argument(raw, async |path| {
+				calls.push(path.to_owned());
+				Ok(tg::Template::builder().artifact(directory.clone()).build())
+			})
+			.await
+			.unwrap();
+			assert_eq!(calls, paths, "{raw}");
+			assert_eq!(template.artifacts().count(), paths.len());
+			assert_eq!(render(&template), expected, "{raw}");
+		}
+	}
+
+	fn render(template: &tg::Template) -> String {
+		template
+			.try_render_sync(|component| match component {
+				tg::template::Component::String(string) => Ok(string.as_str().into()),
+				tg::template::Component::Artifact(_) => Ok("/checked-in".into()),
+				tg::template::Component::Placeholder(_) => panic!("unexpected placeholder"),
+			})
+			.unwrap()
 	}
 }
