@@ -29,9 +29,9 @@ fn checkin_template_retains_root_subpath_and_all_tokens() {
 fn checkin_referent(path: &str, expires_at: i64) -> tg::Referent<tg::artifact::Id> {
 	let file = tg::File::with_contents("library");
 	let root = tg::Directory::with_entries([("lib".to_owned(), file.clone().into())].into());
-	let mut tokens = tg::authorization::Tokens::default();
+	let mut tokens = tg::Tokens::default();
 	for resource in [file.id().into(), root.id().into()] {
-		tokens.insert_local(tg::authorization::Token {
+		tokens.insert_local_authorization(tg::authorization::Token {
 			body: tg::authorization::Body {
 				expires_at,
 				permissions: vec![tg::authorization::Permission::Object(
@@ -50,7 +50,7 @@ fn checkin_referent(path: &str, expires_at: i64) -> tg::Referent<tg::artifact::I
 		name: "test".into(),
 		region: None,
 	});
-	tokens.insert(remote.clone(), tokens.local()[0].clone());
+	tokens.insert_authorization(remote.clone(), tokens.local_authorization()[0].clone());
 	tg::Referent::new(
 		file.id().into(),
 		tg::referent::Options {

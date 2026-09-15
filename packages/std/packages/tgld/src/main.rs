@@ -1501,17 +1501,15 @@ mod tests {
 			};
 			directory
 				.state()
-				.set_tokens(tg::authorization::Tokens::with_local([token]));
+				.set_tokens(tg::Tokens::with_authorization([token]));
 		}
 		// Keep an independent proof that the newer token does not cover.
-		let mut complementary = first.state().tokens().local()[0].clone();
+		let mut complementary = first.state().tokens().local_authorization()[0].clone();
 		complementary.metadata.key = "other-signer".into();
 		first
 			.state()
-			.inherit_tokens(&tg::authorization::Tokens::with_local([
-				complementary.clone()
-			]));
-		let newer = duplicate.state().tokens().local()[0].clone();
+			.inherit_tokens(&tg::Tokens::with_authorization([complementary.clone()]));
+		let newer = duplicate.state().tokens().local_authorization()[0].clone();
 		let location = tg::Location::Remote(tg::location::Remote {
 			name: "test".into(),
 			region: None,
@@ -1557,9 +1555,9 @@ mod tests {
 			],
 		);
 		let tokens = paths[0].directory.state().tokens();
-		assert_eq!(tokens.local().len(), 2);
-		assert!(tokens.local().contains(&newer));
-		assert!(tokens.local().contains(&complementary));
+		assert_eq!(tokens.local_authorization().len(), 2);
+		assert!(tokens.local_authorization().contains(&newer));
+		assert!(tokens.local_authorization().contains(&complementary));
 		assert_eq!(
 			paths[0].directory.state().location(),
 			Some(location.clone())

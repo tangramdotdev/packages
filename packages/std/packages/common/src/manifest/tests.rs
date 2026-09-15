@@ -12,8 +12,11 @@ fn interpreter_and_environment_dependencies_preserve_authorization() {
 		name: "test".to_owned(),
 		region: None,
 	});
-	let mut tokens = tg::authorization::Tokens::default();
-	tokens.insert(location, remote.state().tokens().local()[0].clone());
+	let mut tokens = tg::Tokens::default();
+	tokens.insert_authorization(
+		location,
+		remote.state().tokens().local_authorization()[0].clone(),
+	);
 	remote.state().set_tokens(tokens);
 	let mut expected = local.state().tokens();
 	expected.inherit(&remote.state().tokens());
@@ -141,6 +144,6 @@ fn file_with_token(expires_at: i64) -> tg::File {
 		signature: vec![0; 64],
 	};
 	file.state()
-		.set_tokens(tg::authorization::Tokens::with_local([token]));
+		.set_tokens(tg::Tokens::with_authorization([token]));
 	file
 }

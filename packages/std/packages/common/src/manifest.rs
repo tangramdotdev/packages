@@ -366,7 +366,7 @@ impl Manifest {
 		// Keep authorization out of the executable bytes while retaining it for dependencies.
 		self.for_each_reference_mut(&mut |_, options| {
 			options.location = None;
-			options.tokens = tg::authorization::Tokens::default();
+			options.tokens = tg::Tokens::default();
 		});
 		self
 	}
