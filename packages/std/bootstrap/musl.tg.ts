@@ -60,7 +60,7 @@ export async function build(arg?: Arg) {
 			CPATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
 			LIBRARY_PATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
 			// musl's linker probes write to /dev/null, which the proxy cannot wrap.
-			TGLD_PASSTHROUGH: true,
+			TANGRAM_LINKER_PASSTHROUGH: true,
 		},
 	);
 

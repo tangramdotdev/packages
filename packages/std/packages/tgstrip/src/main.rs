@@ -1,12 +1,24 @@
-use std::{os::unix::fs::PermissionsExt, path::PathBuf};
+use {
+	common::{Manifest, manifest},
+	proxy::options::{Declaration, Kind, Session, Source, Value},
+	std::{
+		ffi::OsString,
+		os::unix::fs::PermissionsExt,
+		path::{Path, PathBuf},
+	},
+	tangram_client::prelude::*,
+};
 
-use common::{Manifest, manifest};
-use tangram_client::prelude::*;
+const DECLARATIONS: &[Declaration<()>] = &[Declaration {
+	id: (),
+	kind: Kind::Boolean,
+	suffix: "passthrough",
+}];
 
 fn main() {
 	// Setup tracing.
 	#[cfg(feature = "tracing")]
-	common::tracing::setup("TGSTRIP_TRACING");
+	common::tracing::setup("TANGRAM_STRIP_TRACING");
 
 	if let Err(e) = main_inner() {
 		common::error::print_error(e);
@@ -33,63 +45,46 @@ fn main_inner() -> tg::Result<()> {
 	if options.passthrough || options.strip_targets.is_empty() {
 		#[cfg(feature = "tracing")]
 		tracing::info!("passing through, running strip with unmodified arguments");
-		run_strip(&options.strip_program, &options.command_args, &[])?;
+		run_strip(&options.strip_program, &options.command_args)?;
 		return Ok(());
 	}
 
-	// Separate wrappers from non-wrappers.
+	// Identify wrapper occurrences without moving their positions in the argument vector.
 	let mut wrappers = Vec::new();
-	let mut non_wrappers = Vec::new();
-
-	for target_path in &options.strip_targets {
-		let manifest = manifest::Manifest::read_from_path(target_path).map_err(|error| {
-			tg::error!(
-				source = error,
-				"could not read manifest from path: {}",
-				target_path.display()
-			)
-		})?;
-
-		if let Some(manifest) = manifest {
-			#[cfg(feature = "tracing")]
-			tracing::info!(?target_path, "found wrapper, will process with proxy");
-			wrappers.push((target_path.clone(), manifest));
-		} else {
-			#[cfg(feature = "tracing")]
-			tracing::info!(?target_path, "not a wrapper, will pass through to strip");
-			non_wrappers.push(target_path);
+	for index in &options.strip_targets {
+		let path = Path::new(&options.command_args[*index]);
+		if read_manifest(path)?.is_some() {
+			wrappers.push(*index);
 		}
 	}
 
-	// Process all wrappers concurrently.
+	// Re-read each wrapper after the previous job, including repeated paths and symlink aliases.
 	if !wrappers.is_empty() {
-		let strip_program = &options.strip_program;
-		let strip_args = &options.strip_args;
 		tokio::runtime::Builder::new_current_thread()
 			.enable_all()
 			.build()
 			.unwrap()
 			.block_on(async {
-				let futures: Vec<_> = wrappers
-					.into_iter()
-					.map(|(target_path, manifest)| async move {
-						run_proxy(strip_program, strip_args, &target_path, manifest).await
-					})
-					.collect();
-				futures::future::try_join_all(futures).await?;
+				for index in &wrappers {
+					let path = Path::new(&options.command_args[*index]);
+					let manifest = read_manifest(path)?
+						.ok_or_else(|| tg::error!("expected a wrapper manifest"))?;
+					run_proxy(&options, *index, path, manifest).await?;
+				}
 				Ok::<(), tg::Error>(())
 			})?;
 	}
 
-	// Process all non-wrappers in one batch.
-	if !non_wrappers.is_empty() {
-		let non_wrapper_refs: Vec<&std::path::Path> =
-			non_wrappers.iter().map(|p| p.as_path()).collect();
-		run_strip(
-			&options.strip_program,
-			&options.strip_args,
-			&non_wrapper_refs,
-		)?;
+	// Retain non-wrapper targets in their original positions, including duplicates.
+	if wrappers.len() != options.strip_targets.len() {
+		let args = options
+			.command_args
+			.iter()
+			.enumerate()
+			.filter(|(index, _)| wrappers.binary_search(index).is_err())
+			.map(|(_, arg)| arg.clone())
+			.collect::<Vec<_>>();
+		run_strip(&options.strip_program, &args)?;
 	}
 
 	// Reset the runtime library path.
@@ -107,9 +102,9 @@ fn main_inner() -> tg::Result<()> {
 
 #[allow(clippy::too_many_lines)]
 async fn run_proxy(
-	strip_program: &std::path::Path,
-	strip_args: &[String],
-	target_path: &std::path::Path,
+	options: &Options,
+	target_index: usize,
+	target_path: &Path,
 	mut manifest: Manifest,
 ) -> tg::Result<()> {
 	if matches!(&manifest.executable, manifest::Executable::Path(_)) {
@@ -179,7 +174,8 @@ async fn run_proxy(
 				.map_err(|error| tg::error!(!error, path = %local_executable_path.display(), "failed to set file permissions"))?;
 
 			// Call strip with the correct arguments on the executable.
-			run_strip(strip_program, strip_args, &[&local_executable_path])?;
+			let args = options.wrapper_args(target_index, &local_executable_path);
+			run_strip(&options.strip_program, &args)?;
 			#[cfg(feature = "tracing")]
 			tracing::info!(?local_executable_path, "strip succeeded");
 
@@ -264,7 +260,8 @@ async fn run_proxy(
 			);
 
 			// If the executable is content, pass through the arguments to strip unchanged.
-			run_strip(strip_program, strip_args, &[target_path])?;
+			let args = options.wrapper_args(target_index, target_path);
+			run_strip(&options.strip_program, &args)?;
 		},
 	}
 
@@ -273,104 +270,102 @@ async fn run_proxy(
 
 #[derive(Debug)]
 struct Options {
-	/// Should we skip the proxy and pass through the arguments to strip unchanged?
+	/// The original arguments excluding owned controls.
+	command_args: Vec<OsString>,
+	/// Whether to skip wrapper rewriting.
 	passthrough: bool,
-
-	/// Original arguments, excluding this proxy's controls, for passthrough.
-	command_args: Vec<String>,
-
-	/// Arguments to pass to strip.
-	strip_args: Vec<String>,
-
-	/// The actual files being stripped.
-	strip_targets: Vec<PathBuf>,
-
-	/// The actual `strip` program to run.
+	/// The actual strip executable.
 	strip_program: PathBuf,
-
-	/// Any paths required by the strip program at runtime.
+	/// The library path required by strip at runtime.
 	strip_runtime_library_path: Option<String>,
+	/// Target occurrence indices in the filtered argument vector.
+	strip_targets: Vec<usize>,
 }
 
 impl Options {
 	fn parse() -> tg::Result<Self> {
-		// Read env for options.
-		let mut passthrough = std::env::var("TGSTRIP_PASSTHROUGH").is_ok();
-		let strip_program = std::env::var("TGSTRIP_COMMAND_PATH")
-			.map_err(|error| tg::error!(source = error, "TGSTRIP_COMMAND_PATH not set"))?
+		Self::parse_with_args(std::env::args_os().skip(1), |name| std::env::var_os(name))
+	}
+
+	fn parse_with_args(
+		args: impl Iterator<Item = OsString>,
+		mut lookup: impl FnMut(&str) -> Option<OsString>,
+	) -> tg::Result<Self> {
+		let strip_program = lookup("TANGRAM_STRIP_COMMAND_PATH")
+			.ok_or_else(|| tg::error!("TANGRAM_STRIP_COMMAND_PATH must be set"))?
 			.into();
-		let strip_runtime_library_path =
-			std::env::var("TGSTRIP_RUNTIME_LIBRARY_PATH").unwrap_or_default();
-		let strip_runtime_library_path = if strip_runtime_library_path.is_empty() {
-			None
-		} else {
-			Some(strip_runtime_library_path)
-		};
-
-		// Parse the arguments.
-		let mut strip_targets = Vec::new();
-		let mut strip_args = vec![];
+		let strip_runtime_library_path = lookup("TANGRAM_STRIP_RUNTIME_LIBRARY_PATH")
+			.and_then(|value| value.into_string().ok())
+			.filter(|value| !value.is_empty());
+		let mut session = Session::new("strip", DECLARATIONS, false, lookup, apply)?;
 		let mut command_args = Vec::new();
-		let mut parse_options = true;
-
-		for arg in std::env::args().skip(1) {
-			if parse_options && arg == "--tangram-strip-passthrough" {
-				passthrough = true;
+		let mut strip_targets = Vec::new();
+		for arg in args {
+			let ended = session.ended();
+			if session.consume(&arg)? {
 				continue;
 			}
-			command_args.push(arg.clone());
-			if parse_options && arg == "--" {
-				parse_options = false;
-				strip_args.push(arg);
-			} else if parse_options && arg.starts_with('-') {
-				strip_args.push(arg);
-			} else {
-				strip_targets.push(arg.into());
+			if ended || !arg.as_encoded_bytes().starts_with(b"-") {
+				strip_targets.push(command_args.len());
 			}
+			command_args.push(arg);
 		}
-
-		// Construct options struct.
-		let options = Options {
-			passthrough,
+		let passthrough = session.into_settings();
+		let options = Self {
 			command_args,
-			strip_args,
-			strip_targets,
+			passthrough,
 			strip_program,
 			strip_runtime_library_path,
+			strip_targets,
 		};
 		Ok(options)
 	}
+
+	fn wrapper_args(&self, target_index: usize, executable: &Path) -> Vec<OsString> {
+		self.command_args
+			.iter()
+			.enumerate()
+			.filter_map(|(index, arg)| {
+				if index == target_index {
+					Some(executable.as_os_str().to_owned())
+				} else if self.strip_targets.binary_search(&index).is_ok() {
+					None
+				} else {
+					Some(arg.clone())
+				}
+			})
+			.collect()
+	}
 }
 
-/// Execute the underlying `strip` command with the given arguments and targets.
-fn run_strip(
-	strip_program: &std::path::Path,
-	strip_args: &[String],
-	targets: &[&std::path::Path],
-) -> tg::Result<()> {
-	#[cfg(feature = "tracing")]
-	tracing::info!(?strip_program, ?strip_args, ?targets, "starting run_strip");
+#[allow(clippy::unnecessary_wraps)]
+fn apply(passthrough: &mut bool, (): (), value: Value<'_>, _: &Source) -> tg::Result<()> {
+	let Value::Boolean(value) = value else {
+		unreachable!("the declaration specifies a boolean");
+	};
+	*passthrough = value;
+	Ok(())
+}
 
-	// Set up command.
-	let mut command = std::process::Command::new(strip_program);
-	command.args(strip_args);
+fn read_manifest(path: &Path) -> tg::Result<Option<Manifest>> {
+	Manifest::read_from_path(path).map_err(|error| {
+		tg::error!(
+			source = error,
+			"could not read the manifest from {}",
+			path.display()
+		)
+	})
+}
 
-	// Add all targets to the command.
-	for target in targets {
-		command.arg(target);
-	}
-
-	// Wait for the command to finish.
-	let status = command
+/// Execute strip with the complete filtered argument vector.
+fn run_strip(strip_program: &Path, args: &[OsString]) -> tg::Result<()> {
+	let status = std::process::Command::new(strip_program)
+		.args(args)
 		.status()
 		.map_err(|error| tg::error!(source = error, "could not run strip"))?;
-
-	// If the command failed, return an error.
 	if !status.success() {
 		return Err(tg::error!("strip failed with status: {}", status));
 	}
-
-	// Otherwise, return success.
 	Ok(())
 }
 
@@ -401,3 +396,6 @@ fn set_runtime_library_path(path: &str) -> Option<String> {
 
 	current_value
 }
+
+#[cfg(test)]
+mod tests;

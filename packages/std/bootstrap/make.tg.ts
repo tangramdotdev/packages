@@ -51,7 +51,7 @@ export async function build(...args: tg.Args<Arg>) {
 
 	let envArgs: tg.Args<std.env.Arg> = [sdk(host)];
 	if (embedWrapper) {
-		envArgs.push({ TGLD_EMBED_WRAPPER: true });
+		envArgs.push({ TANGRAM_LINKER_EMBED_WRAPPER: true });
 	}
 	const env = std.env.compose(...envArgs);
 

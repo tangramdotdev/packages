@@ -19,6 +19,7 @@ struct Settings {
 	text: String,
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn apply(settings: &mut Settings, id: u8, value: Value<'_>, _: &Source) -> tg::Result<()> {
 	match (id, value) {
 		(0, Value::Boolean(value)) => settings.enabled = value,
@@ -173,6 +174,10 @@ fn defaults_and_validation() {
 			.is_err()
 	);
 	assert!(session.consume(OsStr::new("--tg-example-text=")).unwrap());
+}
+
+#[test]
+fn declaration_validation() {
 	assert!(
 		Session::new(
 			"Example",

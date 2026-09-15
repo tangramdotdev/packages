@@ -476,7 +476,7 @@ export async function testBssManifest() {
 	});
 	const executable = await std
 		.run(std.shBootstrap`gcc -static ${source}/main.c -o ${tg.output}`)
-		.env(toolchain, { TGLD_PASSTHROUGH: true })
+		.env(toolchain, { TANGRAM_LINKER_PASSTHROUGH: true })
 		.then(tg.File.expect);
 
 	const original = await elf.parse(executable);
@@ -607,7 +607,7 @@ export async function testStripPreservesManifest() {
 			./embedded > ${tg.output}
 			./standalone >> ${tg.output}
 		`)
-		.env(toolchain, { TGSTRIP_PASSTHROUGH: true })
+		.env(toolchain, { TANGRAM_STRIP_PASSTHROUGH: true })
 		.then(tg.File.expect);
 	const text = await output.text;
 	tg.assert(
@@ -652,7 +652,7 @@ export async function testEmbedNonuniformWrapper() {
 				-nolibc -nostdlib -ffreestanding -fPIC -Os -static-pie \
 				-fno-asynchronous-unwind-tables -fno-stack-protector
 		`)
-		.env(toolchain, { TGLD_PASSTHROUGH: true })
+		.env(toolchain, { TANGRAM_LINKER_PASSTHROUGH: true })
 		.then(tg.File.expect);
 
 	const parsed = await elf.parse(wrapperExe);
@@ -691,7 +691,7 @@ export async function testEmbedNonuniformWrapper() {
 				--wrapper-exe ${wrapperExe} \
 				-o ${tg.output}
 		`)
-		.env(toolchain, { TGLD_PASSTHROUGH: true })
+		.env(toolchain, { TANGRAM_LINKER_PASSTHROUGH: true })
 		.then(tg.File.expect);
 
 	const output = await std
@@ -768,8 +768,8 @@ export async function testStrip() {
 	`)
 		.env(toolchain, {
 			TANGRAM_WRAPPER_TRACING: "true",
-			TGLD_TRACING: "tgld=trace",
-			TGSTRIP_TRACING: "tgstrip=trace",
+			TANGRAM_LINKER_TRACING: "tgld=trace",
+			TANGRAM_STRIP_TRACING: "tgstrip=trace",
 		});
 }
 
@@ -833,6 +833,14 @@ export async function testControls() {
 		tg.assert(tg.encoding.json.decode(await printed.text) !== undefined);
 	}
 	await check(["--tg-wrapper-suppress-args", "--tangram-wrapper-suppress-args=0", "last"], [...manifestArgs, "last"]);
+	const printed = await std.build(std.shBootstrap`
+		TANGRAM_WRAPPER_PRINT_MANIFEST=TrUe ${wrapper} > ${tg.output}
+	`).then(tg.File.expect);
+	tg.assert(tg.encoding.json.decode(await printed.text) !== undefined);
+	const traced = await std.build(std.shBootstrap`
+		TANGRAM_WRAPPER_TRACING=1 ${wrapper} > /dev/null 2> ${tg.output}
+	`).then(tg.File.expect);
+	tg.assert((await traced.text).includes("enable_tracing:1"));
 	await check(["--", "--tg-wrapper-suppress-env", ""], [...manifestArgs, "--", "--tg-wrapper-suppress-env", ""]);
 	await check(words, [...manifestArgs, ...words], { TANGRAM_SUPPRESS_ARGS: "1", TANGRAM_WRAPPER_SUPPRESS_ARGS_EXTRA: "1" });
 	for (const suffix of ["suppress-args", "suppress-env", "print-manifest", "tracing"]) {

@@ -234,7 +234,7 @@ export async function dylib(...dylibArgs: tg.Args<DylibArg>): Promise<tg.File> {
 			buildToolchain,
 			{
 				// Ensure the linker proxy is always skipped, whether or not the toolchain is proxied.
-				TGLD_PASSTHROUGH: true,
+				TANGRAM_LINKER_PASSTHROUGH: true,
 			},
 			...(arg.env !== undefined ? [arg.env] : []),
 		)

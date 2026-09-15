@@ -2762,7 +2762,7 @@ export async function argAndEnvDump(arg?: BuildAndHostArg) {
 			std.shBootstrap`${targetPrefix}cc -xc ${inspectProcessSource} -o ${tg.output}`,
 		)
 		.env(buildToolchain, {
-			TGLD_TRACING: "tgld=trace",
+			TANGRAM_LINKER_TRACING: "tgld=trace",
 			TANGRAM_WRAPPER_TRACING: "true",
 		})
 		.then(tg.File.expect);

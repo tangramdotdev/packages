@@ -33,6 +33,7 @@ pub struct Session<'a, I, S, F> {
 /// A control name without its potentially sensitive value.
 pub struct Source(String);
 
+#[derive(Clone, Copy)]
 pub enum Value<'a> {
 	Boolean(bool),
 	Text(&'a str),
