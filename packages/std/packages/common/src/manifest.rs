@@ -371,13 +371,64 @@ impl Manifest {
 		self
 	}
 
+	fn for_each_reference(
+		&self,
+		visit: &mut impl FnMut(&tg::object::Id, &tg::referent::Options),
+	) {
+		self.for_each_template(|template| visit_template_references(template, visit));
+		if let Some(env) = &self.env {
+			visit_mutation_references(env, visit);
+		}
+	}
+
+	fn for_each_template(&self, mut visit: impl FnMut(&tg::template::Data)) {
+		fn visit_all(
+			templates: &Option<Vec<tg::template::Data>>,
+			visit: &mut impl FnMut(&tg::template::Data),
+		) {
+			for template in templates.iter().flatten() {
+				visit(template);
+			}
+		}
+		visit_all(&self.args, &mut visit);
+		match &self.executable {
+			Executable::Address(_) => {},
+			Executable::Content(template) | Executable::Path(template) => visit(template),
+		}
+		match &self.interpreter {
+			Some(Interpreter::DyLd(interpreter)) => {
+				visit_all(&interpreter.library_paths, &mut visit);
+				visit_all(&interpreter.preloads, &mut visit);
+			},
+			Some(Interpreter::LdLinux(interpreter)) => {
+				visit(&interpreter.path);
+				visit_all(&interpreter.args, &mut visit);
+				visit_all(&interpreter.library_paths, &mut visit);
+				visit_all(&interpreter.preloads, &mut visit);
+			},
+			Some(Interpreter::LdMusl(interpreter)) => {
+				visit(&interpreter.path);
+				visit_all(&interpreter.args, &mut visit);
+				visit_all(&interpreter.library_paths, &mut visit);
+				visit_all(&interpreter.preloads, &mut visit);
+			},
+			Some(Interpreter::Normal(interpreter)) => {
+				visit(&interpreter.path);
+				for arg in &interpreter.args {
+					visit(arg);
+				}
+			},
+			None => {},
+		}
+	}
+
 	fn for_each_reference_mut(
 		&mut self,
 		visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
 	) {
-		self.for_each_template_mut(|template| visit_template_references(template, visit));
+		self.for_each_template_mut(|template| visit_template_references_mut(template, visit));
 		if let Some(env) = &mut self.env {
-			visit_mutation_references(env, visit);
+			visit_mutation_references_mut(env, visit);
 		}
 	}
 
@@ -515,7 +566,7 @@ impl Manifest {
 	#[must_use]
 	pub fn dependencies(&self) -> BTreeMap<tg::Reference, Option<tg::file::Dependency>> {
 		let mut dependencies = BTreeMap::new();
-		self.clone().for_each_reference_mut(&mut |id, options| {
+		self.for_each_reference(&mut |id, options| {
 			collect_reference(id, options, &mut dependencies);
 		});
 		dependencies
@@ -539,7 +590,7 @@ pub fn collect_dependencies_from_value_data(
 	value: &tg::value::Data,
 	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
-	visit_value_references(&mut value.clone(), &mut |id, options| {
+	visit_value_references(value, &mut |id, options| {
 		collect_reference(id, options, dependencies);
 	});
 }
@@ -548,7 +599,7 @@ pub fn collect_dependencies_from_template_data(
 	value: &tg::template::Data,
 	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
-	visit_template_references(&mut value.clone(), &mut |id, options| {
+	visit_template_references(value, &mut |id, options| {
 		collect_reference(id, options, dependencies);
 	});
 }
@@ -557,7 +608,7 @@ pub fn collect_dependencies_from_mutation_data(
 	value: &tg::mutation::Data,
 	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
-	visit_mutation_references(&mut value.clone(), &mut |id, options| {
+	visit_mutation_references(value, &mut |id, options| {
 		collect_reference(id, options, dependencies);
 	});
 }
@@ -581,22 +632,22 @@ fn insert_dependency(
 }
 
 fn visit_template_references(
-	template: &mut tg::template::Data,
-	visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
+	template: &tg::template::Data,
+	visit: &mut impl FnMut(&tg::object::Id, &tg::referent::Options),
 ) {
-	for component in &mut template.components {
+	for component in &template.components {
 		if let tg::template::data::Component::Artifact(artifact) = component {
-			visit(&artifact.node.clone().into(), &mut artifact.options);
+			visit(&artifact.node.clone().into(), &artifact.options);
 		}
 	}
 }
 
 fn visit_value_references(
-	value: &mut tg::value::Data,
-	visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
+	value: &tg::value::Data,
+	visit: &mut impl FnMut(&tg::object::Id, &tg::referent::Options),
 ) {
 	match value {
-		tg::value::Data::Object(object) => visit(&object.node, &mut object.options),
+		tg::value::Data::Object(object) => visit(&object.node, &object.options),
 		tg::value::Data::Template(template) => visit_template_references(template, visit),
 		tg::value::Data::Mutation(mutation) => visit_mutation_references(mutation, visit),
 		tg::value::Data::Array(values) => {
@@ -605,7 +656,7 @@ fn visit_value_references(
 			}
 		},
 		tg::value::Data::Map(values) => {
-			for value in values.values_mut() {
+			for value in values.values() {
 				visit_value_references(value, visit);
 			}
 		},
@@ -614,8 +665,8 @@ fn visit_value_references(
 }
 
 fn visit_mutation_references(
-	mutation: &mut tg::mutation::Data,
-	visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
+	mutation: &tg::mutation::Data,
+	visit: &mut impl FnMut(&tg::object::Id, &tg::referent::Options),
 ) {
 	match mutation {
 		tg::mutation::Data::Unset => {},
@@ -630,8 +681,65 @@ fn visit_mutation_references(
 		tg::mutation::Data::Prefix { template, .. }
 		| tg::mutation::Data::Suffix { template, .. } => visit_template_references(template, visit),
 		tg::mutation::Data::Merge { value } => {
-			for value in value.values_mut() {
+			for value in value.values() {
 				visit_value_references(value, visit);
+			}
+		},
+	}
+}
+
+fn visit_template_references_mut(
+	template: &mut tg::template::Data,
+	visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
+) {
+	for component in &mut template.components {
+		if let tg::template::data::Component::Artifact(artifact) = component {
+			visit(&artifact.node.clone().into(), &mut artifact.options);
+		}
+	}
+}
+
+fn visit_value_references_mut(
+	value: &mut tg::value::Data,
+	visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
+) {
+	match value {
+		tg::value::Data::Object(object) => visit(&object.node, &mut object.options),
+		tg::value::Data::Template(template) => visit_template_references_mut(template, visit),
+		tg::value::Data::Mutation(mutation) => visit_mutation_references_mut(mutation, visit),
+		tg::value::Data::Array(values) => {
+			for value in values {
+				visit_value_references_mut(value, visit);
+			}
+		},
+		tg::value::Data::Map(values) => {
+			for value in values.values_mut() {
+				visit_value_references_mut(value, visit);
+			}
+		},
+		_ => {},
+	}
+}
+
+fn visit_mutation_references_mut(
+	mutation: &mut tg::mutation::Data,
+	visit: &mut impl FnMut(&tg::object::Id, &mut tg::referent::Options),
+) {
+	match mutation {
+		tg::mutation::Data::Unset => {},
+		tg::mutation::Data::Set { value } | tg::mutation::Data::SetIfUnset { value } => {
+			visit_value_references_mut(value, visit);
+		},
+		tg::mutation::Data::Prepend { values } | tg::mutation::Data::Append { values } => {
+			for value in values {
+				visit_value_references_mut(value, visit);
+			}
+		},
+		tg::mutation::Data::Prefix { template, .. }
+		| tg::mutation::Data::Suffix { template, .. } => visit_template_references_mut(template, visit),
+		tg::mutation::Data::Merge { value } => {
+			for value in value.values_mut() {
+				visit_value_references_mut(value, visit);
 			}
 		},
 	}

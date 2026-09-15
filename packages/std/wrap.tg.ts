@@ -1137,17 +1137,21 @@ function hasTokens(object: tg.Object): boolean {
 	return Object.keys(object.state.tokens).length > 0;
 }
 
-function setManifestReference(
+/** Merge authorization into both handles and retain the first reference in the map. */
+export function setManifestReference<T extends tg.Object>(
 	references: ManifestReferences,
-	object: tg.Object,
-): void {
+	object: T,
+): T {
 	const existing = references.get(object.id);
 	if (existing === undefined) {
 		references.set(object.id, object);
 	} else {
+		tg.Object.inheritLocation(object, existing.state.location);
+		tg.Object.inheritTokens(object, existing.state.tokens);
 		tg.Object.inheritLocation(existing, object.state.location);
 		tg.Object.inheritTokens(existing, object.state.tokens);
 	}
+	return object;
 }
 
 function inheritManifestReference<T extends tg.Object>(
@@ -1157,12 +1161,7 @@ function inheritManifestReference<T extends tg.Object>(
 ): T {
 	tg.Object.inheritTokens(object, tokens ?? {});
 	if (references !== undefined) {
-		const existing = references.get(object.id);
-		if (existing !== undefined) {
-			tg.Object.inheritLocation(object, existing.state.location);
-			tg.Object.inheritTokens(object, existing.state.tokens);
-		}
-		setManifestReference(references, object);
+		return setManifestReference(references, object);
 	}
 	return object;
 }

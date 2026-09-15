@@ -325,19 +325,27 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 			continue;
 		};
 		let paths = arg.strip_prefix(prefix).unwrap();
+		let separator = match prefix {
+			"-Wl,-dynamic-linker=" => None,
+			"-Wl,-rpath," | "-Wl,-rpath-link," => Some(':'),
+			_ => unreachable!(),
+		};
 		let mut template = tg::Template::builder().string(prefix);
 		for (index, path) in paths
-			.split(|c| prefix != "-Wl,-dynamic-linker=" && c == ':')
+			.split(|c| separator == Some(c))
 			.enumerate()
 		{
 			if index > 0 {
 				template = template.string(":");
 			}
-			template = if !path.is_empty()
-				&& (!prefix.starts_with("-Wl,-rpath") || !path.contains('$'))
-				&& !path.starts_with('@')
-				&& (prefix != "-Wl,-rpath," || Path::new(path).is_absolute())
-			{
+			let should_check_in = match prefix {
+				_ if path.is_empty() || path.starts_with('@') => false,
+				"-Wl,-dynamic-linker=" => true,
+				"-Wl,-rpath," => Path::new(path).is_absolute() && !path.contains('$'),
+				"-Wl,-rpath-link," => !path.contains('$'),
+				_ => unreachable!(),
+			};
+			template = if should_check_in {
 				template.components(common::template_from_path(path).await?.components)
 			} else {
 				template.string(path)

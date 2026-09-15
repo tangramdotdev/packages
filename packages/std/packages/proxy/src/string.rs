@@ -1,11 +1,6 @@
-use tangram_client::prelude::*;
+use {std::sync::LazyLock, tangram_client::prelude::*};
 
-/// Recover embedded Tangram references without interpreting the surrounding text.
-/// Checkin supplies identity, context, and authorization for each occurrence.
-pub async fn template_from_string(
-	raw: &str,
-	mut template_from_path: impl AsyncFnMut(&str) -> tg::Result<tg::Template>,
-) -> tg::Result<tg::Template> {
+static ARTIFACT_REFERENCE_PATTERN: LazyLock<tg::Result<regex::Regex>> = LazyLock::new(|| {
 	let executable = std::env::current_exe()
 		.and_then(|path| path.canonicalize())
 		.map_err(|error| tg::error!(!error, "failed to locate the current executable"))?;
@@ -23,6 +18,16 @@ pub async fn template_from_string(
 	);
 	let pattern = regex::Regex::new(&pattern)
 		.map_err(|error| tg::error!(!error, "failed to build the artifact reference pattern"))?;
+	Ok(pattern)
+});
+
+/// Recover embedded Tangram references without interpreting the surrounding text.
+/// Checkin supplies identity, context, and authorization for each occurrence.
+pub async fn template_from_string(
+	raw: &str,
+	mut template_from_path: impl AsyncFnMut(&str) -> tg::Result<tg::Template>,
+) -> tg::Result<tg::Template> {
+	let pattern = ARTIFACT_REFERENCE_PATTERN.as_ref().map_err(Clone::clone)?;
 	let mut template = tg::Template::builder();
 	let mut end = 0;
 	for path in pattern.find_iter(raw) {

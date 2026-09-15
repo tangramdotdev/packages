@@ -260,7 +260,7 @@ fn read_options() -> tg::Result<Options> {
 		}
 
 		// Handle the library path argument.
-		if arg == "-L" || arg == "--library_path" {
+		if arg == "-L" || arg == "--library-path" {
 			if let Some(library_path) = args.next() {
 				command_args.push(library_path.clone());
 				library_paths.push(library_path);
@@ -373,13 +373,14 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	.await?;
 
 	// Check in each library directory and retain the context returned by the server.
-	let library_paths = command_line_library_path
+	let mut library_paths = command_line_library_path
 		.into_iter()
 		.chain(
 			futures::future::try_join_all(
 				options
 					.library_paths
 					.iter()
+					.unique()
 					.map(|path| checkin_library_path(path)),
 			)
 			.await?
@@ -387,6 +388,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			.flatten(),
 		)
 		.collect_vec();
+	deduplicate_library_paths(&mut library_paths);
 
 	tracing::debug!(?library_paths, "Library paths");
 
@@ -530,8 +532,12 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	Ok(())
 }
 
-// Keep the server's containing root, adding aliases for libraries whose SONAME
-// or install name differs from their filename.
+fn deduplicate_library_paths(library_paths: &mut Vec<DirectoryWithSubpath>) {
+	let mut seen = HashSet::<_, Hasher>::default();
+	library_paths.retain(|path| seen.insert((path.directory.id(), path.subpath.clone())));
+}
+
+// Keep the server's containing root, adding aliases for local libraries whose SONAME or install name differs from their filename.
 async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubpath>> {
 	if !std::path::Path::new(path).is_dir() {
 		return Ok(None);
@@ -550,11 +556,22 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 	let root = root
 		.try_unwrap_directory()
 		.map_err(|_| tg::error!("expected a containing directory"))?;
-	let prefix = subpath.clone().unwrap_or_default();
-	let mut builder: Option<tg::directory::Builder> = None;
 	let mut entries = tokio::fs::read_dir(path)
 		.await
 		.map_err(|error| tg::error!(!error, "failed to read library directory"))?;
+	if !library_path_needs_aliases(&output.artifact) {
+		if entries
+			.next_entry()
+			.await
+			.map_err(|error| tg::error!(!error, "failed to read the library directory entry"))?
+			.is_none()
+		{
+			return Ok(None);
+		}
+		return Ok(Some(dir_with_subpath_from_directory(&root, subpath).await?));
+	}
+	let prefix = subpath.clone().unwrap_or_default();
+	let mut builder: Option<tg::directory::Builder> = None;
 	while let Some(entry) = entries
 		.next_entry()
 		.await
@@ -589,6 +606,16 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 	}
 	let root = builder.map_or(root, tg::directory::Builder::build);
 	Ok(Some(dir_with_subpath_from_directory(&root, subpath).await?))
+}
+
+fn library_path_needs_aliases(referent: &tg::Referent<tg::artifact::Id>) -> bool {
+	// Checkin returns an absolute source path for local directories and a relative subpath or no path for store artifacts.
+	referent.options.id.is_none()
+		&& referent
+			.options
+			.path
+			.as_ref()
+			.is_some_and(|path| path.is_absolute())
 }
 
 fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {
@@ -648,11 +675,6 @@ async fn create_manifest(
 		tracing::trace!(?library_paths, "Library paths");
 
 		if let Some((path, interpreter_flavor)) = config {
-			let path = if interpreter_flavor == InterpreterFlavor::Dyld {
-				None
-			} else {
-				Some(common::template_from_path(&path).await?.to_data())
-			};
 			let preloads = if let Some(path) = &options.injection_path {
 				Some(vec![common::template_from_path(path).await?.to_data()])
 			} else {
@@ -679,22 +701,28 @@ async fn create_manifest(
 						preloads,
 					},
 				)),
-				InterpreterFlavor::Gnu => Some(common::manifest::Interpreter::LdLinux(
-					common::manifest::LdLinuxInterpreter {
-						path: path.unwrap(),
-						library_paths,
-						preloads,
-						args,
-					},
-				)),
-				InterpreterFlavor::Musl => Some(common::manifest::Interpreter::LdMusl(
-					common::manifest::LdMuslInterpreter {
-						path: path.unwrap(),
-						library_paths,
-						preloads,
-						args,
-					},
-				)),
+				InterpreterFlavor::Gnu => {
+					let path = common::template_from_path(&path).await?.to_data();
+					Some(common::manifest::Interpreter::LdLinux(
+						common::manifest::LdLinuxInterpreter {
+							args,
+							library_paths,
+							path,
+							preloads,
+						},
+					))
+				},
+				InterpreterFlavor::Musl => {
+					let path = common::template_from_path(&path).await?.to_data();
+					Some(common::manifest::Interpreter::LdMusl(
+						common::manifest::LdMuslInterpreter {
+							args,
+							library_paths,
+							path,
+							preloads,
+						},
+					))
+				},
 			}
 		} else {
 			// There was no interpreter specified. We are likely a statically linked executable.
@@ -1130,13 +1158,19 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 			{
 				continue;
 			}
-			if !tokio::fs::try_exists(path.join(&library_name))
+			let library_path = path.join(&library_name);
+			if !tokio::fs::try_exists(&library_path)
 				.await
 				.unwrap_or(false)
 			{
 				continue;
 			}
-			let output = common::checkin_path(path.join(&library_name)).await?;
+			let mut output = common::checkin_path(&library_path).await?;
+			if matches!(output.artifact.node, tg::artifact::Id::Symlink(_)) {
+				let target = std::fs::canonicalize(&library_path)
+					.map_err(|error| tg::error!(!error, "failed to resolve the library symlink"))?;
+				output = common::checkin_path(target).await?;
+			}
 			let artifact = tg::Artifact::with_referent(output.artifact);
 			let Ok(found_library) = artifact.try_unwrap_file() else {
 				continue;
@@ -1405,7 +1439,93 @@ impl DirectoryWithSubpath {
 
 #[cfg(test)]
 mod tests {
-	use super::{AnalyzeOutputFileOutput, InterpreterRequirement, analyze_output_file};
+	use {
+		super::{
+			AnalyzeOutputFileOutput, DirectoryWithSubpath, InterpreterRequirement, analyze_output_file,
+			deduplicate_library_paths, library_path_needs_aliases,
+		},
+		tangram_client::prelude::*,
+	};
+
+	#[test]
+	fn alias_scans_are_limited_to_local_checkins() {
+		let id = tg::directory::Id::new(b"library directory");
+		let root = tg::directory::Id::new(b"containing directory");
+		let mut referent = tg::Referent::with_node(id.into());
+		assert!(!library_path_needs_aliases(&referent));
+		referent.options.id = Some(root.into());
+		referent.options.path = Some("lib".into());
+		assert!(!library_path_needs_aliases(&referent));
+		referent.options.id = None;
+		referent.options.path = Some("/work/libraries".into());
+		assert!(library_path_needs_aliases(&referent));
+	}
+
+	#[test]
+	fn library_paths_keep_the_first_handle_and_search_order() {
+		let first = tg::Directory::with_id(tg::directory::Id::new(b"first"));
+		let duplicate = tg::Directory::with_id(first.id());
+		let second = tg::Directory::with_id(tg::directory::Id::new(b"second"));
+		for (directory, expires_at) in [(&first, 100), (&duplicate, 200)] {
+			let token = tg::authorization::Token {
+				body: tg::authorization::Body {
+					expires_at,
+					permissions: vec![tg::authorization::Permission::Object(
+						tg::authorization::permission::object::Permission::Subtree,
+					)],
+					resource: directory.id().into(),
+				},
+				metadata: tg::authorization::Metadata {
+					algorithm: tg::authorization::Algorithm::Ed25519,
+					key: "test".into(),
+				},
+				signature: vec![0; 64],
+			};
+			directory
+				.state()
+				.set_tokens(tg::authorization::Tokens::with_local([token]));
+		}
+		let mut paths = vec![
+			DirectoryWithSubpath {
+				directory: first.clone(),
+				subpath: Some("lib".into()),
+			},
+			DirectoryWithSubpath {
+				directory: second.clone(),
+				subpath: Some("lib".into()),
+			},
+			DirectoryWithSubpath {
+				directory: duplicate,
+				subpath: Some("lib".into()),
+			},
+			DirectoryWithSubpath {
+				directory: first.clone(),
+				subpath: Some("lib64".into()),
+			},
+			DirectoryWithSubpath {
+				directory: first.clone(),
+				subpath: None,
+			},
+			DirectoryWithSubpath {
+				directory: first.clone(),
+				subpath: None,
+			},
+		];
+		deduplicate_library_paths(&mut paths);
+		assert_eq!(
+			paths
+				.iter()
+				.map(|path| (path.directory.id(), path.subpath.clone()))
+				.collect::<Vec<_>>(),
+			vec![
+				(first.id(), Some("lib".into())),
+				(second.id(), Some("lib".into())),
+				(first.id(), Some("lib64".into())),
+				(first.id(), None),
+			],
+		);
+		assert_eq!(paths[0].directory.state().tokens(), first.state().tokens());
+	}
 
 	#[tokio::test]
 	async fn read_output_files() {
