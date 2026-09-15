@@ -8,6 +8,8 @@ pub use env::environment_value;
 pub use interpreter::interpreter_args;
 pub use string::template_from_string;
 
+pub mod options;
+
 /// Interpret server-provided context; never extract artifact IDs from store paths.
 pub fn artifact_path(
 	referent: &tg::Referent<tg::artifact::Id>,
