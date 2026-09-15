@@ -1113,8 +1113,9 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 				.as_deref()
 				.unwrap_or(std::path::Path::new(""))
 				.join(&library_name);
-			let Some(tg::Artifact::File(found_library)) =
-				dir_with_subpath.directory.try_get(path).await?
+			// Discovery is best-effort; final verification applies disallow_missing.
+			let Ok(Some(tg::Artifact::File(found_library))) =
+				dir_with_subpath.directory.try_get(path).await
 			else {
 				continue;
 			};
@@ -1373,11 +1374,53 @@ mod tests {
 	use {
 		super::{
 			AnalyzeOutputFileOutput, DirectoryWithSubpath, InterpreterRequirement,
-			analyze_output_file, deduplicate_library_paths, library_path_needs_aliases,
-			verify_missing_libraries,
+			LibraryPathStrategy, analyze_output_file, deduplicate_library_paths,
+			library_path_needs_aliases, optimize_library_paths, verify_missing_libraries,
 		},
 		tangram_client::prelude::*,
 	};
+
+	#[tokio::test]
+	async fn absolute_library_dependencies_remain_unresolved() {
+		tg::init().unwrap();
+		let file = tg::File::with_contents("library");
+		let directory =
+			tg::Directory::with_entries([("libexample.so".to_owned(), file.clone().into())].into());
+		for strategy in [
+			LibraryPathStrategy::Filter,
+			LibraryPathStrategy::Resolve,
+			LibraryPathStrategy::Isolate,
+			LibraryPathStrategy::Combine,
+		] {
+			for disallow_missing in [false, true] {
+				let mut needed =
+					std::collections::HashMap::from([("/external/libexample.so".to_owned(), None)]);
+				let result = optimize_library_paths(
+					&file,
+					vec![DirectoryWithSubpath {
+						directory: directory.clone(),
+						subpath: None,
+					}],
+					&mut needed,
+					strategy,
+					16,
+					disallow_missing,
+				)
+				.await;
+				if disallow_missing {
+					assert!(
+						result
+							.unwrap_err()
+							.to_string()
+							.contains("could not find required libraries")
+					);
+				} else {
+					assert!(result.unwrap().is_empty());
+				}
+				assert!(needed["/external/libexample.so"].is_none());
+			}
+		}
+	}
 
 	#[tokio::test]
 	async fn library_verification_checks_all_matching_names() {
