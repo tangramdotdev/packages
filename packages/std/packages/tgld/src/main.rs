@@ -176,7 +176,9 @@ fn read_options() -> tg::Result<Options> {
 			command_args.push(arg);
 			for arg in args {
 				if is_library_candidate(&arg) {
-					additional_library_candidate_paths.push(PathBuf::from(&arg));
+					if let Ok(canonical_path) = std::fs::canonicalize(&arg) {
+						additional_library_candidate_paths.push(canonical_path);
+					}
 				}
 				command_args.push(arg);
 			}
@@ -294,7 +296,10 @@ fn read_options() -> tg::Result<Options> {
 
 		// Add any dynamic libraries passed directly to the linker.
 		if is_library_candidate(&arg) {
-			additional_library_candidate_paths.push(PathBuf::from(&arg));
+			// If the path can't be canonicalized, do nothing - it's not a valid library candidate.
+			if let Ok(canonical_path) = std::fs::canonicalize(&arg) {
+				additional_library_candidate_paths.push(canonical_path);
+			}
 		}
 	}
 

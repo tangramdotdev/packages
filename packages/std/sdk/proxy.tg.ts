@@ -1341,7 +1341,7 @@ export async function testSamePrefix(target?: string) {
 	return output;
 }
 
-/** This test checks that the less-common case of linking against a library in the working directory by name instead of library path still works post-install. */
+/** This test checks that linking directly against a library symlink in the working directory still works post-install. */
 export async function testSamePrefixDirect(target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
@@ -1380,8 +1380,9 @@ export async function testSamePrefixDirect(target?: string) {
 			mkdir -p .libs
 			cd .libs
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o libgreet.${dylibExt}
+			ln -s libgreet.${dylibExt} libgreet-link.${dylibExt}
 			cd ../.bins
-			cc -v ../.libs/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o ${tg.output}
+			cc -v ../.libs/libgreet-link.${dylibExt} -I${source} -xc ${source}/main.c -o ${tg.output}
 			`)
 		.env(
 			std.env.compose(testSDK, {
