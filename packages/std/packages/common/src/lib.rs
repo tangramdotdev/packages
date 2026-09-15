@@ -11,29 +11,6 @@ pub mod tracing;
 
 pub mod error;
 
-/// Interpret a [`tg::Template`] as its corresponding [`tg::Symlink`].
-pub fn template_to_symlink(template: &tg::Template) -> tg::Result<tg::Symlink> {
-	use tg::template::Component;
-	match template.components() {
-		[Component::String(s)] => Ok(tg::Symlink::with_path(s.into())),
-		[Component::Artifact(artifact)] | [Component::String(_), Component::Artifact(artifact)] => {
-			Ok(tg::Symlink::with_artifact(artifact.clone()))
-		},
-		[Component::Artifact(artifact), Component::String(s)]
-		| [
-			Component::String(_),
-			Component::Artifact(artifact),
-			Component::String(s),
-		] => Ok(tg::Symlink::with_artifact_and_path(
-			artifact.clone(),
-			s.chars().skip(1).collect::<String>().into(),
-		)),
-		components => Err(tg::error!(
-			"expected a template with 1-3 components, got {components:?}"
-		)),
-	}
-}
-
 /// Get a template with a single artifact component.
 #[must_use]
 pub fn template_from_artifact(artifact: tg::Artifact) -> tg::Template {

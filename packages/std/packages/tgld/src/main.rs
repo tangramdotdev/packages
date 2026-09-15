@@ -567,7 +567,10 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 		.try_unwrap_directory()
 		.map_err(|_| tg::error!("expected a containing directory"))?;
 	if !library_path_needs_aliases(&output.artifact) {
-		return Ok(Some(dir_with_subpath_from_directory(&root, subpath).await?));
+		return Ok(Some(DirectoryWithSubpath {
+			directory: root,
+			subpath,
+		}));
 	}
 	// Start a fresh scan so the emptiness check does not consume the first entry.
 	let mut entries = tokio::fs::read_dir(path)
@@ -608,7 +611,10 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 		builder = Some(current.add(&prefix.join(name), alias.into()).await?);
 	}
 	let root = builder.map_or(root, tg::directory::Builder::build);
-	Ok(Some(dir_with_subpath_from_directory(&root, subpath).await?))
+	Ok(Some(DirectoryWithSubpath {
+		directory: root,
+		subpath,
+	}))
 }
 
 fn library_path_needs_aliases(referent: &tg::Referent<tg::artifact::Id>) -> bool {
@@ -829,8 +835,10 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 		None
 	} else {
 		let directory = tg::Directory::with_entries(entries);
-		let dir_with_subpath = dir_with_subpath_from_directory(&directory, None).await?;
-		Some(dir_with_subpath)
+		Some(DirectoryWithSubpath {
+			directory,
+			subpath: None,
+		})
 	};
 	Ok(result)
 }
@@ -865,11 +873,8 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 		return Ok(library_paths);
 	}
 
-	// Check out the library paths before searching their filesystem entries.
-	let checkouts = checkout_library_paths(&library_paths).await?;
-
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
-	find_transitive_needed_libraries(file, &checkouts, needed_libraries, max_depth, 0).await?;
+	find_transitive_needed_libraries(file, &library_paths, needed_libraries, max_depth, 0).await?;
 	tracing::debug!(?needed_libraries, "post-find");
 
 	let filtered_library_paths = library_paths
@@ -938,8 +943,10 @@ async fn isolate_library_paths<H: BuildHasher + Default>(
 		let mut entries = BTreeMap::new();
 		entries.insert(name.clone(), artifact);
 		let directory = tg::Directory::with_entries(entries);
-		let dir_with_subpath = dir_with_subpath_from_directory(&directory, None).await?;
-		isolated_library_paths.push(dir_with_subpath);
+		isolated_library_paths.push(DirectoryWithSubpath {
+			directory,
+			subpath: None,
+		});
 	}
 
 	Ok(isolated_library_paths)
@@ -959,39 +966,10 @@ async fn combine_library_paths<H: BuildHasher + Default>(
 		return Ok(Vec::new());
 	}
 	let directory = tg::Directory::with_entries(entries);
-	let dir_with_subpath = dir_with_subpath_from_directory(&directory, None).await?;
-	Ok(vec![dir_with_subpath])
-}
-
-/// Check out library paths and return their filesystem paths.
-async fn checkout_library_paths(
-	library_paths: &[DirectoryWithSubpath],
-) -> tg::Result<Vec<(DirectoryWithSubpath, PathBuf)>> {
-	if library_paths.is_empty() {
-		return Ok(Vec::new());
-	}
-	let artifacts = library_paths
-		.iter()
-		.map(|path| path.directory.clone().into())
-		.collect();
-	let paths = common::checkout_artifacts(artifacts).await?;
-	if paths.len() != library_paths.len() {
-		return Err(tg::error!("expected one checkout path per library root"));
-	}
-	let checkouts = library_paths
-		.iter()
-		.cloned()
-		.zip(paths)
-		.map(|(library_path, path)| {
-			let path = match &library_path.subpath {
-				Some(subpath) => path.join(subpath),
-				None => path,
-			};
-			(library_path, path)
-		})
-		.collect();
-
-	Ok(checkouts)
+	Ok(vec![DirectoryWithSubpath {
+		directory,
+		subpath: None,
+	}])
 }
 
 /// Produce the set of library paths to be written to the wrapper post-optimization.
@@ -1000,10 +978,8 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	library_paths: Vec<DirectoryWithSubpath>,
 	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
 ) -> tg::Result<Vec<DirectoryWithSubpath>> {
-	let checkouts = checkout_library_paths(&library_paths).await?;
-
 	// Warn or error if any required libraries are not included in the set.
-	verify_missing_libraries(disallow_missing, needed_libraries, &checkouts).await?;
+	verify_missing_libraries(disallow_missing, needed_libraries, &library_paths).await?;
 	Ok(library_paths)
 }
 
@@ -1011,9 +987,8 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 async fn verify_missing_libraries<H: BuildHasher + Default>(
 	disallow_missing: bool,
 	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
-	checkouts: &[(DirectoryWithSubpath, PathBuf)],
+	library_paths: &[DirectoryWithSubpath],
 ) -> tg::Result<()> {
-	let mut found_libraries = HashSet::default();
 	let basename = |library_name: &str| -> tg::Result<String> {
 		let res = std::path::Path::new(&library_name)
 			.file_stem()
@@ -1022,34 +997,17 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 		Ok(res.to_owned())
 	};
 
-	// Read from the checkouts to avoid loading the directories again.
-	let futures = checkouts.iter().map(|(library_path, path)| async move {
-		let mut read_dir = tokio::fs::read_dir(path).await.map_err(
-			|error| tg::error!(!error, directory = %library_path.directory.id(), path = %path.display(), "failed to read the checked out library path"),
-		)?;
-		let mut names = Vec::new();
-		while let Some(entry) = read_dir.next_entry().await.map_err(
-			|error| tg::error!(!error, path = %path.display(), "failed to read the library path's entries"),
-		)? {
-			names.push(entry.file_name().to_string_lossy().into_owned());
-		}
-		Ok::<_, tg::Error>(names)
+	let futures = library_paths.iter().map(|library_path| async move {
+		let directory = library_path.resolve().await?;
+		Ok::<_, tg::Error>(directory.entries().await?.into_keys().collect_vec())
 	});
 	let entries = futures::future::try_join_all(futures).await?;
 
-	for library in needed_libraries.keys() {
-		// For this check, we just care about the basename.
-		let library_basename = basename(library)?;
-		for names in &entries {
-			for name in names {
-				if name.starts_with(&library_basename) {
-					let found_library_basename = basename(name)?;
-					found_libraries.insert(found_library_basename);
-					break;
-				}
-			}
-		}
-	}
+	let found_libraries: HashSet<String, H> = entries
+		.iter()
+		.flatten()
+		.map(|name| basename(name))
+		.collect::<tg::Result<_>>()?;
 	let needed_library_names: HashSet<String, H> = needed_libraries
 		.keys()
 		.map(|lib| basename(lib))
@@ -1064,10 +1022,6 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 		.difference(&found_libraries)
 		.collect_vec();
 	if !missing_libs.is_empty() {
-		let library_paths = checkouts
-			.iter()
-			.map(|(library_path, _)| library_path)
-			.collect_vec();
 		if disallow_missing {
 			return Err(tg::error!(
 				?library_paths,
@@ -1089,8 +1043,11 @@ async fn resolve_directories(
 ) -> tg::Result<Vec<DirectoryWithSubpath>> {
 	futures::future::try_join_all(unresolved_paths.iter().map(|dir_with_subpath| async {
 		if dir_with_subpath.subpath.is_some() {
-			let inner = dir_with_subpath.resolve().await?;
-			dir_with_subpath_from_directory(&inner, None).await
+			let directory = dir_with_subpath.resolve().await?;
+			Ok(DirectoryWithSubpath {
+				directory,
+				subpath: None,
+			})
 		} else {
 			Ok(dir_with_subpath.clone())
 		}
@@ -1101,7 +1058,7 @@ async fn resolve_directories(
 /// Recursively find all needed libraries for an executable.
 async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync>(
 	file: &tg::File,
-	library_paths: &[(DirectoryWithSubpath, PathBuf)],
+	library_paths: &[DirectoryWithSubpath],
 	all_needed_libraries: &mut HashMap<String, Option<DirectoryWithSubpath>, H>,
 	max_depth: usize,
 	depth: usize,
@@ -1133,7 +1090,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 		return Ok(());
 	}
 
-	for (dir_with_subpath, path) in library_paths {
+	for dir_with_subpath in library_paths {
 		tracing::trace!(?dir_with_subpath, "Checking directory for libraries.");
 
 		let names = all_needed_libraries
@@ -1151,18 +1108,14 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 			{
 				continue;
 			}
-			let library_path = path.join(&library_name);
-			if !tokio::fs::try_exists(&library_path).await.unwrap_or(false) {
-				continue;
-			}
-			let mut output = common::checkin_path(&library_path).await?;
-			if matches!(output.artifact.node, tg::artifact::Id::Symlink(_)) {
-				let target = std::fs::canonicalize(&library_path)
-					.map_err(|error| tg::error!(!error, "failed to resolve the library symlink"))?;
-				output = common::checkin_path(target).await?;
-			}
-			let artifact = tg::Artifact::with_referent(output.artifact);
-			let Ok(found_library) = artifact.try_unwrap_file() else {
+			let path = dir_with_subpath
+				.subpath
+				.as_deref()
+				.unwrap_or(std::path::Path::new(""))
+				.join(&library_name);
+			let Some(tg::Artifact::File(found_library)) =
+				dir_with_subpath.directory.try_get(path).await?
+			else {
 				continue;
 			};
 			let found_library_id = found_library.id();
@@ -1395,18 +1348,6 @@ async fn bytes_from_path(path: impl AsRef<std::path::Path>) -> tg::Result<Vec<u8
 	Ok(bytes)
 }
 
-/// Get a [`DirectoryWithSubpath`] from a [`tg::Directory`] handle.
-pub async fn dir_with_subpath_from_directory(
-	directory: &tg::Directory,
-	subpath: Option<PathBuf>,
-) -> tg::Result<DirectoryWithSubpath> {
-	directory.store().await?;
-	Ok(DirectoryWithSubpath {
-		directory: directory.clone(),
-		subpath,
-	})
-}
-
 #[derive(Clone, Debug)]
 pub struct DirectoryWithSubpath {
 	directory: tg::Directory,
@@ -1433,9 +1374,41 @@ mod tests {
 		super::{
 			AnalyzeOutputFileOutput, DirectoryWithSubpath, InterpreterRequirement,
 			analyze_output_file, deduplicate_library_paths, library_path_needs_aliases,
+			verify_missing_libraries,
 		},
 		tangram_client::prelude::*,
 	};
+
+	#[tokio::test]
+	async fn library_verification_checks_all_matching_names() {
+		tg::init().unwrap();
+		let file = tg::File::with_contents("library");
+		let libraries = tg::Directory::with_entries(
+			[
+				("libleaf-real.so".to_owned(), file.into()),
+				(
+					"libleaf.so".to_owned(),
+					tg::Symlink::with_path("libleaf-real.so".into()).into(),
+				),
+			]
+			.into(),
+		);
+		let root = tg::Directory::with_entries([("lib".to_owned(), libraries.into())].into());
+		let paths = [DirectoryWithSubpath {
+			directory: root,
+			subpath: Some("lib".into()),
+		}];
+		let mut needed = std::collections::HashMap::from([("libleaf.so".to_owned(), None)]);
+		verify_missing_libraries(true, &needed, &paths)
+			.await
+			.unwrap();
+		needed.insert("libmissing.so".to_owned(), None);
+		assert!(
+			verify_missing_libraries(true, &needed, &paths)
+				.await
+				.is_err()
+		);
+	}
 
 	#[test]
 	fn alias_scans_are_limited_to_local_checkins() {

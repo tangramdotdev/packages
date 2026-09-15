@@ -20,15 +20,17 @@ pub async fn run() -> tg::Result<()> {
 	let crate_name = std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "unknown".into());
 
 	let output = outer::checkin(Path::new(&script_binary)).await?;
-	let script_artifact = tg::Artifact::with_referent(output.artifact)
+	let mut script_artifact = tg::Artifact::with_referent(output.artifact)
 		.try_unwrap_file()
 		.map_err(|_| tg::error!("expected a build script file"))?;
-	// Retain the executable flag enforced by the previous byte-copy path.
-	let script_artifact = tg::File::builder()
-		.contents(script_artifact.contents().await?)
-		.dependencies(script_artifact.dependencies().await?)
-		.executable(true)
-		.build()?;
+	// Checkin preserves permissions. Keep supporting inputs without an executable bit.
+	if !script_artifact.executable().await? {
+		script_artifact = tg::File::builder()
+			.contents(script_artifact.contents().await?)
+			.dependencies(script_artifact.dependencies().await?)
+			.executable(true)
+			.build()?;
+	}
 	let script_artifact = tg::Artifact::from(script_artifact);
 	let script_template =
 		tg::Template::with_components([tg::template::Component::Artifact(script_artifact)]);
