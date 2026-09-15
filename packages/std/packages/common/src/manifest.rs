@@ -2,226 +2,75 @@ use std::{
 	collections::BTreeMap,
 	os::unix::fs::PermissionsExt,
 	path::{Path, PathBuf},
-	sync::LazyLock,
 };
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
 use crate::checkout_artifact;
 
-/// The Tangram run entrypoint manifest.
-#[derive(
-	Clone,
-	Debug,
-	serde::Serialize,
-	serde::Deserialize,
-	tangram_serialize::Serialize,
-	tangram_serialize::Deserialize,
-)]
-pub struct Manifest {
-	/// The interpreter for the executable.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[tangram_serialize(id = 0, skip_serializing_if = "Option::is_none")]
-	pub interpreter: Option<Interpreter>,
+mod data;
+mod resolve;
 
-	/// The executable to run.
-	#[tangram_serialize(id = 1)]
-	pub executable: Executable,
+#[cfg(test)]
+mod tests;
 
-	/// The environment variable mutations to apply.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[tangram_serialize(id = 2, skip_serializing_if = "Option::is_none")]
-	pub env: Option<tg::mutation::Data>,
-
-	/// The command line arguments to pass to the executable.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[tangram_serialize(id = 3, skip_serializing_if = "Option::is_none")]
-	pub args: Option<Vec<tg::template::Data>>,
-}
-
-/// An interpreter is another program that is used to launch the executable.
-#[derive(
-	Clone,
-	Debug,
-	serde::Serialize,
-	serde::Deserialize,
-	tangram_serialize::Serialize,
-	tangram_serialize::Deserialize,
-)]
-#[serde(tag = "kind")]
-pub enum Interpreter {
-	/// A normal interpreter.
-	#[serde(rename = "normal")]
-	#[tangram_serialize(id = 0)]
-	Normal(NormalInterpreter),
-
-	/// An ld-linux interpreter.
-	#[serde(rename = "ld-linux")]
-	#[tangram_serialize(id = 1)]
-	LdLinux(LdLinuxInterpreter),
-
-	/// An ld-musl interpreter.
-	#[serde(rename = "ld-musl")]
-	#[tangram_serialize(id = 2)]
-	LdMusl(LdMuslInterpreter),
-
-	// A dyld interpreter.
-	#[serde(rename = "dyld")]
-	#[tangram_serialize(id = 3)]
-	DyLd(DyLdInterpreter),
-}
-
-impl Interpreter {
-	#[must_use]
-	pub fn is_dynamic(&self) -> bool {
-		matches!(
-			self,
-			Interpreter::LdLinux(_) | Interpreter::LdMusl(_) | Interpreter::DyLd(_)
-		)
-	}
-}
-
-#[derive(
-	Clone,
-	Debug,
-	serde::Serialize,
-	serde::Deserialize,
-	tangram_serialize::Serialize,
-	tangram_serialize::Deserialize,
-)]
-pub struct NormalInterpreter {
-	/// The path to the file to exec.
-	#[tangram_serialize(id = 0)]
-	pub path: tg::template::Data,
-
-	/// Arguments for the interpreter.
-	#[tangram_serialize(id = 1)]
-	pub args: Vec<tg::template::Data>,
-}
-
-#[derive(
-	Clone,
-	Debug,
-	serde::Serialize,
-	serde::Deserialize,
-	tangram_serialize::Serialize,
-	tangram_serialize::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-pub struct LdLinuxInterpreter {
-	/// The path to ld-linux.so.
-	#[tangram_serialize(id = 0)]
-	pub path: tg::template::Data,
-
-	/// The paths for the `--library-path` argument.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[tangram_serialize(id = 1, skip_serializing_if = "Option::is_none")]
-	pub library_paths: Option<Vec<tg::template::Data>>,
-
-	/// The paths for the `--preload` argument.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[tangram_serialize(id = 2, skip_serializing_if = "Option::is_none")]
-	pub preloads: Option<Vec<tg::template::Data>>,
-
-	/// Any additional arguments.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[tangram_serialize(id = 3, skip_serializing_if = "Option::is_none")]
-	pub args: Option<Vec<tg::template::Data>>,
-}
-
-#[derive(
-	Clone,
-	Debug,
-	serde::Serialize,
-	serde::Deserialize,
-	tangram_serialize::Serialize,
-	tangram_serialize::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-pub struct LdMuslInterpreter {
-	/// The path to ld-linux.so.
-	#[tangram_serialize(id = 0)]
-	pub path: tg::template::Data,
-
-	/// The paths for the `--library-path` argument.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[tangram_serialize(id = 1, skip_serializing_if = "Option::is_none")]
-	pub library_paths: Option<Vec<tg::template::Data>>,
-
-	/// The paths for the `--preload` argument.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[tangram_serialize(id = 2, skip_serializing_if = "Option::is_none")]
-	pub preloads: Option<Vec<tg::template::Data>>,
-
-	/// Any additional arguments.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[tangram_serialize(id = 3, skip_serializing_if = "Option::is_none")]
-	pub args: Option<Vec<tg::template::Data>>,
-}
-
-#[derive(
-	Clone,
-	Debug,
-	serde::Serialize,
-	serde::Deserialize,
-	tangram_serialize::Serialize,
-	tangram_serialize::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-pub struct DyLdInterpreter {
-	/// The paths for the `DYLD_LIBRARY_PATH` environment variable.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[tangram_serialize(id = 0, skip_serializing_if = "Option::is_none")]
-	pub library_paths: Option<Vec<tg::template::Data>>,
-
-	/// The paths for the `DYLD_INSERT_LIBRARIES` environment variable.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[tangram_serialize(id = 1, skip_serializing_if = "Option::is_none")]
-	pub preloads: Option<Vec<tg::template::Data>>,
-}
-
-/// An executable launched by the entrypoint.
-#[derive(
-	Clone,
-	Debug,
-	serde::Serialize,
-	serde::Deserialize,
-	tangram_serialize::Serialize,
-	tangram_serialize::Deserialize,
-)]
-#[serde(rename_all = "camelCase", tag = "kind", content = "value")]
-pub enum Executable {
-	/// A path to an executable file.
-	#[tangram_serialize(id = 0)]
-	Path(tg::template::Data),
-
-	/// A script which will be rendered to a file and interpreted.
-	#[tangram_serialize(id = 1)]
-	Content(tg::template::Data),
-
-	/// A virtual address.
-	#[tangram_serialize(id = 2)]
-	Address(u64),
-}
+/// The working manifest retains Tangram handles until serialization.
+pub type Manifest = data::Manifest<tg::Template, tg::Mutation>;
+pub type Interpreter = data::Interpreter<tg::Template>;
+pub type NormalInterpreter = data::NormalInterpreter<tg::Template>;
+pub type LdLinuxInterpreter = data::LdLinuxInterpreter<tg::Template>;
+pub type LdMuslInterpreter = data::LdMuslInterpreter<tg::Template>;
+pub type DyLdInterpreter = data::DyLdInterpreter<tg::Template>;
+pub type Executable = data::Executable<tg::Template>;
 
 impl Manifest {
 	/// Read a manifest from the end of the given `[tg::File]`.
 	pub async fn read_from_file(file: tg::File) -> tg::Result<Option<Self>> {
 		tracing::debug!(?file, "Reading manifest from file");
-		let path = checkout_artifact(file.id().into())
+		let path = checkout_artifact(file.clone().into())
 			.await
 			.map_err(|error| tg::error!(!error, "failed to check out the file"))?;
-		tokio::task::spawn_blocking(move || Self::read_from_path(path))
+		let mut manifest = tokio::task::spawn_blocking(move || Self::read_from_path(path))
 			.await
 			.map_err(|error| tg::error!(!error, "failed to read the manifest"))?
-			.map_err(|error| tg::error!(!error, "failed to read the manifest"))
+			.map_err(|error| tg::error!(!error, "failed to read the manifest"))?;
+		if let Some(manifest) = &mut manifest {
+			manifest.resolve_from_file(&file).await?;
+		}
+		Ok(manifest)
 	}
 
-	/// Read a manifest from the end of the file at the given path.
+	/// Read manifest bytes only. Use `read_from_file` or `resolve_from_file` before rebuilding a wrapper.
 	pub fn read_from_path(path: impl AsRef<Path>) -> std::io::Result<Option<Self>> {
 		let path = path.as_ref();
 		tracing::debug!(path = %path.display(), "Reading manifest from path");
-		Ok(wrap::read_manifest(path, None).manifest)
+		wrap::read_manifest::<data::Data>(path, None)
+			.manifest
+			.map(Self::try_from_data)
+			.transpose()
+			.map_err(std::io::Error::other)
+	}
+
+	/// Reconnect manifest references to the wrapper's dependency handles.
+	pub async fn resolve_from_file(&mut self, file: &tg::File) -> tg::Result<()> {
+		let dependencies = file.dependencies().await?;
+		let objects = dependencies
+			.values()
+			.flatten()
+			.filter_map(|dependency| dependency.0.node.clone())
+			.map(|object| (object.id(), object))
+			.collect();
+		*self = self.clone().try_map(
+			|mut template| {
+				resolve::template(&mut template, &objects)?;
+				Ok::<_, tg::Error>(template)
+			},
+			|mut mutation| {
+				resolve::mutation(&mut mutation, &objects)?;
+				Ok(mutation)
+			},
+		)?;
+		Ok(())
 	}
 
 	#[allow(clippy::too_many_lines)]
@@ -230,21 +79,21 @@ impl Manifest {
 		tracing::debug!(?self, "Embedding manifest");
 
 		// Get the paths of the required files.
-		let wrapper_exe = TANGRAM_WRAPPER_EXE_PATH
-			.as_ref()
+		let wrapper_exe = std::env::var_os("TANGRAM_WRAPPER_EXE_PATH")
+			.map(PathBuf::from)
 			.ok_or_else(|| tg::error!("missing wrapper exe"))?;
-		let objcopy = TANGRAM_OBJCOPY_PATH.as_ref();
+		let objcopy = std::env::var_os("TANGRAM_OBJCOPY_PATH").map(PathBuf::from);
 
 		// Check out the input file, which is not a dependency of this executable, to get its path on
 		// disk.
-		let input = checkout_artifact(file.id().into())
+		let input = checkout_artifact(file.clone().into())
 			.await
 			.map_err(|error| tg::error!(!error, "failed to check out the input file"))?;
 
 		// Provide the context to wrap.
-		wrap::set_wrapper_exe_path(wrapper_exe.clone());
+		wrap::set_wrapper_exe_path(wrapper_exe);
 		if let Some(objcopy) = objcopy {
-			wrap::set_objcopy_path(objcopy.clone());
+			wrap::set_objcopy_path(objcopy);
 		}
 
 		// Copy the input file to a a temp.
@@ -259,7 +108,7 @@ impl Manifest {
 
 		// Embed the wrapper.
 		tokio::task::spawn_blocking({
-			let manifest = self.clone();
+			let manifest = self.to_data();
 			let output = tempfile.path().to_owned();
 			move || wrap::embed(output, &manifest, None)
 		})
@@ -275,8 +124,7 @@ impl Manifest {
 			Ok(Some(wrap::Format::Mach64))
 		) {
 			tracing::info!("codesigning binary");
-			let codesign = TANGRAM_CODESIGN_PATH
-				.as_ref()
+			let codesign = std::env::var_os("TANGRAM_CODESIGN_PATH")
 				.ok_or_else(|| tg::error!("missing the codesign binary"))?;
 			let output = tokio::process::Command::new(codesign)
 				.arg("sign")
@@ -327,9 +175,47 @@ impl Manifest {
 		Ok(output_file)
 	}
 
-	pub fn write_to_path(&self, path: &Path) -> tg::Result<()> {
-		wrap::write_manifest(path, self, None);
-		Ok(())
+	pub fn write_to_path(&self, path: &Path) {
+		let manifest = self.to_data();
+		wrap::write_manifest(path, &manifest, None);
+	}
+
+	fn for_each_template(&self, mut visit: impl FnMut(&tg::Template)) {
+		fn visit_all(templates: Option<&[tg::Template]>, visit: &mut impl FnMut(&tg::Template)) {
+			for template in templates.into_iter().flatten() {
+				visit(template);
+			}
+		}
+		visit_all(self.args.as_deref(), &mut visit);
+		match &self.executable {
+			Executable::Address(_) => {},
+			Executable::Content(template) | Executable::Path(template) => visit(template),
+		}
+		match &self.interpreter {
+			Some(Interpreter::DyLd(interpreter)) => {
+				visit_all(interpreter.library_paths.as_deref(), &mut visit);
+				visit_all(interpreter.preloads.as_deref(), &mut visit);
+			},
+			Some(Interpreter::LdLinux(interpreter)) => {
+				visit(&interpreter.path);
+				visit_all(interpreter.args.as_deref(), &mut visit);
+				visit_all(interpreter.library_paths.as_deref(), &mut visit);
+				visit_all(interpreter.preloads.as_deref(), &mut visit);
+			},
+			Some(Interpreter::LdMusl(interpreter)) => {
+				visit(&interpreter.path);
+				visit_all(interpreter.args.as_deref(), &mut visit);
+				visit_all(interpreter.library_paths.as_deref(), &mut visit);
+				visit_all(interpreter.preloads.as_deref(), &mut visit);
+			},
+			Some(Interpreter::Normal(interpreter)) => {
+				visit(&interpreter.path);
+				for arg in &interpreter.args {
+					visit(arg);
+				}
+			},
+			None => {},
+		}
 	}
 
 	/// Create a new wrapper from a manifest. Will locate the wrapper file from the `TANGRAM_WRAPPER_EXE_PATH` environment variable.
@@ -337,8 +223,7 @@ impl Manifest {
 		tracing::debug!(?self, "Writing manifest");
 
 		// Get the path of the wrapper file.
-		let path = TANGRAM_WRAPPER_EXE_PATH
-			.as_ref()
+		let path = std::env::var_os("TANGRAM_WRAPPER_EXE_PATH")
 			.ok_or_else(|| tg::error!("missing wrapper exe"))?;
 
 		// Create a temp.
@@ -361,14 +246,12 @@ impl Manifest {
 			move || manifest.write_to_path(&path)
 		})
 		.await
-		.map_err(|error| tg::error!(!error, "failed to write manifest to file"))?
-		.map_err(|error| tg::error!(!error, "failed to append manifest"))?;
+		.map_err(|error| tg::error!(!error, "failed to write manifest to file"))?;
 
 		// Codesign if necessary.
 		if matches!(wrap::detect_format(&path), Ok(Some(wrap::Format::Mach64))) {
 			tracing::info!("codesigning binary");
-			let codesign = TANGRAM_CODESIGN_PATH
-				.as_ref()
+			let codesign = std::env::var_os("TANGRAM_CODESIGN_PATH")
 				.ok_or_else(|| tg::error!("missing the codesign binary"))?;
 			let output = tokio::process::Command::new(codesign)
 				.arg("sign")
@@ -385,7 +268,7 @@ impl Manifest {
 		}
 
 		// Check the temp in.
-		let wrapped = tg::checkin(tg::checkin::Arg {
+		let output = tg::checkin(tg::checkin::Arg {
 			options: tg::checkin::Options {
 				root: true,
 				..tg::checkin::Options::default()
@@ -394,9 +277,10 @@ impl Manifest {
 			updates: Vec::new(),
 		})
 		.await
-		.map_err(|error| tg::error!(!error, "failed to check in file"))?
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("expected a file"))?;
+		.map_err(|error| tg::error!(!error, "failed to check in file"))?;
+		let wrapped = tg::Artifact::with_referent(output.artifact)
+			.try_unwrap_file()
+			.map_err(|_| tg::error!("expected a file"))?;
 
 		// Obtain the dependencies from the manifest to add to the file.
 		// NOTE: We know the wrapper file has no dependencies, so there is no need to merge.
@@ -422,202 +306,22 @@ impl Manifest {
 		Ok(output_file)
 	}
 
-	/// Collect the dependencies from a manifest.
+	/// Collect dependency handles from every manifest field.
 	#[must_use]
 	pub fn dependencies(&self) -> BTreeMap<tg::Reference, Option<tg::file::Dependency>> {
-		let mut dependencies = BTreeMap::default();
-
-		// Collect the references from the interpreter.
-		match &self.interpreter {
-			Some(Interpreter::Normal(interpreter)) => {
-				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
-				for arg in &interpreter.args {
-					collect_dependencies_from_template_data(arg, &mut dependencies);
-				}
-			},
-			Some(Interpreter::LdLinux(interpreter)) => {
-				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
-				if let Some(library_paths) = &interpreter.library_paths {
-					for library_path in library_paths {
-						collect_dependencies_from_template_data(library_path, &mut dependencies);
-					}
-				}
-				if let Some(preloads) = &interpreter.preloads {
-					for preload in preloads {
-						collect_dependencies_from_template_data(preload, &mut dependencies);
-					}
-				}
-			},
-			Some(Interpreter::LdMusl(interpreter)) => {
-				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
-				if let Some(library_paths) = &interpreter.library_paths {
-					for library_path in library_paths {
-						collect_dependencies_from_template_data(library_path, &mut dependencies);
-					}
-				}
-				if let Some(preloads) = &interpreter.preloads {
-					for preload in preloads {
-						collect_dependencies_from_template_data(preload, &mut dependencies);
-					}
-				}
-			},
-			Some(Interpreter::DyLd(interpreter)) => {
-				if let Some(library_paths) = &interpreter.library_paths {
-					for library_path in library_paths {
-						collect_dependencies_from_template_data(library_path, &mut dependencies);
-					}
-				}
-				if let Some(preloads) = &interpreter.preloads {
-					for preload in preloads {
-						collect_dependencies_from_template_data(preload, &mut dependencies);
-					}
-				}
-			},
-			None => {},
-		}
-
-		// Collect the references from the executable.
-		match &self.executable {
-			Executable::Path(path) => {
-				collect_dependencies_from_template_data(path, &mut dependencies);
-			},
-			Executable::Content(template) => {
-				collect_dependencies_from_template_data(template, &mut dependencies);
-			},
-			Executable::Address(_) => (),
-		}
-
-		// Collect the references from the env.
+		let mut objects = Vec::new();
+		self.for_each_template(|template| objects.extend(template.objects()));
 		if let Some(env) = &self.env {
-			collect_dependencies_from_mutation_data(env, &mut dependencies);
+			objects.extend(env.objects());
 		}
-
-		// Collect the references from the args.
-		if let Some(args) = &self.args {
-			for arg in args {
-				collect_dependencies_from_template_data(arg, &mut dependencies);
-			}
+		let mut dependencies = BTreeMap::new();
+		for object in objects {
+			dependencies
+				.entry(tg::Reference::with_object(object.id()))
+				.or_insert_with(|| {
+					Some(tg::file::Dependency(tg::Referent::with_node(Some(object))))
+				});
 		}
-
 		dependencies
 	}
 }
-
-pub fn collect_dependencies_from_value_data(
-	value: &tg::value::Data,
-	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
-) {
-	match value {
-		tg::value::Data::Object(id) => match &id.node {
-			tg::object::Id::File(id) => {
-				let id = tg::object::Id::from(id.clone());
-				dependencies.insert(
-					tg::Reference::with_object(id.clone()),
-					dependency_from_object_id(&id),
-				);
-			},
-			tg::object::Id::Symlink(id) => {
-				let id = tg::object::Id::from(id.clone());
-				dependencies.insert(
-					tg::Reference::with_object(id.clone()),
-					dependency_from_object_id(&id),
-				);
-			},
-			tg::object::Id::Directory(id) => {
-				let id = tg::object::Id::from(id.clone());
-				dependencies.insert(
-					tg::Reference::with_object(id.clone()),
-					dependency_from_object_id(&id),
-				);
-			},
-			_ => {},
-		},
-		tg::value::Data::Mutation(data) => {
-			collect_dependencies_from_mutation_data(data, dependencies);
-		},
-		tg::value::Data::Template(data) => {
-			collect_dependencies_from_template_data(data, dependencies);
-		},
-		tg::value::Data::Array(arr) => {
-			for value in arr {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
-		tg::value::Data::Map(map) => {
-			for value in map.values() {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
-		_ => {},
-	}
-}
-
-pub fn collect_dependencies_from_template_data(
-	value: &tg::template::Data,
-	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
-) {
-	for component in &value.components {
-		if let tg::template::data::Component::Artifact(id) = component {
-			let id = &id.node;
-			let id = tg::object::Id::from(id.clone());
-			dependencies.insert(
-				tg::Reference::with_object(id.clone()),
-				dependency_from_object_id(&id),
-			);
-		}
-	}
-}
-
-pub fn collect_dependencies_from_mutation_data(
-	value: &tg::mutation::Data,
-	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
-) {
-	match value {
-		tg::mutation::Data::Unset => {},
-		tg::mutation::Data::Set { value } | tg::mutation::Data::SetIfUnset { value } => {
-			collect_dependencies_from_value_data(value, dependencies);
-		},
-		tg::mutation::Data::Prepend { values } | tg::mutation::Data::Append { values } => {
-			for value in values {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
-		tg::mutation::Data::Prefix { template, .. }
-		| tg::mutation::Data::Suffix { template, .. } => {
-			collect_dependencies_from_template_data(template, dependencies);
-		},
-		tg::mutation::Data::Merge { value } => {
-			for value in value.values() {
-				collect_dependencies_from_value_data(value, dependencies);
-			}
-		},
-	}
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn dependency_from_object_id(id: &tg::object::Id) -> Option<tg::file::Dependency> {
-	Some(tg::file::Dependency(tg::Referent::with_node(Some(
-		tg::Object::with_id(id.clone()),
-	))))
-}
-
-// These are rendered from artifacts in the manifest, so each is a dependency already present in an
-// artifact root.
-static TANGRAM_WRAPPER_EXE_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
-	std::env::var("TANGRAM_WRAPPER_EXE_PATH")
-		.ok()
-		.map(PathBuf::from)
-});
-
-static TANGRAM_OBJCOPY_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
-	std::env::var("TANGRAM_OBJCOPY_PATH")
-		.ok()
-		.map(PathBuf::from)
-});
-
-// Only a proxy that targets Darwin sets this.
-static TANGRAM_CODESIGN_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
-	std::env::var("TANGRAM_CODESIGN_PATH")
-		.ok()
-		.map(PathBuf::from)
-});

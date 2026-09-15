@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "packages/common",
+  "packages/proxy",
   "packages/tgcc",
   "packages/tgld",
   "packages/tgstrip",
@@ -38,12 +39,14 @@ itertools = "0.14"
 libc = "0.2"
 num = "0.4"
 paste = "1"
+regex = "1"
 rustix = { version = "1", features = ["all-apis"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "21038fa4cafb9f5edef8d99cabd96a15d21c2129" }
-tangram_either = { git = "https://github.com/tangramdotdev/tangram", rev = "21038fa4cafb9f5edef8d99cabd96a15d21c2129" }
-tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "21038fa4cafb9f5edef8d99cabd96a15d21c2129" }
+shlex = "2"
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "0337e35e5393e4e7b5af282c0006d2917da1ac7f" }
+tangram_either = { git = "https://github.com/tangramdotdev/tangram", rev = "0337e35e5393e4e7b5af282c0006d2917da1ac7f" }
+tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "0337e35e5393e4e7b5af282c0006d2917da1ac7f" }
 tempfile = "3"
 tokio = { version = "1", default-features = false, features = [
   "rt",
@@ -58,6 +61,7 @@ zerocopy = { version = "0.8", features = ["derive"] }
 
 
 common = { path = "packages/common" }
+proxy = { path = "packages/proxy" }
 wrap = { path = "packages/wrap" }
 tgcc = { path = "packages/tgcc" }
 tgld = { path = "packages/tgld" }

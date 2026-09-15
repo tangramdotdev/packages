@@ -680,11 +680,10 @@ export async function envObjectFromArtifact(
 			throw new Error(`Could not read manifest from ${artifactId}.`);
 		}
 		// If the file was a wrapper, return its env.
-		return await wrap.envObjectFromManifestEnv(
-			manifest.env,
-			undefined,
-			artifact.state.tokens,
+		const references = new Map(
+			(await artifact.dependencyObjects).map((object) => [object.id, object]),
 		);
+		return await wrap.envObjectFromManifestEnv(manifest.env, references);
 	} else if (artifact instanceof tg.Directory) {
 		// Return an env with PATH/CPATH/LIBRARY_PATH according to the contents of the directory.
 		const env: env.EnvObject = {};

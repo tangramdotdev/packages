@@ -7,6 +7,7 @@ import cargoLock from "../Cargo.lock" with { type: "file" };
 
 import * as wrapperSrc from "./wrapper.tg.ts";
 import common from "../packages/common" with { type: "directory" };
+import proxy from "../packages/proxy" with { type: "directory" };
 import tgcc from "../packages/tgcc" with { type: "directory" };
 import tgld from "../packages/tgld" with { type: "directory" };
 import tgstrip from "../packages/tgstrip" with { type: "directory" };
@@ -38,6 +39,7 @@ export async function workspace(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	// Get the source.
 	const defaultSource = tg.directory({
 		common,
+		proxy,
 		tgcc,
 		tgld,
 		tgstrip,
@@ -280,7 +282,7 @@ export async function rust(
 
 	// Install the packages.
 	const env = bootstrap.sdk.env(host);
-	return await std
+	const toolchain = await std
 		.build(std.shBootstrap`
 		set -x
 		for package in ${packages}/*/* ; do
@@ -291,6 +293,17 @@ export async function rust(
 		.env(env)
 		.named("rust toolchain install")
 		.then(tg.Directory.expect);
+
+	// rust-objcopy searches beside rustlib's bin directory for libLLVM on macOS.
+	// The minimal profile installs the library in the toolchain's top-level lib.
+	if (std.triple.os(host) === "darwin") {
+		return tg.directory(toolchain, {
+			[`lib/rustlib/${host}/lib/libLLVM.dylib`]: tg.symlink({
+				path: "../../../libLLVM.dylib",
+			}),
+		});
+	}
+	return toolchain;
 }
 
 type RustupManifest = {

@@ -325,6 +325,20 @@ TG_VISIBILITY Stack create_stack (int argc, char** argv) {
 }
 #endif
 
+typedef enum {
+	WRAPPER_OPTION_NONE,
+	WRAPPER_OPTION_SUPPRESS_ARGS,
+	WRAPPER_OPTION_SUPPRESS_ENV,
+	WRAPPER_OPTION_PRINT_MANIFEST,
+} WrapperOption;
+
+static WrapperOption wrapper_option (String arg) {
+	if (cstreq(arg, "--tangram-suppress-args")) return WRAPPER_OPTION_SUPPRESS_ARGS;
+	if (cstreq(arg, "--tangram-suppress-env")) return WRAPPER_OPTION_SUPPRESS_ENV;
+	if (cstreq(arg, "--tangram-print-manifest")) return WRAPPER_OPTION_PRINT_MANIFEST;
+	return WRAPPER_OPTION_NONE;
+}
+
 TG_VISIBILITY Options create_options (Stack* stack) {
 	char **itr, **end;
 	String TANGRAM_SUPPRESS_ARGS = STRING_LITERAL("TANGRAM_SUPPRESS_ARGS");
@@ -336,13 +350,15 @@ TG_VISIBILITY Options create_options (Stack* stack) {
 		.suppress_env = false,
 	};
 
-	itr = stack->argv;
-	end = itr + stack->argc;
+	itr = stack->argv + 1;
+	end = stack->argv + stack->argc;
 	for(; itr != end; itr++) {
 		String arg = STRING_LITERAL(*itr);
-		options.suppress_args  |= cstreq(arg, "--tangram-suppress-args");
-		options.suppress_env   |= cstreq(arg, "--tangram-suppress-env");
-		options.print_manifest |= cstreq(arg, "--tangram-print-manifest");
+		if (cstreq(arg, "--")) break;
+		WrapperOption option = wrapper_option(arg);
+		options.suppress_args  |= option == WRAPPER_OPTION_SUPPRESS_ARGS;
+		options.suppress_env   |= option == WRAPPER_OPTION_SUPPRESS_ENV;
+		options.print_manifest |= option == WRAPPER_OPTION_PRINT_MANIFEST;
 	}
 
 	itr = stack->envp;
@@ -610,11 +626,12 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 			argv[argc++] = executable.manifest->argv[n];
 		}
 
-		// Finally the stack args, not including argv0. Filter out tangram-specific flags.
-		String tangram_prefix = STRING_LITERAL("--tangram-");
+		// Append stack args, consuming only this wrapper's options before --.
+		bool parse_options = true;
 		for (size_t n = 1; n < stack->argc; n++) {
 			String arg = { .ptr = (uint8_t*)stack->argv[n], .len = tg_strlen(stack->argv[n]) };
-			if (starts_with(arg, tangram_prefix)) {
+			if (cstreq(arg, "--")) parse_options = false;
+			if (parse_options && wrapper_option(arg) != WRAPPER_OPTION_NONE) {
 				continue;
 			}
 			argv[argc++] = arg;

@@ -15,7 +15,7 @@ import src from "./tgrustc/src" with { type: "directory" };
 import probeFixture from "./tgrustc/tests/probe" with { type: "directory" };
 import tests from "./tests" with { type: "directory" };
 
-/** `../../std` from tgrustc's Cargo.toml resolves to the std Rust workspace. */
+/** Bundle std's Rust workspace so the proxy support dependency resolves within this source. */
 export async function source() {
 	return tg.directory({
 		"rust/tgrustc": {

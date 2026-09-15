@@ -33,12 +33,7 @@ fn main_inner() -> tg::Result<()> {
 	if options.passthrough || options.strip_targets.is_empty() {
 		#[cfg(feature = "tracing")]
 		tracing::info!("passing through, running strip with unmodified arguments");
-		let target_refs: Vec<&std::path::Path> = options
-			.strip_targets
-			.iter()
-			.map(std::path::PathBuf::as_path)
-			.collect();
-		run_strip(&options.strip_program, &options.strip_args, &target_refs)?;
+		run_strip(&options.strip_program, &options.command_args, &[])?;
 		return Ok(());
 	}
 
@@ -115,8 +110,31 @@ async fn run_proxy(
 	strip_program: &std::path::Path,
 	strip_args: &[String],
 	target_path: &std::path::Path,
-	manifest: Manifest,
+	mut manifest: Manifest,
 ) -> tg::Result<()> {
+	if matches!(&manifest.executable, manifest::Executable::Path(_)) {
+		// The bytes contain IDs only. Recover the wrapper's authorized dependencies before rebuilding it.
+		let path = std::path::absolute(target_path)
+			.map_err(|error| tg::error!(!error, "invalid wrapper path"))?;
+		let output = tg::checkin(tg::checkin::Arg {
+			options: tg::checkin::Options {
+				destructive: false,
+				deterministic: true,
+				ignore: false,
+				lock: None,
+				root: true,
+				..tg::checkin::Options::default()
+			},
+			path,
+			updates: Vec::new(),
+		})
+		.await?;
+		let file = tg::Artifact::with_referent(output.artifact)
+			.try_unwrap_file()
+			.map_err(|error| tg::error!(!error, "expected a wrapper file"))?;
+		manifest.resolve_from_file(&file).await?;
+	}
+
 	// Handle the executable based on its type.
 	match manifest.executable {
 		manifest::Executable::Path(artifact_path) => {
@@ -124,10 +142,27 @@ async fn run_proxy(
 			tracing::info!(?artifact_path, "found executable artifact path");
 
 			// Get the path to the actual executable.
-			let executable_path =
-				std::path::PathBuf::from(common::render_template_data(&artifact_path).map_err(
-					|error| tg::error!(!error, ?artifact_path, "unable to render executable path"),
-				)?);
+			let executable_path = artifact_path
+				.try_render(|component| async move {
+					match component {
+						tg::template::Component::String(string) => Ok(string.clone()),
+						tg::template::Component::Artifact(artifact) => {
+							common::checkout_artifact(artifact.clone())
+								.await?
+								.into_os_string()
+								.into_string()
+								.map_err(|_| tg::error!("checkout path is not UTF-8"))
+						},
+						tg::template::Component::Placeholder(_) => {
+							Err(tg::error!("cannot render an unresolved placeholder"))
+						},
+					}
+				})
+				.await
+				.map(std::path::PathBuf::from)
+				.map_err(|error| {
+					tg::error!(!error, ?artifact_path, "unable to render executable path")
+				})?;
 
 			#[cfg(feature = "tracing")]
 			tracing::info!(?executable_path, "found executable path");
@@ -163,7 +198,7 @@ async fn run_proxy(
 			tracing::info!(?local_executable_path, "strip succeeded");
 
 			// Check in the result.
-			let stripped_file = tg::checkin(tg::checkin::Arg {
+			let output = tg::checkin(tg::checkin::Arg {
 				options: tg::checkin::Options {
 					source_dependencies: true,
 					destructive: false,
@@ -177,12 +212,12 @@ async fn run_proxy(
 				path: local_executable_path,
 				updates: vec![],
 			})
-			.await?
-			.try_unwrap_file()
-			.map_err(|error| tg::error!(source = error, "expected a file"))?;
-			let stripped_file_id = stripped_file.id();
+			.await?;
+			let stripped_file = tg::Artifact::with_referent(output.artifact)
+				.try_unwrap_file()
+				.map_err(|error| tg::error!(source = error, "expected a file"))?;
 			#[cfg(feature = "tracing")]
-			tracing::info!(?stripped_file_id, "checked in the stripped executable");
+			tracing::info!(stripped_file_id = ?stripped_file.id(), "checked in the stripped executable");
 
 			#[cfg(feature = "tracing")]
 			if let Err(e) = tmpdir.close() {
@@ -193,10 +228,9 @@ async fn run_proxy(
 
 			// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
 			let new_manifest = Manifest {
-				executable: manifest::Executable::Path(
-					common::template_from_artifact(tg::Artifact::with_id(stripped_file_id.into()))
-						.to_data(),
-				),
+				executable: manifest::Executable::Path(common::template_from_artifact(
+					stripped_file.into(),
+				)),
 				..manifest
 			};
 			#[cfg(feature = "tracing")]
@@ -225,7 +259,7 @@ async fn run_proxy(
 				.await
 				.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
 
-			let artifact = tg::Artifact::from(new_wrapper).id();
+			let artifact = tg::Artifact::from(new_wrapper);
 			common::checkout_artifact_to_path(artifact, canonical_target_path).await?;
 			#[cfg(feature = "tracing")]
 			tracing::info!("checked out the new output file");
@@ -255,6 +289,9 @@ async fn run_proxy(
 struct Options {
 	/// Should we skip the proxy and pass through the arguments to strip unchanged?
 	passthrough: bool,
+
+	/// Original arguments, excluding this proxy's controls, for passthrough.
+	command_args: Vec<String>,
 
 	/// Arguments to pass to strip.
 	strip_args: Vec<String>,
@@ -287,28 +324,29 @@ impl Options {
 		// Parse the arguments.
 		let mut strip_targets = Vec::new();
 		let mut strip_args = vec![];
+		let mut command_args = Vec::new();
+		let mut parse_options = true;
 
 		for arg in std::env::args().skip(1) {
-			// Catch any --tg- args.
-			if arg.starts_with("--tg-") {
-				// Handle --tg-passthrough.
-				if arg == "--tg-passthrough" {
-					passthrough = true;
-				}
+			if parse_options && arg == "--tangram-strip-passthrough" {
+				passthrough = true;
+				continue;
+			}
+			command_args.push(arg.clone());
+			if parse_options && arg == "--" {
+				parse_options = false;
+				strip_args.push(arg);
+			} else if parse_options && arg.starts_with('-') {
+				strip_args.push(arg);
 			} else {
-				// If the argument starts with `-`, it's an argument to strip.
-				if arg.starts_with('-') {
-					strip_args.push(arg);
-				} else {
-					// This is a target file to strip.
-					strip_targets.push(arg.into());
-				}
+				strip_targets.push(arg.into());
 			}
 		}
 
 		// Construct options struct.
 		let options = Options {
 			passthrough,
+			command_args,
 			strip_args,
 			strip_targets,
 			strip_program,
