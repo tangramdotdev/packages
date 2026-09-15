@@ -175,10 +175,10 @@ fn read_options() -> tg::Result<Options> {
 		if arg == "--" {
 			command_args.push(arg);
 			for arg in args {
-				if is_library_candidate(&arg) {
-					if let Ok(canonical_path) = std::fs::canonicalize(&arg) {
-						additional_library_candidate_paths.push(canonical_path);
-					}
+				if is_library_candidate(&arg)
+					&& let Ok(canonical_path) = std::fs::canonicalize(&arg)
+				{
+					additional_library_candidate_paths.push(canonical_path);
 				}
 				command_args.push(arg);
 			}
@@ -533,8 +533,25 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 }
 
 fn deduplicate_library_paths(library_paths: &mut Vec<DirectoryWithSubpath>) {
-	let mut seen = HashSet::<_, Hasher>::default();
-	library_paths.retain(|path| seen.insert((path.directory.id(), path.subpath.clone())));
+	let mut seen = HashMap::<_, tg::Directory, Hasher>::default();
+	library_paths.retain(
+		|path| match seen.entry((path.directory.id(), path.subpath.clone())) {
+			std::collections::hash_map::Entry::Occupied(entry) => {
+				let retained = entry.get();
+				retained
+					.state()
+					.inherit_location(path.directory.state().location().as_ref());
+				retained
+					.state()
+					.inherit_tokens(&path.directory.state().tokens());
+				false
+			},
+			std::collections::hash_map::Entry::Vacant(entry) => {
+				entry.insert(path.directory.clone());
+				true
+			},
+		},
+	);
 }
 
 // Keep the server's containing root, adding aliases for local libraries whose SONAME or install name differs from their filename.
@@ -572,11 +589,13 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 	}
 	let prefix = subpath.clone().unwrap_or_default();
 	let mut builder: Option<tg::directory::Builder> = None;
+	let mut has_entries = false;
 	while let Some(entry) = entries
 		.next_entry()
 		.await
 		.map_err(|error| tg::error!(!error, "failed to read library directory entry"))?
 	{
+		has_entries = true;
 		if !entry
 			.file_type()
 			.await
@@ -603,6 +622,9 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 			None => root.to_builder().await?,
 		};
 		builder = Some(current.add(&prefix.join(name), alias.into()).await?);
+	}
+	if !has_entries {
+		return Ok(None);
 	}
 	let root = builder.map_or(root, tg::directory::Builder::build);
 	Ok(Some(dir_with_subpath_from_directory(&root, subpath).await?))
@@ -1159,10 +1181,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 				continue;
 			}
 			let library_path = path.join(&library_name);
-			if !tokio::fs::try_exists(&library_path)
-				.await
-				.unwrap_or(false)
-			{
+			if !tokio::fs::try_exists(&library_path).await.unwrap_or(false) {
 				continue;
 			}
 			let mut output = common::checkin_path(&library_path).await?;
@@ -1441,8 +1460,8 @@ impl DirectoryWithSubpath {
 mod tests {
 	use {
 		super::{
-			AnalyzeOutputFileOutput, DirectoryWithSubpath, InterpreterRequirement, analyze_output_file,
-			deduplicate_library_paths, library_path_needs_aliases,
+			AnalyzeOutputFileOutput, DirectoryWithSubpath, InterpreterRequirement,
+			analyze_output_file, deduplicate_library_paths, library_path_needs_aliases,
 		},
 		tangram_client::prelude::*,
 	};
@@ -1485,6 +1504,20 @@ mod tests {
 				.state()
 				.set_tokens(tg::authorization::Tokens::with_local([token]));
 		}
+		// Keep an independent proof that the newer token does not cover.
+		let mut complementary = first.state().tokens().local()[0].clone();
+		complementary.metadata.key = "other-signer".into();
+		first
+			.state()
+			.inherit_tokens(&tg::authorization::Tokens::with_local([
+				complementary.clone()
+			]));
+		let newer = duplicate.state().tokens().local()[0].clone();
+		let location = tg::Location::Remote(tg::location::Remote {
+			name: "test".into(),
+			region: None,
+		});
+		duplicate.state().set_location(Some(location.clone()));
 		let mut paths = vec![
 			DirectoryWithSubpath {
 				directory: first.clone(),
@@ -1524,7 +1557,126 @@ mod tests {
 				(first.id(), None),
 			],
 		);
-		assert_eq!(paths[0].directory.state().tokens(), first.state().tokens());
+		let tokens = paths[0].directory.state().tokens();
+		assert_eq!(tokens.local().len(), 2);
+		assert!(tokens.local().contains(&newer));
+		assert!(tokens.local().contains(&complementary));
+		assert_eq!(
+			paths[0].directory.state().location(),
+			Some(location.clone())
+		);
+		// Existing clones must observe the merged context on the first handle.
+		assert_eq!(first.state().tokens(), tokens);
+		assert_eq!(first.state().location(), Some(location));
+	}
+
+	// Run with `cargo test -p tgld library_path_checkins -- --ignored` and
+	// TANGRAM_URL pointing to a running server.
+	#[tokio::test]
+	#[ignore = "requires a running Tangram server and a C compiler"]
+	async fn library_path_checkins() {
+		tg::init().unwrap();
+		let temp = tempfile::tempdir().unwrap();
+		let local = temp.path().join("lib");
+		let empty = temp.path().join("empty");
+		std::fs::create_dir(&local).unwrap();
+		std::fs::create_dir(&empty).unwrap();
+		let source = temp.path().join("library.c");
+		std::fs::write(&source, "int library_function(void) { return 42; }").unwrap();
+		let (filename, alias, flags) = if cfg!(target_os = "macos") {
+			(
+				"original.dylib",
+				"alias.dylib",
+				["-dynamiclib", "-Wl,-install_name,alias.dylib"],
+			)
+		} else {
+			(
+				"original.so",
+				"alias.so",
+				["-shared", "-Wl,-soname,alias.so"],
+			)
+		};
+		let output = std::process::Command::new("cc")
+			.args(flags)
+			.arg(&source)
+			.arg("-o")
+			.arg(local.join(filename))
+			.output()
+			.unwrap();
+		assert!(
+			output.status.success(),
+			"{}",
+			String::from_utf8_lossy(&output.stderr)
+		);
+
+		// The local checkin retains its absolute source path and needs aliases.
+		let output = common::checkin_path(&local).await.unwrap();
+		assert!(output.artifact.options.id.is_none());
+		assert!(output.artifact.options.path.as_ref().unwrap().is_absolute());
+		assert!(library_path_needs_aliases(&output.artifact));
+		let checked_in = super::checkin_library_path(local.to_str().unwrap())
+			.await
+			.unwrap()
+			.unwrap()
+			.resolve()
+			.await
+			.unwrap();
+		assert!(checked_in.entries().await.unwrap()[alias].is_symlink());
+		assert!(checked_in.get(filename).await.unwrap().is_file());
+		assert!(
+			super::checkin_library_path(empty.to_str().unwrap())
+				.await
+				.unwrap()
+				.is_none()
+		);
+
+		// Put the original directory in a store root without adding its alias.
+		let directory = tg::Directory::with_entries(
+			[
+				("lib".into(), tg::Artifact::with_referent(output.artifact)),
+				(
+					"empty".into(),
+					tg::Directory::with_entries(std::collections::BTreeMap::new()).into(),
+				),
+			]
+			.into(),
+		);
+		let root = common::checkout_artifact(directory.clone().into())
+			.await
+			.unwrap();
+		let output = common::checkin_path(&root).await.unwrap();
+		assert_eq!(output.artifact.node, directory.id().into());
+		assert!(output.artifact.options.id.is_none());
+		assert!(output.artifact.options.path.is_none());
+		assert!(!library_path_needs_aliases(&output.artifact));
+
+		let library_path = root.join("lib");
+		let output = common::checkin_path(&library_path).await.unwrap();
+		assert_eq!(output.artifact.options.id, Some(directory.id().into()));
+		assert_eq!(output.artifact.options.path, Some("lib".into()));
+		assert!(!library_path_needs_aliases(&output.artifact));
+		let checked_in = super::checkin_library_path(library_path.to_str().unwrap())
+			.await
+			.unwrap()
+			.unwrap();
+		assert_eq!(checked_in.directory.id(), directory.id());
+		assert_eq!(checked_in.subpath, Some("lib".into()));
+		assert!(
+			checked_in
+				.resolve()
+				.await
+				.unwrap()
+				.try_get(alias)
+				.await
+				.unwrap()
+				.is_none()
+		);
+		assert!(
+			super::checkin_library_path(root.join("empty").to_str().unwrap())
+				.await
+				.unwrap()
+				.is_none()
+		);
 	}
 
 	#[tokio::test]

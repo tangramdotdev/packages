@@ -303,6 +303,30 @@ fn main_inner() -> tg::Result<()> {
 	Ok(())
 }
 
+struct LinkerPathOption {
+	prefix: &'static str,
+	separator: Option<char>,
+	should_check_in: fn(&str) -> bool,
+}
+
+const LINKER_PATH_OPTIONS: [LinkerPathOption; 3] = [
+	LinkerPathOption {
+		prefix: "-Wl,-rpath-link,",
+		separator: Some(':'),
+		should_check_in: |path| !path.contains('$'),
+	},
+	LinkerPathOption {
+		prefix: "-Wl,-rpath,",
+		separator: Some(':'),
+		should_check_in: |path| Path::new(path).is_absolute() && !path.contains('$'),
+	},
+	LinkerPathOption {
+		prefix: "-Wl,-dynamic-linker=",
+		separator: None,
+		should_check_in: |_| true,
+	},
+];
+
 #[allow(clippy::too_many_lines)]
 async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 	environment.checkin().await?;
@@ -317,34 +341,20 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 	// Remaining path-bearing options here are forwarded directly to the linker.
 	let mut forwarded = Vec::with_capacity(cli_args.len());
 	for arg in cli_args {
-		let Some(prefix) = ["-Wl,-rpath-link,", "-Wl,-rpath,", "-Wl,-dynamic-linker="]
-			.into_iter()
-			.find(|prefix| arg.starts_with(prefix))
+		let Some((option, paths)) = LINKER_PATH_OPTIONS
+			.iter()
+			.find_map(|option| arg.strip_prefix(option.prefix).map(|paths| (option, paths)))
 		else {
 			forwarded.push(arg.into());
 			continue;
 		};
-		let paths = arg.strip_prefix(prefix).unwrap();
-		let separator = match prefix {
-			"-Wl,-dynamic-linker=" => None,
-			"-Wl,-rpath," | "-Wl,-rpath-link," => Some(':'),
-			_ => unreachable!(),
-		};
-		let mut template = tg::Template::builder().string(prefix);
-		for (index, path) in paths
-			.split(|c| separator == Some(c))
-			.enumerate()
-		{
-			if index > 0 {
-				template = template.string(":");
+		let mut template = tg::Template::builder().string(option.prefix);
+		for (index, path) in paths.split(|c| option.separator == Some(c)).enumerate() {
+			if let Some(separator) = option.separator.filter(|_| index > 0) {
+				template = template.string(separator.to_string());
 			}
-			let should_check_in = match prefix {
-				_ if path.is_empty() || path.starts_with('@') => false,
-				"-Wl,-dynamic-linker=" => true,
-				"-Wl,-rpath," => Path::new(path).is_absolute() && !path.contains('$'),
-				"-Wl,-rpath-link," => !path.contains('$'),
-				_ => unreachable!(),
-			};
+			let should_check_in =
+				!path.is_empty() && !path.starts_with('@') && (option.should_check_in)(path);
 			template = if should_check_in {
 				template.components(common::template_from_path(path).await?.components)
 			} else {

@@ -2735,6 +2735,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tangram_client",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "tracing",

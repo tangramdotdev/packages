@@ -282,7 +282,7 @@ export async function rust(
 
 	// Install the packages.
 	const env = bootstrap.sdk.env(host);
-	return await std
+	const toolchain = await std
 		.build(std.shBootstrap`
 		set -x
 		for package in ${packages}/*/* ; do
@@ -293,6 +293,17 @@ export async function rust(
 		.env(env)
 		.named("rust toolchain install")
 		.then(tg.Directory.expect);
+
+	// rust-objcopy searches beside rustlib's bin directory for libLLVM on macOS.
+	// The minimal profile installs the library in the toolchain's top-level lib.
+	if (std.triple.os(host) === "darwin") {
+		return tg.directory(toolchain, {
+			[`lib/rustlib/${host}/lib/libLLVM.dylib`]: tg.symlink({
+				path: "../../../libLLVM.dylib",
+			}),
+		});
+	}
+	return toolchain;
 }
 
 type RustupManifest = {

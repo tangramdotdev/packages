@@ -371,10 +371,7 @@ impl Manifest {
 		self
 	}
 
-	fn for_each_reference(
-		&self,
-		visit: &mut impl FnMut(&tg::object::Id, &tg::referent::Options),
-	) {
+	fn for_each_reference(&self, visit: &mut impl FnMut(&tg::object::Id, &tg::referent::Options)) {
 		self.for_each_template(|template| visit_template_references(template, visit));
 		if let Some(env) = &self.env {
 			visit_mutation_references(env, visit);
@@ -383,34 +380,34 @@ impl Manifest {
 
 	fn for_each_template(&self, mut visit: impl FnMut(&tg::template::Data)) {
 		fn visit_all(
-			templates: &Option<Vec<tg::template::Data>>,
+			templates: Option<&[tg::template::Data]>,
 			visit: &mut impl FnMut(&tg::template::Data),
 		) {
-			for template in templates.iter().flatten() {
+			for template in templates.into_iter().flatten() {
 				visit(template);
 			}
 		}
-		visit_all(&self.args, &mut visit);
+		visit_all(self.args.as_deref(), &mut visit);
 		match &self.executable {
 			Executable::Address(_) => {},
 			Executable::Content(template) | Executable::Path(template) => visit(template),
 		}
 		match &self.interpreter {
 			Some(Interpreter::DyLd(interpreter)) => {
-				visit_all(&interpreter.library_paths, &mut visit);
-				visit_all(&interpreter.preloads, &mut visit);
+				visit_all(interpreter.library_paths.as_deref(), &mut visit);
+				visit_all(interpreter.preloads.as_deref(), &mut visit);
 			},
 			Some(Interpreter::LdLinux(interpreter)) => {
 				visit(&interpreter.path);
-				visit_all(&interpreter.args, &mut visit);
-				visit_all(&interpreter.library_paths, &mut visit);
-				visit_all(&interpreter.preloads, &mut visit);
+				visit_all(interpreter.args.as_deref(), &mut visit);
+				visit_all(interpreter.library_paths.as_deref(), &mut visit);
+				visit_all(interpreter.preloads.as_deref(), &mut visit);
 			},
 			Some(Interpreter::LdMusl(interpreter)) => {
 				visit(&interpreter.path);
-				visit_all(&interpreter.args, &mut visit);
-				visit_all(&interpreter.library_paths, &mut visit);
-				visit_all(&interpreter.preloads, &mut visit);
+				visit_all(interpreter.args.as_deref(), &mut visit);
+				visit_all(interpreter.library_paths.as_deref(), &mut visit);
+				visit_all(interpreter.preloads.as_deref(), &mut visit);
 			},
 			Some(Interpreter::Normal(interpreter)) => {
 				visit(&interpreter.path);
