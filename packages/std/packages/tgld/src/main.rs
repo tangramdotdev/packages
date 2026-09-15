@@ -368,7 +368,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	// Create a library path for any additional candidate libraries that are found in NEEDED and are actual library files.
 	let command_line_library_path = create_library_directory_for_command_line_libraries(
 		&options.additional_library_candidate_paths,
-		&mut needed_libraries,
+		&needed_libraries,
 	)
 	.await?;
 
@@ -559,6 +559,17 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 	if !std::path::Path::new(path).is_dir() {
 		return Ok(None);
 	}
+	let mut entries = tokio::fs::read_dir(path)
+		.await
+		.map_err(|error| tg::error!(!error, "failed to read library directory"))?;
+	if entries
+		.next_entry()
+		.await
+		.map_err(|error| tg::error!(!error, "failed to read library directory entry"))?
+		.is_none()
+	{
+		return Ok(None);
+	}
 	let mut output = common::checkin_path(path).await?;
 	if matches!(output.artifact.node, tg::artifact::Id::Symlink(_)) {
 		let target = std::fs::canonicalize(path)
@@ -573,29 +584,20 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 	let root = root
 		.try_unwrap_directory()
 		.map_err(|_| tg::error!("expected a containing directory"))?;
+	if !library_path_needs_aliases(&output.artifact) {
+		return Ok(Some(dir_with_subpath_from_directory(&root, subpath).await?));
+	}
+	// Start a fresh scan so the emptiness check does not consume the first entry.
 	let mut entries = tokio::fs::read_dir(path)
 		.await
 		.map_err(|error| tg::error!(!error, "failed to read library directory"))?;
-	if !library_path_needs_aliases(&output.artifact) {
-		if entries
-			.next_entry()
-			.await
-			.map_err(|error| tg::error!(!error, "failed to read the library directory entry"))?
-			.is_none()
-		{
-			return Ok(None);
-		}
-		return Ok(Some(dir_with_subpath_from_directory(&root, subpath).await?));
-	}
 	let prefix = subpath.clone().unwrap_or_default();
 	let mut builder: Option<tg::directory::Builder> = None;
-	let mut has_entries = false;
 	while let Some(entry) = entries
 		.next_entry()
 		.await
 		.map_err(|error| tg::error!(!error, "failed to read library directory entry"))?
 	{
-		has_entries = true;
 		if !entry
 			.file_type()
 			.await
@@ -622,9 +624,6 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 			None => root.to_builder().await?,
 		};
 		builder = Some(current.add(&prefix.join(name), alias.into()).await?);
-	}
-	if !has_entries {
-		return Ok(None);
 	}
 	let root = builder.map_or(root, tg::directory::Builder::build);
 	Ok(Some(dir_with_subpath_from_directory(&root, subpath).await?))
@@ -828,7 +827,7 @@ impl std::str::FromStr for LibraryPathStrategy {
 /// Check in any files needed libraries and produce a directory with correct names, returning a [`DirectoryWithSubpath`].
 async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 	library_candidate_paths: &[PathBuf],
-	all_needed_libraries: &mut HashMap<String, Option<DirectoryWithSubpath>, H>,
+	all_needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
 ) -> tg::Result<Option<DirectoryWithSubpath>> {
 	let mut entries = BTreeMap::new();
 	for library_candidate_path in library_candidate_paths {
@@ -1681,35 +1680,42 @@ mod tests {
 
 	#[tokio::test]
 	async fn read_output_files() {
-		std::fs::write("main.c", "int main() { return 0; }").unwrap();
+		let temp = tempfile::tempdir().unwrap();
+		let source = temp.path().join("main.c");
+		let executable = temp.path().join("a.out");
+		std::fs::write(&source, "int main() { return 0; }").unwrap();
+		let compile = |flags: &[&str]| {
+			let output = std::process::Command::new("cc")
+				.arg(&source)
+				.args(flags)
+				.arg("-o")
+				.arg(&executable)
+				.output()
+				.expect("failed to run cc");
+			assert!(
+				output.status.success(),
+				"cc {flags:?} failed ({}):\n{}",
+				output.status,
+				String::from_utf8_lossy(&output.stderr)
+			);
+		};
 
 		// Test analyzing a shared library.
-		std::process::Command::new("cc")
-			.arg("main.c")
-			.arg("-shared")
-			.arg("-o")
-			.arg("a.out")
-			.status()
-			.unwrap();
+		compile(&["-shared"]);
 		let AnalyzeOutputFileOutput { is_executable, .. } =
-			analyze_output_file("a.out").await.unwrap();
+			analyze_output_file(&executable).await.unwrap();
 		assert!(
 			!is_executable,
 			"Dynamically linked library was detected as an executable."
 		);
 
 		// Test analyzing a dynamic executable with an interpreter.
-		std::process::Command::new("cc")
-			.arg("main.c")
-			.arg("-o")
-			.arg("a.out")
-			.status()
-			.unwrap();
+		compile(&[]);
 		let AnalyzeOutputFileOutput {
 			is_executable,
 			interpreter,
 			..
-		} = analyze_output_file("a.out").await.unwrap();
+		} = analyze_output_file(&executable).await.unwrap();
 		assert!(
 			is_executable,
 			"Dynamically linked executable was detected as a library."
@@ -1722,19 +1728,12 @@ mod tests {
 		// Test analyzing a statically linked executable.
 		#[cfg(target_os = "linux")]
 		{
-			std::process::Command::new("cc")
-				.arg("main.c")
-				.arg("-static")
-				.arg("-static-libgcc")
-				.arg("-o")
-				.arg("a.out")
-				.status()
-				.unwrap();
+			compile(&["-static", "-static-libgcc"]);
 			let AnalyzeOutputFileOutput {
 				is_executable,
 				interpreter,
 				..
-			} = analyze_output_file("a.out").await.unwrap();
+			} = analyze_output_file(&executable).await.unwrap();
 			assert!(
 				is_executable,
 				"Statically linked executable was detected as a library."
@@ -1746,18 +1745,12 @@ mod tests {
 		}
 
 		// Test analyzing a dynamically linked PIE executable.
-		std::process::Command::new("cc")
-			.arg("main.c")
-			.arg("-pie")
-			.arg("-o")
-			.arg("a.out")
-			.status()
-			.unwrap();
+		compile(&["-pie"]);
 		let AnalyzeOutputFileOutput {
 			is_executable,
 			interpreter,
 			..
-		} = analyze_output_file("a.out").await.unwrap();
+		} = analyze_output_file(&executable).await.unwrap();
 		assert!(is_executable, "PIE was detected as a library.");
 		assert!(
 			!matches!(interpreter, InterpreterRequirement::None),
@@ -1767,19 +1760,12 @@ mod tests {
 		// Test analyzing a static-pie linked executable.
 		#[cfg(target_os = "linux")]
 		{
-			std::process::Command::new("cc")
-				.arg("main.c")
-				.arg("-static-pie")
-				.arg("-static-libgcc")
-				.arg("-o")
-				.arg("a.out")
-				.status()
-				.unwrap();
+			compile(&["-static-pie", "-static-libgcc"]);
 			let AnalyzeOutputFileOutput {
 				is_executable,
 				interpreter,
 				..
-			} = analyze_output_file("a.out").await.unwrap();
+			} = analyze_output_file(&executable).await.unwrap();
 			assert!(
 				is_executable,
 				"Static-pie linked executable was detected as a library."
@@ -1789,8 +1775,5 @@ mod tests {
 				"Static-PIE linked executables do not need an interpreter."
 			);
 		}
-
-		std::fs::remove_file("a.out").ok();
-		std::fs::remove_file("main.c").ok();
 	}
 }
