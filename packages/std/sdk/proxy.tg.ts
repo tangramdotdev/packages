@@ -677,9 +677,9 @@ export async function testProxyArguments() {
 		"--tangram-strip-passthrough=false",
 		"--tg-disallow-missing-extra",
 		"--tg-embed-wrapper=false",
-		"--tangram-print-manifest-extra",
+		"--tg-wrapper-print-manifest-extra",
 		"--tangram-suppress-args=false",
-		"--tangram-suppress-env-extra",
+		"--tg-wrapper-suppress-env-extra",
 		"--tangram-wrapper-arg-value-extra=[]",
 		"--tangram-wrapper-env-value-extra=opaque",
 		"--tangram-unknown",
@@ -690,20 +690,20 @@ export async function testProxyArguments() {
 	await check(wrapper, unknown, ["manifest argument", ...unknown]);
 	await check(
 		wrapper,
-		["--tangram-suppress-args", ...unknown],
+		["--tg-wrapper-suppress-args", ...unknown],
 		["manifest argument"],
 	);
 	await check(
 		wrapper,
-		["--tangram-suppress-env", ...unknown],
+		["--tg-wrapper-suppress-env", ...unknown],
 		["manifest argument", ...unknown],
 		"unset",
 	);
 
 	const wrapperFlags = [
-		"--tangram-suppress-args",
-		"--tangram-suppress-env",
-		"--tangram-print-manifest",
+		"--tg-wrapper-suppress-args",
+		"--tg-wrapper-suppress-env",
+		"--tg-wrapper-print-manifest",
 	];
 	const linkerFlags = [
 		"--tangram-linker-passthrough",
@@ -773,7 +773,7 @@ export async function testProxyArguments() {
 
 	// Verify the wrapper's diagnostic control, and errors for missing linker values.
 	const manifest = await std
-		.build(std.shBootstrap`${wrapper} --tangram-print-manifest > ${tg.output}`)
+		.build(std.shBootstrap`${wrapper} --tg-wrapper-print-manifest > ${tg.output}`)
 		.then(tg.File.expect);
 	tg.assert(tg.encoding.json.decode(await manifest.text) !== undefined);
 	for (const flag of [
@@ -835,7 +835,7 @@ export async function testBasic(target?: string) {
 			std.env.compose(buildToolchain, {
 				TGLD_TRACING: "tgld=trace,tangram_std=trace",
 				TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
-				TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
+				TANGRAM_WRAPPER_TRACING: "true",
 			}),
 		)
 		.then(tg.File.expect);

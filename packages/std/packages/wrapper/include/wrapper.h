@@ -31,10 +31,10 @@ typedef struct
 // Options configured with CLI args or environment variables.
 typedef struct
 {
-	bool enable_tracing;	// TANGRAM_TRACING=1
-	bool suppress_args;	// --tangram-suppress-args, TANGRAM_SUPPRESS_ARGS=1
-	bool suppress_env;	// --tangram-suppress-env, TANGRAM_SUPPRESS_ENV=1
-	bool print_manifest;	// --tangram-print-manifest
+	bool enable_tracing;
+	bool suppress_args;
+	bool suppress_env;
+	bool print_manifest;
 } Options;
 
 // The executable image.
@@ -332,47 +332,68 @@ typedef enum {
 	WRAPPER_OPTION_PRINT_MANIFEST,
 } WrapperOption;
 
+// Split at the first equals sign without changing the original word.
+static String control_name (String word) {
+	for (size_t n = 0; n < word.len; n++) {
+		if (word.ptr[n] == '=') return (String){ .ptr = word.ptr, .len = n };
+	}
+	return word;
+}
+
 static WrapperOption wrapper_option (String arg) {
-	if (cstreq(arg, "--tangram-suppress-args")) return WRAPPER_OPTION_SUPPRESS_ARGS;
-	if (cstreq(arg, "--tangram-suppress-env")) return WRAPPER_OPTION_SUPPRESS_ENV;
-	if (cstreq(arg, "--tangram-print-manifest")) return WRAPPER_OPTION_PRINT_MANIFEST;
+	String name = control_name(arg);
+	if (cstreq(name, "--tg-wrapper-suppress-args") || cstreq(name, "--tangram-wrapper-suppress-args")) return WRAPPER_OPTION_SUPPRESS_ARGS;
+	if (cstreq(name, "--tg-wrapper-suppress-env") || cstreq(name, "--tangram-wrapper-suppress-env")) return WRAPPER_OPTION_SUPPRESS_ENV;
+	if (cstreq(name, "--tg-wrapper-print-manifest") || cstreq(name, "--tangram-wrapper-print-manifest")) return WRAPPER_OPTION_PRINT_MANIFEST;
 	return WRAPPER_OPTION_NONE;
 }
 
-TG_VISIBILITY Options create_options (Stack* stack) {
-	char **itr, **end;
-	String TANGRAM_SUPPRESS_ARGS = STRING_LITERAL("TANGRAM_SUPPRESS_ARGS");
-	String TANGRAM_SUPPRESS_ENV  = STRING_LITERAL("TANGRAM_SUPPRESS_ENV");
-	String TANGRAM_TRACING	     = STRING_LITERAL("TANGRAM_TRACING");
-	Options options = {
-		.enable_tracing = false,
-		.suppress_args = false,
-		.suppress_env = false,
-	};
+static bool control_value_matches (String value, const char* expected) {
+	if (value.len != tg_strlen(expected)) return false;
+	for (size_t n = 0; n < value.len; n++) {
+		uint8_t ch = value.ptr[n];
+		if (ch >= 'A' && ch <= 'Z') ch += 'a' - 'A';
+		if (ch != expected[n]) return false;
+	}
+	return true;
+}
 
-	itr = stack->argv + 1;
-	end = stack->argv + stack->argc;
-	for(; itr != end; itr++) {
-		String arg = STRING_LITERAL(*itr);
-		if (cstreq(arg, "--")) break;
-		WrapperOption option = wrapper_option(arg);
-		options.suppress_args  |= option == WRAPPER_OPTION_SUPPRESS_ARGS;
-		options.suppress_env   |= option == WRAPPER_OPTION_SUPPRESS_ENV;
-		options.print_manifest |= option == WRAPPER_OPTION_PRINT_MANIFEST;
+static bool control_boolean (String word) {
+	String name = control_name(word);
+	if (name.len == word.len) return true;
+	String value = { .ptr = word.ptr + name.len + 1, .len = word.len - name.len - 1 };
+	if (control_value_matches(value, "true") || cstreq(value, "1")) return true;
+	if (control_value_matches(value, "false") || cstreq(value, "0")) return false;
+	trace("invalid control ");
+	write(STDERR_FILENO, name.ptr, name.len);
+	trace(": expected a boolean (true, false, 1, or 0)\n");
+	exit(1);
+	return false;
+}
+
+TG_VISIBILITY Options create_options (Stack* stack) {
+	Options options = {0};
+
+	// Validate the environment before applying any CLI overrides.
+	for (int n = 0; n < stack->envc; n++) {
+		String env = STRING_LITERAL(stack->envp[n]);
+		String name = control_name(env);
+		if (cstreq(name, "TANGRAM_WRAPPER_SUPPRESS_ARGS")) options.suppress_args = control_boolean(env);
+		if (cstreq(name, "TANGRAM_WRAPPER_SUPPRESS_ENV")) options.suppress_env = control_boolean(env);
+		if (cstreq(name, "TANGRAM_WRAPPER_PRINT_MANIFEST")) options.print_manifest = control_boolean(env);
+		if (cstreq(name, "TANGRAM_WRAPPER_TRACING")) options.enable_tracing = control_boolean(env);
 	}
 
-	itr = stack->envp;
-	end = itr + stack->envc;
-	for(; itr != end; itr++) {
-		String env = STRING_LITERAL(*itr);
-		String key = STRING_LITERAL("TANGRAM_TRACING=");
-		String argv0 = STRING_LITERAL(stack->argv[0]);
-		if (starts_with(env, STRING_LITERAL("TANGRAM_TRACING="))) {
-			String val = { .ptr = env.ptr + key.len, .len = env.len - key.len };
-			options.enable_tracing |= cstreq(val, "true") || streq(val, argv0);
+	// Manifest arguments are data and are never parsed by the current wrapper.
+	for (int n = 1; n < stack->argc; n++) {
+		String arg = STRING_LITERAL(stack->argv[n]);
+		if (cstreq(arg, "--")) break;
+		switch (wrapper_option(arg)) {
+			case WRAPPER_OPTION_NONE: break;
+			case WRAPPER_OPTION_PRINT_MANIFEST: options.print_manifest = control_boolean(arg); break;
+			case WRAPPER_OPTION_SUPPRESS_ARGS: options.suppress_args = control_boolean(arg); break;
+			case WRAPPER_OPTION_SUPPRESS_ENV: options.suppress_env = control_boolean(arg); break;
 		}
-		options.suppress_args  |= starts_with(env, TANGRAM_SUPPRESS_ARGS);
-		options.suppress_env   |= starts_with(env, TANGRAM_SUPPRESS_ENV);
 	}
 
 	return options;
