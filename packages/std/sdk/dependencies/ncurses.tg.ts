@@ -24,7 +24,7 @@ export async function build(...args: tg.Args<Arg>) {
 			env: {
 				CFLAGS: tg.Mutation.suffix("-std=gnu17", " "),
 				// We rename the shared objects after the build, let the LD proxy ignore missing libraries.
-				TGLD_ALLOW_MISSING_LIBRARIES: true,
+				TANGRAM_LINKER_DISALLOW_MISSING_LIBRARIES: "false",
 			},
 			phases: {
 				configure: {

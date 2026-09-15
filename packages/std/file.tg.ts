@@ -152,7 +152,7 @@ export async function testBinary() {
 		cc -v -L${tg.output} -I${source} -lgreet -xc ${source}/main.c -o ${tg.output}/exe
 	`)
 		.env(bootstrapSDK, {
-			TGLD_PASSTHROUGH: true,
+			TANGRAM_LINKER_PASSTHROUGH: true,
 		})
 		.then(tg.Directory.expect);
 

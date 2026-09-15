@@ -63,14 +63,13 @@ impl Environment {
 	// Parse the runtime environment.
 	fn parse() -> tg::Result<Self> {
 		let mut env = BTreeMap::new();
-		let mut enable = false;
+		let enable = std::env::var_os("TGCC_ENABLE")
+			.map(|value| proxy::options::boolean(&value, "TGCC_ENABLE"))
+			.transpose()?
+			.unwrap_or(false);
 		for (key, value) in std::env::vars() {
 			match key.as_str() {
-				"TGCC_ENABLE" => {
-					enable = value.parse().map_err(|error| {
-						tg::error!(source = error, "Failed to parse TGCC_ENABLE")
-					})?;
-				},
+				"TGCC_ENABLE" => {},
 				key if BLACKLISTED_ENV_VARS.contains(&key)
 					|| key.starts_with(tg::process::env::PREFIX) => {},
 				_ => {
