@@ -63,14 +63,21 @@ fn checkin_referent(path: &str, expires_at: i64) -> tg::Referent<tg::artifact::I
 	)
 }
 
-const ROOT: &str = "/opt/tangram/store/example";
+fn root() -> String {
+	format!(
+		"/opt/tangram/store/{}",
+		tg::Directory::with_entries(std::collections::BTreeMap::new()).id()
+	)
+}
 
 async fn render_environment(name: &str, raw: &str, expected_paths: &[&str]) -> String {
 	let mut calls = Vec::new();
 	let template = environment_value(name, raw, async |path| {
-		let subpath = path.strip_prefix(ROOT).unwrap().strip_prefix('/').unwrap();
-		// Repeated paths return distinct proofs, so reusing an earlier result fails the test.
-		let referent = checkin_referent(subpath, 100 + i64::try_from(calls.len()).unwrap());
+		// Return distinct proofs on repeated calls, and an identity supplied by checkin.
+		let referent = checkin_referent(
+			path.trim_start_matches('/'),
+			100 + i64::try_from(calls.len()).unwrap(),
+		);
 		calls.push((path.to_owned(), referent.clone()));
 		template_from_referent(&referent)
 	})
@@ -100,73 +107,56 @@ async fn render_environment(name: &str, raw: &str, expected_paths: &[&str]) -> S
 			referent.options.location
 		);
 	}
-	template
-		.try_render(|component| async move {
-			match component {
-				tg::template::Component::String(string) => Ok(string.clone()),
-				tg::template::Component::Artifact(_) => Ok(ROOT.to_owned()),
-				tg::template::Component::Placeholder(_) => panic!("unexpected placeholder"),
-			}
-		})
-		.await
-		.unwrap()
+	render(&template)
 }
 
 #[tokio::test]
-async fn environment_paths_and_flags_preserve_order_and_tokens() {
-	let include = format!("{ROOT}/include space");
-	let library = format!("{ROOT}/lib");
-	let paths = format!(":/usr/bin:{include}::{library}:{library}:");
-	for name in ["PATH", "CMAKE_PREFIX_PATH"] {
+async fn environment_references_preserve_text_order_and_tokens() {
+	let root = root();
+	let checkout = root.replace("/store/", "/checkouts/");
+	let raw =
+		format!(":/usr/bin:./local:{root}/lib space::{checkout}/nonexistent suffix:{root}/bin:");
+	for name in ["PATH", "CMAKE_PREFIX_PATH", "CUSTOM"] {
 		assert_eq!(
-			render_environment(name, &paths, &[&include, &library, &library]).await,
-			paths
+			render_environment(name, &raw, &[&root, &checkout, &root]).await,
+			raw
 		);
 	}
-	let flags = format!(" -O2\t-I{library}  -L {library} ");
-	for name in ["CFLAGS", "CPPFLAGS", "CXXFLAGS", "LDFLAGS"] {
-		assert_eq!(
-			render_environment(name, &flags, &[&library, &library]).await,
-			flags
-		);
+	let raw = format!("prefix=\"{root}/a'b\\c\"\n-DROOT={root}/include -I./local");
+	for name in ["CFLAGS", "CPPFLAGS", "CXXFLAGS", "LDFLAGS", "CUSTOM"] {
+		assert_eq!(render_environment(name, &raw, &[&root, &root]).await, raw);
 	}
-	let flags = format!("-Wl,-rpath-link,{library}:/usr/lib:{library}");
-	assert_eq!(
-		render_environment("LDFLAGS", &flags, &[&library, &library]).await,
-		flags
-	);
-	assert_eq!(
-		render_environment("CUSTOM", &include, &[&include]).await,
-		include
-	);
-	let quoted = format!("{ROOT}/lib'quote");
-	let flags = format!("--library-path '{include}:{library}' --preload=\"{quoted}\" ''");
-	let rendered = render_environment(
-		"TGLD_INTERPRETER_ARGS",
-		&flags,
-		&[&include, &library, &quoted],
-	)
-	.await;
-	assert_eq!(shlex::split(&rendered), shlex::split(&flags));
 }
 
 #[tokio::test]
-async fn quoted_compiler_flags() {
-	for (flag, directory) in [
-		(format!("-I\"{ROOT}/include space\""), "include space"),
-		(format!("-I'{ROOT}/include space'"), "include space"),
-		(format!("-I{ROOT}/include\\ space"), "include space"),
-		(format!("\"-I{ROOT}/include space\""), "include space"),
-		(format!("-I\"{ROOT}/include'quote\""), "include'quote"),
-		(format!("-I{ROOT}/lib"), "lib"),
+async fn references_under_ancestor_store_roots() {
+	let executable = std::env::current_exe().unwrap().canonicalize().unwrap();
+	let parent = executable.parent().unwrap();
+	for (directory, id) in [
+		("store", tg::File::with_contents("file").id().to_string()),
+		(
+			"checkouts",
+			tg::Symlink::with_path("target".into()).id().to_string(),
+		),
 	] {
-		let prefix = r#" -DVERSION=\"1.0\"  "#;
-		let flags = format!("{prefix}{flag}\t-O2 ");
-		let path = format!("{ROOT}/{directory}");
-		let rendered = render_environment("CFLAGS", &flags, &[&path]).await;
-		assert!(rendered.starts_with(prefix));
-		assert!(rendered.ends_with("\t-O2 "));
-		// Interpret the forwarded flags as a make recipe would.
+		let root = format!("{}/.tangram/{directory}/{id}", parent.display());
+		let raw = format!("prefix={root}/suffix");
+		assert_eq!(render_environment("CUSTOM", &raw, &[&root]).await, raw);
+	}
+}
+
+#[tokio::test]
+async fn quoted_compiler_flags_keep_their_spelling() {
+	let root = root();
+	for flag in [
+		format!("-I\"{root}/include space\""),
+		format!("-I'{root}/include space'"),
+		format!("-I{root}/include\\ space"),
+		format!("\"-I{root}/include space\""),
+	] {
+		let raw = format!(" -DVERSION=\\\"1.0\\\"  {flag}\t-O2 ");
+		let rendered = render_environment("CFLAGS", &raw, &[&root]).await;
+		assert_eq!(rendered, raw);
 		let output = std::process::Command::new("/bin/sh")
 			.args(["-c", "eval \"set -- $CFLAGS\"; printf '%s\\n' \"$@\""])
 			.env("CFLAGS", &rendered)
@@ -175,48 +165,36 @@ async fn quoted_compiler_flags() {
 		assert!(output.status.success());
 		assert_eq!(
 			String::from_utf8(output.stdout).unwrap(),
-			format!("-DVERSION=\"1.0\"\n-I{path}\n-O2\n")
+			format!("-DVERSION=\"1.0\"\n-I{root}/include space\n-O2\n")
 		);
 	}
 }
 
 #[tokio::test]
-async fn interpreter_arguments_preserve_paths_and_tokens() {
-	let library = format!("{ROOT}/lib space");
-	let preload = format!("{ROOT}/preload.so");
-	let audit = format!("{ROOT}/audit.so");
-	let quoted = format!("{ROOT}/path'quote:colon=equal");
+async fn interpreter_arguments_preserve_boundaries_and_tokens() {
+	let root = root();
 	let raw = format!(
-		"--library-path ':{library}::/usr/lib:{library}:' \
-		 --library-path='{library}:/usr/lib' \
-		 --preload '{preload} {preload}:/usr/lib/system.so' \
-		 --audit='{audit}:/usr/lib/audit.so' \"{quoted}\""
+		"--library-path ':{root}/lib space:/usr/lib:$ORIGIN/lib:' --preload='{root}/a.so {root}/b.so' --argv0 /literal/name '' \"{root}/path'quote:colon=equal\""
 	);
 	let mut calls = Vec::new();
 	let args = interpreter_args(&raw, async |path| {
-		let subpath = path.strip_prefix(ROOT).unwrap().strip_prefix('/').unwrap();
-		let referent = checkin_referent(subpath, 100 + i64::try_from(calls.len()).unwrap());
-		calls.push((path.to_owned(), referent.clone()));
+		assert_eq!(path, root);
+		let referent = checkin_referent(
+			path.trim_start_matches('/'),
+			100 + i64::try_from(calls.len()).unwrap(),
+		);
+		calls.push(referent.clone());
 		template_from_referent(&referent)
 	})
 	.await
 	.unwrap();
-	assert_eq!(
-		calls.iter().map(|(path, _)| path).collect::<Vec<_>>(),
-		vec![
-			&library, &library, &library, &preload, &preload, &audit, &quoted
-		]
-	);
+	assert_eq!(calls.len(), 4);
 	let artifacts = args
 		.iter()
 		.flat_map(tg::Template::artifacts)
 		.collect::<Vec<_>>();
 	assert_eq!(artifacts.len(), calls.len());
-	for (artifact, (_, referent)) in artifacts.iter().zip(&calls) {
-		assert_eq!(
-			artifact.id().to_string(),
-			referent.options.id.as_ref().unwrap().to_string()
-		);
+	for (artifact, referent) in artifacts.into_iter().zip(calls) {
 		assert_eq!(
 			artifact.to_referent().options.tokens,
 			referent.options.tokens
@@ -226,31 +204,9 @@ async fn interpreter_arguments_preserve_paths_and_tokens() {
 			referent.options.location
 		);
 	}
-	let mut rendered = Vec::new();
-	for arg in args {
-		rendered.push(
-			arg.try_render(|component| async move {
-				match component {
-					tg::template::Component::String(string) => Ok(string.clone()),
-					tg::template::Component::Artifact(_) => Ok(ROOT.to_owned()),
-					tg::template::Component::Placeholder(_) => panic!("unexpected placeholder"),
-				}
-			})
-			.await
-			.unwrap(),
-		);
-	}
 	assert_eq!(
-		rendered,
-		vec![
-			"--library-path".to_owned(),
-			format!(":{library}::/usr/lib:{library}:"),
-			format!("--library-path={library}:/usr/lib"),
-			"--preload".to_owned(),
-			format!("{preload} {preload}:/usr/lib/system.so"),
-			format!("--audit={audit}:/usr/lib/audit.so"),
-			quoted,
-		]
+		args.iter().map(render).collect::<Vec<_>>(),
+		shlex::split(&raw).unwrap()
 	);
 }
 
@@ -263,7 +219,7 @@ async fn interpreter_arguments_decode_shell_quoting() {
 	.await
 	.unwrap();
 	assert_eq!(
-		args.iter().map(tg::Template::to_data).collect::<Vec<_>>(),
+		args.iter().map(render).collect::<Vec<_>>(),
 		[
 			"",
 			"literal words",
@@ -272,15 +228,8 @@ async fn interpreter_arguments_decode_shell_quoting() {
 			"a'b",
 			"$HOME;$(false)"
 		]
-		.into_iter()
-		.map(|string| tg::Template::from(string).to_data())
-		.collect::<Vec<_>>()
 	);
-	for raw in [
-		"'unterminated",
-		"trailing\\",
-		"prefix/opt/tangram/store/example",
-	] {
+	for raw in ["'unterminated", "trailing\\"] {
 		assert!(
 			interpreter_args(raw, async |_| panic!("unexpected checkin"))
 				.await
@@ -290,34 +239,21 @@ async fn interpreter_arguments_decode_shell_quoting() {
 }
 
 #[tokio::test]
-async fn unsupported_environment_paths_fail_before_checkin() {
+async fn ordinary_environment_paths_and_text_stay_literal() {
 	for (name, raw) in [
-		("CFLAGS", "-DROOT=/opt/tangram/store/example/include"),
+		("PATH", "/usr/bin:/bin:/missing/bin:./local::"),
+		("TMPDIR", "/temporary/output"),
+		("TANGRAM_OUTPUT", "/process/output"),
+		("PWD", "/working/directory"),
+		("CUSTOM", "prefix=/opt/tangram/store/not-an-artifact"),
+		("CUSTOM", "/local/input"),
+		("CUSTOM", "./local/input"),
+		("CPATH", "./local/include"),
 		(
 			"CFLAGS",
-			"-DROOT=/home/user/.tangram/checkouts/example/include",
+			"-I./include -I/usr/include -o /output -DROOT=/literal/path",
 		),
-		("CFLAGS", "-I\"/opt/tangram/store/example/include space"),
-		("CFLAGS", "-I/opt/tangram/store/example/include\\"),
-		("CUSTOM", "prefix=/opt/tangram/store/example"),
-		(
-			"TGLD_INTERPRETER_ARGS",
-			"--library-path '/opt/tangram/store/example",
-		),
-	] {
-		assert!(
-			environment_value(name, raw, async |_| panic!("unexpected checkin"))
-				.await
-				.is_err()
-		);
-	}
-}
-
-#[tokio::test]
-async fn plain_environment_values_do_not_check_in_paths() {
-	for (name, raw) in [
-		("PATH", ":/usr/bin::"),
-		("CFLAGS", " -O2\t-g "),
+		("CFLAGS", "'unterminated"),
 		("CUSTOM", ""),
 	] {
 		let value = environment_value(name, raw, async |_| panic!("unexpected checkin"))
@@ -325,4 +261,14 @@ async fn plain_environment_values_do_not_check_in_paths() {
 			.unwrap();
 		assert_eq!(value.try_unwrap_string().unwrap(), raw);
 	}
+}
+
+fn render(template: &tg::Template) -> String {
+	template
+		.try_render_sync(|component| match component {
+			tg::template::Component::String(string) => Ok(string.as_str().into()),
+			tg::template::Component::Artifact(_) => Ok("".into()),
+			tg::template::Component::Placeholder(_) => panic!("unexpected placeholder"),
+		})
+		.unwrap()
 }

@@ -472,6 +472,7 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 export async function test() {
 	const tests = [
 		testBasic(),
+		testCompilerLocalPaths(),
 		testLdProxyDependencies(),
 		testLdProxyInterpreterArgs(),
 		testTransitiveAll(),
@@ -597,6 +598,31 @@ export async function testLdProxyInterpreterArgs() {
 	return true;
 }
 
+/** Local source and include paths must remain available inside the compiler sandbox. */
+export async function testCompilerLocalPaths() {
+	const toolchain = await bootstrap.sdk();
+	const proxy = await workspace.ccProxy({});
+	const source = await tg.file`#include <answer.h>
+int main(void) { return ANSWER != 42; }
+`;
+	const output = await std
+		.build(std.shBootstrap`
+			mkdir -p "source with spaces" "z includes" "a includes"
+			cp ${source} "source with spaces/main.c"
+			ln -s main.c "source with spaces/alias.c"
+			printf '#define ANSWER 42\\n' > "z includes/answer.h"
+			printf '#define ANSWER 0\\n' > "a includes/answer.h"
+			${proxy} -I"./z includes" -I"./a includes" -I"./z includes" "./source with spaces/alias.c" -o ${tg.output}
+		`)
+		.env(toolchain, {
+			TGCC_ENABLE: "true",
+			TGCC_COMPILER: await tg`${toolchain}/bin/cc`,
+		})
+		.then(tg.File.expect);
+	await std.assert.stdoutIncludes(output, "");
+	return true;
+}
+
 /** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */
 export async function testBasic(target?: string) {
 	const buildToolchain = target ? std.sdk({ target }) : await bootstrap.sdk();
@@ -683,6 +709,8 @@ export async function testSharedLibraryWithDep(target?: string) {
 		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
 		: await bootstrap.sdk();
 	const dylibExt = std.triple.os(targetTriple) === "darwin" ? "dylib" : "so";
+	const libraryNameFlag =
+		std.triple.os(targetTriple) === "darwin" ? "-install_name" : "-soname";
 	const constantsSource = await tg.file`
 		const char* getGreetingA() {
 			return "Hello from transitive constants A!";
@@ -721,12 +749,14 @@ export async function testSharedLibraryWithDep(target?: string) {
 		mkdir -p ${tg.output}/include
 		cp ${sources}/*.h ${tg.output}/include
 
-		${cmd} -shared -xc ${sources}/constants.c -o libconstants.${dylibExt}
-		${cmd} -shared -L. -I${tg.output}/include -lconstants -xc ${sources}/printer.c -o libprinter.${dylibExt}
-		${cmd} -xc -L. -I${tg.output}/include -lconstants -lprinter ${sources}/main.c -o main
+		mkdir libraries
+		ln -s libraries library-alias
+		${cmd} -shared -xc ${sources}/constants.c -Wl,${libraryNameFlag},libconstants-renamed.${dylibExt} -o libraries/libconstants.${dylibExt}
+		${cmd} -shared -Llibrary-alias -I${tg.output}/include -lconstants -xc ${sources}/printer.c -o libraries/libprinter.${dylibExt}
+		${cmd} -xc -Llibrary-alias -I${tg.output}/include -lconstants -lprinter ${sources}/main.c -o main
 
-		cp libconstants.${dylibExt} ${tg.output}/lib
-		cp libprinter.${dylibExt} ${tg.output}/lib
+		cp libraries/libconstants.${dylibExt} ${tg.output}/lib
+		cp libraries/libprinter.${dylibExt} ${tg.output}/lib
 		cp main ${tg.output}/bin
 	`)
 		.env(
@@ -738,6 +768,12 @@ export async function testSharedLibraryWithDep(target?: string) {
 
 	await output.store();
 	console.log("SHARED LIBRARY WITH DEP OUTPUT", output.id);
+	if (target === undefined) {
+		await std.assert.stdoutIncludes(
+			output.get("bin/main").then(tg.File.expect),
+			"Hello from transitive constants A!",
+		);
+	}
 	return output;
 }
 

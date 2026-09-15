@@ -1651,6 +1651,7 @@ dependencies = [
 name = "proxy"
 version = "0.0.0"
 dependencies = [
+ "regex",
  "shlex",
  "tangram_client",
 ]

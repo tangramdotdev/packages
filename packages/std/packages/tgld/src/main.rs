@@ -1,4 +1,3 @@
-use futures::{StreamExt as _, TryStreamExt as _};
 use itertools::Itertools;
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
@@ -300,15 +299,7 @@ fn read_options() -> tg::Result<Options> {
 
 		// Add any dynamic libraries passed directly to the linker.
 		if is_library_candidate(&arg) {
-			// If the path can't be canonicalized, do nothing - it's not a valid library candidate.
-			if let Ok(canonical_path) = std::fs::canonicalize(&arg) {
-				let path = if common::is_store_path(&arg) {
-					PathBuf::from(&arg)
-				} else {
-					canonical_path
-				};
-				additional_library_candidate_paths.push(path);
-			}
+			additional_library_candidate_paths.push(PathBuf::from(&arg));
 		}
 	}
 
@@ -381,47 +372,16 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	)
 	.await?;
 
-	// Check in store directories directly. Local directories retain selective library checkin.
+	// Check in each library directory and retain the context returned by the server.
 	let library_paths = command_line_library_path
 		.into_iter()
 		.chain(
-			futures::future::try_join_all(options.library_paths.iter().map(
-				|library_path| async move {
-					// Preserve the original store root across symlinks so checkin can recover its context.
-					let path = if common::is_store_path(library_path) {
-						PathBuf::from(library_path)
-					} else if let Ok(path) = std::fs::canonicalize(library_path) {
-						path
-					} else {
-						tracing::warn!(
-							?library_path,
-							"Could not canonicalize library path. Skipping."
-						);
-						return Ok(None);
-					};
-					if !common::is_store_path(&path.to_string_lossy()) {
-						if !path.is_dir() {
-							return Ok(None);
-						}
-						return checkin_local_library_path(&path).await;
-					}
-					let output = common::checkin_path(&path).await?;
-					let referent = output.artifact;
-					let artifact = tg::Artifact::with_referent(referent.clone());
-					let Ok(directory) = artifact.try_unwrap_directory() else {
-						return Ok(None);
-					};
-					if directory.entries().await?.is_empty() {
-						return Ok(None);
-					}
-					let (root, subpath) = common::artifact_path(&referent)?;
-					let root = root
-						.try_unwrap_directory()
-						.map_err(|_| tg::error!("expected a containing directory"))?;
-					let library_path = dir_with_subpath_from_directory(&root, subpath).await?;
-					Ok::<_, tg::Error>(Some(library_path))
-				},
-			))
+			futures::future::try_join_all(
+				options
+					.library_paths
+					.iter()
+					.map(|path| checkin_library_path(path)),
+			)
 			.await?
 			.into_iter()
 			.flatten(),
@@ -570,67 +530,65 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	Ok(())
 }
 
-/// Check in any files needed libraries and produce a directory with correct names.
-async fn checkin_local_library_path(
-	library_path: &impl AsRef<std::path::Path>,
-) -> tg::Result<Option<DirectoryWithSubpath>> {
-	let library_path = library_path.as_ref();
-	tracing::debug!(?library_path, "Checking in local library path");
-	// Get a stream of directory entries.
-	let read_dir = tokio::fs::read_dir(library_path)
+// Keep the server's containing root, adding aliases for libraries whose SONAME
+// or install name differs from their filename.
+async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubpath>> {
+	if !std::path::Path::new(path).is_dir() {
+		return Ok(None);
+	}
+	let mut output = common::checkin_path(path).await?;
+	if matches!(output.artifact.node, tg::artifact::Id::Symlink(_)) {
+		let target = std::fs::canonicalize(path)
+			.map_err(|error| tg::error!(!error, "failed to resolve library directory symlink"))?;
+		output = common::checkin_path(target).await?;
+	}
+	let artifact = tg::Artifact::with_referent(output.artifact.clone());
+	let directory = artifact
+		.try_unwrap_directory()
+		.map_err(|_| tg::error!("expected a library directory"))?;
+	let (root, subpath) = common::artifact_path(&output.artifact)?;
+	let root = root
+		.try_unwrap_directory()
+		.map_err(|_| tg::error!("expected a containing directory"))?;
+	let prefix = subpath.clone().unwrap_or_default();
+	let mut builder: Option<tg::directory::Builder> = None;
+	let mut entries = tokio::fs::read_dir(path)
 		.await
-		.map_err(|error| tg::error!(source = error, "could not read library path"))?;
-	let stream = tokio_stream::wrappers::ReadDirStream::new(read_dir);
-
-	// Produce checked-in directory entries for all libraries found.
-	let entries = stream
-		.map(|entry| async {
-			let entry = entry.map_err(|error| {
-				tg::error!(source = error, "could not read next directory entry")
-			})?;
-
-			let library_candidate_path = entry.path();
-			tracing::debug!(?library_candidate_path, "analyzing library candidate path");
-
-			// Skip any entry we cannot determine is a regular file.
-			let metadata = tokio::fs::symlink_metadata(&library_candidate_path).await;
-			if metadata.is_err() || !metadata.unwrap().is_file() {
-				tracing::debug!("Skipping non-file entry.");
-				return Ok(None);
-			}
-
-			if let Ok(AnalyzeOutputFileOutput {
-				name: Some(name), ..
-			}) = analyze_output_file(&library_candidate_path).await
-			{
-				tracing::debug!(?name, "Found library candidate.");
-				// Check in the file.
-				let output = common::checkin_path(&library_candidate_path).await?;
-				let library_candidate_file = tg::Artifact::with_referent(output.artifact)
-					.try_unwrap_file()
-					.map_err(|_| tg::error!("expected a library file"))?;
-
-				// Add an entry to the directory.
-				let id = library_candidate_file.id();
-				tracing::info!(?name, ?id, "Checked in library candidate.");
-				Ok::<_, tg::Error>(Some((name, tg::Artifact::File(library_candidate_file))))
-			} else {
-				Ok(None)
-			}
-		})
-		.filter_map(|result| async { result.await.transpose() })
-		.try_collect::<BTreeMap<_, _>>()
-		.await?;
-
-	let result = if entries.is_empty() {
-		None
-	} else {
-		let directory = tg::Directory::with_entries(entries);
-		let dir_with_subpath = dir_with_subpath_from_directory(&directory, None).await?;
-		Some(dir_with_subpath)
-	};
-	tracing::debug!(?result, ?library_path, "checked in local library path");
-	Ok(result)
+		.map_err(|error| tg::error!(!error, "failed to read library directory"))?;
+	while let Some(entry) = entries
+		.next_entry()
+		.await
+		.map_err(|error| tg::error!(!error, "failed to read library directory entry"))?
+	{
+		if !entry
+			.file_type()
+			.await
+			.map_err(|error| tg::error!(!error, "failed to read file type"))?
+			.is_file()
+		{
+			continue;
+		}
+		let Ok(AnalyzeOutputFileOutput {
+			name: Some(name), ..
+		}) = analyze_output_file(entry.path()).await
+		else {
+			continue;
+		};
+		if entry.file_name() == name.as_str() || directory.try_get(&name).await?.is_some() {
+			continue;
+		}
+		let alias = tg::Symlink::with_artifact_and_path(
+			root.clone().into(),
+			prefix.join(entry.file_name()),
+		);
+		let current = match builder.take() {
+			Some(builder) => builder,
+			None => root.to_builder().await?,
+		};
+		builder = Some(current.add(&prefix.join(name), alias.into()).await?);
+	}
+	let root = builder.map_or(root, tg::directory::Builder::build);
+	Ok(Some(dir_with_subpath_from_directory(&root, subpath).await?))
 }
 
 fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {

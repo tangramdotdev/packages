@@ -1,6 +1,6 @@
 [package]
 name = "proxy"
-description = "Shared artifact and compiler flag handling for Tangram proxies"
+description = "Shared artifact reference handling for Tangram proxies"
 edition = { workspace = true }
 homepage = { workspace = true }
 license = { workspace = true }
@@ -13,6 +13,7 @@ version = { workspace = true }
 workspace = true
 
 [dependencies]
+regex = { workspace = true }
 shlex = { workspace = true }
 tangram_client = { workspace = true }
 

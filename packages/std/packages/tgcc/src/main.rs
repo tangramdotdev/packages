@@ -317,14 +317,13 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 	// Remaining path-bearing options here are forwarded directly to the linker.
 	let mut forwarded = Vec::with_capacity(cli_args.len());
 	for arg in cli_args {
-		if !common::is_store_path(&arg) {
-			forwarded.push(arg.into());
-			continue;
-		}
-		let prefix = ["-Wl,-rpath-link,", "-Wl,-rpath,", "-Wl,-dynamic-linker="]
+		let Some(prefix) = ["-Wl,-rpath-link,", "-Wl,-rpath,", "-Wl,-dynamic-linker="]
 			.into_iter()
 			.find(|prefix| arg.starts_with(prefix))
-			.ok_or_else(|| tg::error!("unsupported embedded store path in compiler argument"))?;
+		else {
+			forwarded.push(arg.into());
+			continue;
+		};
 		let paths = arg.strip_prefix(prefix).unwrap();
 		let mut template = tg::Template::builder().string(prefix);
 		for (index, path) in paths
@@ -334,10 +333,11 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 			if index > 0 {
 				template = template.string(":");
 			}
-			template = if common::is_store_path(path) {
-				if !Path::new(path).is_absolute() {
-					return Err(tg::error!("unsupported embedded linker path"));
-				}
+			template = if !path.is_empty()
+				&& (!prefix.starts_with("-Wl,-rpath") || !path.contains('$'))
+				&& !path.starts_with('@')
+				&& (prefix != "-Wl,-rpath," || Path::new(path).is_absolute())
+			{
 				template.components(common::template_from_path(path).await?.components)
 			} else {
 				template.string(path)
@@ -360,10 +360,7 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 
 	// Create the arguments to the driver script.
 	let cc = common::template_from_path(&environment.cc).await?.into();
-	let mut args = std::iter::once("tangram_cc".to_string().into())
-		.chain(std::iter::once(cc))
-		.chain(forwarded)
-		.collect::<Vec<_>>();
+	let mut args = std::iter::once(cc).chain(forwarded).collect::<Vec<_>>();
 	for (target, value) in remappings {
 		match target.kind {
 			RemapKind::Include => args.push("-I".to_owned().into()),
@@ -427,23 +424,7 @@ async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
 		.await
 		.map_err(|error| tg::error!(source = error, "cc failed: no output"))?;
 
-	// Verify we did everything correctly.
-	let mut tangram_path = std::env::current_dir()
-		.map_err(|error| tg::error!(source = error, "failed to get current working directory"))?;
-	while !tangram_path.join(".tangram").exists() {
-		let Some(parent) = tangram_path.parent() else {
-			break;
-		};
-		tangram_path = parent.into();
-	}
-	let store_path = if tangram_path.join(".tangram").exists() {
-		tangram_path.join(".tangram/store")
-	} else if std::path::Path::new("/opt/tangram/store").exists() {
-		"/opt/tangram/store".into()
-	} else {
-		return Err(tg::error!("failed to find the store directory"));
-	};
-	let artifact_path = store_path.join(output_file.id().to_string());
+	let artifact_path = common::checkout_artifact(output_file).await?;
 	eprintln!("Copying {} to {output:#?}", artifact_path.display());
 	std::fs::copy(artifact_path, output)
 		.map_err(|error| tg::error!(source = error, "failed to copy file"))?;
@@ -471,185 +452,91 @@ fn which_cc() -> tg::Result<PathBuf> {
 	Ok(cc)
 }
 
-// Represents a sparse tree of source files. Used to avoid checking in an excessive number of files for every invocation.
-struct SourceTree {
-	component: std::ffi::OsString,
-	remap_target: Option<RemapTarget>,
-	children: Option<Vec<Self>>,
-}
-
-// Convert a list of sources into a corresponding list of tg::Template.
+// Check in each input before using its returned context or assembling local file layout.
 async fn create_remapping_table(
 	remap_targets: Vec<RemapTarget>,
-) -> tg::Result<BTreeMap<RemapTarget, tg::Template>> {
-	let mut table = BTreeMap::new();
-	let mut subtrees = Vec::new();
-
-	for remap_target in remap_targets {
-		// Let checkin preserve the original store root, including symlink context.
-		if common::is_store_path(&remap_target.value) {
-			let template = common::template_from_path(&remap_target.value).await?;
-			table.insert(remap_target, template);
-			continue;
-		}
-		// Canonicalize local paths to detect symlinks into the store.
-		let path: &Path = remap_target.value.as_ref();
-		let path = path
-			.canonicalize()
-			.map_err(|error| tg::error!(source = error, "failed to canonicalize path"))?;
-
-		// Bail if the file does not exist.
-		if !path.exists() {
-			return Err(tg::error!("Source file does not exist: {path:#?}."));
-		}
-
-		// Check if this is a path that should be a template. Needs to happen after canonicalization in case a local symlink was created pointing to an artifact.
-		if common::is_store_path(&path.to_string_lossy()) {
-			let template = common::template_from_path(&path).await?;
-			table.insert(remap_target, template);
-			continue;
-		}
-
-		// Add to the file trees.
-		insert_into_source_tree(
-			&mut subtrees,
-			path.iter().collect::<Vec<_>>().as_slice(),
-			remap_target,
-		);
-	}
-
-	// Check in every source tree.
-	for subtree in subtrees {
-		table.extend(check_in_source_tree(subtree).await?);
-	}
-
-	Ok(table)
-}
-
-fn insert_into_source_tree(
-	subtrees: &mut Vec<SourceTree>,
-	components: &[&std::ffi::OsStr],
-	remap_target: RemapTarget,
-) {
-	let parent = if let Some(parent) = subtrees
-		.iter_mut()
-		.find(|tree| tree.component.as_os_str() == components[0])
-	{
-		parent
-	} else {
-		let parent = SourceTree {
-			component: components[0].to_os_string(),
-			remap_target: None,
-			children: None,
+) -> tg::Result<Vec<(RemapTarget, tg::Template)>> {
+	let mut table = Vec::with_capacity(remap_targets.len());
+	let mut files = BTreeMap::<PathBuf, tg::Artifact>::new();
+	let mut local_targets = Vec::new();
+	for target in remap_targets {
+		let path = std::path::absolute(&target.value)
+			.map_err(|error| tg::error!(!error, "invalid input path"))?;
+		let mut arg = tg::checkin::Arg {
+			options: tg::checkin::Options {
+				destructive: false,
+				deterministic: true,
+				ignore: false,
+				source_dependencies: true,
+				locked: false,
+				lock: None,
+				root: true,
+				..Default::default()
+			},
+			path: path.clone(),
+			updates: vec![],
 		};
-		subtrees.push(parent);
-		subtrees.last_mut().unwrap()
-	};
-	let components = &components[1..];
-	if components.is_empty() {
-		parent.remap_target = Some(remap_target);
-	} else {
-		if parent.children.is_none() {
-			parent.children = Some(Vec::new());
+		let mut output = tg::checkin(arg.clone()).await?;
+		if matches!(output.artifact.node, tg::artifact::Id::Symlink(_)) {
+			// A standalone filesystem symlink does not include its target.
+			arg.path = path
+				.canonicalize()
+				.map_err(|error| tg::error!(!error, "failed to resolve input symlink"))?;
+			output = tg::checkin(arg).await?;
 		}
-		let subtrees = parent.children.as_mut().unwrap();
-		insert_into_source_tree(subtrees, components, remap_target);
-	}
-}
-
-// Check in the source tree and return a list of templates that correspond to the files within it.
-async fn check_in_source_tree(subtree: SourceTree) -> tg::Result<Vec<(RemapTarget, tg::Template)>> {
-	// Directory builder to check in the directory at the end.
-	let mut builder = tg::directory::Builder::with_entries(BTreeMap::new());
-
-	// List of remap targets and their subpaths within the directory that we will eventually check in.
-	let mut remap_targets = Vec::new();
-
-	// Recursively walk the subtree to collect the remap targets.
-	let mut stack = vec![(vec![], subtree)];
-	while let Some((mut components, subtree)) = stack.pop() {
-		let SourceTree {
-			component,
-			remap_target,
-			children,
-		} = subtree;
-		components.push(component);
-		let is_directory = children.is_some();
-		if let Some(children) = children {
-			stack.extend(
-				children
-					.into_iter()
-					.map(|child| (components.clone(), child)),
+		if output.artifact.options.id.is_some()
+			|| matches!(output.artifact.node, tg::artifact::Id::Directory(_))
+		{
+			let template = proxy::template_from_referent(&output.artifact)?;
+			table.push((target, template));
+			continue;
+		}
+		// Preserve filenames and relative layout for files without a containing root.
+		let path = path
+			.parent()
+			.unwrap()
+			.canonicalize()
+			.map_err(|error| tg::error!(!error, "failed to canonicalize input parent"))?
+			.join(
+				path.file_name()
+					.ok_or_else(|| tg::error!("expected an input filename"))?,
 			);
+		let subpath = path.strip_prefix("/").unwrap().to_owned();
+		let artifact = tg::Artifact::with_referent(output.artifact);
+		if let Some(existing) = files.get(&subpath) {
+			artifact.state().inherit_tokens(&existing.state().tokens());
+			artifact
+				.state()
+				.inherit_location(existing.state().location().as_ref());
 		}
-		if let Some(remap_target) = remap_target {
-			let subpath = components[1..].iter().collect::<PathBuf>();
-			let path = components.iter().collect::<PathBuf>();
-
-			// Update the remap targets.
-			remap_targets.push((remap_target, subpath.clone()));
-
-			// Check if we're remapping a file, and check it in first.
-			if !is_directory {
-				// FIXME - destructive, followed by immediate checkout.
-				let output = tg::checkin(tg::checkin::Arg {
-					options: tg::checkin::Options {
-						destructive: false,
-						deterministic: true,
-						ignore: false,
-						source_dependencies: true,
-						locked: false,
-						lock: None,
-						root: true,
-						..tg::checkin::Options::default()
-					},
-					path,
-					updates: vec![],
-				})
-				.await?;
-				let artifact = tg::Artifact::with_referent(output.artifact);
-				builder = builder
-					.add(&subpath, artifact.clone())
-					.await
-					.map_err(|error| {
-						tg::error!(
-							source = error,
-							"failed to add {}, {artifact:?} to directory",
-							subpath.display()
-						)
-					})?;
-			}
+		files.insert(subpath.clone(), artifact);
+		local_targets.push((table.len(), subpath));
+		// Filled once the selected files have been assembled into their common root.
+		table.push((target, tg::Template::from("")));
+	}
+	if !files.is_empty() {
+		let mut builder = tg::directory::Builder::with_entries(BTreeMap::new());
+		for (path, artifact) in files {
+			builder = builder.add(&path, artifact).await?;
+		}
+		let root: tg::Artifact = builder.build().into();
+		for (index, path) in local_targets {
+			table[index].1 = common::template_from_artifact_and_subpath(root.clone(), path);
 		}
 	}
-
-	// Create the directory from the subtree.
-	let artifact: tg::Artifact = builder.build().into();
-
-	// Get the templates for each remap target.
-	let templates = remap_targets
-		.into_iter()
-		.map(|(remap_target, subpath)| {
-			let template = tg::Template {
-				components: vec![
-					tg::template::Component::Artifact(artifact.clone()),
-					tg::template::Component::String(format!("/{}", subpath.display())),
-				],
-			};
-			(remap_target, template)
-		})
-		.collect();
-	Ok(templates)
+	Ok(table)
 }
 
 const DRIVER_SH: &str = include_str!("driver.sh");
 
 // Environment variables that must be filtered out before invoking the driver target.
-const BLACKLISTED_ENV_VARS: [&str; 5] = [
+const BLACKLISTED_ENV_VARS: [&str; 6] = [
 	"TANGRAM_ADDRESS",
 	"TGCC_TRACING",
 	"TGCC_COMPILER",
 	"HOME",
 	"OUTPUT",
+	"TMPDIR",
 ];
 
 // List of gcc options that take a value. This list **must** be comprehensive.

@@ -2,11 +2,11 @@ use std::path::PathBuf;
 use tangram_client::prelude::*;
 
 mod env;
-mod flags;
 mod interpreter;
+mod string;
 pub use env::environment_value;
-pub use flags::compiler_flags;
 pub use interpreter::interpreter_args;
+pub use string::template_from_string;
 
 /// Interpret server-provided context; never extract artifact IDs from store paths.
 pub fn artifact_path(
@@ -40,19 +40,6 @@ pub fn template_from_referent(
 		template = template.string(format!("/{}", path.display()));
 	}
 	Ok(template.build())
-}
-
-/// Only classify paths here. Checkin resolves their identity and authorization.
-#[must_use]
-pub fn is_store_path(path: &str) -> bool {
-	[
-		"/.tangram/store/",
-		"/.tangram/checkouts/",
-		"/opt/tangram/store/",
-		"/opt/tangram/checkouts/",
-	]
-	.into_iter()
-	.any(|prefix| path.contains(prefix))
 }
 
 #[cfg(test)]

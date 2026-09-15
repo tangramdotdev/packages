@@ -56,12 +56,7 @@ pub async fn run() -> tg::Result<()> {
 	let mut spawn_args: tg::value::Array = Vec::with_capacity(1 + extra_args.len());
 	spawn_args.push(tg::Value::Template(script_template));
 	for arg in &extra_args {
-		// Cargo build-script arguments have no compiler-option grammar.
-		spawn_args.push(if proxy::is_store_path(arg) {
-			outer::template_from_path(arg).await?.into()
-		} else {
-			arg.clone().into()
-		});
+		spawn_args.push(arg.clone().into());
 	}
 
 	let process_arg = tg::process::Arg {

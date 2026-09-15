@@ -1,5 +1,4 @@
 use crate::{args::Args, lock, sidecar};
-use proxy::is_store_path;
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	path::{Path, PathBuf},
@@ -545,20 +544,14 @@ async fn build_spawn_args(
 					.ok_or_else(|| tg::error!("expected a sysroot path"))?,
 			};
 			spawn_args.push("--sysroot".to_owned().into());
-			spawn_args.push(if is_store_path(path) {
-				template_from_path(path).await?.into()
-			} else {
-				path.to_owned().into()
-			});
+			spawn_args.push(template_from_path(path).await?.into());
 			continue;
 		}
 		let value = rewrite_arg(arg, source_artifact, source_dir, cwd);
 		let value = if let tg::Value::String(raw) = &value {
-			if is_store_path(raw) {
-				template_from_path(raw).await?.into()
-			} else {
-				value
-			}
+			proxy::template_from_string(raw, template_from_path)
+				.await?
+				.into()
 		} else {
 			value
 		};
@@ -827,9 +820,6 @@ pub(crate) async fn forward_logs(
 
 // These paths have already been separated by the caller's argument/environment grammar.
 pub(crate) async fn template_from_path(path: &str) -> tg::Result<tg::Template> {
-	if !Path::new(path).is_absolute() {
-		return Err(tg::error!("unsupported embedded store path"));
-	}
 	let output = checkin(Path::new(path)).await?;
 	proxy::template_from_referent(&output.artifact)
 }
