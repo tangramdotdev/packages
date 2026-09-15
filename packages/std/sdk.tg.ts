@@ -1201,7 +1201,7 @@ export namespace sdk {
 						parameters: testCParameters,
 						proxiedLinker: false,
 						sdkEnv: await std.env.compose(env, {
-							TGLD_PASSTHROUGH: true,
+							TANGRAM_LINKER_PASSTHROUGH: true,
 						}),
 						host: expected.host,
 						target,
@@ -1226,7 +1226,7 @@ export namespace sdk {
 						parameters: testCxxParameters,
 						proxiedLinker: false,
 						sdkEnv: await std.env.compose(env, {
-							TGLD_PASSTHROUGH: true,
+							TANGRAM_LINKER_PASSTHROUGH: true,
 						}),
 						host: expected.host,
 						target,
@@ -1259,7 +1259,7 @@ export namespace sdk {
 						parameters: testCxxAtomicParameters,
 						proxiedLinker: false,
 						sdkEnv: await std.env.compose(env, {
-							TGLD_PASSTHROUGH: true,
+							TANGRAM_LINKER_PASSTHROUGH: true,
 						}),
 						host: expected.host,
 						target,
@@ -1289,7 +1289,7 @@ export namespace sdk {
 							parameters: testFortranParameters,
 							proxiedLinker: false,
 							sdkEnv: await std.env.compose(env, {
-								TGLD_PASSTHROUGH: true,
+								TANGRAM_LINKER_PASSTHROUGH: true,
 							}),
 							host: expected.host,
 							target,

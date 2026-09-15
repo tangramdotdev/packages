@@ -85,7 +85,7 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 	env.push({
 		CPATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
 		LIBRARY_PATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
-		TGLD_PASSTHROUGH: true,
+		TANGRAM_LINKER_PASSTHROUGH: true,
 	});
 
 	return std.autotools.build({

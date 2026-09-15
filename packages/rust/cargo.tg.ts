@@ -968,7 +968,7 @@ export async function testUnproxiedWorkspace() {
 	const helloWorkspace = build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		env: {
-			TGLD_TRACING: "tgld=trace",
+			TANGRAM_LINKER_TRACING: "tgld=trace",
 		},
 		pre: "set -x",
 		proxy: false,
@@ -984,7 +984,7 @@ export async function testUnproxiedWorkspace() {
 	const helloOpenssl = build({
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
 		env: std.env.arg(openssl(), pkgconf(), {
-			TGLD_TRACING: "tgld=trace",
+			TANGRAM_LINKER_TRACING: "tgld=trace",
 		}),
 		proxy: false,
 	});
@@ -1005,7 +1005,7 @@ export async function testUnproxiedWorkspaceCross() {
 		target: "x86_64-unknown-linux-gnu",
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		env: {
-			TGLD_TRACING: "tgld=trace",
+			TANGRAM_LINKER_TRACING: "tgld=trace",
 		},
 		pre: "set -x",
 		proxy: false,

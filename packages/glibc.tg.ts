@@ -75,7 +75,7 @@ export async function build(...args: tg.Args<Arg>) {
 		{
 			CPATH: tg.Mutation.unset(),
 			LIBRARY_PATH: tg.Mutation.unset(),
-			TGLD_PASSTHROUGH: true,
+			TANGRAM_LINKER_PASSTHROUGH: true,
 		},
 		arg.env ?? null,
 	);

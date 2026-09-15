@@ -2732,6 +2732,7 @@ dependencies = [
  "futures",
  "goblin",
  "itertools 0.14.0",
+ "proxy",
  "serde",
  "serde_json",
  "tangram_client",
@@ -2748,6 +2749,7 @@ version = "0.0.0"
 dependencies = [
  "common",
  "futures",
+ "proxy",
  "serde",
  "serde_json",
  "tangram_client",
