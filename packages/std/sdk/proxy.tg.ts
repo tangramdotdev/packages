@@ -889,7 +889,10 @@ export async function testSdkControlPrecedence() {
 	const source = await tg.file`int main(void) { return 0; }`;
 	const linux = std.triple.os(std.triple.host()) === "linux";
 	for (const defaultValue of [false, true]) {
-		const toolchain = await env({ toolchain: rawToolchain, embedWrapper: defaultValue });
+		// Build each SDK independently, as the bootstrap SDK does.
+		const toolchain = await tg
+			.build(env, { toolchain: rawToolchain, embedWrapper: defaultValue })
+			.named(`SDK embedding default ${defaultValue}`);
 		for (const [environment, cli, expected] of [
 			[undefined, undefined, linux && defaultValue],
 			["false", undefined, false],
