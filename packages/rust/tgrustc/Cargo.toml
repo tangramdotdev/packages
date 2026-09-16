@@ -21,7 +21,7 @@ result_large_err = "allow"
 proxy = { path = "../../std/packages/proxy" }
 rustix = { version = "1", features = ["stdio"] }
 serde = { version = "1", default-features = false, features = ["derive", "std"] }
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "0337e35e5393e4e7b5af282c0006d2917da1ac7f" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "09be0e8949ddd56112a3fc6027b4c83df7f8fd53" }
 tokio = { version = "1", default-features = false, features = ["rt", "fs"] }
 toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
 which = "8"
