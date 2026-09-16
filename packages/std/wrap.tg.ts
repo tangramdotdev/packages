@@ -40,8 +40,8 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			if (kind === "elf" || kind === "mach-o") {
 				detectedManifest = await wrap.Manifest.tryRead(f);
 				if (detectedManifest !== undefined) {
-					for (const dependency of manifestDependencies(detectedManifest)) {
-						inheritManifestReference(dependency, references, f.state.tokens);
+					for (const dependency of await f.dependencyObjects) {
+						references.set(dependency.id, dependency);
 					}
 				}
 				if (arg.merge && detectedManifest && kind === "elf") {
@@ -411,7 +411,17 @@ export namespace wrap {
 		// If the executable arg is a wrapper, obtain its manifest.
 		const existingManifest =
 			await wrap.existingManifestFromExecutableArg(executable);
-		const tokens = tg.Artifact.is(executable) ? executable.state.tokens : {};
+		if (existingManifest !== undefined) {
+			const file =
+				executable instanceof tg.Symlink
+					? await executable.resolve()
+					: executable;
+			if (file instanceof tg.File) {
+				for (const dependency of await file.dependencyObjects) {
+					references.set(dependency.id, dependency);
+				}
+			}
+		}
 
 		// Determine whether to try to merge this wrapper with an existing one. If the user specified `true`, only honor if an existing manifest was found.
 		const merge = merge_ && existingManifest !== undefined;
@@ -428,18 +438,13 @@ export namespace wrap {
 			}
 
 			envs.push(
-				await wrap.envObjectFromManifestEnv(
-					existingManifest.env,
-					references,
-					tokens,
-				),
+				await wrap.envObjectFromManifestEnv(existingManifest.env, references),
 			);
 
 			// Merge the existing interpreter with any new interpreter provided
 			const existingInterpreter = await wrap.interpreterFromManifestInterpreter(
 				existingManifest.interpreter,
 				references,
-				tokens,
 			);
 			if (interpreter !== undefined && interpreter !== null) {
 				const newInterpreter = await interpreterFromArg(
@@ -461,13 +466,12 @@ export namespace wrap {
 				executable = await wrap.executableFromManifestExecutable(
 					existingManifest.executable,
 					references,
-					tokens,
 				);
 			}
 
 			const existingArgs = await Promise.all(
 				(existingManifest.args ?? []).map((arg) =>
-					templateFromManifestTemplate(arg, references, tokens),
+					templateFromManifestTemplate(arg, references),
 				),
 			);
 			args_ = mergeWrapArgs(args_ ?? [], existingArgs);
@@ -593,7 +597,6 @@ export namespace wrap {
 	export async function envObjectFromManifestEnv(
 		mutation?: wrap.Manifest.Mutation,
 		references?: ManifestReferences,
-		tokens?: tg.Authorization.Tokens,
 	): Promise<std.env.EnvObject> {
 		if (mutation === undefined || mutation.kind === "unset") {
 			return {};
@@ -602,13 +605,12 @@ export namespace wrap {
 			mutation.kind === "set",
 			"malformed env, expected a set or unset mutation",
 		);
-		return envObjectFromMapValue(mutation.value, references, tokens);
+		return envObjectFromMapValue(mutation.value, references);
 	}
 
 	export async function interpreterFromManifestInterpreter(
 		manifestInterpreter?: wrap.Manifest.Interpreter,
 		references?: ManifestReferences,
-		tokens?: tg.Authorization.Tokens,
 	): Promise<wrap.Interpreter | undefined> {
 		if (manifestInterpreter === undefined) {
 			return undefined;
@@ -621,14 +623,13 @@ export namespace wrap {
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 						references,
-						tokens,
 					),
 					...(manifestInterpreter.args === undefined
 						? {}
 						: {
 								args: await Promise.all(
 									manifestInterpreter.args.map((arg) =>
-										templateFromManifestTemplate(arg, references, tokens),
+										templateFromManifestTemplate(arg, references),
 									),
 								),
 							}),
@@ -641,14 +642,13 @@ export namespace wrap {
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 						references,
-						tokens,
 					),
 					...(manifestInterpreter.libraryPaths === undefined
 						? {}
 						: {
 								libraryPaths: await Promise.all(
 									manifestInterpreter.libraryPaths.map((arg) =>
-										templateFromManifestTemplate(arg, references, tokens),
+										templateFromManifestTemplate(arg, references),
 									),
 								),
 							}),
@@ -657,7 +657,7 @@ export namespace wrap {
 						: {
 								preloads: await Promise.all(
 									manifestInterpreter.preloads.map((arg) =>
-										fileOrSymlinkFromManifestTemplate(arg, references, tokens),
+										fileOrSymlinkFromManifestTemplate(arg, references),
 									),
 								),
 							}),
@@ -666,7 +666,7 @@ export namespace wrap {
 						: {
 								args: await Promise.all(
 									manifestInterpreter.args.map((arg) =>
-										templateFromManifestTemplate(arg, references, tokens),
+										templateFromManifestTemplate(arg, references),
 									),
 								),
 							}),
@@ -680,7 +680,7 @@ export namespace wrap {
 						: {
 								libraryPaths: await Promise.all(
 									manifestInterpreter.libraryPaths.map((arg) =>
-										templateFromManifestTemplate(arg, references, tokens),
+										templateFromManifestTemplate(arg, references),
 									),
 								),
 							}),
@@ -689,7 +689,7 @@ export namespace wrap {
 						: {
 								preloads: await Promise.all(
 									manifestInterpreter.preloads.map((arg) =>
-										fileOrSymlinkFromManifestTemplate(arg, references, tokens),
+										fileOrSymlinkFromManifestTemplate(arg, references),
 									),
 								),
 							}),
@@ -819,19 +819,13 @@ export namespace wrap {
 	export async function executableFromManifestExecutable(
 		manifestExecutable: wrap.Manifest.Executable,
 		references?: ManifestReferences,
-		tokens?: tg.Authorization.Tokens,
 	): Promise<number | tg.Template | tg.File | tg.Symlink> {
 		if (manifestExecutable.kind === "content") {
-			return templateFromManifestTemplate(
-				manifestExecutable.value,
-				references,
-				tokens,
-			);
+			return templateFromManifestTemplate(manifestExecutable.value, references);
 		} else if (manifestExecutable.kind === "path") {
 			return fileOrSymlinkFromManifestTemplate(
 				manifestExecutable.value,
 				references,
-				tokens,
 			);
 		} else {
 			return manifestExecutable.value;
@@ -904,8 +898,9 @@ export namespace wrap {
 		tg.assert(manifest.executable.kind !== "address");
 		const wrappedExecutableFile = await fileOrSymlinkFromManifestTemplate(
 			manifest.executable.value,
-			undefined,
-			file.state.tokens,
+			new Map(
+				(await file.dependencyObjects).map((object) => [object.id, object]),
+			),
 		);
 		tg.assert(
 			wrappedExecutableFile instanceof tg.File,
@@ -1118,33 +1113,15 @@ async function addManifestReference(
 	object: tg.Object,
 ): Promise<void> {
 	await object.store();
-	setManifestReference(references, object);
+	references.set(object.id, object);
 }
 
-// Determine whether an object carries any authorization tokens.
-function hasTokens(object: tg.Object): boolean {
-	return Object.keys(object.state.tokens).length > 0;
-}
-
-function setManifestReference(
-	references: ManifestReferences,
-	object: tg.Object,
-): void {
-	const existing = references.get(object.id);
-	if (existing === undefined || (!hasTokens(existing) && hasTokens(object))) {
-		references.set(object.id, object);
-	}
-}
-
-function inheritManifestReference<T extends tg.Object>(
-	object: T,
+function getManifestReference(
+	id: tg.Object.Id,
 	references?: ManifestReferences,
-	tokens?: tg.Authorization.Tokens,
-): T {
-	tg.Object.inheritTokens(object, tokens ?? {});
-	if (references !== undefined) {
-		setManifestReference(references, object);
-	}
+): tg.Object {
+	const object = references?.get(id);
+	tg.assert(object !== undefined, `missing manifest dependency ${id}`);
 	return object;
 }
 
@@ -1549,7 +1526,13 @@ async function interpreterFromExecutableArg(
 	// Handle the executable by its format.
 	switch (metadata.format) {
 		case "elf": {
-			return interpreterFromElf(metadata, buildToolchainArg, buildArg, hostArg);
+			return interpreterFromElf(
+				arg,
+				metadata,
+				buildToolchainArg,
+				buildArg,
+				hostArg,
+			);
 		}
 		case "mach-o": {
 			// Use default injection when no custom build, host, or buildToolchain is provided.
@@ -1610,6 +1593,7 @@ async function interpreterFromExecutableArg(
 
 /** Inspect an ELF file and produce the correct interpreter. */
 async function interpreterFromElf(
+	executable: tg.File,
 	metadata: std.file.ElfExecutableMetadata,
 	buildToolchainArg?: std.env.Arg,
 	buildArg?: string,
@@ -1673,7 +1657,11 @@ async function interpreterFromElf(
 	} else if (metadata.interpreter?.includes("ld-musl")) {
 		// Handle an ld-musl interpreter.
 		host = std.triple.create(host, { environment: "musl" });
-		const { ldso, libDir } = await muslLoader(metadata.interpreter, host);
+		const { ldso, libDir } = await muslLoader(
+			metadata.interpreter,
+			host,
+			executable,
+		);
 		return {
 			kind: "ld-musl",
 			executable: ldso,
@@ -1689,13 +1677,19 @@ async function interpreterFromElf(
 async function muslLoader(
 	interpreterPath: string,
 	host: string,
+	executable: tg.File,
 ): Promise<{ ldso: tg.File; libDir: tg.Directory }> {
 	const match = interpreterPath.match(/\/(dir_[0-9a-z]+)\/(.*)\/([^/]+)$/);
 	const [, directoryId, libSubpath, ldsoName] = match ?? [];
 	if (directoryId !== undefined && libSubpath && ldsoName !== undefined) {
-		const libDir = await tg.Directory.withId(directoryId)
-			.get(libSubpath)
-			.then(tg.Directory.expect);
+		const directory = (await executable.dependencyObjects).find(
+			(dependency) => dependency.id === directoryId,
+		);
+		tg.assert(
+			directory instanceof tg.Directory,
+			`missing interpreter dependency ${directoryId}`,
+		);
+		const libDir = await directory.get(libSubpath).then(tg.Directory.expect);
 		let ldso = await libDir.get(ldsoName);
 		if (ldso instanceof tg.Symlink) {
 			ldso = await ldso.resolve().then((resolved) => {
@@ -2237,12 +2231,10 @@ function manifestValueFromManifestTemplate(
 export async function fileOrSymlinkFromManifestTemplate(
 	manifestTemplate: wrap.Manifest.Template,
 	references?: ManifestReferences,
-	tokens?: tg.Authorization.Tokens,
 ): Promise<tg.File | tg.Symlink> {
 	let template = await templateFromManifestTemplate(
 		manifestTemplate,
 		references,
-		tokens,
 	);
 	if (template.components.length !== 1) {
 		throw new Error(
@@ -2261,16 +2253,13 @@ export async function fileOrSymlinkFromManifestTemplate(
 function templateFromManifestTemplate(
 	manifestTemplate: wrap.Manifest.Template,
 	references?: ManifestReferences,
-	tokens?: tg.Authorization.Tokens,
 ): PromiseLike<tg.Template> {
 	return manifestTemplate.components.reduce<PromiseLike<tg.Template>>(
 		(result, component) => {
 			switch (component.kind) {
 				case "artifact": {
-					const artifact = inheritManifestReference(
-						tg.Artifact.withId(component.value),
-						references,
-						tokens,
+					const artifact = tg.Artifact.expect(
+						getManifestReference(component.value, references),
 					);
 					return tg`${result}${artifact}`;
 				}
@@ -2289,53 +2278,43 @@ function templateFromManifestTemplate(
 function mutationFromManifestMutation(
 	manifestMutation: wrap.Manifest.Mutation,
 	references?: ManifestReferences,
-	tokens?: tg.Authorization.Tokens,
 ): PromiseLike<tg.Mutation> {
 	if (manifestMutation.kind === "unset") {
 		return Promise.resolve(tg.Mutation.unset());
 	} else if (manifestMutation.kind === "set") {
 		return tg.Mutation.set(
-			valueFromManifestValue(manifestMutation.value, references, tokens),
+			valueFromManifestValue(manifestMutation.value, references),
 		);
 	} else if (manifestMutation.kind === "set_if_unset") {
 		return tg.Mutation.setIfUnset(
-			valueFromManifestValue(manifestMutation.value, references, tokens),
+			valueFromManifestValue(manifestMutation.value, references),
 		);
 	} else if (manifestMutation.kind === "prepend") {
 		return tg.Mutation.prepend(
 			manifestMutation.values.map((value) =>
-				valueFromManifestValue(value, references, tokens),
+				valueFromManifestValue(value, references),
 			),
 		);
 	} else if (manifestMutation.kind === "append") {
 		return tg.Mutation.append(
 			manifestMutation.values.map((value) =>
-				valueFromManifestValue(value, references, tokens),
+				valueFromManifestValue(value, references),
 			),
 		);
 	} else if (manifestMutation.kind === "prefix") {
 		return tg.Mutation.prefix(
-			templateFromManifestTemplate(
-				manifestMutation.template,
-				references,
-				tokens,
-			),
+			templateFromManifestTemplate(manifestMutation.template, references),
 			manifestMutation.separator,
 		);
 	} else if (manifestMutation.kind === "suffix") {
 		return tg.Mutation.suffix(
-			templateFromManifestTemplate(
-				manifestMutation.template,
-				references,
-				tokens,
-			),
+			templateFromManifestTemplate(manifestMutation.template, references),
 			manifestMutation.separator,
 		);
 	} else if (manifestMutation.kind === "merge") {
 		const value = valueFromManifestValue(
 			manifestMutation.value,
 			references,
-			tokens,
 		).then((v) => {
 			tg.assert(tg.Value.isMap(v));
 			return v;
@@ -2412,11 +2391,10 @@ async function manifestValueFromValue(
 async function valueFromManifestValue(
 	value: wrap.Manifest.Value,
 	references?: ManifestReferences,
-	tokens?: tg.Authorization.Tokens,
 ): Promise<tg.Value> {
 	if (value instanceof Array) {
 		return await Promise.all(
-			value.map((value) => valueFromManifestValue(value, references, tokens)),
+			value.map((value) => valueFromManifestValue(value, references)),
 		);
 	} else if (value === null) {
 		return null;
@@ -2427,34 +2405,22 @@ async function valueFromManifestValue(
 	} else if (typeof value === "string") {
 		return value;
 	} else if (value.kind === "directory") {
-		return inheritManifestReference(
-			tg.Directory.withId(value.value),
-			references,
-			tokens,
-		);
+		return tg.Directory.expect(getManifestReference(value.value, references));
 	} else if (value.kind === "file") {
-		return inheritManifestReference(
-			tg.File.withId(value.value),
-			references,
-			tokens,
-		);
+		return tg.File.expect(getManifestReference(value.value, references));
 	} else if (value.kind === "symlink") {
-		return inheritManifestReference(
-			tg.Symlink.withId(value.value),
-			references,
-			tokens,
-		);
+		return tg.Symlink.expect(getManifestReference(value.value, references));
 	} else if (value.kind === "template") {
-		return await templateFromManifestTemplate(value.value, references, tokens);
+		return await templateFromManifestTemplate(value.value, references);
 	} else if (value.kind === "mutation") {
-		return mutationFromManifestMutation(value.value, references, tokens);
+		return mutationFromManifestMutation(value.value, references);
 	} else if (value.kind === "map") {
 		const ret: tg.Value = {};
 		const entries = Object.entries(value.value);
 		const promises = entries.map(async ([key, val]) => {
 			return {
 				key,
-				value: await valueFromManifestValue(val, references, tokens),
+				value: await valueFromManifestValue(val, references),
 			};
 		});
 		const resolvedEntries = await Promise.all(promises);
@@ -2470,10 +2436,10 @@ async function valueFromManifestValue(
 /** Yield the key/value pairs this manifest sets once all mutations are applied. */
 export async function* manifestEnvVars(
 	manifest: wrap.Manifest,
-	tokens: tg.Authorization.Tokens,
+	references: ManifestReferences,
 ): AsyncGenerator<[string, tg.Template | undefined]> {
 	yield* std.env.envVars(
-		await wrap.envObjectFromManifestEnv(manifest.env, undefined, tokens),
+		await wrap.envObjectFromManifestEnv(manifest.env, references),
 	);
 }
 
@@ -2509,7 +2475,6 @@ async function manifestTemplateFromArg(
 async function envObjectFromMapValue(
 	value: wrap.Manifest.Value,
 	references?: ManifestReferences,
-	tokens?: tg.Authorization.Tokens,
 ): Promise<std.env.EnvObject> {
 	tg.assert(
 		value !== null &&
@@ -2530,7 +2495,6 @@ async function envObjectFromMapValue(
 			ret[key] = (await mutationFromManifestMutation(
 				val.value,
 				references,
-				tokens,
 			)) as tg.Mutation<tg.Template.Arg>;
 		} else {
 			throw new Error(
@@ -2780,8 +2744,8 @@ export async function test() {
 		}),
 		tg.build(testDependencies, { name: "dependencies" }),
 		tg.build(testDylibPath, { name: "dylib path" }),
-		tg.build(testEnvObjectFromArtifactAuthorization, {
-			name: "env object from artifact authorization",
+		tg.build(testEnvObjectFromArtifactDependencies, {
+			name: "env object from artifact dependencies",
 		}),
 		tg.build(testFilterLibraryPathsWithoutExecutable, {
 			name: "filter library paths without executable",
@@ -2803,8 +2767,8 @@ export async function test() {
 		tg.build(testManifestMutationPrependRoundTrip, {
 			name: "manifest mutation prepend round trip",
 		}),
-		tg.build(testManifestTemplateAuthorization, {
-			name: "manifest template authorization",
+		tg.build(testManifestReferences, {
+			name: "manifest references",
 		}),
 		tg.build(testManifestTemplatePlaceholderRoundTrip, {
 			name: "manifest template placeholder round trip",
@@ -2902,7 +2866,15 @@ export async function testSingleArgObjectNoMutations() {
 	} else if (os === "darwin") {
 		tg.assert(origManifestExecutable.kind === "path");
 		const origExecutable = await wrap
-			.executableFromManifestExecutable(origManifestExecutable)
+			.executableFromManifestExecutable(
+				origManifestExecutable,
+				new Map(
+					(await executable.dependencyObjects).map((object) => [
+						object.id,
+						object,
+					]),
+				),
+			)
 			.then(tg.File.expect);
 		await origExecutable.store();
 		const origExecutableId = origExecutable.id;
@@ -2959,8 +2931,9 @@ export async function testRewrapEmbeddedExecutableRetainsNeededLibraries() {
 
 	const interpreter = await wrap.interpreterFromManifestInterpreter(
 		manifest.interpreter,
-		undefined,
-		wrapper.state.tokens,
+		new Map(
+			(await wrapper.dependencyObjects).map((object) => [object.id, object]),
+		),
 	);
 	tg.assert(
 		interpreter?.kind === "ld-linux" || interpreter?.kind === "ld-musl",
@@ -3173,38 +3146,34 @@ export async function testDylibPath() {
 	return libraryPathWrapper;
 }
 
-export async function testManifestTemplateAuthorization() {
-	const directory = await tg.directory({ library: tg.file("library") });
-	await directory.store();
-	tg.assert(hasTokens(directory));
-
-	const serializedReferences: ManifestReferences = new Map();
-	const manifestTemplate = await manifestTemplateFromArg(
-		directory,
-		serializedReferences,
-	);
-	tg.assert(serializedReferences.get(directory.id) === directory);
-
-	const parsedReferences: ManifestReferences = new Map();
-	const template = await templateFromManifestTemplate(
-		manifestTemplate,
-		parsedReferences,
-		directory.state.tokens,
-	);
-	const [artifact] = template.components;
-	tg.assert(artifact instanceof tg.Directory);
-	const artifactTokens = artifact.state.tokens;
-	const directoryTokens = directory.state.tokens;
-	const locations = Object.keys(directoryTokens);
-	tg.assert(
-		locations.length === Object.keys(artifactTokens).length &&
-			locations.every(
-				(location) => artifactTokens[location] === directoryTokens[location],
-			),
-		"expected the manifest template artifact to retain its authorization tokens",
-	);
-	tg.assert(parsedReferences.get(directory.id) === artifact);
-
+export async function testManifestReferences() {
+	const file = await tg.file("library");
+	const directory = await tg.directory({ library: file });
+	const symlink = await tg.symlink({ artifact: directory, path: "library" });
+	for (const artifact of [file, directory, symlink]) {
+		const references: ManifestReferences = new Map();
+		const manifestTemplate = await manifestTemplateFromArg(
+			artifact,
+			references,
+		);
+		const manifestValue = await manifestValueFromValue(artifact, references);
+		const wrapper = await tg.file("wrapper", {
+			dependencies: { [artifact.id]: { node: artifact } },
+		});
+		const dependencies = new Map(
+			(await wrapper.dependencyObjects).map((object) => [object.id, object]),
+		);
+		const restored = await templateFromManifestTemplate(
+			manifestTemplate,
+			dependencies,
+		);
+		tg.assert(references.get(artifact.id) === artifact);
+		tg.assert(restored.components[0] === dependencies.get(artifact.id));
+		tg.assert(
+			(await valueFromManifestValue(manifestValue, dependencies)) ===
+				dependencies.get(artifact.id),
+		);
+	}
 	return true;
 }
 
@@ -3398,6 +3367,12 @@ export async function testMergeFalsePreservesWrapperExecutable() {
 	tg.assert(outerManifest.executable.kind === "path");
 	const outerExecutable = await fileOrSymlinkFromManifestTemplate(
 		outerManifest.executable.value,
+		new Map(
+			(await outerWrapper.dependencyObjects).map((object) => [
+				object.id,
+				object,
+			]),
+		),
 	);
 
 	tg.assert(
@@ -3436,7 +3411,7 @@ export async function testMergedWrapperArgumentOrder() {
 	return true;
 }
 
-export async function testEnvObjectFromArtifactAuthorization() {
+export async function testEnvObjectFromArtifactDependencies() {
 	const dependency = await tg.directory({ dependency: tg.file("dependency") });
 	const references: ManifestReferences = new Map();
 	const manifestEnv = await wrap.manifestEnvFromEnvObject(
@@ -3467,10 +3442,9 @@ export async function testEnvObjectFromArtifactAuthorization() {
 	const component = value.components[0];
 	tg.assert(component instanceof tg.Directory);
 
-	tg.assert(
-		hasTokens(component),
-		"expected envObjectFromArtifact to retain the wrapper authorization tokens",
-	);
+	tg.assert(component.id === dependency.id);
+	const file = await component.get("dependency").then(tg.File.expect);
+	tg.assert((await file.text) === "dependency");
 
 	return true;
 }

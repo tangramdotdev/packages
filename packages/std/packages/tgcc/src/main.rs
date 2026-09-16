@@ -45,20 +45,16 @@ struct RemapTarget {
 // https://gcc.gnu.org/onlinedocs/gcc/Directory-Options.html
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum RemapKind {
-	// -I, -include
+	// -I
 	Include,
-	// -iquote
-	Quote,
-	// -isystem
-	System,
 	// -idirafter
 	DirAfter,
-	// -imacro
-	Macro,
 	// -L
 	Linker,
 	// -B
 	Binary,
+	// Other compiler options whose operand is a path.
+	Option(&'static str),
 	// Any source file input.
 	Source,
 }
@@ -75,9 +71,9 @@ impl Environment {
 						tg::error!(source = error, "Failed to parse TGCC_ENABLE")
 					})?;
 				},
-				key if BLACKLISTED_ENV_VARS.contains(&key) => {},
+				key if BLACKLISTED_ENV_VARS.contains(&key)
+					|| key.starts_with(tg::process::env::PREFIX) => {},
 				_ => {
-					let value = common::unrender(&value)?;
 					env.insert(key, value.into());
 				},
 			}
@@ -85,19 +81,31 @@ impl Environment {
 		let cc = which_cc()?;
 		Ok(Self { enable, cc, env })
 	}
+	async fn checkin(&mut self) -> tg::Result<()> {
+		for (name, value) in &mut self.env {
+			let tg::Value::String(raw) = value else {
+				continue;
+			};
+			*value = proxy::environment_value(name, raw, async |path| {
+				common::template_from_path(path).await
+			})
+			.await?;
+		}
+		Ok(())
+	}
 }
 
 impl Args {
 	// Parse the cli arguments as if this program was gcc to extract the sources, search paths, and rest of the arguments.
 	#[allow(clippy::too_many_lines)]
-	fn parse() -> Self {
+	fn parse(args: impl Iterator<Item = String>) -> Self {
 		let mut remap_targets = vec![];
 		let mut output = None;
 		let mut cli_args = vec![];
 		let mut stdin = false;
 		let mut iprefix = String::new();
 
-		let mut args = std::env::args().skip(1).peekable();
+		let mut args = args.peekable();
 		while let Some(arg) = args.next() {
 			match arg.as_str() {
 				// By convention, '-' refers to using stdin as the source file.
@@ -155,47 +163,6 @@ impl Args {
 						},
 					}
 				},
-				// The long form include flags are treated differently by gcc.
-				"-include" => {
-					if args.peek().is_some() {
-						remap_targets.push(RemapTarget {
-							kind: RemapKind::Include,
-							value: args.next().unwrap(),
-						});
-					}
-				},
-				"-iquote" => {
-					if args.peek().is_some() {
-						remap_targets.push(RemapTarget {
-							kind: RemapKind::Quote,
-							value: args.next().unwrap(),
-						});
-					}
-				},
-				"-isystem" => {
-					if args.peek().is_some() {
-						remap_targets.push(RemapTarget {
-							kind: RemapKind::System,
-							value: args.next().unwrap(),
-						});
-					}
-				},
-				"-imacro" => {
-					if args.peek().is_some() {
-						remap_targets.push(RemapTarget {
-							kind: RemapKind::Macro,
-							value: args.next().unwrap(),
-						});
-					}
-				},
-				"-idirafter" => {
-					if args.peek().is_some() {
-						remap_targets.push(RemapTarget {
-							kind: RemapKind::DirAfter,
-							value: args.next().unwrap(),
-						});
-					}
-				},
 				// Handle prefixes. This is a stateful operation over the command line arguments, where subsequent -iprefix arguments will override any previous -iprefix.
 				"-iprefix" => {
 					if args.peek().is_some() {
@@ -245,6 +212,34 @@ impl Args {
 				},
 				// Anything starting with a '-' is an option. Check if we need to extract its value too.
 				option if option.starts_with('-') => {
+					if let Some((prefix, flag)) = [
+						("--sysroot=", "--sysroot"),
+						("--sysroot", "--sysroot"),
+						("-isysroot", "-isysroot"),
+						("-isystem", "-isystem"),
+						("-iquote", "-iquote"),
+						("-idirafter", "-idirafter"),
+						("-include-pch", "-include-pch"),
+						("-include", "-include"),
+						("-imacros", "-imacros"),
+					]
+					.into_iter()
+					.find(|(prefix, _)| {
+						option == *prefix
+							|| (*prefix != "-include-pch" && option.starts_with(prefix))
+					}) {
+						let path = option.strip_prefix(prefix).unwrap();
+						let path = if path.is_empty() {
+							args.next().unwrap_or_default()
+						} else {
+							path.to_owned()
+						};
+						remap_targets.push(RemapTarget {
+							kind: RemapKind::Option(flag),
+							value: path,
+						});
+						continue;
+					}
 					cli_args.push(option.into());
 					if let Some(opt) = CC_OPTIONS_WITH_VALUE
 						.iter()
@@ -286,7 +281,7 @@ fn main_inner() -> tg::Result<()> {
 	let environment = Environment::parse()?;
 
 	// Get the command line arguments.
-	let args = Args::parse();
+	let args = Args::parse(std::env::args().skip(1));
 
 	// If this invocation isn't being used to generate output or needs to read from stdin, fallback on the detected C compiler.
 	if !environment.enable || args.output.is_none() || args.stdin {
@@ -311,8 +306,66 @@ fn main_inner() -> tg::Result<()> {
 	Ok(())
 }
 
+async fn linker_argument(
+	raw: &str,
+	mut template_from_path: impl AsyncFnMut(&str) -> tg::Result<tg::Template>,
+) -> tg::Result<tg::Template> {
+	let Some(args) = raw.strip_prefix("-Wl,") else {
+		return Ok(raw.into());
+	};
+	let mut args = args.split(',');
+	let mut template = tg::Template::builder().string("-Wl");
+	while let Some(arg) = args.next() {
+		template = template.string(",");
+		let (option, path) = arg
+			.split_once('=')
+			.map_or((arg, None), |(option, path)| (option, Some(path)));
+		if !matches!(option, "-rpath" | "-rpath-link" | "-dynamic-linker") {
+			template = template.string(arg);
+			continue;
+		}
+		template = template.string(option);
+		let paths = if let Some(path) = path {
+			template = template.string("=");
+			path
+		} else if let Some(path) = args.next() {
+			template = template.string(",");
+			path
+		} else {
+			break;
+		};
+		if option == "-rpath" {
+			// Runtime paths need not exist at build time. Only recover Tangram references.
+			template = template.components(
+				proxy::template_from_string(paths, &mut template_from_path)
+					.await?
+					.components,
+			);
+			continue;
+		}
+		for (index, path) in paths
+			.split(|c| option == "-rpath-link" && c == ':')
+			.enumerate()
+		{
+			if index > 0 {
+				template = template.string(":");
+			}
+			let should_check_in = !path.is_empty()
+				&& !path.starts_with('@')
+				&& (option == "-dynamic-linker" || !path.contains('$'));
+			template = if should_check_in {
+				template.components(template_from_path(path).await?.components)
+			} else {
+				template.string(path)
+			};
+		}
+	}
+	Ok(template.build())
+}
+
 #[allow(clippy::too_many_lines)]
-async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
+async fn run_proxy(mut environment: Environment, args: Args) -> tg::Result<()> {
+	environment.checkin().await?;
 	let Args {
 		output,
 		remap_targets,
@@ -320,6 +373,14 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		..
 	} = args;
 	let output = output.unwrap();
+	// Include/library/source operands were separated by Args::parse above.
+	// Remaining path-bearing options here are forwarded directly to the linker.
+	let mut forwarded = Vec::with_capacity(cli_args.len());
+	for arg in cli_args {
+		let template =
+			linker_argument(&arg, async |path| common::template_from_path(path).await).await?;
+		forwarded.push(template.into());
+	}
 
 	// Create the driver executable.
 	let contents = tg::Blob::with_reader(DRIVER_SH.as_bytes()).await?;
@@ -334,20 +395,15 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	let remappings = create_remapping_table(remap_targets).await?;
 
 	// Create the arguments to the driver script.
-	let cc = common::unrender(environment.cc.to_str().unwrap())?.into();
-	let mut args = std::iter::once("tangram_cc".to_string().into())
-		.chain(std::iter::once(cc))
-		.chain(cli_args.into_iter().map(tg::Value::from))
-		.collect::<Vec<_>>();
+	let cc = common::template_from_path(&environment.cc).await?.into();
+	let mut args = std::iter::once(cc).chain(forwarded).collect::<Vec<_>>();
 	for (target, value) in remappings {
 		match target.kind {
 			RemapKind::Include => args.push("-I".to_owned().into()),
-			RemapKind::Quote => args.push("-iquote".to_owned().into()),
-			RemapKind::System => args.push("-isystem".to_owned().into()),
 			RemapKind::DirAfter => args.push("-idirafter".to_owned().into()),
-			RemapKind::Macro => args.push("-imacro".to_owned().into()),
 			RemapKind::Linker => args.push("-L".to_owned().into()),
 			RemapKind::Binary => args.push("-B".to_owned().into()),
+			RemapKind::Option(flag) => args.push(flag.to_owned().into()),
 			RemapKind::Source => (),
 		}
 		args.push(value.into());
@@ -364,7 +420,8 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		..Default::default()
 	};
 
-	let process: tg::Process = tg::Process::spawn(arg).await?;
+	let process: tg::Process =
+		tg::Process::spawn(arg, tg::process::spawn::Options::default()).await?;
 	let wait = process.wait(tg::process::wait::Options::default()).await?;
 
 	let build_directory = wait
@@ -403,23 +460,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		.await
 		.map_err(|error| tg::error!(source = error, "cc failed: no output"))?;
 
-	// Verify we did everything correctly.
-	let mut tangram_path = std::env::current_dir()
-		.map_err(|error| tg::error!(source = error, "failed to get current working directory"))?;
-	while !tangram_path.join(".tangram").exists() {
-		let Some(parent) = tangram_path.parent() else {
-			break;
-		};
-		tangram_path = parent.into();
-	}
-	let store_path = if tangram_path.join(".tangram").exists() {
-		tangram_path.join(".tangram/store")
-	} else if std::path::Path::new("/opt/tangram/store").exists() {
-		"/opt/tangram/store".into()
-	} else {
-		return Err(tg::error!("failed to find the store directory"));
-	};
-	let artifact_path = store_path.join(output_file.id().to_string());
+	let artifact_path = common::checkout_artifact(output_file).await?;
 	eprintln!("Copying {} to {output:#?}", artifact_path.display());
 	std::fs::copy(artifact_path, output)
 		.map_err(|error| tg::error!(source = error, "failed to copy file"))?;
@@ -447,178 +488,85 @@ fn which_cc() -> tg::Result<PathBuf> {
 	Ok(cc)
 }
 
-// Represents a sparse tree of source files. Used to avoid checking in an excessive number of files for every invocation.
-struct SourceTree {
-	component: std::ffi::OsString,
-	remap_target: Option<RemapTarget>,
-	children: Option<Vec<Self>>,
-}
-
-// Convert a list of sources into a corresponding list of tg::Template.
+// Check in each input before using its returned context or assembling local file layout.
 async fn create_remapping_table(
 	remap_targets: Vec<RemapTarget>,
-) -> tg::Result<BTreeMap<RemapTarget, tg::Template>> {
-	let mut table = BTreeMap::new();
-	let mut subtrees = Vec::new();
-
-	for remap_target in remap_targets {
-		// Canonicalize the source path.
-		let path: &Path = remap_target.value.as_ref();
-		let path = path
-			.canonicalize()
-			.map_err(|error| tg::error!(source = error, "failed to canonicalize path"))?;
-
-		// Bail if the file does not exist.
-		if !path.exists() {
-			return Err(tg::error!("Source file does not exist: {path:#?}."));
+) -> tg::Result<Vec<(RemapTarget, tg::Template)>> {
+	let mut table = Vec::with_capacity(remap_targets.len());
+	let mut files = BTreeMap::<PathBuf, tg::Artifact>::new();
+	let mut local_targets = Vec::new();
+	for target in remap_targets {
+		let path = std::path::absolute(&target.value)
+			.map_err(|error| tg::error!(!error, "invalid input path"))?;
+		let mut arg = tg::checkin::Arg {
+			options: tg::checkin::Options {
+				destructive: false,
+				deterministic: true,
+				ignore: false,
+				source_dependencies: true,
+				locked: false,
+				lock: None,
+				root: true,
+				..Default::default()
+			},
+			path: path.clone(),
+			updates: vec![],
+		};
+		let mut output = tg::checkin(arg.clone()).await?;
+		if matches!(output.artifact.node, tg::artifact::Id::Symlink(_)) {
+			// A standalone filesystem symlink does not include its target.
+			arg.path = path
+				.canonicalize()
+				.map_err(|error| tg::error!(!error, "failed to resolve input symlink"))?;
+			output = tg::checkin(arg).await?;
 		}
-
-		// Check if this is a path that should be a template. Needs to happen after canonicalization in case a local symlink was created pointing to an artifact.
-		if path.starts_with("/.tangram/store") || path.starts_with("/opt/tangram/store") {
-			let template = common::unrender(path.to_str().unwrap())?;
-			table.insert(remap_target, template);
+		if output.artifact.options.id.is_some()
+			|| matches!(output.artifact.node, tg::artifact::Id::Directory(_))
+		{
+			let template = proxy::template_from_referent(&output.artifact)?;
+			table.push((target, template));
 			continue;
 		}
-
-		// Add to the file trees.
-		insert_into_source_tree(
-			&mut subtrees,
-			path.iter().collect::<Vec<_>>().as_slice(),
-			remap_target,
-		);
-	}
-
-	// Check in every source tree.
-	for subtree in subtrees {
-		table.extend(check_in_source_tree(subtree).await?);
-	}
-
-	Ok(table)
-}
-
-fn insert_into_source_tree(
-	subtrees: &mut Vec<SourceTree>,
-	components: &[&std::ffi::OsStr],
-	remap_target: RemapTarget,
-) {
-	let parent = if let Some(parent) = subtrees
-		.iter_mut()
-		.find(|tree| tree.component.as_os_str() == components[0])
-	{
-		parent
-	} else {
-		let parent = SourceTree {
-			component: components[0].to_os_string(),
-			remap_target: None,
-			children: None,
-		};
-		subtrees.push(parent);
-		subtrees.last_mut().unwrap()
-	};
-	let components = &components[1..];
-	if components.is_empty() {
-		parent.remap_target = Some(remap_target);
-	} else {
-		if parent.children.is_none() {
-			parent.children = Some(Vec::new());
-		}
-		let subtrees = parent.children.as_mut().unwrap();
-		insert_into_source_tree(subtrees, components, remap_target);
-	}
-}
-
-// Check in the source tree and return a list of templates that correspond to the files within it.
-async fn check_in_source_tree(subtree: SourceTree) -> tg::Result<Vec<(RemapTarget, tg::Template)>> {
-	// Directory builder to check in the directory at the end.
-	let mut builder = tg::directory::Builder::with_entries(BTreeMap::new());
-
-	// List of remap targets and their subpaths within the directory that we will eventually check in.
-	let mut remap_targets = Vec::new();
-
-	// Recursively walk the subtree to collect the remap targets.
-	let mut stack = vec![(vec![], subtree)];
-	while let Some((mut components, subtree)) = stack.pop() {
-		let SourceTree {
-			component,
-			remap_target,
-			children,
-		} = subtree;
-		components.push(component);
-		let is_directory = children.is_some();
-		if let Some(children) = children {
-			stack.extend(
-				children
-					.into_iter()
-					.map(|child| (components.clone(), child)),
+		// Preserve filenames and relative layout for files without a containing root.
+		let path = path
+			.parent()
+			.unwrap()
+			.canonicalize()
+			.map_err(|error| tg::error!(!error, "failed to canonicalize input parent"))?
+			.join(
+				path.file_name()
+					.ok_or_else(|| tg::error!("expected an input filename"))?,
 			);
+		let subpath = path.strip_prefix("/").unwrap().to_owned();
+		let artifact = tg::Artifact::with_referent(output.artifact);
+		files.insert(subpath.clone(), artifact);
+		local_targets.push((table.len(), subpath));
+		// Filled once the selected files have been assembled into their common root.
+		table.push((target, tg::Template::from("")));
+	}
+	if !files.is_empty() {
+		let mut builder = tg::directory::Builder::with_entries(BTreeMap::new());
+		for (path, artifact) in files {
+			builder = builder.add(&path, artifact).await?;
 		}
-		if let Some(remap_target) = remap_target {
-			let subpath = components[1..].iter().collect::<PathBuf>();
-			let path = components.iter().collect::<PathBuf>();
-
-			// Update the remap targets.
-			remap_targets.push((remap_target, subpath.clone()));
-
-			// Check if we're remapping a file, and check it in first.
-			if !is_directory {
-				// FIXME - destructive, followed by immediate checkout.
-				let artifact = tg::checkin(tg::checkin::Arg {
-					options: tg::checkin::Options {
-						destructive: false,
-						deterministic: true,
-						ignore: false,
-						source_dependencies: true,
-						locked: false,
-						lock: None,
-						root: true,
-						..tg::checkin::Options::default()
-					},
-					path,
-					updates: vec![],
-				})
-				.await?;
-				builder = builder
-					.add(&subpath, artifact.clone())
-					.await
-					.map_err(|error| {
-						tg::error!(
-							source = error,
-							"failed to add {}, {artifact:?} to directory",
-							subpath.display()
-						)
-					})?;
-			}
+		let root: tg::Artifact = builder.build().into();
+		for (index, path) in local_targets {
+			table[index].1 = common::template_from_artifact_and_subpath(root.clone(), path);
 		}
 	}
-
-	// Create the directory from the subtree.
-	let artifact: tg::Artifact = builder.build().into();
-
-	// Get the templates for each remap target.
-	let templates = remap_targets
-		.into_iter()
-		.map(|(remap_target, subpath)| {
-			let template = tg::Template {
-				components: vec![
-					tg::template::Component::Artifact(artifact.clone()),
-					tg::template::Component::String(format!("/{}", subpath.display())),
-				],
-			};
-			(remap_target, template)
-		})
-		.collect();
-	Ok(templates)
+	Ok(table)
 }
 
 const DRIVER_SH: &str = include_str!("driver.sh");
 
 // Environment variables that must be filtered out before invoking the driver target.
-const BLACKLISTED_ENV_VARS: [&str; 5] = [
+const BLACKLISTED_ENV_VARS: [&str; 6] = [
 	"TANGRAM_ADDRESS",
 	"TGCC_TRACING",
 	"TGCC_COMPILER",
 	"HOME",
 	"OUTPUT",
+	"TMPDIR",
 ];
 
 // List of gcc options that take a value. This list **must** be comprehensive.
@@ -643,3 +591,136 @@ const CC_OPTIONS_WITH_VALUE: [&str; 18] = [
 	"-Xpreprocessor",
 	"-z",
 ];
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn path_options_preserve_their_meaning() {
+		for (flag, path) in [
+			("-include-pch", "header.pch"),
+			("-include", "/include"),
+			("-include", "-pch.h"),
+			("-imacros", "/include"),
+			("-isystem", "/include"),
+			("-iquote", "/include"),
+			("-idirafter", "/include"),
+			("--sysroot", "/include"),
+		] {
+			let separator = if flag == "--sysroot" { "=" } else { "" };
+			for mut cli in [
+				vec![flag.to_owned(), path.to_owned()],
+				vec![format!("{flag}{separator}{path}")],
+			] {
+				// Clang accepts -include-pch with a separate operand.
+				if flag == "-include-pch" && cli.len() == 1 {
+					continue;
+				}
+				cli.extend(["main.c".to_owned(), "-o".to_owned(), "main".to_owned()]);
+				let args = Args::parse(cli.into_iter());
+				assert_eq!(
+					args.remap_targets,
+					vec![
+						RemapTarget {
+							kind: RemapKind::Option(flag),
+							value: path.into(),
+						},
+						RemapTarget {
+							kind: RemapKind::Source,
+							value: "main.c".into(),
+						},
+					]
+				);
+				assert!(args.cli.is_empty());
+				assert_eq!(args.output.as_deref(), Some("main"));
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn runtime_paths_stay_literal() {
+		for raw in [
+			"-Wl,-rpath,/future/install/lib,-z,now",
+			"-Wl,-rpath,/tmp:./lib::$ORIGIN/../lib:@loader_path:",
+			"-Wl,-z,now,-rpath=/future/install/lib",
+			"-Wl,-rpath,",
+			"-Wl,-rpath",
+			"-Wl,--as-needed,,",
+			"-pthread",
+		] {
+			let template = linker_argument(raw, async |_| panic!("unexpected checkin"))
+				.await
+				.unwrap();
+			assert_eq!(render(&template), raw);
+		}
+	}
+
+	#[tokio::test]
+	async fn runtime_paths_recover_embedded_references() {
+		let directory = tg::Directory::with_id(tg::directory::Id::new(b"runtime libraries"));
+		let root = format!("/opt/tangram/store/{}", directory.id());
+		let raw = format!("-Wl,-rpath,/future/lib:{root}/lib:$ORIGIN,-z,now");
+		let mut calls = Vec::new();
+		let template = linker_argument(&raw, async |path| {
+			calls.push(path.to_owned());
+			Ok(tg::Template::builder().artifact(directory.clone()).build())
+		})
+		.await
+		.unwrap();
+		assert_eq!(calls, [root]);
+		assert_eq!(template.artifacts().count(), 1);
+		assert_eq!(
+			render(&template),
+			"-Wl,-rpath,/future/lib:/checked-in/lib:$ORIGIN,-z,now"
+		);
+	}
+
+	#[tokio::test]
+	async fn linker_paths_preserve_comma_separated_options() {
+		for (raw, paths, expected) in [
+			(
+				"-Wl,-rpath-link,/one:/two,-z,now",
+				vec!["/one", "/two"],
+				"-Wl,-rpath-link,/checked-in:/checked-in,-z,now",
+			),
+			(
+				"-Wl,-dynamic-linker=/loader,-z,now",
+				vec!["/loader"],
+				"-Wl,-dynamic-linker=/checked-in,-z,now",
+			),
+			(
+				"-Wl,-z,now,-rpath-link=/lib,-rpath,/future/lib,-dynamic-linker,/loader,-z,relro",
+				vec!["/lib", "/loader"],
+				"-Wl,-z,now,-rpath-link=/checked-in,-rpath,/future/lib,-dynamic-linker,/checked-in,-z,relro",
+			),
+			(
+				"-Wl,-rpath-link,:./local::$ORIGIN:@loader_path:,-z,now",
+				vec!["./local"],
+				"-Wl,-rpath-link,:/checked-in::$ORIGIN:@loader_path:,-z,now",
+			),
+		] {
+			let directory = tg::Directory::with_id(tg::directory::Id::new(b"linker input"));
+			let mut calls = Vec::new();
+			let template = linker_argument(raw, async |path| {
+				calls.push(path.to_owned());
+				Ok(tg::Template::builder().artifact(directory.clone()).build())
+			})
+			.await
+			.unwrap();
+			assert_eq!(calls, paths, "{raw}");
+			assert_eq!(template.artifacts().count(), paths.len());
+			assert_eq!(render(&template), expected, "{raw}");
+		}
+	}
+
+	fn render(template: &tg::Template) -> String {
+		template
+			.try_render_sync(|component| match component {
+				tg::template::Component::String(string) => Ok(string.as_str().into()),
+				tg::template::Component::Artifact(_) => Ok("/checked-in".into()),
+				tg::template::Component::Placeholder(_) => panic!("unexpected placeholder"),
+			})
+			.unwrap()
+	}
+}

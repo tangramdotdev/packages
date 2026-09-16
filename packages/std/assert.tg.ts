@@ -334,8 +334,9 @@ export async function assertFileReferences(
 	const interpreterPath = interpreter.path;
 	const interpreterArtifact = await fileOrSymlinkFromManifestTemplate(
 		interpreterPath,
-		undefined,
-		file.state.tokens,
+		new Map(
+			(await file.dependencyObjects).map((object) => [object.id, object]),
+		),
 	);
 	const interpreterId = interpreterArtifact.id;
 	tg.assert(interpreterId);

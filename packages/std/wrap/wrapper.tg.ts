@@ -850,57 +850,6 @@ export async function testPrintManifest() {
 	return true;
 }
 
-export async function testWrapperValues() {
-	const toolchain = std.bootstrap.sdk();
-	const source = tg.directory({
-		"main.c": tg.file(`
-			#include <stdio.h>
-			extern char** environ;
-			int main(int argc, const char** argv) {
-				for (int i = 0; i < argc; i++) {
-					printf("argv[%d] = %s\\n", i, argv[i]);
-				}
-				for (char** e = environ; *e; e++) {
-					printf("env: %s\\n", *e);
-				}
-				return 0;
-			}
-		`),
-	});
-	const valueFiles = tg.directory({
-		env: `tg.mutation({
-			"kind": "set",
-			"value": {
-				"CUSTOM": "custom"
-			}
-		})`,
-		args: `[
-			tg.template(["--custom"])
-		]`,
-	});
-	const output = await std
-		.run(std.shBootstrap`
-		gcc ${source}/main.c -o main
-		./main > ${tg.output}
-	`)
-		.env(toolchain, {
-			TGLD_TRACING: "tgld=trace",
-			TGLD_WRAPPER_ENV_VALUE_PATH: tg`${valueFiles}/env`,
-			TGLD_WRAPPER_ARG_VALUE_PATH: tg`${valueFiles}/args`,
-		})
-		.then(tg.File.expect);
-	const text = await output.text;
-	tg.assert(
-		text.includes("argv[1] = --custom"),
-		"Expected argv[1] = --custom in output",
-	);
-	tg.assert(
-		text.includes("env: CUSTOM=custom"),
-		"Expected env: CUSTOM=custom in output",
-	);
-	return true;
-}
-
 export async function testModify() {
 	let file = await tg.file("nothing to see here\n");
 	return std.run(std.shBootstrap`
