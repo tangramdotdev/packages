@@ -55,12 +55,6 @@ export async function env(...args: tg.Args<Arg>) {
 	// These are the utilities a managed SDK itself depends on, so none of them may ask for one. The compiler comes from the given environment, which falls back to the bootstrap toolchain.
 	const toolchainEnv = env_ ?? (await bootstrapSdk.sdk(host));
 
-	const shellArtifact = await bash.build({
-		build: build ?? null,
-		env: toolchainEnv,
-		host,
-		sdk: "none",
-	});
 	const env = await std.env.compose(toolchainEnv);
 	const commonArg = {
 		build: build ?? null,
@@ -68,22 +62,23 @@ export async function env(...args: tg.Args<Arg>) {
 		host,
 		sdk: "none" as const,
 	};
+	const shellArtifact = await tg.build(bash.build, commonArg).named("bash");
 
 	let utils = [shellArtifact];
 	utils = utils.concat(
 		await Promise.all([
-			bzip2(commonArg),
-			coreutils(commonArg),
-			diffutils(commonArg),
-			findutils(commonArg),
-			gawk(commonArg),
-			grep(commonArg),
-			gzip(commonArg),
-			make(commonArg),
-			patch(commonArg),
-			sed(commonArg),
-			tar(commonArg),
-			xz(commonArg),
+			tg.build(bzip2, commonArg).named("bzip2"),
+			tg.build(coreutils, commonArg).named("coreutils"),
+			tg.build(diffutils, commonArg).named("diffutils"),
+			tg.build(findutils, commonArg).named("findutils"),
+			tg.build(gawk, commonArg).named("gawk"),
+			tg.build(grep, commonArg).named("grep"),
+			tg.build(gzip, commonArg).named("gzip"),
+			tg.build(make, commonArg).named("make"),
+			tg.build(patch, commonArg).named("patch"),
+			tg.build(sed, commonArg).named("sed"),
+			tg.build(tar, commonArg).named("tar"),
+			tg.build(xz, commonArg).named("xz"),
 		]),
 	);
 	return await std.env.compose(...utils);
@@ -107,7 +102,11 @@ export async function buildDefaultEnv() {
 export async function prerequisites(hostArg?: tg.Unresolved<string>) {
 	const rawHost = hostArg ? await tg.resolve(hostArg) : std.triple.host();
 	const host = bootstrap.toolchainTriple(rawHost);
+	return tg.build(prerequisitesInner, host).named("utils prerequisites");
+}
 
+/** Build the prerequisites after normalizing the host and establishing the cache boundary. */
+export async function prerequisitesInner(host: string) {
 	// Add GNU make.
 	const makeArtifact = await tg
 		.build(bootstrap.make.build, { host })

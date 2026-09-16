@@ -157,18 +157,21 @@ export default build;
 /** Build bootstrap coreutils with consistent, normalized args. This is the shared entry point used by both gnuEnv() and prerequisites() to ensure cache hits. */
 export async function bootstrapBuild(hostArg?: string) {
 	const host = bootstrap.toolchainTriple(hostArg ?? std.triple.host());
+	return tg.build(bootstrapBuildInner, host).named("bootstrap coreutils");
+}
+
+/** Resolve the bootstrap dependencies inside the shared build. */
+export async function bootstrapBuildInner(host: string) {
 	const env = std.env.compose(
 		bootstrap.sdk(host),
 		tg.build(bootstrap.make.build, { host }),
 	);
-	return tg
-		.build(build, {
-			host,
-			env,
-			sdk: "none",
-			usePrerequisites: false,
-		})
-		.named("bootstrap coreutils");
+	return build({
+		host,
+		env,
+		sdk: "none",
+		usePrerequisites: false,
+	});
 }
 
 /** Obtain just the `env` binary. */

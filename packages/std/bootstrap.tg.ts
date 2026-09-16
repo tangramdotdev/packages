@@ -124,7 +124,9 @@ export async function patchGnu(
 	const host = std.triple.host();
 	// Build GNU patch the way `std.utils.env` does, so the two share a build.
 	const env = await std.env.compose(await bootstrapSdk(host));
-	const gnuPatch = await gnuPatchBuild({ build: null, env, host, sdk: "none" });
+	const gnuPatch = await tg
+		.build(gnuPatchBuild, { build: null, env, host, sdk: "none" })
+		.named("patch");
 	return patchInner(gnuPatch, source, patches);
 }
 
