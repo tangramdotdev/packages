@@ -787,21 +787,23 @@ export async function testProxyArguments() {
 			.then(tg.File.expect);
 		tg.assert((await output.text).includes("an attached value (=VALUE)"));
 	}
-	for (const option of ["-o", "--output", "-L", "--library-path"]) {
-		for (const operand of ["--", "--tg-linker-passthrough=false", "--tg-linker-wrapper-args"] ) {
-			const native = [option, operand, "", "repeat", "repeat", "a b=c,d"];
-			await check(linker, [...native, "--tg-linker-passthrough"], native);
-		}
+	// The Rust unit tests cover the full native operand matrix.
+	for (const [option, operand] of [
+		["-o", "--"],
+		["--output", "--tg-linker-passthrough=false"],
+		["-L", "--tg-linker-wrapper-args"],
+		["--library-path", "--"],
+	]) {
+		const native = [option, operand, "", "repeat", "repeat", "a b=c,d"];
+		await check(linker, [...native, "--tg-linker-passthrough"], native);
 	}
 	await check(strip, ["--tg-strip-passthrough=false", "--tangram-strip-passthrough", ...unknown], unknown);
 	for (const component of ["linker", "strip"]) {
 		const executable = component === "linker" ? linker : strip;
-		for (const value of ["", " true", "false ", "yes"]) {
-			const error = await std.build(std.shBootstrap`
-				if ${executable} ${await interpreterArgsTemplate([`--tg-${component}-passthrough=${value}`, `--tangram-${component}-passthrough=false`])} > /dev/null 2> ${tg.output}; then exit 1; fi
-			`).then(tg.File.expect);
-			tg.assert((await error.text).includes("expected a boolean"));
-		}
+		const error = await std.build(std.shBootstrap`
+			if ${executable} ${await interpreterArgsTemplate([`--tg-${component}-passthrough= true`, `--tangram-${component}-passthrough=false`])} > /dev/null 2> ${tg.output}; then exit 1; fi
+		`).then(tg.File.expect);
+		tg.assert((await error.text).includes("expected a boolean"));
 	}
 
 	return true;

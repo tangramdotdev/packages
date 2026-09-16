@@ -42,6 +42,7 @@ pub const DECLARATIONS: &[Declaration<Id>] = &[
 	},
 ];
 
+#[derive(Debug)]
 pub struct Settings {
 	pub disallow_missing: bool,
 	pub embed: bool,

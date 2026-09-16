@@ -833,18 +833,22 @@ export async function testControls() {
 	};
 	const words = ["", "repeat", "a b=c,d", "repeat", "--tg-wrapper-extra=1", "--tangram-suppress-args"];
 	await check(words, [...manifestArgs, ...words]);
+	for (const value of ["true", "TRUE", "1"]) {
+		await check(words, manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ARGS: value });
+		await check([], manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ENV: value }, "unset");
+	}
+	for (const value of ["false", "FALSE", "0"]) {
+		await check(words, [...manifestArgs, ...words], { TANGRAM_WRAPPER_SUPPRESS_ARGS: value, TANGRAM_WRAPPER_PRINT_MANIFEST: value, TANGRAM_WRAPPER_TRACING: value });
+	}
 	for (const alias of ["tg", "tangram"]) {
 		for (const value of ["true", "TRUE", "1"]) {
 			await check([`--${alias}-wrapper-suppress-args=${value}`, ...words], manifestArgs);
-			await check(words, manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ARGS: value });
 			await check([`--${alias}-wrapper-suppress-env=${value}`], manifestArgs, {}, "unset");
-			await check([], manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ENV: value }, "unset");
 		}
 		for (const value of ["false", "FALSE", "0"]) {
 			await check([`--${alias}-wrapper-suppress-args=${value}`, ...words], [...manifestArgs, ...words], { TANGRAM_WRAPPER_SUPPRESS_ARGS: "true" });
 			await check([`--${alias}-wrapper-suppress-env=${value}`], manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ENV: "true" });
 			await check([`--${alias}-wrapper-print-manifest=${value}`], manifestArgs, { TANGRAM_WRAPPER_PRINT_MANIFEST: "true" });
-			await check(words, [...manifestArgs, ...words], { TANGRAM_WRAPPER_SUPPRESS_ARGS: value, TANGRAM_WRAPPER_PRINT_MANIFEST: value, TANGRAM_WRAPPER_TRACING: value });
 		}
 		await check([`--${alias}-wrapper-suppress-args`], manifestArgs);
 		await check([`--${alias}-wrapper-suppress-env`], manifestArgs, {}, "unset");
