@@ -255,9 +255,9 @@ const checksums: Record<string, tg.Checksum> = {
 	utils_aarch64_darwin:
 		"sha256:164b27c527541c1695d0ad9ca5ccb65b495315770ca2916c9c2b7f691d002dc4",
 	utils_aarch64_linux:
-		"sha256:452a996d74030a74f1b7de3a022cc7710a5ad216bb8fb1ac967544b0db632260",
+		"sha256:316b1b5d96bbf7b6e411f507a41c87e2dc8b43cd6c98960c20d64d3a5390b3a4",
 	utils_x86_64_darwin:
 		"sha256:10b0cf8ca64429f4362f8aaded78326d418db8a1d4d7f2fa91a5f8019dbb49de",
 	utils_x86_64_linux:
-		"sha256:1c555946f1a69253c6e6b5ae9152ee2c45629ebd047ba2e471c64ee79d8dbbff",
+		"sha256:c60c8c54913fd8be2b8614c8abe0b2bb9752fc4ebf5d3a0a13e81701020078cf",
 };
