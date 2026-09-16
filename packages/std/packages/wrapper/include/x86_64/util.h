@@ -10,5 +10,4 @@ static void jump_to_entrypoint (void* stack, void* entrypoint) {
 		"mov $0, %rdx;" 	// clear rdx because we have no cleanup code.
 		"jmp *%rsi;"		// jump to the entrypoint.
 	);
-	__builtin_unreachable();
 }

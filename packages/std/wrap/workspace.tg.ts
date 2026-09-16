@@ -216,13 +216,14 @@ export async function buildDefaultWrapper() {
 }
 
 type ToolchainArg = {
+	host?: string;
 	target?: string;
 };
 
 export async function rust(
 	...args: tg.Args<ToolchainArg>
 ): Promise<tg.Directory> {
-	const { target: target_ } = await tg.Args.apply<
+	const { host: host_, target: target_ } = await tg.Args.apply<
 		ToolchainArg,
 		tg.ValueOrMaybeMutationMap<ToolchainArg>,
 		ToolchainArg
@@ -231,7 +232,7 @@ export async function rust(
 		map: async (a) => a,
 		reduce: {},
 	});
-	const host = standardizeTriple(std.triple.host());
+	const host = standardizeTriple(host_ ?? std.triple.host());
 	const target = standardizeTriple(target_ ?? host);
 	const hostSystem = std.triple.archAndOs(host);
 
@@ -366,7 +367,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	}
 
 	// Use the bootstrap shell and utils.
-	const utilsArtifact = await bootstrap.sdk.prepareBootstrapUtils();
+	const utilsArtifact = await bootstrap.sdk.prepareBootstrapUtils(host);
 
 	// Get the appropriate toolchain directory.
 	// You need a build toolchian AND a host toolchain. These may be the same.
@@ -388,7 +389,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 				.named("gnu toolchain");
 		}
 	} else {
-		if (isCross) {
+		if (isCross && std.triple.os(target) === "linux") {
 			buildToolchain = await bootstrap.sdk.env(host);
 			hostToolchain = await tg
 				.build(llvm.toolchain, {
@@ -405,6 +406,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 				.raw` -target ${standardizedTarget} --sysroot ${targetDirectory}/${standardizedTarget}/sysroot`;
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host);
+			suffix = tg.Template.raw` -target ${standardizedTarget}`;
 		}
 	}
 
@@ -418,7 +420,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 
 	// Get the Rust toolchain.
 	const rustToolchain = await tg
-		.build(rust, { target: standardizedTarget })
+		.build(rust, { host: standardizedHost, target: standardizedTarget })
 		.named("rust toolchain");
 
 	// Set up common environemnt.
@@ -435,7 +437,8 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 			RUST_TARGET: standardizedTarget,
 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 			RUSTFLAGS: `-C target-feature=+crt-static`,
-			[`CARGO_TARGET_${tripleToEnvVar(standardizedTarget, true)}_LINKER`]: tg`${prefix}cc${suffix}`,
+			// Cargo expects a linker executable without compiler arguments.
+			[`CARGO_TARGET_${tripleToEnvVar(standardizedTarget, true)}_LINKER`]: `${prefix}cc`,
 			[`AR_${tripleToEnvVar(standardizedTarget)}`]: `${prefix}ar`,
 			[`CC_${tripleToEnvVar(standardizedTarget)}`]: tg`${prefix}cc${suffix}`,
 			[`CXX_${tripleToEnvVar(standardizedTarget)}`]: tg`${prefix}c++${suffix}`,
@@ -463,13 +466,13 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		rustc = tg`${rustToolchain}/bin/rustc`;
 		cargo = tg`${rustToolchain}/bin/cargo`;
 
-		if (isCross) {
+		if (std.triple.os(target) === "linux") {
 			env.push({
 				SDKROOT: tg.Mutation.unset(),
 			});
 		} else {
 			env.push({
-				SDKROOT: tg`${bootstrap.macOsSdk()}/MacOSX.sdk`,
+				SDKROOT: tg`${bootstrap.macOsSdk(undefined, host)}/MacOSX.sdk`,
 			});
 		}
 	}
@@ -488,8 +491,8 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		chmod +x rustc.sh
 		export RUSTC=$PWD/rustc.sh
 		`;
-	if (hostOs === "darwin" && isCross) {
-		const hostFlag = tg`--sysroot ${bootstrap.macOsSdk()}/MacOSX.sdk`;
+	if (hostOs === "darwin" && std.triple.os(target) === "linux") {
+		const hostFlag = tg`--sysroot ${bootstrap.macOsSdk(undefined, host)}/MacOSX.sdk`;
 		const { directory: targetDirectory } = await std.sdk.toolchainComponents({
 			env: await std.env.compose(hostToolchain ?? null),
 			host: host,
@@ -640,6 +643,24 @@ export async function test() {
 	return nativeWorkspace;
 }
 
+export async function testDarwin() {
+	const build = std.triple.host();
+	if (std.triple.os(build) !== "darwin") {
+		return true;
+	}
+	for (const arch of ["aarch64", "x86_64"]) {
+		const host = `${arch}-apple-darwin`;
+		const output = await tg.build(workspace, { build, host, release: false });
+		for (const name of ["tgcc", "tgld", "tgstrip", "wrap", "wrapper.exe"]) {
+			const executable = await output.get(`bin/${name}`).then(tg.File.expect);
+			const metadata = await std.file.executableMetadata(executable);
+			tg.assert(metadata.format === "mach-o");
+			tg.assert(metadata.arches.length === 1 && metadata.arches[0] === arch);
+		}
+	}
+	return true;
+}
+
 export async function testCross() {
 	// Detect the host triple.
 	const host = std.triple.host();
@@ -680,7 +701,7 @@ export async function rcodesign(host?: string) {
 			"sha256:fd5aeb908f1d3be60f7e372003772f52a6ce4148106d3aaf22aec6861f5d8a5e",
 		["macos-universal.tar"]:
 			"sha256:d98372d5524226ccf9dc0eda03d4e4f5826182dabb2fc3f2bd303ed9113a748d",
-		["x86_64-apple-darwin.tar"]:
+		["x86_64-apple-darwin"]:
 			"sha256:14ef11bedd51a8d95eafd767939ae96d5900e5a61511bef75bb21db6e7c74140",
 		["x86_64-pc-windows-msvc"]:
 			"sha256:54bb500e2da7a8de02fcae0f331d1cac6e6d7173b4281042ff9c528ba3159aaa",

@@ -178,7 +178,7 @@ const swVers = () => {
 
 export namespace sdk {
 	/** The minimum macOS version that produced binaries should support. */
-	export const macOsDeploymentTarget = "11.0";
+	export const macOsDeploymentTarget = "14.0";
 
 	/**
 	 * The `sdk` field of a builder argument.
@@ -738,7 +738,7 @@ export namespace sdk {
 		target: string,
 		isCross: boolean,
 	): Promise<{ ldso?: tg.File; libDir: tg.Directory }> {
-		if (isCross) {
+		if (isCross && std.triple.os(target) === "linux") {
 			const sysroot = await directory
 				.get(`${target}/sysroot`)
 				.then(tg.Directory.expect);

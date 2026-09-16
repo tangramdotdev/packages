@@ -26,7 +26,7 @@ export async function injection(...args: tg.Args<Arg>) {
 	const source = arg.source ? arg.source : injectionSource;
 
 	// Get the build toolchain. If not provided, use bootstrap SDK.
-	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(host));
+	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(build));
 
 	// Get any additional env.
 	const env = arg?.env;
@@ -51,6 +51,7 @@ export async function injection(...args: tg.Args<Arg>) {
 		return injection;
 	} else if (os === "darwin") {
 		const injection = macOsInjection({
+			build,
 			buildToolchain,
 			...std.args.optional("env", env),
 			host,
@@ -63,6 +64,7 @@ export async function injection(...args: tg.Args<Arg>) {
 }
 
 type MacOsInjectionArg = {
+	build?: string;
 	buildToolchain?: std.env.Arg;
 	env?: std.env.Arg | null;
 	host?: string;
@@ -71,6 +73,7 @@ type MacOsInjectionArg = {
 
 export async function macOsInjection(arg: MacOsInjectionArg) {
 	const host = arg.host ?? std.triple.host();
+	const build = arg.build ?? host;
 	const os = std.triple.os(host);
 	if (os !== "darwin") {
 		throw new Error(`Unsupported OS ${os}`);
@@ -79,51 +82,32 @@ export async function macOsInjection(arg: MacOsInjectionArg) {
 	const source = arg.source;
 
 	// Get the build toolchain. If not provided, use bootstrap SDK.
-	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(host));
+	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(build));
 
 	// Define common options.
-	const additionalArgs = ["-Wno-nonnull", "-Wno-nullability-completeness"];
+	const additionalArgs = [
+		"-Wno-nonnull",
+		"-Wno-nullability-completeness",
+		`--target=${std.sdk.canonicalTriple(host)}`,
+	];
 	const env = await std.env.compose(
 		{
-			SDKROOT: tg`${bootstrap.macOsSdk()}/MacOSX.sdk`,
+			MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget,
+			SDKROOT: tg`${bootstrap.macOsSdk(undefined, build)}/MacOSX.sdk`,
 		},
 		arg.env ?? null,
 	);
 
-	// Compile arm64 dylib.
-	const arm64Args = additionalArgs.concat(["--target=aarch64-apple-darwin"]);
-	const arm64injection = await tg
+	return tg
 		.build(dylib, {
+			build,
 			buildToolchain,
+			host,
 			source,
-			additionalArgs: arm64Args,
+			additionalArgs,
 			env,
 		})
-		.named("arm64 injection");
-
-	// Compile amd64 dylib.
-	const amd64Args = additionalArgs.concat(["--target=x86_64-apple-darwin"]);
-	const amd64injection = await tg
-		.build(dylib, {
-			buildToolchain,
-			source,
-			additionalArgs: amd64Args,
-			env,
-		})
-		.named("amd64 injection");
-
-	// Combine into universal dylib.
-	const system = std.triple.archAndOs(host);
-	const injection = await std
-		.build(
-			std.shBootstrap`lipo -create ${arm64injection} ${amd64injection} -output ${tg.output}`,
-		)
-		.host(system)
-		.env(buildToolchain)
-		.env(env)
-		.named("universal injection")
-		.then(tg.File.expect);
-	return injection;
+		.named("darwin injection");
 }
 
 type DylibArg = {
@@ -147,11 +131,11 @@ export async function dylib(...dylibArgs: tg.Args<DylibArg>): Promise<tg.File> {
 	});
 	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
-	const os = std.triple.os(std.triple.archAndOs(build));
+	const os = std.triple.os(host);
 	const source = arg.source;
 
 	// Get the build toolchain. If not provided, use bootstrap SDK.
-	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(host));
+	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(build));
 	const toolchainEnv = await std.env.compose(buildToolchain);
 
 	// Find the compiler. Try clang first, then cc, then prefixed cc variants.
@@ -267,14 +251,9 @@ export async function test() {
 		`,
 		);
 	} else if (os === "darwin") {
-		std.assert.assertJsonSnapshot(
-			nativeMetadata,
-			`
-			{
-				"format": "mach-o",
-				"arches": ["${hostArch}"]
-			}
-		`,
+		tg.assert(nativeMetadata.format === "mach-o");
+		tg.assert(
+			nativeMetadata.arches.length === 1 && nativeMetadata.arches[0] === hostArch,
 		);
 	} else {
 		return tg.unreachable();
@@ -301,15 +280,14 @@ export async function buildDefaultInjection() {
 
 export async function testCross() {
 	const detectedHost = std.triple.host();
-	if (std.triple.os(detectedHost) === "darwin") {
-		console.log("Skipping cross test on darwin");
-		return true;
-	}
-
+	const os = std.triple.os(detectedHost);
 	const hostArch = std.triple.arch(detectedHost);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
-	const target = `${targetArch}-unknown-linux-gnu`;
-	const buildToolchain = gnu.toolchain({ host: detectedHost, target });
+	const target = std.sdk.canonicalTriple(`${targetArch}-${os}`);
+	const buildToolchain =
+		os === "darwin"
+			? bootstrap.sdk.env(detectedHost)
+			: gnu.toolchain({ host: detectedHost, target });
 
 	const nativeInjection = await tg.build(injection, {
 		build: detectedHost,
@@ -318,7 +296,6 @@ export async function testCross() {
 	});
 
 	// Assert the injection dylib was built for the target machine.
-	const os = std.triple.os(std.triple.archAndOs(detectedHost));
 	const nativeMetadata = await std.file.executableMetadata(nativeInjection);
 	if (os === "linux") {
 		std.assert.assertJsonSnapshot(
@@ -331,14 +308,9 @@ export async function testCross() {
 		`,
 		);
 	} else if (os === "darwin") {
-		std.assert.assertJsonSnapshot(
-			nativeMetadata,
-			`
-			{
-				"format": "mach-o",
-				"arches": ["${targetArch}"]
-			}
-		`,
+		tg.assert(nativeMetadata.format === "mach-o");
+		tg.assert(
+			nativeMetadata.arches.length === 1 && nativeMetadata.arches[0] === targetArch,
 		);
 	} else {
 		return tg.unreachable();

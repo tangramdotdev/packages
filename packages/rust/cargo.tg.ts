@@ -587,7 +587,10 @@ linker = "${hostLinker}"`;
 
 	// The wrappers carry `SDKROOT` in their manifests, so build scripts and rustc never see it.
 	if (os === "darwin" && std.triple.os(target) === "darwin") {
-		envs.push({ SDKROOT: tg`${await std.bootstrap.macOsSdk()}/MacOSX.sdk` });
+		envs.push({
+			MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget,
+			SDKROOT: tg`${await std.bootstrap.macOsSdk(undefined, host)}/MacOSX.sdk`,
+		});
 	}
 
 	if (network) {

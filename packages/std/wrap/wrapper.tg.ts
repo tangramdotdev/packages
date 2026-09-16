@@ -1,5 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as elf from "../file/elf.tg.ts";
+import * as macho from "../file/macho.tg.ts";
 import * as gnu from "../sdk/gnu.tg.ts";
 import * as llvm from "../sdk/llvm.tg.ts";
 import * as std from "../tangram.ts";
@@ -62,7 +63,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 				.named("gnu toolchain");
 		}
 	} else {
-		if (isCross) {
+		if (isCross && std.triple.os(target) === "linux") {
 			buildToolchain = await bootstrap.sdk.env(host_);
 			hostToolchain = await tg
 				.build(llvm.toolchain, { host, target })
@@ -103,9 +104,11 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		];
 	}
 	if (os === "darwin") {
-		osArgs = [];
+		// The manifest is stored immediately before the code signature.
+		osArgs = ["-target", target, "-Wl,-adhoc_codesign"];
 		env.push({
-			SDKROOT: tg`${bootstrap.macOsSdk()}/MacOSX.sdk`,
+			MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget,
+			SDKROOT: tg`${bootstrap.macOsSdk(undefined, host_)}/MacOSX.sdk`,
 		});
 	}
 
@@ -149,6 +152,24 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		})
 		.then(tg.Directory.expect);
 	return tg.directory({ bin });
+}
+
+export async function testDarwin() {
+	const host = std.triple.host();
+	tg.assert(std.triple.os(host) === "darwin");
+	for (const arch of ["aarch64", "x86_64"]) {
+		const target = `${arch}-apple-darwin`;
+		const output = await tg.build(build, { host, target, source });
+		const executable = await output.get("bin/wrapper.exe").then(tg.File.expect);
+		const metadata = await std.file.executableMetadata(executable);
+		tg.assert(metadata.format === "mach-o");
+		tg.assert(metadata.arches.length === 1 && metadata.arches[0] === arch);
+		const parsed = await macho.parse(executable);
+		tg.assert(!("files" in parsed));
+		// The manifest reader requires an LC_CODE_SIGNATURE load command.
+		tg.assert(parsed.loadCommands.some((command) => command.cmd === 0x1d));
+	}
+	return true;
 }
 
 /* Ensure the passed triples are what we expect, musl on linux and standard for macOS. */

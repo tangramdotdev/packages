@@ -97,7 +97,7 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 				arg.linkerExe ??
 				(os === "linux" && isLlvm
 					? await tg`${directory}/bin/ld.lld`
-					: os === "darwin" && isCross
+					: os === "darwin" && std.triple.os(build) === "linux"
 						? await tg`${directory}/bin/${host}-ld.gold`
 						: ld),
 			...(ldso !== undefined ? { interpreter: ldso } : {}),
@@ -411,9 +411,10 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 				});
 	await hostWrapper.store();
 
+	// The strip proxy runs on the build machine.
 	const stripProxy = await workspace.stripProxy({
 		build,
-		host,
+		host: build,
 	});
 
 	// Only Mach-O outputs get codesigned. The binary runs on the build machine.

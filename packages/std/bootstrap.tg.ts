@@ -7,13 +7,13 @@ export * as musl from "./bootstrap/musl.tg.ts";
 export { sdk, toolchainSdk } from "./bootstrap/sdk.tg.ts";
 
 // Bootstrap release version and GCC version bundled in the Linux toolchain.
-const version = "v2026.07.29";
+const version = "v2026.09.16";
 export const gccVersion = "11.2.1";
 
-// Supported macOS SDK versions. The latest is the default.
-const sdkVersions = ["12.1", "14.5", "15.2", "15.4", "26.5"] as const;
+// Supported macOS SDK versions.
+const sdkVersions = ["12.1", "14.5", "15.2", "26.5", "27.0"] as const;
 export type SdkVersion = (typeof sdkVersions)[number];
-export const LatestSdkVersion: SdkVersion = "26.5";
+export const LatestSdkVersion: SdkVersion = "27.0";
 
 export type Arg = {
 	/** Specify which component to provide. */
@@ -54,9 +54,17 @@ export function utils(host?: string) {
 }
 
 /** Retrieve a macOS SDK wrapped under a `MacOSX.sdk/` subdirectory. */
-export async function macOsSdk(version: SdkVersion = LatestSdkVersion) {
+export async function macOsSdk(version?: SdkVersion, host?: string) {
+	version ??= defaultMacOsSdkVersion(host);
 	const inner = await bootstrap({ component: `macos_sdk_${version}` });
 	return tg.directory({ "MacOSX.sdk": inner });
+}
+
+/** Select the SDK for the machine running the compiler, including cross-compilers. */
+export function defaultMacOsSdkVersion(host = std.triple.host()): SdkVersion {
+	return std.triple.archAndOs(host) === "x86_64-darwin"
+		? "26.5"
+		: LatestSdkVersion;
 }
 
 /** The build triple string of the bundled Linux toolchain. */
@@ -159,13 +167,12 @@ export async function remoteComponent(name: string) {
 
 /** Normalize a host triple to the canonical form used for component names. */
 function normalizeHost(host?: string) {
-	const h = std.triple.archAndOs(host ?? std.triple.host());
-	return std.triple.os(h) === "darwin" ? "universal_darwin" : h;
+	return std.triple.archAndOs(host ?? std.triple.host());
 }
 
 /** Enumerate the full set of components for a host. */
 export function componentList(host?: string): Array<string> | undefined {
-	const h = host ?? normalizeHost();
+	const h = host === "js" ? host : normalizeHost(host);
 	switch (h) {
 		case "aarch64-linux":
 		case "x86_64-linux": {
@@ -173,13 +180,14 @@ export function componentList(host?: string): Array<string> | undefined {
 			return ["toolchain", "utils"].map((c) => `${c}_${suffix}`);
 		}
 		case "aarch64-darwin":
-		case "x86_64-darwin":
-		case "universal_darwin":
+		case "x86_64-darwin": {
+			const suffix = h.replace("-", "_");
 			return [
 				...sdkVersions.map((v) => `macos_sdk_${v}`),
-				"toolchain_universal_darwin",
-				"utils_universal_darwin",
+				`toolchain_${suffix}`,
+				`utils_${suffix}`,
 			];
+		}
 		case "js":
 			return [];
 		default:
@@ -188,6 +196,7 @@ export function componentList(host?: string): Array<string> | undefined {
 }
 
 export async function test() {
+	testSelection();
 	const host = std.triple.host();
 	const components = componentList(host);
 	if (!components) {
@@ -204,27 +213,49 @@ export async function test() {
 	return true;
 }
 
+export function testSelection() {
+	tg.assert(componentList("js")?.length === 0);
+	for (const [host, sdkVersion] of [
+		["aarch64-apple-darwin", "27.0"],
+		["x86_64-apple-darwin", "26.5"],
+		["aarch64-unknown-linux-gnu", "27.0"],
+		["x86_64-unknown-linux-musl", "27.0"],
+	] as const) {
+		const suffix = std.triple.archAndOs(host).replace("-", "_");
+		const components = componentList(host);
+		tg.assert(components?.includes(`toolchain_${suffix}`));
+		tg.assert(components?.includes(`utils_${suffix}`));
+		tg.assert(components.every((name) => checksums[name] !== undefined));
+		tg.assert(defaultMacOsSdkVersion(host) === sdkVersion);
+	}
+	return true;
+}
+
 const checksums: Record<string, tg.Checksum> = {
 	"macos_sdk_12.1":
-		"sha256:60cb0bf7c1dfd0d690fbadc58f9e0750a31a4079e3f2ec367d41d3f3f0249aaa",
+		"sha256:3f2d3ac24930f9422a59f29d7a9c70d72433e2b62082af4ec0d3ced21d0aab9c",
 	"macos_sdk_14.5":
-		"sha256:04cceb8affaee0319d3985611e88735fb05a4cd1517b936b77e8d8ee2af69a1c",
+		"sha256:3fa3e0bdc49b0411bc49ec6b64ec290d7e06428c51f0a5ab5098e1ea7cef4a57",
 	"macos_sdk_15.2":
-		"sha256:d026cae566358af13c581bfc9bc7e7766048ea2acbdf8d2d5c4ebe880fe3088c",
-	"macos_sdk_15.4":
-		"sha256:db62998e3d1aeaacf631785fe32433e8f74bb7205345ed328e7483e91329ef05",
+		"sha256:0e3684e94e08a9053470db72c2a23e4ae8e44a886385ee21a37db95a95940032",
 	"macos_sdk_26.5":
-		"sha256:5efe322cf20d89d3e2aed633407aa1c85606ec14e6dae5defbee1fee6bb098da",
+		"sha256:9ce8d514ec9c82efd18bf7ec4f06330368580dfe6440c83c665e87bcb6e83694",
+	"macos_sdk_27.0":
+		"sha256:fea5b356d1a7480d459d9f40f6945823a83dc17f8fa16f58f1fba15b34e4c9ed",
+	toolchain_aarch64_darwin:
+		"sha256:917cbc227e5c2b04229a02239ce6dc42bdcfeb56d87f1ed9eda96cd8bf340b52",
 	toolchain_aarch64_linux:
 		"sha256:d0d01924d0542cf54b187f7e294fb2f995b4e0ee16815d03ee182f07e16e07e3",
-	toolchain_universal_darwin:
-		"sha256:165f267d834d07f07a512c6932776ac4b35e36781c5a3271dafd7c42921797b4",
+	toolchain_x86_64_darwin:
+		"sha256:00c6d34df2bfa9fa9ca1daba8fd384f4635e404689ad932a6e481e48ccbcc275",
 	toolchain_x86_64_linux:
 		"sha256:f688005853cd8c15cb9371e7d320049387b951aca961ebd7be5d724e25d8fb22",
+	utils_aarch64_darwin:
+		"sha256:164b27c527541c1695d0ad9ca5ccb65b495315770ca2916c9c2b7f691d002dc4",
 	utils_aarch64_linux:
-		"sha256:0f5df376109c8c5acd1efc4989e83608cea57d21d8a31d9804f145f2a96cba8b",
-	utils_universal_darwin:
-		"sha256:44649125995ade83db7e4f745876492ca877cfc2ed47aad85e792d4f5bcc27c1",
+		"sha256:452a996d74030a74f1b7de3a022cc7710a5ad216bb8fb1ac967544b0db632260",
+	utils_x86_64_darwin:
+		"sha256:10b0cf8ca64429f4362f8aaded78326d418db8a1d4d7f2fa91a5f8019dbb49de",
 	utils_x86_64_linux:
-		"sha256:de8db84ba59a38b82dd963747b4c466aabd352d81a46d11c405d1ef1379992fd",
+		"sha256:1c555946f1a69253c6e6b5ae9152ee2c45629ebd047ba2e471c64ee79d8dbbff",
 };

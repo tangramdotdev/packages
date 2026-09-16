@@ -81,7 +81,15 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 	if (std.triple.os(host) === "darwin") {
 		const targetOs = std.triple.os(target);
 		if (targetOs === "darwin") {
-			return await bootstrap.sdk.toolchain(host);
+			const toolchain = await bootstrap.sdk.toolchain(host);
+			if (host === target) {
+				return toolchain;
+			}
+			const tools = ["ar", "cc", "c++", "clang", "clang++", "ld", "nm", "ranlib", "strip"];
+			const aliases = Object.fromEntries(
+				tools.map((name) => [`${target}-${name}`, tg.symlink(name)]),
+			);
+			return tg.directory(toolchain, { bin: aliases });
 		} else if (targetOs === "linux") {
 			const toolchain = bootstrap.toolchain(host);
 			const lld = buildLld({ host });
@@ -413,7 +421,7 @@ export async function linuxToDarwin(arg?: LinuxToDarwinArg) {
 
 	// Add the sysroot to the clang toolchain.
 	clangToolchain = await tg.directory(clangToolchain, {
-		["sysroot"]: bootstrap.macOsSdk(),
+		["sysroot"]: bootstrap.macOsSdk(undefined, host),
 	});
 
 	// Add shell wrappers for clang and clang++.
@@ -473,7 +481,12 @@ export async function wrapArgs(arg: WrapArgsArg) {
 		if (targetOs === "darwin") {
 			// If the target is darwin, use the macOS SDK for the SDKROOT.
 			env = {
-				SDKROOT: tg.Mutation.setIfUnset(tg`${bootstrap.macOsSdk()}/MacOSX.sdk`),
+				MACOSX_DEPLOYMENT_TARGET: tg.Mutation.setIfUnset(
+					std.sdk.macOsDeploymentTarget,
+				),
+				SDKROOT: tg.Mutation.setIfUnset(
+					tg`${bootstrap.macOsSdk(undefined, host)}/MacOSX.sdk`,
+				),
 			};
 		} else if (targetOs === "linux") {
 			// If the target is linux, unset any existing SDKROOT and instead use the Linux sysroot.

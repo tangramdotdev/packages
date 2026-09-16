@@ -1253,7 +1253,9 @@ async function getBuildToolchain(
 					.build(gnu.toolchain, { host: build, target: host })
 					.named("gnu toolchain"),
 			)
-		: await tg.build(std.buildBootstrapSdkEnv).named("bootstrap sdk env");
+		: std.triple.archAndOs(build) === std.triple.host()
+			? await tg.build(std.buildBootstrapSdkEnv).named("bootstrap sdk env")
+			: await bootstrap.sdk.env(build);
 }
 
 /** Produce the manifest interpreter object given a set of parameters. */
@@ -1471,15 +1473,18 @@ async function interpreterFromArg(
 
 			// If no preload is defined, add the default injection preload.
 			if (preloads.length === 0) {
-				const host = std.triple.host();
-				// Use default injection when no custom build or buildToolchain is provided.
-				if (buildArg === undefined && buildToolchainArg === undefined) {
+				// Use the default injection when no custom build, host, or build toolchain is provided.
+				if (
+					buildArg === undefined &&
+					hostArg === undefined &&
+					buildToolchainArg === undefined
+				) {
 					const injectionLibrary = await tg
 						.build(std.buildDefaultInjection)
 						.named("default injection");
 					preloads.push(injectionLibrary);
 				} else {
-					const build = buildArg ?? host;
+					const build = buildArg ?? std.triple.host();
 					const buildToolchain = await getBuildToolchain(
 						buildToolchainArg,
 						build,
@@ -1488,7 +1493,7 @@ async function interpreterFromArg(
 					const injectionLibrary = await tg
 						.build(injection.injection, {
 							...std.args.optional("buildToolchain", buildToolchain),
-							build: buildArg ?? null,
+							build,
 							host,
 						})
 						.named("injection");
@@ -2791,6 +2796,7 @@ export async function test() {
 		tg.build(testManifestDependenciesMergeMutation, {
 			name: "manifest dependencies merge mutation",
 		}),
+		tg.build(testDarwinInjection).named("Darwin injection"),
 		tg.build(testDarwinLargeManifestOverwrite, {
 			name: "Darwin large manifest overwrite",
 		}),
@@ -3618,6 +3624,31 @@ async function testWrapperBinary(): Promise<tg.File> {
 		.build(workspace.wrapper, { build, host })
 		.named("test wrapper binary")
 		.then(tg.File.expect);
+}
+
+export async function testDarwinInjection() {
+	const build = std.triple.host();
+	if (std.triple.os(build) !== "darwin") {
+		return true;
+	}
+	for (const arch of ["aarch64", "x86_64"]) {
+		const host = `${arch}-apple-darwin`;
+		for (const buildArg of [undefined, build]) {
+			const interpreter = await interpreterFromArg(
+				{ kind: "dyld" },
+				undefined,
+				buildArg,
+				host,
+			);
+			tg.assert(interpreter.kind === "dyld");
+			tg.assert(interpreter.preloads?.length === 1);
+			const preload = tg.File.expect(interpreter.preloads[0]);
+			const metadata = await std.file.executableMetadata(preload);
+			tg.assert(metadata.format === "mach-o");
+			tg.assert(metadata.arches.length === 1 && metadata.arches[0] === arch);
+		}
+	}
+	return true;
 }
 
 export async function testInterpreterSwappingNormal() {
