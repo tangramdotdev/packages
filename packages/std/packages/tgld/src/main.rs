@@ -1,16 +1,19 @@
-use itertools::Itertools;
-use std::{
-	collections::{BTreeMap, HashMap, HashSet},
-	hash::BuildHasher,
-	path::PathBuf,
-	str::FromStr,
+use {
+	itertools::Itertools as _,
+	std::{
+		collections::{BTreeMap, HashMap, HashSet},
+		ffi::OsString,
+		hash::BuildHasher,
+		path::PathBuf,
+	},
+	tangram_client::prelude::*,
+	tokio::io::AsyncReadExt as _,
 };
-use tangram_client::prelude::*;
-use tokio::io::AsyncReadExt as _;
+
+mod controls;
+mod payload;
 
 type Hasher = fnv::FnvBuildHasher;
-
-const MAX_DEPTH: usize = 16;
 
 fn main() {
 	if let Err(e) = main_inner() {
@@ -21,7 +24,7 @@ fn main() {
 
 fn main_inner() -> tg::Result<()> {
 	// Setup tracing.
-	common::tracing::setup("TGLD_TRACING");
+	common::tracing::setup("TANGRAM_LINKER_TRACING");
 
 	tg::init()?;
 	let runtime = tokio::runtime::Builder::new_current_thread()
@@ -31,7 +34,11 @@ fn main_inner() -> tg::Result<()> {
 
 	// Read the options from the environment and arguments.
 	let options = read_options()?;
-	tracing::debug!(?options);
+	tracing::debug!(
+		passthrough = options.controls.passthrough,
+		embed = options.controls.embed,
+		"parsed the controls"
+	);
 
 	// Run the command.
 	let status = std::process::Command::new(&options.command_path)
@@ -46,7 +53,7 @@ fn main_inner() -> tg::Result<()> {
 	}
 
 	// If passthrough mode is enabled, then exit.
-	if options.passthrough {
+	if options.controls.passthrough {
 		tracing::info!("Passthrough mode enabled. Exiting.");
 		return Ok(());
 	}
@@ -69,187 +76,81 @@ struct Options {
 	/// Paths which may contain additional dynamic libraries passed on the command line, not via a library path.
 	additional_library_candidate_paths: Vec<PathBuf>,
 
+	/// The original arguments to the command.
+	command_args: Vec<OsString>,
+
 	/// The path to the command that will be invoked.
 	command_path: PathBuf,
 
-	/// The original arguments to the command.
-	command_args: Vec<String>,
-
-	/// If any NEEDED libraries are missing at the end, should we still produce a wrapper?. Will warn if false, error if true. Default: false.
-	disallow_missing: bool,
-
-	/// If enabled, the wrapper will be embedded into the binary.
-	embed: bool,
-
-	/// The interpreter used by the output executable.
-	interpreter_path: Option<String>,
-
-	/// Any additional arguments to pass to the interpreter.
-	interpreter_args: Option<String>,
+	/// The component controls.
+	controls: controls::Settings,
 
 	/// The path to the injection library.
 	injection_path: Option<String>,
 
-	/// Library path optimization strategy. Select `none`, `filter`, `resolve`, `isolate`, or `combine`. Defaults to `isolate`.
-	library_path_strategy: LibraryPathStrategy,
+	/// Any additional arguments to pass to the interpreter.
+	interpreter_args: Option<String>,
+
+	/// The interpreter used by the output executable.
+	interpreter_path: Option<String>,
 
 	/// The library paths.
 	library_paths: Vec<String>,
 
-	/// The maximum number of transitive library path searches to perform during optimization. Defaults to 16.
-	max_depth: usize,
-
 	/// The output path.
 	output_path: PathBuf,
-
-	/// Whether the linker should run in passthrough mode.
-	passthrough: bool,
-
-	/// Additional argument values to set in the wrapper.
-	wrapper_arg_value: Option<Vec<tg::Template>>,
-
-	/// Additional environment variable values to set in the wrapper.
-	wrapper_env_value: Option<tg::Mutation>,
 }
 
 // Read the options from the environment and arguments.
-#[allow(clippy::too_many_lines)]
 fn read_options() -> tg::Result<Options> {
-	// Create the output.
+	read_options_with_args(std::env::args_os().skip(1), |name| std::env::var_os(name))
+}
+
+#[allow(clippy::too_many_lines)]
+fn read_options_with_args(
+	mut args: impl Iterator<Item = OsString>,
+	mut lookup: impl FnMut(&str) -> Option<OsString>,
+) -> tg::Result<Options> {
 	let mut command_args = Vec::new();
-	let mut output_path = None;
+	let mut output_path: Option<PathBuf> = None;
 	let mut library_paths = Vec::new();
-
-	// Get the command.
-	let command_path = std::env::var("TGLD_COMMAND_PATH")
-		.map_err(|error| tg::error!(source = error, "TGLD_COMMAND_PATH must be set."))?
+	let command_path = lookup("TANGRAM_LINKER_COMMAND_PATH")
+		.ok_or_else(|| tg::error!("TANGRAM_LINKER_COMMAND_PATH must be set"))?
 		.into();
-
-	// Get the passthrough flag.
-	let mut passthrough = std::env::var("TGLD_PASSTHROUGH").is_ok();
-
-	// Get the allow_missing flag.
-	let mut disallow_missing = std::env::var("TGLD_DISALLOW_MISSING").is_ok();
-
-	// Get the interpreter path.
-	let interpreter_path = std::env::var("TGLD_INTERPRETER_PATH").ok();
-
-	// Get the wrap binary.
-	let mut embed = std::env::var("TGLD_EMBED_WRAPPER").is_ok();
-
-	// Get additional interpreter arguments, if any.
-	let interpreter_args = std::env::var("TGLD_INTERPRETER_ARGS").ok();
-
-	// Get the max depth.
-	let mut max_depth = std::env::var("TGLD_MAX_DEPTH")
-		.ok()
-		.map_or(MAX_DEPTH, |s| s.parse().unwrap_or(MAX_DEPTH));
-
-	// Get the injection path.
-	let injection_path = std::env::var("TGLD_INJECTION_PATH").ok();
-
-	// Get the option to disable combining library paths. Enabled by default.
-	let mut library_path_optimization = std::env::var("TGLD_LIBRARY_PATH_OPT_LEVEL")
-		.ok()
-		.map_or(LibraryPathStrategy::default(), |s| {
-			s.parse().unwrap_or_default()
-		});
-
-	// Get an iterator over the arguments.
-	let mut args = std::env::args();
-
-	// Skip arg0.
-	args.next();
-
-	// Prepare to store dynamic libraries passed directly to the linker.
+	let interpreter_path =
+		lookup("TANGRAM_LINKER_INTERPRETER_PATH").and_then(|value| value.into_string().ok());
+	let interpreter_args =
+		lookup("TANGRAM_LINKER_INTERPRETER_ARGS").and_then(|value| value.into_string().ok());
+	let injection_path =
+		lookup("TANGRAM_LINKER_INJECTION_PATH").and_then(|value| value.into_string().ok());
+	let mut controls = controls::Settings::from_env(lookup)?;
+	let mut ended = false;
 	let mut additional_library_candidate_paths = Vec::new();
-
-	// Prepare to store wrapper arg values.
-	let mut wrapper_arg_value = None;
-
-	// Prepare to store wrapper env values.
-	let mut wrapper_env_value = None;
 
 	// Handle the arguments.
 	while let Some(arg) = args.next() {
-		if arg == "--" {
-			command_args.push(arg);
-			for arg in args {
-				if is_library_candidate(&arg)
-					&& let Ok(canonical_path) = std::fs::canonicalize(&arg)
-				{
-					additional_library_candidate_paths.push(canonical_path);
-				}
-				command_args.push(arg);
-			}
-			break;
-		}
-
-		// Consume only this proxy's options. Other components own other flags.
-		match arg.as_str() {
-			"--tangram-linker-passthrough" => {
-				passthrough = true;
-				continue;
-			},
-			"--tg-disallow-missing" => {
-				disallow_missing = true;
-				continue;
-			},
-			"--tg-embed-wrapper" => {
-				embed = true;
-				continue;
-			},
-			_ => {},
-		}
-		if let Some(option) = arg.strip_prefix("--tg-library-path-opt-level=") {
-			library_path_optimization = LibraryPathStrategy::from_str(option).unwrap_or_default();
+		if !ended && controls.consume(&arg)? {
 			continue;
 		}
-		if let Some(option) = arg.strip_prefix("--tg-max-depth=") {
-			if let Ok(max_depth_arg) = option.parse() {
-				max_depth = max_depth_arg;
-			} else {
-				tracing::warn!("Invalid max depth argument {option}. Using default.");
-			}
-			continue;
-		}
-		let (name, value) = arg
-			.split_once('=')
-			.map_or((arg.as_str(), None), |(name, value)| (name, Some(value)));
-		if name == "--tangram-wrapper-arg-value" || name == "--tangram-wrapper-env-value" {
-			let value = value
-				.map(str::to_owned)
-				.or_else(|| args.next())
-				.ok_or_else(|| tg::error!(%name, "missing option value"))?;
-			let value = value
-				.parse::<tg::Value>()
-				.map_err(|error| tg::error!(!error, %name, "failed to parse wrapper value"))?;
-			if name == "--tangram-wrapper-arg-value" {
-				let templates = value
-					.try_unwrap_array()
-					.map_err(|_| tg::error!("expected an array"))?
-					.into_iter()
-					.map(|v| {
-						v.try_unwrap_template()
-							.map_err(|_| tg::error!("expected a template"))
-					})
-					.collect::<tg::Result<Vec<_>>>()?;
-				wrapper_arg_value.replace(templates);
-			} else {
-				let mutation = value
-					.try_unwrap_mutation()
-					.map_err(|_| tg::error!("expected a mutation"))?;
-				wrapper_env_value.replace(mutation);
-			}
-			continue;
-		}
+		ended |= arg == "--";
 		command_args.push(arg.clone());
+		let Some(arg) = arg.to_str() else {
+			continue;
+		};
+		if ended {
+			if is_library_candidate(arg)
+				&& let Ok(path) = std::fs::canonicalize(arg)
+			{
+				additional_library_candidate_paths.push(path);
+			}
+			continue;
+		}
 
 		// Handle the output path argument.
 		if arg == "-o" || arg == "--output" {
 			if let Some(path) = args.next() {
 				command_args.push(path.clone());
-				output_path = path.into();
+				output_path = Some(path.into());
 			}
 		} else if let Some(output_arg) = arg.strip_prefix("-o") {
 			output_path = Some(output_arg.into());
@@ -261,7 +162,11 @@ fn read_options() -> tg::Result<Options> {
 		if arg == "-L" || arg == "--library-path" {
 			if let Some(library_path) = args.next() {
 				command_args.push(library_path.clone());
-				library_paths.push(library_path);
+				library_paths.push(
+					library_path
+						.into_string()
+						.map_err(|_| tg::error!("expected a UTF-8 library path"))?,
+				);
 			}
 		} else if let Some(library_arg) = arg.strip_prefix("--library-path=") {
 			library_paths.push(library_arg.to_owned());
@@ -293,33 +198,27 @@ fn read_options() -> tg::Result<Options> {
 		}
 
 		// Add any dynamic libraries passed directly to the linker.
-		if is_library_candidate(&arg) {
+		if is_library_candidate(arg) {
 			// If the path can't be canonicalized, do nothing - it's not a valid library candidate.
-			if let Ok(canonical_path) = std::fs::canonicalize(&arg) {
+			if let Ok(canonical_path) = std::fs::canonicalize(arg) {
 				additional_library_candidate_paths.push(canonical_path);
 			}
 		}
 	}
 
 	// If no explicit output path was provided, instead look for `a.out`.
-	let output_path = output_path.as_deref().unwrap_or("a.out").into();
+	let output_path = output_path.unwrap_or_else(|| "a.out".into());
 
 	let options = Options {
 		additional_library_candidate_paths,
-		command_path,
 		command_args,
-		disallow_missing,
-		embed,
-		interpreter_path,
-		interpreter_args,
+		command_path,
+		controls,
 		injection_path,
-		library_path_strategy: library_path_optimization,
+		interpreter_args,
+		interpreter_path,
 		library_paths,
-		max_depth,
 		output_path,
-		passthrough,
-		wrapper_arg_value,
-		wrapper_env_value,
 	};
 
 	Ok(options)
@@ -338,7 +237,10 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	tracing::debug!(?is_executable, ?interpreter, ?initial_needed_libraries);
 
 	// If the file is executable but does not need an interpreter, it is static or static-PIE linked. Abort here.
-	if !options.embed && is_executable && matches!(interpreter, InterpreterRequirement::None) {
+	if !options.controls.embed
+		&& is_executable
+		&& matches!(interpreter, InterpreterRequirement::None)
+	{
 		tracing::info!("No interpreter needed for static executable. Exiting without wrapping.");
 		return Ok(());
 	}
@@ -427,7 +329,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	let library_paths = if library_paths.is_empty() {
 		None
 	} else {
-		let strategy = options.library_path_strategy;
+		let strategy = options.controls.library_path_strategy;
 		tracing::trace!(
 			?library_paths,
 			?needed_libraries,
@@ -439,9 +341,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			&output_file,
 			library_paths,
 			&mut needed_libraries,
-			options.library_path_strategy,
-			options.max_depth,
-			options.disallow_missing,
+			options.controls.library_path_strategy,
+			options.controls.max_depth,
+			options.controls.disallow_missing,
 		)
 		.await?;
 
@@ -466,7 +368,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		tracing::trace!(?manifest);
 
 		// If requested, embed the wrapper.
-		let new_wrapper = if options.embed {
+		let new_wrapper = if options.controls.embed {
 			if let Some(entrypoint) = entrypoint {
 				manifest.executable = common::manifest::Executable::Address(entrypoint);
 			}
@@ -649,7 +551,7 @@ async fn create_manifest(
 				let path = options
 					.interpreter_path
 					.as_ref()
-					.expect("TGLD_INTERPRETER_PATH must be set.");
+					.expect("TANGRAM_LINKER_INTERPRETER_PATH must be set.");
 
 				Some((path.clone(), flavor))
 			},
@@ -734,8 +636,8 @@ async fn create_manifest(
 	let executable = common::manifest::Executable::Path(common::template_from_artifact(ld_output));
 
 	// Create empty values for env and args.
-	let env = options.wrapper_env_value.clone();
-	let args = options.wrapper_arg_value.clone();
+	let env = options.controls.wrapper_env_value.clone();
+	let args = options.controls.wrapper_arg_value.clone();
 
 	// Create the manifest.
 	let manifest = common::Manifest {
@@ -1513,6 +1415,33 @@ mod tests {
 			],
 		);
 		assert!(paths[0].directory.state().object().is_some());
+	}
+
+	#[test]
+	fn native_operands_and_delimiters() {
+		use std::{ffi::OsString, os::unix::ffi::OsStringExt as _};
+		for option in ["-o", "--output", "-L", "--library-path"] {
+			for operand in [
+				"--",
+				"--tg-linker-passthrough=false",
+				"--tg-linker-wrapper-args",
+			] {
+				let input = vec![
+					OsString::from(option),
+					operand.into(),
+					"--tg-linker-passthrough".into(),
+					"--".into(),
+					"--tg-linker-passthrough=false".into(),
+					OsString::from_vec(b"\xff".to_vec()),
+				];
+				let options = super::read_options_with_args(input.clone().into_iter(), |key| {
+					(key == "TANGRAM_LINKER_COMMAND_PATH").then(|| "ld".into())
+				})
+				.unwrap();
+				assert!(options.controls.passthrough);
+				assert_eq!(options.command_args, [&input[..2], &input[3..]].concat());
+			}
+		}
 	}
 
 	#[tokio::test]

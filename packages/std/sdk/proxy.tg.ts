@@ -349,16 +349,16 @@ async function ldProxy(arg: LdProxyArg) {
 
 	// Define environment for the linker proxy.
 	const env = {
-		TGLD_COMMAND_PATH: tg.Mutation.setIfUnset<
+		TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<
 			tg.File | tg.Symlink | tg.Template
 		>(arg.linker),
-		TGLD_INJECTION_PATH: tg.Mutation.set(hostInjectionLibrary),
+		TANGRAM_LINKER_INJECTION_PATH: tg.Mutation.set(hostInjectionLibrary),
 		...(interpreterArgs
 			? {
-					TGLD_INTERPRETER_ARGS: tg.Mutation.setIfUnset(interpreterArgs),
+					TANGRAM_LINKER_INTERPRETER_ARGS: tg.Mutation.setIfUnset(interpreterArgs),
 				}
 			: {}),
-		TGLD_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
+		TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
 			arg.interpreter ?? "none",
 		),
 		// Pass artifacts, not IDs, so that they are recorded as dependencies.
@@ -369,9 +369,7 @@ async function ldProxy(arg: LdProxyArg) {
 		TANGRAM_OBJCOPY_PATH: objcopy
 			? tg.Mutation.set(objcopy)
 			: (tg.Mutation.unset() as tg.Mutation<tg.File>),
-		TGLD_EMBED_WRAPPER: embedWrapper
-			? tg.Mutation.set("true")
-			: (tg.Mutation.unset() as tg.Mutation<string>),
+		TANGRAM_LINKER_EMBED_WRAPPER: tg.Mutation.setIfUnset(embedWrapper ? "true" : "false"),
 	};
 
 	// Create the linker proxy.
@@ -449,7 +447,7 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 
 	const envs: tg.Args<std.env.Arg> = [
 		{
-			TGSTRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
+			TANGRAM_STRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
 				tg.File | tg.Symlink | tg.Template
 			>(stripCommand),
 			TANGRAM_WRAPPER_EXE_PATH: tg.Mutation.setIfUnset(hostWrapper),
@@ -460,7 +458,7 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 	];
 	if (runtimeLibraryPath !== undefined) {
 		envs.push({
-			TGSTRIP_RUNTIME_LIBRARY_PATH: runtimeLibraryPath,
+			TANGRAM_STRIP_RUNTIME_LIBRARY_PATH: runtimeLibraryPath,
 		});
 	}
 
@@ -474,6 +472,9 @@ export async function test() {
 	const tests = [
 		testBasic(),
 		testProxyArguments(),
+		testLinkerControls(),
+		testSdkControlPrecedence(),
+		testStripControls(),
 		testCompilerLocalPaths(),
 		testLdProxyDependencies(),
 		testLdProxyInterpreterArgs(),
@@ -493,7 +494,7 @@ export async function test() {
 const ldProxyArtifactEnvVars = (host: string) => [
 	...(std.triple.os(host) === "darwin" ? ["TANGRAM_CODESIGN_PATH"] : []),
 	"TANGRAM_WRAPPER_EXE_PATH",
-	"TGLD_INJECTION_PATH",
+	"TANGRAM_LINKER_INJECTION_PATH",
 ];
 
 /** Get the value the manifest env sets for a name. */
@@ -586,7 +587,7 @@ export async function testLdProxyInterpreterArgs() {
 	]);
 	const output = await std
 		.build(std.shBootstrap`
-			eval "set -- $TGLD_INTERPRETER_ARGS"
+			eval "set -- $TANGRAM_LINKER_INTERPRETER_ARGS"
 			test "$#" -eq 5
 			test "$1" = --library-path
 			test -d "$2"
@@ -594,7 +595,7 @@ export async function testLdProxyInterpreterArgs() {
 			printf '%s\\n' "$4" > ${tg.output}
 			cat "$5" >> ${tg.output}
 		`)
-		.env(await bootstrap.utils(), { TGLD_INTERPRETER_ARGS: args })
+		.env(await bootstrap.utils(), { TANGRAM_LINKER_INTERPRETER_ARGS: args })
 		.then(tg.File.expect);
 	tg.assert((await output.text) === `${literal}\n${content}`);
 	return true;
@@ -618,7 +619,7 @@ export async function testProxyArguments() {
 	`;
 	const recorder = await std
 		.build(std.shBootstrap`cc -xc ${source} -o ${tg.output}`)
-		.env(buildToolchain, { TGLD_PASSTHROUGH: true })
+		.env(buildToolchain, { TANGRAM_LINKER_PASSTHROUGH: true })
 		.then(tg.File.expect);
 	const wrapper = await std.wrap(recorder, {
 		buildToolchain,
@@ -630,21 +631,21 @@ export async function testProxyArguments() {
 		std.triple.os(std.triple.host()) === "linux"
 			? await std
 					.build(std.shBootstrap`cc -static -xc ${source} -o ${tg.output}`)
-					.env(buildToolchain, { TGLD_PASSTHROUGH: true })
+					.env(buildToolchain, { TANGRAM_LINKER_PASSTHROUGH: true })
 					.then(tg.File.expect)
 			: recorder;
 	const linker = await std.wrap(await workspace.ldProxy({}), {
 		buildToolchain,
 		env: {
-			TGLD_COMMAND_PATH: commandRecorder,
-			TGLD_PASSTHROUGH: tg.Mutation.unset(),
+			TANGRAM_LINKER_COMMAND_PATH: commandRecorder,
+			TANGRAM_LINKER_PASSTHROUGH: tg.Mutation.unset(),
 		},
 	});
 	const strip = await std.wrap(await workspace.stripProxy({}), {
 		buildToolchain,
 		env: {
-			TGSTRIP_COMMAND_PATH: commandRecorder,
-			TGSTRIP_PASSTHROUGH: tg.Mutation.unset(),
+			TANGRAM_STRIP_COMMAND_PATH: commandRecorder,
+			TANGRAM_STRIP_PASSTHROUGH: tg.Mutation.unset(),
 		},
 	});
 	const check = async (
@@ -674,12 +675,12 @@ export async function testProxyArguments() {
 		"--tg-passthrough",
 		"--tg-passthrough-extra",
 		"--tangram-linker-passthrough-extra",
-		"--tangram-strip-passthrough=false",
+		"--tangram-strip-passthrough-extra=false",
 		"--tg-disallow-missing-extra",
 		"--tg-embed-wrapper=false",
-		"--tangram-print-manifest-extra",
+		"--tg-wrapper-print-manifest-extra",
 		"--tangram-suppress-args=false",
-		"--tangram-suppress-env-extra",
+		"--tg-wrapper-suppress-env-extra",
 		"--tangram-wrapper-arg-value-extra=[]",
 		"--tangram-wrapper-env-value-extra=opaque",
 		"--tangram-unknown",
@@ -690,33 +691,31 @@ export async function testProxyArguments() {
 	await check(wrapper, unknown, ["manifest argument", ...unknown]);
 	await check(
 		wrapper,
-		["--tangram-suppress-args", ...unknown],
+		["--tg-wrapper-suppress-args", ...unknown],
 		["manifest argument"],
 	);
 	await check(
 		wrapper,
-		["--tangram-suppress-env", ...unknown],
+		["--tg-wrapper-suppress-env", ...unknown],
 		["manifest argument", ...unknown],
 		"unset",
 	);
 
 	const wrapperFlags = [
-		"--tangram-suppress-args",
-		"--tangram-suppress-env",
-		"--tangram-print-manifest",
+		"--tg-wrapper-suppress-args",
+		"--tg-wrapper-suppress-env",
+		"--tg-wrapper-print-manifest",
 	];
 	const linkerFlags = [
-		"--tangram-linker-passthrough",
-		"--tg-disallow-missing",
-		"--tg-embed-wrapper",
-		"--tg-max-depth=1",
-		"--tg-library-path-opt-level=none",
-		"--tangram-wrapper-arg-value",
-		"[]",
-		'--tangram-wrapper-env-value=tg.mutation({"kind":"set","value":{}})',
-		"--tangram-wrapper-arg-value=[]",
-		"--tangram-wrapper-env-value",
-		'tg.mutation({"kind":"set","value":{}})',
+		"--tg-linker-passthrough",
+		"--tg-linker-disallow-missing-libraries",
+		"--tg-linker-embed-wrapper",
+		"--tg-linker-library-search-depth=1",
+		"--tg-linker-library-path-strategy=none",
+		"--tg-linker-wrapper-args=[]",
+		'--tg-linker-wrapper-env=tg.mutation({"kind":"set","value":{}})',
+		"--tangram-linker-wrapper-args=[]",
+		'--tangram-linker-wrapper-env=tg.mutation({"kind":"unset"})',
 	];
 	const stripFlags = ["--tangram-strip-passthrough"];
 	await check(
@@ -773,19 +772,136 @@ export async function testProxyArguments() {
 
 	// Verify the wrapper's diagnostic control, and errors for missing linker values.
 	const manifest = await std
-		.build(std.shBootstrap`${wrapper} --tangram-print-manifest > ${tg.output}`)
+		.build(std.shBootstrap`${wrapper} --tg-wrapper-print-manifest > ${tg.output}`)
 		.then(tg.File.expect);
 	tg.assert(tg.encoding.json.decode(await manifest.text) !== undefined);
 	for (const flag of [
-		"--tangram-wrapper-arg-value",
-		"--tangram-wrapper-env-value",
+		"--tg-linker-wrapper-args",
+		"--tg-linker-wrapper-env",
 	]) {
 		const output = await std
 			.build(std.shBootstrap`
 				if ${linker} ${flag} > /dev/null 2> ${tg.output}; then exit 1; fi
 			`)
 			.then(tg.File.expect);
-		tg.assert((await output.text).includes("missing option value"));
+		tg.assert((await output.text).includes("an attached value (=VALUE)"));
+	}
+	await check(strip, ["--tg-strip-passthrough=false", "--tangram-strip-passthrough", ...unknown], unknown);
+	for (const component of ["linker", "strip"]) {
+		const executable = component === "linker" ? linker : strip;
+		const error = await std.build(std.shBootstrap`
+			if ${executable} ${await interpreterArgsTemplate([`--tg-${component}-passthrough= true`, `--tangram-${component}-passthrough=false`])} > /dev/null 2> ${tg.output}; then exit 1; fi
+		`).then(tg.File.expect);
+		tg.assert((await error.text).includes("expected a boolean"));
+	}
+
+	return true;
+}
+
+/** Inline linker payloads retain their values, authorization, and executable behavior. */
+export async function testLinkerControls() {
+	const toolchain = await bootstrap.sdk();
+	const source = await tg.file`
+		#include <stdio.h>
+		#include <stdlib.h>
+		#include <string.h>
+		int main(int argc, char **argv) {
+			const char *example = getenv("EXAMPLE"), *inherited = getenv("INHERITED");
+			printf("%s%c%s%c", example ? example : "unset", 0, inherited ? inherited : "unset", 0);
+			for (int i = 1; i < argc; i++) fwrite(argv[i], 1, strlen(argv[i]) + 1, stdout);
+			if (argc > 2) {
+				const char *artifact = getenv("ARTIFACT");
+				if (!artifact || strcmp(artifact, argv[2])) return 1;
+				FILE *file = fopen(argv[2], "r");
+				if (!file) return 1;
+				int ch;
+				while ((ch = fgetc(file)) != EOF) putchar(ch);
+				fclose(file);
+			}
+		}
+	`;
+	const directory = await tg.directory({ value: tg.file("artifact contents") });
+	await directory.store();
+	const argument = await tg.template("hello, world=1");
+	const artifactArgument = await tg`${directory}/value`;
+	const argsPayload = tg.Value.stringify([argument, artifactArgument]);
+	const envPayload = tg.Value.stringify(await tg.Mutation.set({ EXAMPLE: "hello, world=1", ARTIFACT: artifactArgument }));
+	const build = async (cli: string[], environment: Record<string, string> = {}) => {
+		const flags = await interpreterArgsTemplate(cli.flatMap((flag) => ["-Xlinker", flag]));
+		return std.build(std.shBootstrap`
+			test -f ${directory}/value
+			cc -xc ${source} -o ${tg.output} ${flags}
+		`).env(toolchain, environment).then(tg.File.expect);
+	};
+	const cli = await build([`--tg-linker-wrapper-args=${argsPayload}`, `--tg-linker-wrapper-env=${envPayload}`]);
+	const environment = await build([], { TANGRAM_LINKER_WRAPPER_ARGS: argsPayload, TANGRAM_LINKER_WRAPPER_ENV: envPayload });
+	for (const executable of [cli, environment]) {
+		const output = await std.build(std.shBootstrap`INHERITED=kept ${executable} > ${tg.output}`).then(tg.File.expect);
+		const words = (await output.text).split("\0");
+		tg.assert(words[0] === "hello, world=1" && words[1] === "kept" && words[2] === "hello, world=1");
+		tg.assert(words[3]?.endsWith(`/${directory.id}/value`) && words[4] === "artifact contents");
+	}
+	for (const mutation of ['tg.mutation({"kind":"set","value":{}})', 'tg.mutation({"kind":"unset"})']) {
+		const executable = await build(["--tg-linker-wrapper-args=[]", `--tangram-linker-wrapper-env=${mutation}`], { TANGRAM_LINKER_WRAPPER_ARGS: argsPayload, TANGRAM_LINKER_WRAPPER_ENV: envPayload });
+		const manifest = await wrap.Manifest.read(executable);
+		tg.assert(manifest?.args?.length === 0);
+		const output = await std.build(std.shBootstrap`INHERITED=kept ${executable} > ${tg.output}`).then(tg.File.expect);
+		tg.assert((await output.text) === (mutation.includes('"unset"') ? "unset\0unset\0" : "unset\0kept\0"));
+	}
+	const raw = await std.wrap(await workspace.ldProxy({}), { buildToolchain: toolchain });
+	for (const control of [
+		'--tg-linker-wrapper-args=["SECRET_MARKER"]',
+		'--tg-linker-wrapper-args=[] SECRET_MARKER',
+		'--tg-linker-wrapper-env=tg.mutation({"kind":"SECRET_MARKER"})',
+		'--tg-linker-wrapper-env=tg.mutation({"kind":"set","value":{"SECRET_MARKER":{}}})',
+	]) {
+		const error = await std.build(std.shBootstrap`
+			if TANGRAM_LINKER_COMMAND_PATH=/nonexistent ${raw} ${await interpreterArgsTemplate([control, "--tg-linker-wrapper-args=[]"])} > /dev/null 2> ${tg.output}; then exit 1; fi
+		`).then(tg.File.expect);
+		const text = await error.text;
+		tg.assert(text.includes("invalid control") && !text.includes("SECRET_MARKER") && !text.includes("failed to run"));
+	}
+	return true;
+}
+
+/** SDK defaults yield to incoming environment and then invocation-local linker controls. */
+export async function testSdkControlPrecedence() {
+	const rawToolchain = await bootstrap.sdk.env();
+	const source = await tg.file`#include <stdio.h>
+int main(void) { puts("SDK controls"); }`;
+	const linux = std.triple.os(std.triple.host()) === "linux";
+	for (const defaultValue of [false, true]) {
+		// Build each SDK independently, as the bootstrap SDK does.
+		const toolchain = await tg
+			.build(env, { toolchain: rawToolchain, embedWrapper: defaultValue })
+			.named(`SDK embedding default ${defaultValue}`);
+		for (const [environment, cli, expected] of [
+			[undefined, undefined, linux && defaultValue],
+			["false", undefined, false],
+			["true", undefined, true],
+			["true", "false", false],
+			["false", "true", true],
+		] as const) {
+			// Mach-O embedding does not install the runtime wrapper, so test enabled controls with passthrough on macOS.
+			const passthrough = !linux && expected;
+			const result = await std.build(std.shBootstrap`
+				mkdir -p ${tg.output}
+				TANGRAM_LINKER_TRACING=tgld=debug ${environment === undefined ? "" : `TANGRAM_LINKER_EMBED_WRAPPER=${environment}`} cc -xc ${source} -o ${tg.output}/program ${cli === undefined ? "" : `-Wl,--tg-linker-embed-wrapper=${cli}`} ${passthrough ? "-Wl,--tg-linker-passthrough" : ""} 2> ${tg.output}/log
+			`).env(toolchain).then(tg.Directory.expect);
+			const log = await result.get("log").then(tg.File.expect).then((file) => file.text);
+			const context = `SDK default ${defaultValue}, environment ${environment}, CLI ${cli}`;
+			tg.assert(
+				log.split("\n").some((line) => line.includes("parsed the controls") && line.includes(`embed=${expected}`)),
+				`expected embedding ${expected} for ${context}`,
+			);
+			const output = await result.get("program").then(tg.File.expect);
+			const manifest = await wrap.Manifest.read(output);
+			tg.assert(
+				passthrough ? manifest === undefined : manifest !== undefined && (manifest.executable.kind === "address") === expected,
+				`unexpected manifest for ${context}: ${manifest?.executable.kind}`,
+			);
+			await std.assert.stdoutIncludes(output, "SDK controls");
+		}
 	}
 	return true;
 }
@@ -807,11 +923,14 @@ int main(void) { return ANSWER != 42; }
 			${proxy} -I"./z includes" -I"./a includes" -I"./z includes" "./source with spaces/alias.c" -o ${tg.output}
 		`)
 		.env(toolchain, {
-			TGCC_ENABLE: "true",
+			TGCC_ENABLE: "1",
 			TGCC_COMPILER: await tg`${toolchain}/bin/cc`,
+			TANGRAM_LINKER_WRAPPER_ARGS: '[tg.template(["transported through tgcc"])]',
 		})
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "");
+	const manifest = await wrap.Manifest.read(output);
+	tg.assert(manifest?.args?.[0]?.components[0]?.value === "transported through tgcc");
 	return true;
 }
 
@@ -833,9 +952,9 @@ export async function testBasic(target?: string) {
 				echo "done"`)
 		.env(
 			std.env.compose(buildToolchain, {
-				TGLD_TRACING: "tgld=trace,tangram_std=trace",
-				TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
-				TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
+				TANGRAM_LINKER_TRACING: "tgld=trace,tangram_std=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "combine",
+				TANGRAM_WRAPPER_TRACING: "true",
 			}),
 		)
 		.then(tg.File.expect);
@@ -887,7 +1006,7 @@ async function makeShared(arg: tg.Unresolved<MakeSharedArg>) {
 		)
 		.env(
 			std.env.compose(sdk, {
-				TGLD_TRACING: "tgld=trace",
+				TANGRAM_LINKER_TRACING: "tgld=trace",
 			}),
 		)
 		.then(tg.Directory.expect);
@@ -953,7 +1072,7 @@ export async function testSharedLibraryWithDep(target?: string) {
 	`)
 		.env(
 			std.env.compose(testSDK, {
-				TGLD_TRACING: "tgld=trace",
+				TANGRAM_LINKER_TRACING: "tgld=trace",
 			}),
 		)
 		.then(tg.Directory.expect);
@@ -1158,8 +1277,8 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 		)
 		.env(
 			std.env.compose(testSDK, {
-				TGLD_TRACING: "tgld=trace",
-				TGLD_LIBRARY_PATH_OPT_LEVEL: opt,
+				TANGRAM_LINKER_TRACING: "tgld=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: opt,
 			}),
 		)
 		.then(tg.File.expect);
@@ -1342,8 +1461,8 @@ export async function testSamePrefix(target?: string) {
 			`)
 		.env(
 			std.env.compose(testSDK, {
-				TGLD_TRACING: "tgld=trace",
-				TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
+				TANGRAM_LINKER_TRACING: "tgld=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "combine",
 			}),
 		)
 		.then(tg.File.expect);
@@ -1398,8 +1517,8 @@ export async function testSamePrefixDirect(target?: string) {
 			`)
 		.env(
 			std.env.compose(testSDK, {
-				TGLD_TRACING: "tgld=trace",
-				TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
+				TANGRAM_LINKER_TRACING: "tgld=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "combine",
 			}),
 		)
 		.then(tg.File.expect);
@@ -1447,8 +1566,8 @@ export async function testDifferentPrefixDirect(target?: string) {
 			`)
 		.env(
 			std.env.compose(testSDK, {
-				TGLD_TRACING: "tgld=trace",
-				TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
+				TANGRAM_LINKER_TRACING: "tgld=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "combine",
 			}),
 		)
 		.then(tg.Directory.expect);
@@ -1460,8 +1579,8 @@ export async function testDifferentPrefixDirect(target?: string) {
 			`)
 		.env(
 			std.env.compose(testSDK, {
-				TGLD_TRACING: "tgld=trace",
-				TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
+				TANGRAM_LINKER_TRACING: "tgld=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "combine",
 			}),
 		)
 		.then(tg.File.expect);
@@ -1485,11 +1604,80 @@ export async function testStrip(target?: string) {
 		mv main ${tg.output}`)
 		.env(
 			std.env.compose(toolchain, {
-				TGSTRIP_TRACING: "tgstrip=trace",
+				TANGRAM_STRIP_TRACING: "tgstrip=trace",
 			}),
 		)
 		.then(tg.File.expect);
 	return output;
+}
+
+/** Strip preserves target positions, duplicate occurrences, and real executable behavior. */
+export async function testStripControls() {
+	const toolchain = await bootstrap.sdk();
+	const rawToolchain = await bootstrap.sdk.env();
+	const { strip: realStrip } = await std.sdk.toolchainComponents({
+		env: await std.env.compose(rawToolchain),
+		host: bootstrap.toolchainTriple(std.triple.host()),
+	});
+	const source = await tg.file`int main(void) { return 0; }`;
+	const recorderSource = await tg.file`
+		#include <stdio.h>
+		#include <stdlib.h>
+		#include <string.h>
+		#include <unistd.h>
+		int main(int argc, char **argv) {
+			FILE *log = fopen(getenv("STRIP_LOG"), "ab");
+			if (!log) return 1;
+			for (int i = 1; i < argc; i++) fwrite(argv[i], 1, strlen(argv[i]) + 1, log);
+			fputc(0, log);
+			fclose(log);
+			if (getenv("RECORD_ONLY")) return 0;
+			#ifdef __APPLE__
+			/* Record the proxy boundary before adapting the delimiter for Apple strip. */
+			for (int i = 1; i < argc; i++) if (!strcmp(argv[i], "--")) argv[i] = "-";
+			#endif
+			execv(getenv("REAL_STRIP"), argv);
+			return 1;
+		}
+	`;
+	const recorder = await std.build(std.shBootstrap`
+		TANGRAM_LINKER_PASSTHROUGH=true cc ${std.triple.os(std.triple.host()) === "linux" ? "-static" : ""} -xc ${recorderSource} -o ${tg.output}
+	`).env(toolchain).then(tg.File.expect);
+	const output = await std.build(std.shBootstrap`
+		mkdir -p ${tg.output}
+		cc -g -xc ${source} -Wl,--tg-linker-embed-wrapper=false -o wrapped
+		chmod 751 wrapped
+		TANGRAM_LINKER_PASSTHROUGH=true cc -g -xc ${source} -o plain
+		cc -g -xc ${source} -Wl,--tg-linker-embed-wrapper=false -o ./--tg-strip-passthrough
+		export STRIP_LOG="$PWD/log" REAL_STRIP=${realStrip}
+		export TANGRAM_STRIP_COMMAND_PATH=${recorder}
+		TANGRAM_STRIP_PASSTHROUGH=true strip --tg-strip-passthrough=false wrapped -S plain wrapped -- --tg-strip-passthrough plain
+		test "$(stat -c %a wrapped)" = 751
+		test -x ./--tg-strip-passthrough
+		./wrapped
+		./--tg-strip-passthrough
+		${std.triple.os(std.triple.host()) === "darwin" ? "./plain" : ""}
+		mv log ${tg.output}/normal
+		RECORD_ONLY=1 strip --tg-strip-passthrough wrapped -S plain wrapped -- --tg-strip-passthrough plain
+		mv log ${tg.output}/passthrough
+		mv wrapped ${tg.output}/wrapped
+		mv ./--tg-strip-passthrough ${tg.output}/flag-shaped
+	`).env(toolchain).then(tg.Directory.expect);
+	const normal = await output.get("normal").then(tg.File.expect).then((file) => file.text);
+	const normalized = normal.split("\0").map((arg) => arg.endsWith("/executable") ? "<executable>" : arg).join("\0");
+	tg.assert(normalized === [
+		"<executable>", "-S", "--", "",
+		"-S", "<executable>", "--", "",
+		"-S", "--", "<executable>", "",
+		"-S", "plain", "--", "plain", "", "",
+	].join("\0"), `unexpected strip invocations: ${JSON.stringify(normalized)}`);
+	const passthrough = await output.get("passthrough").then(tg.File.expect).then((file) => file.text);
+	tg.assert(passthrough === ["wrapped", "-S", "plain", "wrapped", "--", "--tg-strip-passthrough", "plain", "", ""].join("\0"));
+	for (const name of ["wrapped", "flag-shaped"]) {
+		const file = await output.get(name).then(tg.File.expect);
+		tg.assert((await wrap.Manifest.read(file))?.executable.kind === "path");
+	}
+	return true;
 }
 
 /** This test verifies that strip can handle multiple files in a single invocation, like `strip foo bar baz`. */
@@ -1536,7 +1724,7 @@ export async function testStripMultipleFiles() {
 		mv progC ${tg.output}/progC`)
 		.env(
 			std.env.compose(toolchain, {
-				TGSTRIP_TRACING: "tgstrip=trace",
+				TANGRAM_STRIP_TRACING: "tgstrip=trace",
 			}),
 		)
 		.then(tg.Directory.expect);
@@ -1633,8 +1821,8 @@ export async function testTransitiveDiscovery(target?: string) {
 		)
 		.env(
 			std.env.compose(testSDK, {
-				TGLD_TRACING: "tgld=trace",
-				TGLD_LIBRARY_PATH_OPT_LEVEL: "isolate",
+				TANGRAM_LINKER_TRACING: "tgld=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "isolate",
 			}),
 		)
 		.then(tg.File.expect);
@@ -1662,6 +1850,23 @@ export async function testTransitiveDiscovery(target?: string) {
 
 	// Verify the executable runs correctly.
 	await std.assert.stdoutIncludes(output, "Hello from bottom library!");
+	if (target === undefined) {
+		// Zero depth stops discovery, and explicit false disables missing-library rejection.
+		const limited = await std.build(std.shBootstrap`
+			cc -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output} -Wl,--tg-linker-library-search-depth=0 -Wl,--tg-linker-disallow-missing-libraries=false
+		`).env(testSDK, { TANGRAM_LINKER_DISALLOW_MISSING_LIBRARIES: "true" }).then(tg.File.expect);
+		const limitedManifest = await wrap.Manifest.read(limited);
+		tg.assert(limitedManifest?.interpreter !== undefined && "libraryPaths" in limitedManifest.interpreter && limitedManifest.interpreter.libraryPaths?.length === 0);
+		const rejected = await std.build(std.shBootstrap`
+			if cc -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o rejected -Wl,--tangram-linker-library-search-depth=0 -Wl,--tg-linker-disallow-missing-libraries > /dev/null 2> ${tg.output}; then exit 1; fi
+		`).env(testSDK).then(tg.File.expect);
+		tg.assert((await rejected.text).includes("could not find required libraries"));
+		// The none strategy retains input paths and bypasses missing-library verification.
+		const retained = await std.build(std.shBootstrap`
+			cc -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output} -Wl,--tg-linker-library-path-strategy=NONE -Wl,--tg-linker-library-search-depth=0 -Wl,--tg-linker-disallow-missing-libraries
+		`).env(testSDK, { TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "isolate" }).then(tg.File.expect);
+		await std.assert.stdoutIncludes(retained, "Hello from bottom library!");
+	}
 
 	return true;
 }
@@ -1722,7 +1927,7 @@ export async function benchLdProxy() {
 		bench "link only, fixed, passthru " fixed_passthrough
 
 		echo "=== one traced link ==="
-		TGLD_TRACING=tgld=trace,tangram_std=trace cc conftest.o -o conftest 2>&1 | tail -200
+		TANGRAM_LINKER_TRACING=tgld=trace,tangram_std=trace cc conftest.o -o conftest 2>&1 | tail -200
 
 		echo done > ${tg.output}
 	`)

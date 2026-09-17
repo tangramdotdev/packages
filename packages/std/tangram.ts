@@ -41,6 +41,7 @@ import { env as stdEnv } from "./env.tg.ts";
 import * as file from "./file.tg.ts";
 import * as image from "./image.tg.ts";
 import * as injection from "./wrap/injection.tg.ts";
+import * as nativeWrapper from "./wrap/wrapper.tg.ts";
 import * as packages from "./packages_test.tg.ts";
 import * as phases from "./phases.tg.ts";
 import * as pkgconfig from "./pkgconfig.tg.ts";
@@ -158,6 +159,7 @@ function testActions(): Record<string, () => any> {
 		directory: directory.test,
 		wrapArgAndEnvDump: wrap.argAndEnvDump,
 		wrapBasic: wrap.testSingleArgObjectNoMutations,
+		wrapperControls: nativeWrapper.testControls,
 		wrapContent: wrap.testContentExecutable,
 		wrapContentVariadic: wrap.testContentExecutableVariadic,
 		wrapDylib: wrap.testDylibPath,
@@ -166,6 +168,9 @@ function testActions(): Record<string, () => any> {
 		env: env.test,
 		proxyBasic: sdk.proxy.testBasic,
 		proxyArguments: sdk.proxy.testProxyArguments,
+		proxyLinkerControls: sdk.proxy.testLinkerControls,
+		proxySdkControlPrecedence: sdk.proxy.testSdkControlPrecedence,
+		proxyStripControls: sdk.proxy.testStripControls,
 		proxyLdDependencies: sdk.proxy.testLdProxyDependencies,
 		proxyLdInterpreterArgs: sdk.proxy.testLdProxyInterpreterArgs,
 		proxyCompilerLocalPaths: sdk.proxy.testCompilerLocalPaths,
