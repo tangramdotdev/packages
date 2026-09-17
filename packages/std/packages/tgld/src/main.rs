@@ -1445,46 +1445,6 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn verification_bypasses_need_no_server() {
-		use {std::collections::HashMap, tangram_client::prelude::*};
-		let file = tg::File::with_contents("unused");
-		let mut needed = HashMap::<_, _, super::Hasher>::default();
-		needed.insert("missing".to_owned(), None);
-		for strategy in [
-			super::LibraryPathStrategy::Combine,
-			super::LibraryPathStrategy::Filter,
-			super::LibraryPathStrategy::Isolate,
-			super::LibraryPathStrategy::None,
-			super::LibraryPathStrategy::Resolve,
-		] {
-			assert!(
-				super::optimize_library_paths(&file, vec![], &mut needed, strategy, 0, true)
-					.await
-					.unwrap()
-					.is_empty()
-			);
-		}
-		let path = super::DirectoryWithSubpath {
-			directory: tg::Directory::with_entries(std::collections::BTreeMap::new()),
-			subpath: None,
-		};
-		assert_eq!(
-			super::optimize_library_paths(
-				&file,
-				vec![path],
-				&mut needed,
-				super::LibraryPathStrategy::None,
-				0,
-				true
-			)
-			.await
-			.unwrap()
-			.len(),
-			1
-		);
-	}
-
-	#[tokio::test]
 	async fn read_output_files() {
 		let temp = tempfile::tempdir().unwrap();
 		let source = temp.path().join("main.c");

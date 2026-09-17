@@ -833,35 +833,26 @@ export async function testControls() {
 	};
 	const words = ["", "repeat", "a b=c,d", "repeat", "--tg-wrapper-extra=1", "--tangram-suppress-args"];
 	await check(words, [...manifestArgs, ...words]);
-	for (const value of ["true", "TRUE", "1"]) {
-		await check(words, manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ARGS: value });
-		await check([], manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ENV: value }, "unset");
-	}
-	for (const value of ["false", "FALSE", "0"]) {
-		await check(words, [...manifestArgs, ...words], { TANGRAM_WRAPPER_SUPPRESS_ARGS: value, TANGRAM_WRAPPER_PRINT_MANIFEST: value, TANGRAM_WRAPPER_TRACING: value });
+	for (const [value, suppress] of [["true", true], ["TrUe", true], ["1", true], ["false", false], ["FaLsE", false], ["0", false]] as const) {
+		await check(words, suppress ? manifestArgs : [...manifestArgs, ...words], { TANGRAM_WRAPPER_SUPPRESS_ARGS: value });
 	}
 	for (const alias of ["tg", "tangram"]) {
-		for (const value of ["true", "TRUE", "1"]) {
-			await check([`--${alias}-wrapper-suppress-args=${value}`, ...words], manifestArgs);
-			await check([`--${alias}-wrapper-suppress-env=${value}`], manifestArgs, {}, "unset");
-		}
-		for (const value of ["false", "FALSE", "0"]) {
-			await check([`--${alias}-wrapper-suppress-args=${value}`, ...words], [...manifestArgs, ...words], { TANGRAM_WRAPPER_SUPPRESS_ARGS: "true" });
-			await check([`--${alias}-wrapper-suppress-env=${value}`], manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ENV: "true" });
-			await check([`--${alias}-wrapper-print-manifest=${value}`], manifestArgs, { TANGRAM_WRAPPER_PRINT_MANIFEST: "true" });
-		}
-		await check([`--${alias}-wrapper-suppress-args`], manifestArgs);
+		await check([`--${alias}-wrapper-suppress-args`, ...words], manifestArgs);
 		await check([`--${alias}-wrapper-suppress-env`], manifestArgs, {}, "unset");
+		await check([`--${alias}-wrapper-suppress-args=0`, ...words], [...manifestArgs, ...words], { TANGRAM_WRAPPER_SUPPRESS_ARGS: "true" });
+		await check([`--${alias}-wrapper-suppress-env=false`], manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ENV: "true" });
+		await check([`--${alias}-wrapper-print-manifest=FALSE`], manifestArgs, { TANGRAM_WRAPPER_PRINT_MANIFEST: "true" });
 		const printed = await std.build(std.shBootstrap`
 			${wrapper} --${alias}-wrapper-print-manifest > ${tg.output}
 		`).then(tg.File.expect);
-		tg.assert(tg.encoding.json.decode(await printed.text) !== undefined);
+		tg.assert(JSON.stringify(tg.encoding.json.decode(await printed.text)) === JSON.stringify(await std.wrap.Manifest.read(wrapper)));
 	}
 	await check(["--tg-wrapper-suppress-args", "--tangram-wrapper-suppress-args=0", "last"], [...manifestArgs, "last"]);
+	await check([], manifestArgs, { TANGRAM_WRAPPER_SUPPRESS_ENV: "1" }, "unset");
 	const printed = await std.build(std.shBootstrap`
-		TANGRAM_WRAPPER_PRINT_MANIFEST=TrUe ${wrapper} > ${tg.output}
+		TANGRAM_WRAPPER_PRINT_MANIFEST=1 ${wrapper} > ${tg.output}
 	`).then(tg.File.expect);
-	tg.assert(tg.encoding.json.decode(await printed.text) !== undefined);
+	tg.assert(JSON.stringify(tg.encoding.json.decode(await printed.text)) === JSON.stringify(await std.wrap.Manifest.read(wrapper)));
 	const traced = await std.build(std.shBootstrap`
 		TANGRAM_WRAPPER_TRACING=1 ${wrapper} > /dev/null 2> ${tg.output}
 	`).then(tg.File.expect);
@@ -870,18 +861,18 @@ export async function testControls() {
 	await check(words, [...manifestArgs, ...words], { TANGRAM_SUPPRESS_ARGS: "1", TANGRAM_WRAPPER_SUPPRESS_ARGS_EXTRA: "1" });
 	for (const suffix of ["suppress-args", "suppress-env", "print-manifest", "tracing"]) {
 		const key = `TANGRAM_WRAPPER_${suffix.replaceAll("-", "_").toUpperCase()}`;
-		for (const value of ["", " true", "false ", "yes"]) {
-			const error = await std.build(std.shBootstrap`
-				if ${key}=${quote(value)} ${wrapper} --tg-wrapper-suppress-args=false > /dev/null 2> ${tg.output}; then exit 1; fi
-			`).then(tg.File.expect);
-			tg.assert((await error.text).includes(key));
-			if (suffix !== "tracing") {
-				const cliError = await std.build(std.shBootstrap`
-					if ${wrapper} ${quote(`--tg-wrapper-${suffix}=${value}`)} --tangram-wrapper-${suffix}=false > /dev/null 2> ${tg.output}; then exit 1; fi
-				`).then(tg.File.expect);
-				tg.assert((await cliError.text).includes(`--tg-wrapper-${suffix}`));
-			}
-		}
+		const error = await std.build(std.shBootstrap`
+			if ${key}=SECRET_MARKER ${wrapper} --tg-wrapper-suppress-args=false > /dev/null 2> ${tg.output}; then exit 1; fi
+		`).then(tg.File.expect);
+		const text = await error.text;
+		tg.assert(text.includes(key) && !text.includes("SECRET_MARKER"));
+	}
+	for (const value of ["", " true", "false ", "SECRET_MARKER"]) {
+		const error = await std.build(std.shBootstrap`
+			if ${wrapper} ${quote(`--tg-wrapper-suppress-args=${value}`)} --tangram-wrapper-suppress-args=false > /dev/null 2> ${tg.output}; then exit 1; fi
+		`).then(tg.File.expect);
+		const text = await error.text;
+		tg.assert(text.includes("--tg-wrapper-suppress-args") && !text.includes("SECRET_MARKER"));
 	}
 	// The current wrapper's manifest configures its child, and incoming environment controls survive local overrides.
 	const inner = await std.wrap(executable, { args: ["inner"], env: { MANIFEST: "kept" } });

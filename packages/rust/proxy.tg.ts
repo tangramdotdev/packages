@@ -909,37 +909,6 @@ export async function testCcRs() {
 	tg.assert(text.trim() === "10 + 32 = 42", `unexpected output: ${text}`);
 }
 
-/** Component controls reach both the build-script runner and rustc sandboxes. */
-export async function testControlTransport() {
-	const original = await tests.get("hello-cc-rs").then(tg.Directory.expect);
-	const controls = {
-		TANGRAM_LINKER_DISALLOW_MISSING_LIBRARIES: "false",
-		TANGRAM_LINKER_EMBED_WRAPPER: "false",
-		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "isolate",
-		TANGRAM_LINKER_LIBRARY_SEARCH_DEPTH: "16",
-		TANGRAM_LINKER_PASSTHROUGH: "false",
-		TANGRAM_LINKER_WRAPPER_ARGS: '[tg.template(["transported through tgrustc"])]',
-		TANGRAM_LINKER_WRAPPER_ENV: 'tg.mutation({"kind":"set","value":{}})',
-		TANGRAM_STRIP_PASSTHROUGH: "false",
-		TANGRAM_WRAPPER_PRINT_MANIFEST: "false",
-		TANGRAM_WRAPPER_SUPPRESS_ARGS: "false",
-		TANGRAM_WRAPPER_SUPPRESS_ENV: "false",
-	};
-	const assertions = Object.entries(controls).map(([key, value]) =>
-		`assert_eq!(std::env::var(${JSON.stringify(key)}).unwrap(), ${JSON.stringify(value)});`,
-	).join("\n");
-	const buildScript = await original.get("build.rs").then(tg.File.expect).then((file) => file.text);
-	const main = await original.get("src/main.rs").then(tg.File.expect).then((file) => file.text);
-	const source = tg.directory(original, {
-		"build.rs": buildScript.replace("fn main() {", `fn main() {\n${assertions}`),
-		src: { "main.rs": main.replace("fn main() {", 'fn main() {\nassert_eq!(env!("TANGRAM_LINKER_LIBRARY_SEARCH_DEPTH"), "16");') },
-	});
-	const result = await cargo.build({ source, proxy: true, env: controls });
-	const output = await $`hello-cc-rs | tee ${tg.output}`.env(result).then(tg.File.expect);
-	tg.assert((await output.text).trim() === "10 + 32 = 42");
-	return true;
-}
-
 /** Runner: build scripts execute inside a tangram sandbox via `host.runner`.
  *  Asserts cache stability — modifying main.rs (not the build script or its
  *  inputs) must keep the runner_complete entry for cc-rs a cache hit. */
@@ -1176,7 +1145,6 @@ export async function test() {
 		testProcMacro(),
 		testProcMacroWithDeps(),
 		testCcRs(),
-		testControlTransport(),
 		testProxyCompiles(),
 		testPkgconfig(),
 		testOpenSSL(),

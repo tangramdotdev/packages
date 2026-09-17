@@ -43,31 +43,22 @@ fn main_inner() -> tg::Result<()> {
 		return Ok(());
 	}
 
-	// Identify wrapper occurrences without moving their positions in the argument vector.
+	// Process each occurrence in order so repeated paths see the updated wrapper.
 	let mut wrappers = Vec::new();
-	for index in &options.strip_targets {
-		let path = Path::new(&options.command_args[*index]);
-		if read_manifest(path)?.is_some() {
-			wrappers.push(*index);
-		}
-	}
-
-	// Re-read each wrapper after the previous job, including repeated paths and symlink aliases.
-	if !wrappers.is_empty() {
-		tokio::runtime::Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.unwrap()
-			.block_on(async {
-				for index in &wrappers {
-					let path = Path::new(&options.command_args[*index]);
-					let manifest = read_manifest(path)?
-						.ok_or_else(|| tg::error!("expected a wrapper manifest"))?;
+	tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(async {
+			for index in &options.strip_targets {
+				let path = Path::new(&options.command_args[*index]);
+				if let Some(manifest) = read_manifest(path)? {
 					run_proxy(&options, *index, path, manifest).await?;
+					wrappers.push(*index);
 				}
-				Ok::<(), tg::Error>(())
-			})?;
-	}
+			}
+			Ok::<(), tg::Error>(())
+		})?;
 
 	// Retain non-wrapper targets in their original positions, including duplicates.
 	if wrappers.len() != options.strip_targets.len() {

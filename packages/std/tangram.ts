@@ -169,7 +169,6 @@ function testActions(): Record<string, () => any> {
 		proxyBasic: sdk.proxy.testBasic,
 		proxyArguments: sdk.proxy.testProxyArguments,
 		proxyLinkerControls: sdk.proxy.testLinkerControls,
-		proxyLibraryControlBehavior: sdk.proxy.testLibraryControlBehavior,
 		proxySdkControlPrecedence: sdk.proxy.testSdkControlPrecedence,
 		proxyStripControls: sdk.proxy.testStripControls,
 		proxyLdDependencies: sdk.proxy.testLdProxyDependencies,

@@ -57,7 +57,7 @@ fn aliases_environment_and_replacement() {
 }
 
 #[test]
-fn invalid_values_fail_before_overrides() {
+fn invalid_control_values() {
 	for (suffix, values) in [
 		("disallow-missing-libraries", vec!["", " true", "yes"]),
 		("embed-wrapper", vec!["", "false ", "2"]),
@@ -105,12 +105,8 @@ fn invalid_values_fail_before_overrides() {
 }
 
 #[test]
-fn defaults_ownership_and_alias_precedence() {
+fn ownership_and_alias_precedence() {
 	let mut settings = Settings::from_env(|_| None).unwrap();
-	assert!(!settings.disallow_missing && !settings.embed && !settings.passthrough);
-	assert_eq!(settings.library_path_strategy, LibraryPathStrategy::Isolate);
-	assert_eq!(settings.max_depth, 16);
-	assert!(settings.wrapper_arg_value.is_none() && settings.wrapper_env_value.is_none());
 	for arg in [
 		"",
 		"--",

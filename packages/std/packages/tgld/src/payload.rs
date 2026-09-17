@@ -3,7 +3,7 @@ use tangram_client::prelude::*;
 type Result<T> = std::result::Result<T, &'static str>;
 
 pub fn args(raw: &str) -> Result<Vec<tg::Template>> {
-	let raw = frame(raw, false)?;
+	let raw = frame(raw)?;
 	let value = raw
 		.parse::<tg::Value>()
 		.map_err(|_| "a Tangram array of templates")?;
@@ -22,7 +22,7 @@ pub fn args(raw: &str) -> Result<Vec<tg::Template>> {
 }
 
 pub fn env(raw: &str) -> Result<tg::Mutation> {
-	let raw = frame(raw, true)?;
+	let raw = frame(raw)?;
 	let value = raw
 		.parse::<tg::Value>()
 		.map_err(|_| "a Tangram environment mutation")?;
@@ -45,31 +45,12 @@ pub fn env(raw: &str) -> Result<tg::Mutation> {
 }
 
 // The pinned value parser accepts a prefix; check framing locally before delegating its grammar.
-fn frame(raw: &str, mutation: bool) -> Result<&str> {
-	let whitespace = |ch| matches!(ch, ' ' | '\t' | '\r' | '\n');
-	let raw = raw.trim_matches(whitespace);
-	let start = if mutation {
-		let mut remaining = raw;
-		for token in ["tg", ".", "mutation"] {
-			remaining = remaining
-				.strip_prefix(token)
-				.ok_or("a complete tg.mutation(...) expression")?
-				.trim_start_matches(whitespace);
-		}
-		if !remaining.starts_with('(') {
-			return Err("a complete tg.mutation(...) expression");
-		}
-		raw.len() - remaining.len()
-	} else {
-		if !raw.starts_with('[') {
-			return Err("a complete array expression");
-		}
-		0
-	};
-	let mut stack = Vec::new();
+fn frame(raw: &str) -> Result<&str> {
+	let raw = raw.trim_matches([' ', '\t', '\r', '\n']);
+	let mut depth = 0_usize;
 	let mut quoted = false;
 	let mut escaped = false;
-	for (offset, byte) in raw.bytes().enumerate().skip(start) {
+	for (offset, byte) in raw.bytes().enumerate() {
 		if quoted {
 			if escaped {
 				escaped = false;
@@ -82,14 +63,12 @@ fn frame(raw: &str, mutation: bool) -> Result<&str> {
 		}
 		match byte {
 			b'"' => quoted = true,
-			b'(' => stack.push(b')'),
-			b'[' => stack.push(b']'),
-			b'{' => stack.push(b'}'),
+			b'(' | b'[' | b'{' => depth += 1,
 			b')' | b']' | b'}' => {
-				if stack.pop() != Some(byte) {
-					return Err("a payload with balanced delimiters");
-				}
-				if stack.is_empty() {
+				depth = depth
+					.checked_sub(1)
+					.ok_or("a payload with balanced delimiters")?;
+				if depth == 0 {
 					return if offset + 1 == raw.len() {
 						Ok(raw)
 					} else {

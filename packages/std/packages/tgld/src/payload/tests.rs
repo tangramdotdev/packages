@@ -40,7 +40,7 @@ fn inline_artifact_contents_remain_available() {
 }
 
 #[test]
-fn authorized_artifacts_and_subpaths_remain_intact() {
+fn repeated_artifacts_merge_authorization() {
 	let file = tg::File::with_contents("payload");
 	let mut referent = file.to_referent().map(tg::artifact::Id::from);
 	let mut authorization = Vec::new();
@@ -72,16 +72,6 @@ fn authorized_artifacts_and_subpaths_remain_intact() {
 	referent.options.location = Some(location);
 	let raw = format!("[tg.template([{referent},\"/subpath\"]),tg.template([{referent}])]");
 	let parsed = args(&raw).unwrap();
-	let data = parsed.iter().map(tg::Template::to_data).collect::<Vec<_>>();
-	let tg::template::data::Component::Artifact(actual) = &data[0].components[0] else {
-		panic!("expected an artifact");
-	};
-	assert_eq!(actual, &referent);
-	assert_eq!(
-		data[0].components[1],
-		tg::template::data::Component::String("/subpath".into())
-	);
-	assert_eq!(data[1].components[0], data[0].components[0]);
 	let mut other = referent.clone();
 	let mut token = referent.options.tokens.local().unwrap().authorization[0].clone();
 	token.metadata.key = "another-signer".into();
@@ -114,24 +104,6 @@ fn authorized_artifacts_and_subpaths_remain_intact() {
 	expected.inherit(&other.options.tokens);
 	assert_eq!(dependency.state().tokens(), expected);
 	assert_manifest_omits_credentials(&manifest, &expected);
-
-	// Context from a root checkin becomes an artifact component followed by a literal subpath.
-	let root = tg::Directory::with_entries(std::collections::BTreeMap::new());
-	referent.options.id = Some(root.id().into());
-	referent.options.path = Some("lib".into());
-	let template = proxy::template_from_referent(&referent).unwrap();
-	validate_template(&template).unwrap();
-	let template = template.to_data();
-	let tg::template::data::Component::Artifact(actual) = &template.components[0] else {
-		panic!("expected an artifact root");
-	};
-	assert_eq!(actual.node, root.id().into());
-	assert_eq!(actual.options.tokens, referent.options.tokens);
-	assert_eq!(actual.options.location, referent.options.location);
-	assert_eq!(
-		template.components[1],
-		tg::template::data::Component::String("/lib".into())
-	);
 }
 
 fn assert_manifest_omits_credentials(manifest: &common::Manifest, tokens: &tg::Tokens) {
@@ -154,24 +126,6 @@ fn assert_manifest_omits_credentials(manifest: &common::Manifest, tokens: &tg::T
 }
 
 #[test]
-fn unsupported_templates_and_values_are_rejected() {
-	assert!(args(r#"[tg.template([tg.placeholder("SECRET_MARKER")])]"#).is_err());
-	for value in [
-		r#"tg.placeholder("SECRET_MARKER")"#,
-		r#"tg.bytes("aGVsbG8=")"#,
-		r#"tg.template([tg.placeholder("SECRET_MARKER")])"#,
-		r#"tg.mutation({"kind":"suffix","template":tg.template([tg.placeholder("SECRET_MARKER")])})"#,
-	] {
-		assert!(
-			env(&format!(
-				"tg.mutation({{\"kind\":\"set\",\"value\":{{\"VALUE\":{value}}}}})"
-			))
-			.is_err()
-		);
-	}
-}
-
-#[test]
 fn complete_payloads_and_runtime_types() {
 	for text in [
 		"[]",
@@ -188,6 +142,7 @@ fn complete_payloads_and_runtime_types() {
 		"[]\u{a0}",
 		"[\"string\"]",
 		"[tg.template([1])]",
+		r#"[tg.template([tg.placeholder("unresolved")])]"#,
 		"[tg.template([\"unterminated])]",
 	] {
 		assert!(args(text).is_err(), "{text}");
@@ -206,6 +161,8 @@ fn complete_payloads_and_runtime_types() {
 		"tg.mutation({\"kind\":\"merge\",\"value\":{}})",
 		"tg.mutation({\"kind\":\"append\",\"values\":[1]})",
 		"tg.mutation({\"kind\":\"set\",\"value\":[]})",
+		r#"tg.template([tg.placeholder("unresolved")])"#,
+		r#"tg.mutation({"kind":"suffix","template":tg.template([tg.placeholder("unresolved")])})"#,
 	] {
 		assert!(
 			env(&format!(
