@@ -473,6 +473,7 @@ export async function test() {
 		testBasic(),
 		testProxyArguments(),
 		testLinkerControls(),
+		testLinkerOutputCheckout(),
 		testSdkControlPrecedence(),
 		testStripControls(),
 		testCompilerLocalPaths(),
@@ -976,6 +977,36 @@ export async function testBasic(target?: string) {
 		);
 	}
 	return tg.directory({ output });
+}
+
+/** Newly linked outputs must retain build ordering and have their runtime dependencies available. */
+export async function testLinkerOutputCheckout() {
+	const toolchain = await bootstrap.sdk();
+	const darwin = std.triple.os(std.triple.host()) === "darwin";
+	const library = darwin ? "libmessage.dylib" : "libmessage.so";
+	const libraryName = darwin
+		? `-Wl,-install_name,@rpath/${library}`
+		: `-Wl,-soname,${library}`;
+	await std
+		.build(std.shBootstrap`
+			# Give each execution a distinct library so an earlier test cannot materialize its wrapper.
+			cat > library.c <<EOF
+const char *message(void) { return "$PWD"; }
+EOF
+			cat > main.c <<'EOF'
+const char *message(void);
+int main(void) { return message()[0] != '/'; }
+EOF
+			cc -fPIC -shared library.c ${libraryName} -o ${library}
+			cc -c main.c -o main.o
+			cc main.o -L. -lmessage -o program
+			test ! program -ot main.o
+			rm ${library}
+			./program
+			touch ${tg.output}
+		`)
+		.env(toolchain);
+	return true;
 }
 
 type MakeSharedArg = {
