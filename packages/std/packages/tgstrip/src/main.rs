@@ -118,10 +118,9 @@ async fn run_proxy(
 	// Handle the executable based on its type.
 	match manifest.executable {
 		manifest::Executable::Path(artifact_path) => {
-			let original_permissions = tokio::fs::metadata(target_path)
+			let original_metadata = tokio::fs::metadata(target_path)
 				.await
-				.map_err(|error| tg::error!(!error, "failed to read the wrapper permissions"))?
-				.permissions();
+				.map_err(|error| tg::error!(!error, "failed to read the wrapper metadata"))?;
 			#[cfg(feature = "tracing")]
 			tracing::info!(?artifact_path, "found executable artifact path");
 
@@ -175,12 +174,24 @@ async fn run_proxy(
 			tokio::fs::set_permissions(&local_executable_path, perms)
 				.await
 				.map_err(|error| tg::error!(!error, path = %local_executable_path.display(), "failed to set file permissions"))?;
+			// Give date-preserving strip operations the wrapper's modification time instead of the store's epoch.
+			let modified = original_metadata
+				.modified()
+				.map_err(|error| tg::error!(!error, "failed to read the wrapper modification time"))?;
+			std::fs::File::open(&local_executable_path)
+				.and_then(|file| file.set_modified(modified))
+				.map_err(|error| tg::error!(!error, "failed to set the strip input modification time"))?;
 
 			// Call strip with the correct arguments on the executable.
 			let args = options.wrapper_args(target_index, &local_executable_path);
 			run_strip(&options.strip_program, &args)?;
 			#[cfg(feature = "tracing")]
 			tracing::info!(?local_executable_path, "strip succeeded");
+
+			// Preserve the native strip output's modification time before check-in and wrapping.
+			let modified = std::fs::metadata(&local_executable_path)
+				.and_then(|metadata| metadata.modified())
+				.map_err(|error| tg::error!(!error, "failed to read the strip output modification time"))?;
 
 			// Check in the result.
 			let output = tg::checkin(tg::checkin::Arg {
@@ -246,7 +257,10 @@ async fn run_proxy(
 
 			let artifact = tg::Artifact::from(new_wrapper);
 			common::checkout_artifact_to_path(artifact, canonical_target_path.clone()).await?;
-			tokio::fs::set_permissions(&canonical_target_path, original_permissions)
+			std::fs::File::open(&canonical_target_path)
+				.and_then(|file| file.set_modified(modified))
+				.map_err(|error| tg::error!(!error, "failed to restore the strip output modification time"))?;
+			tokio::fs::set_permissions(&canonical_target_path, original_metadata.permissions())
 				.await
 				.map_err(|error| tg::error!(!error, "failed to restore the wrapper permissions"))?;
 			#[cfg(feature = "tracing")]

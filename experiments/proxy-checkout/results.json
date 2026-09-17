@@ -1,0 +1,1571 @@
+{
+  "root": "/private/tmp/proxy-checkout-experiment/run-arca13ns",
+  "sdk": "/opt/tangram/store/dir_0180q2ng1e9tj3qed21tfharqex4naq411d59nedt0abfp3nfnmf90",
+  "trials": 20,
+  "modes": {
+    "full": {
+      "timestamps": {
+        "shared_cold": {
+          "mtime_ns": 0,
+          "native_mtime_ns": 1789679079969940870,
+          "matches_native_mtime": false,
+          "make_up_to_date": false,
+          "make_exit": 1,
+          "mode": "0o755"
+        },
+        "shared_warm": {
+          "mtime_ns": 0,
+          "native_mtime_ns": 1789679080311101379,
+          "matches_native_mtime": false,
+          "make_up_to_date": false,
+          "make_exit": 1,
+          "mode": "0o755"
+        },
+        "executable_cold": {
+          "mtime_ns": 0,
+          "native_mtime_ns": 1789679080427627350,
+          "matches_native_mtime": false,
+          "make_up_to_date": false,
+          "make_exit": 1,
+          "mode": "0o755"
+        },
+        "executable_warm": {
+          "mtime_ns": 0,
+          "native_mtime_ns": 1789679081098539872,
+          "matches_native_mtime": false,
+          "make_up_to_date": false,
+          "make_exit": 1,
+          "mode": "0o755"
+        },
+        "strip_cold": {
+          "mtime_ns": 0,
+          "native_mtime_ns": 1789679081355880227,
+          "matches_native_mtime": false,
+          "make_up_to_date": false,
+          "make_exit": 1,
+          "mode": "0o751"
+        },
+        "strip_warm": {
+          "mtime_ns": 0,
+          "native_mtime_ns": 1789679081712337287,
+          "matches_native_mtime": false,
+          "make_up_to_date": false,
+          "make_exit": 1,
+          "mode": "0o751"
+        }
+      },
+      "materialized": {
+        "shared": {
+          "id": "fil_01db9ezm239sv7b0x5seh1agcejcepa43q9r6rzvxg5kmf86w779d0",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        },
+        "executable": {
+          "id": "fil_01qv6mptdq4b6jdybz2j42f4kv9js1j3g7sqncfyptqfjrx3jhaws0",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        },
+        "strip": {
+          "id": "fil_01jm0pwz8c2sd36266b1r9w9bkjr4pd2a2k6qz086nemdznhmw56j0",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        }
+      },
+      "runtime": {
+        "transitive_dependencies": true,
+        "strip_cold": true,
+        "strip_warm": true,
+        "direct": true,
+        "stored": true,
+        "dlopen_none_behaves_as_expected": true,
+        "dlopen_isolate_behaves_as_expected": true,
+        "selected_files": true
+      },
+      "race": {
+        "stable": [
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          }
+        ],
+        "unrelated_churn": [
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          }
+        ],
+        "selected_files": [
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          }
+        ]
+      },
+      "missing_required_library_fails": true
+    },
+    "dependencies": {
+      "timestamps": {
+        "shared_cold": {
+          "mtime_ns": 1789679090550094709,
+          "native_mtime_ns": 1789679090244995487,
+          "matches_native_mtime": false,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o755"
+        },
+        "shared_warm": {
+          "mtime_ns": 0,
+          "native_mtime_ns": 1789679090638868504,
+          "matches_native_mtime": false,
+          "make_up_to_date": false,
+          "make_exit": 1,
+          "mode": "0o755"
+        },
+        "executable_cold": {
+          "mtime_ns": 1789679090990329714,
+          "native_mtime_ns": 1789679090763061959,
+          "matches_native_mtime": false,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o755"
+        },
+        "executable_warm": {
+          "mtime_ns": 0,
+          "native_mtime_ns": 1789679091082909605,
+          "matches_native_mtime": false,
+          "make_up_to_date": false,
+          "make_exit": 1,
+          "mode": "0o755"
+        },
+        "strip_cold": {
+          "mtime_ns": 1789679091749947740,
+          "native_mtime_ns": 1789679091285160111,
+          "matches_native_mtime": false,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o751"
+        },
+        "strip_warm": {
+          "mtime_ns": 0,
+          "native_mtime_ns": 1789679091850742908,
+          "matches_native_mtime": false,
+          "make_up_to_date": false,
+          "make_exit": 1,
+          "mode": "0o751"
+        }
+      },
+      "materialized": {
+        "shared": {
+          "id": "fil_0139519ad34nhk0qvacp7z0t2yvq5qv9gybr5b4kt8tynp1bwfbtcg",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        },
+        "executable": {
+          "id": "fil_01qf2z4ezwhk07qrzab180fq0kac2xd1200xywpzsjrfhpsja18fh0",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        },
+        "strip": {
+          "id": "fil_01dax5pzch58vpn6dbd6d0542z2t1gjy4rn7236r1xxc3x7ep5q1s0",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        }
+      },
+      "runtime": {
+        "transitive_dependencies": true,
+        "strip_cold": true,
+        "strip_warm": true,
+        "direct": true,
+        "stored": true,
+        "dlopen_none_behaves_as_expected": true,
+        "dlopen_isolate_behaves_as_expected": true,
+        "selected_files": true
+      },
+      "race": {
+        "stable": [
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          }
+        ],
+        "unrelated_churn": [
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          }
+        ],
+        "selected_files": [
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          }
+        ]
+      },
+      "missing_required_library_fails": true
+    },
+    "full_restore": {
+      "timestamps": {
+        "shared_cold": {
+          "mtime_ns": 1789679100606192181,
+          "native_mtime_ns": 1789679100606192181,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o755"
+        },
+        "shared_warm": {
+          "mtime_ns": 1789679100917262674,
+          "native_mtime_ns": 1789679100917262674,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o755"
+        },
+        "executable_cold": {
+          "mtime_ns": 1789679101055260841,
+          "native_mtime_ns": 1789679101055260841,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o755"
+        },
+        "executable_warm": {
+          "mtime_ns": 1789679101869471464,
+          "native_mtime_ns": 1789679101869471464,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o755"
+        },
+        "strip_cold": {
+          "mtime_ns": 1789679102015538283,
+          "native_mtime_ns": 1789679102015538283,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o751"
+        },
+        "strip_warm": {
+          "mtime_ns": 1789679102899310263,
+          "native_mtime_ns": 1789679102899310263,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o751"
+        }
+      },
+      "materialized": {
+        "shared": {
+          "id": "fil_01qm3tda86wvgff64t2bp7nk9m25nb783073gech87zct2rwc6bfa0",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        },
+        "executable": {
+          "id": "fil_01m0bdjzkv80mej5qb6d7pwck1hx3c28wvsg3brg4h46d3nygv6hvg",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        },
+        "strip": {
+          "id": "fil_016hq538rg5zsdndvtmb096gb80t6t122fmhwhwx1b61661871zsr0",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        }
+      },
+      "runtime": {
+        "transitive_dependencies": true,
+        "strip_cold": true,
+        "strip_warm": true,
+        "direct": true,
+        "stored": true,
+        "dlopen_none_behaves_as_expected": true,
+        "dlopen_isolate_behaves_as_expected": true,
+        "selected_files": true
+      },
+      "race": {
+        "stable": [
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          }
+        ],
+        "unrelated_churn": [
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          }
+        ],
+        "selected_files": [
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          }
+        ]
+      },
+      "missing_required_library_fails": true
+    },
+    "dependencies_restore": {
+      "timestamps": {
+        "shared_cold": {
+          "mtime_ns": 1789679111227915700,
+          "native_mtime_ns": 1789679111227915700,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o755"
+        },
+        "shared_warm": {
+          "mtime_ns": 1789679111525327314,
+          "native_mtime_ns": 1789679111525327314,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o755"
+        },
+        "executable_cold": {
+          "mtime_ns": 1789679111646664093,
+          "native_mtime_ns": 1789679111646664093,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o755"
+        },
+        "executable_warm": {
+          "mtime_ns": 1789679111960783762,
+          "native_mtime_ns": 1789679111960783762,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o755"
+        },
+        "strip_cold": {
+          "mtime_ns": 1789679112127024023,
+          "native_mtime_ns": 1789679112127024023,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o751"
+        },
+        "strip_warm": {
+          "mtime_ns": 1789679112680829239,
+          "native_mtime_ns": 1789679112680829239,
+          "matches_native_mtime": true,
+          "make_up_to_date": true,
+          "make_exit": 0,
+          "mode": "0o751"
+        }
+      },
+      "materialized": {
+        "shared": {
+          "id": "fil_01b3b9xnmzvsyfxx7ntny0wftz4cjeshdhye5sx79f8tqp23w241zg",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        },
+        "executable": {
+          "id": "fil_01ary4stg9a4c4ejk93vng4hnh5retg837hknr7nennknvyvzd778g",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        },
+        "strip": {
+          "id": "fil_01q3tewcpc5f7q51wydg5kcbhx2xz3yjrsh8sb9f06cmbmkvvy8xvg",
+          "store_mtime_ns": 0,
+          "same_id_after_relink": true,
+          "warm_store_mtime_ns": 0
+        }
+      },
+      "runtime": {
+        "transitive_dependencies": true,
+        "strip_cold": true,
+        "strip_warm": true,
+        "direct": true,
+        "stored": true,
+        "dlopen_none_behaves_as_expected": true,
+        "dlopen_isolate_behaves_as_expected": true,
+        "selected_files": true
+      },
+      "race": {
+        "stable": [
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          }
+        ],
+        "unrelated_churn": [
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": false,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          },
+          {
+            "exit": 1,
+            "metadata_race": true,
+            "checkin_failure": true
+          }
+        ],
+        "selected_files": [
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          },
+          {
+            "exit": 0,
+            "metadata_race": false,
+            "checkin_failure": false
+          }
+        ]
+      },
+      "missing_required_library_fails": true
+    }
+  }
+}

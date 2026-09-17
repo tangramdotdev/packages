@@ -474,6 +474,7 @@ export async function test() {
 		testProxyArguments(),
 		testLinkerControls(),
 		testLinkerOutputCheckout(),
+		testProxyOutputMetadata(),
 		testSdkControlPrecedence(),
 		testStripControls(),
 		testCompilerLocalPaths(),
@@ -986,7 +987,7 @@ export async function testLinkerOutputCheckout() {
 	const library = darwin ? "libmessage.dylib" : "libmessage.so";
 	const libraryName = darwin
 		? `-Wl,-install_name,@rpath/${library}`
-		: `-Wl,-soname,${library}`;
+		: "";
 	await std
 		.build(std.shBootstrap`
 			# Give each execution a distinct library so an earlier test cannot materialize its wrapper.
@@ -997,15 +998,80 @@ EOF
 const char *message(void);
 int main(void) { return message()[0] != '/'; }
 EOF
-			cc -fPIC -shared library.c ${libraryName} -o ${library}
+			mkdir lib
+			cc -fPIC -shared library.c ${libraryName} -o lib/${library}
+			# A live library directory can contain unrelated files that cannot be checked in.
+			mkfifo lib/unrelated.a-temporary
+			printf 'not a shared library' > lib/unrelated.a
 			cc -c main.c -o main.o
-			cc main.o -L. -lmessage -o program
+			cc main.o -Llib -lmessage -o program
 			test ! program -ot main.o
-			rm ${library}
+			rm lib/${library}
 			./program
 			touch ${tg.output}
 		`)
 		.env(toolchain);
+	return true;
+}
+
+/** Wrapping must preserve the native tool's output metadata, including date-preserving strip operations. */
+export async function testProxyOutputMetadata() {
+	const toolchain = await bootstrap.sdk();
+	const rawToolchain = await bootstrap.sdk.env();
+	const { ld, strip } = await std.sdk.toolchainComponents({
+		env: await std.env.compose(rawToolchain),
+		host: bootstrap.toolchainTriple(std.triple.host()),
+	});
+	const darwin = std.triple.os(std.triple.host()) === "darwin";
+	await std.build(std.shBootstrap`
+		cat > native-linker <<'EOF'
+#!/bin/sh
+set -eu
+previous=
+output=a.out
+for arg do
+	if test "$previous" = -o; then output="$arg"; fi
+	previous="$arg"
+done
+${ld} "$@"
+touch -r "$METADATA_REFERENCE" "$output"
+chmod 751 "$output"
+EOF
+		cat > native-strip <<'EOF'
+#!/bin/sh
+set -eu
+for output do :; done
+touch -r "$output" "$PWD/strip-input-time"
+${strip} "$@"
+if test "$PRESERVE_DATE" = true; then
+	touch -r "$PWD/strip-input-time" "$output"
+else
+	touch -r "$METADATA_REFERENCE" "$output"
+fi
+EOF
+		chmod +x native-linker native-strip
+		printf 'int main(void) { return 0; }' > main.c
+		export METADATA_REFERENCE="$PWD/reference"
+		touch -t 202601010000 reference
+		export TANGRAM_LINKER_COMMAND_PATH="$PWD/native-linker"
+		for embed in ${darwin ? "false" : "true false"}; do
+			cc -g main.c -Wl,--tg-linker-embed-wrapper=$embed -o program
+			test ! program -ot reference
+			test ! reference -ot program
+			test "$(stat -c %a program)" = 751
+			./program
+		done
+		export TANGRAM_STRIP_COMMAND_PATH="$PWD/native-strip"
+		touch -t 202602020000 reference
+		for preserve in false true; do
+			PRESERVE_DATE=$preserve strip -S program
+			test ! program -ot reference
+			test ! reference -ot program
+			test "$(stat -c %a program)" = 751
+			./program
+		done
+		touch ${tg.output}
+	`).env(toolchain);
 	return true;
 }
 
