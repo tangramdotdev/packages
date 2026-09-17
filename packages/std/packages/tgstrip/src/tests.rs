@@ -43,6 +43,11 @@ fn controls_and_occurrence_positions() {
 
 #[test]
 fn exact_forwarding_and_environment_validation() {
+	let defaults = Options::parse_with_args(std::iter::empty(), |key| {
+		(key == "TANGRAM_STRIP_COMMAND_PATH").then(|| "strip".into())
+	})
+	.unwrap();
+	assert!(!defaults.passthrough);
 	let input = vec![
 		"--tg-strip-passthrough".into(),
 		"--tangram-strip-passthrough=false".into(),
@@ -51,6 +56,7 @@ fn exact_forwarding_and_environment_validation() {
 		"".into(),
 		"a b=c,d".into(),
 		OsString::from_vec(b"\xff".to_vec()),
+		OsString::from_vec(b"--tg-strip-passthrough-extra=\xff".to_vec()),
 	];
 	let options = Options::parse_with_args(input.clone().into_iter(), |key| {
 		(key == "TANGRAM_STRIP_COMMAND_PATH").then(|| "strip".into())
@@ -58,6 +64,21 @@ fn exact_forwarding_and_environment_validation() {
 	.unwrap();
 	assert!(!options.passthrough);
 	assert_eq!(options.command_args, input[2..]);
+	for alias in ["tg", "tangram"] {
+		let arg = OsString::from_vec(
+			[
+				format!("--{alias}-strip-passthrough=").as_bytes(),
+				b"SECRET_MARKER\xff",
+			]
+			.concat(),
+		);
+		let error = Options::parse_with_args([arg].into_iter(), |key| {
+			(key == "TANGRAM_STRIP_COMMAND_PATH").then(|| "strip".into())
+		})
+		.unwrap_err();
+		assert!(error.to_string().contains("strip-passthrough"));
+		assert!(!format!("{error:?}").contains("SECRET_MARKER"));
+	}
 	for value in ["", " true", "false ", "yes"] {
 		assert!(
 			Options::parse_with_args(["--tg-strip-passthrough=false".into()].into_iter(), |key| {

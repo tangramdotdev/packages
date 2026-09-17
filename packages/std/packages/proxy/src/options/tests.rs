@@ -1,233 +1,61 @@
-use {super::*, std::os::unix::ffi::OsStringExt as _};
-
-const DECLARATIONS: &[Declaration<u8>] = &[
-	Declaration {
-		id: 0,
-		kind: Kind::Boolean,
-		suffix: "enabled",
-	},
-	Declaration {
-		id: 1,
-		kind: Kind::Value,
-		suffix: "text",
-	},
-];
-
-#[derive(Default)]
-struct Settings {
-	enabled: bool,
-	text: String,
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn apply(settings: &mut Settings, id: u8, value: Value<'_>, _: &Source) -> tg::Result<()> {
-	match (id, value) {
-		(0, Value::Boolean(value)) => settings.enabled = value,
-		(1, Value::Text(value)) => settings.text = value.to_owned(),
-		_ => unreachable!(),
-	}
-	Ok(())
-}
+use {
+	super::*,
+	std::{ffi::OsString, os::unix::ffi::OsStringExt as _},
+};
 
 #[test]
-fn aliases_environment_precedence_and_ownership() {
-	for component in ["example", "second-component"] {
-		let mut keys = Vec::new();
-		let mut session = Session::new(
-			component,
-			DECLARATIONS,
-			Settings::default(),
-			|key| {
-				keys.push(key.to_owned());
-				Some(
-					if key.ends_with("ENABLED") {
-						"TrUe"
-					} else {
-						"environment"
-					}
-					.into(),
-				)
-			},
-			apply,
-		)
-		.unwrap();
-		assert_eq!(
-			keys,
-			[
-				format!(
-					"TANGRAM_{}_ENABLED",
-					component.replace('-', "_").to_uppercase()
-				),
-				format!(
-					"TANGRAM_{}_TEXT",
-					component.replace('-', "_").to_uppercase()
-				)
-			]
-		);
-		for alias in ["tg", "tangram"] {
-			for value in ["false", "FALSE", "0", "true", "TRUE", "1"] {
-				assert!(
-					session
-						.consume(OsStr::new(&format!(
-							"--{alias}-{component}-enabled={value}"
-						)))
-						.unwrap()
-				);
-			}
-			assert!(
-				session
-					.consume(OsStr::new(&format!("--{alias}-{component}-enabled")))
-					.unwrap()
-			);
-			assert!(
-				session
-					.consume(OsStr::new(&format!(
-						"--{alias}-{component}-text=hello, world=1"
-					)))
-					.unwrap()
-			);
+fn aliases_and_attached_values() {
+	for alias in ["tg", "tangram"] {
+		for value in [None, Some(""), Some("hello, world=1")] {
+			let source = format!("--{alias}-example-text");
+			let arg = value.map_or_else(|| source.clone(), |value| format!("{source}={value}"));
+			let (parsed_source, parsed_value) = split(OsStr::new(&arg)).unwrap();
+			assert_eq!(parsed_source, source);
+			assert_eq!(name(parsed_source), Some("example-text"));
+			assert_eq!(parsed_value, value.map(OsStr::new));
 		}
-		assert!(
-			session
-				.consume(OsStr::new(&format!("--tg-{component}-enabled=false")))
-				.unwrap()
-		);
-		for arg in [
-			"",
-			"@file",
-			"--tg-other-enabled",
-			"--tangram-suppress-args",
-			"--tg-example-enabled-extra",
-			"--TG-example-enabled",
-			"--tg-example-text-extra=x",
-		] {
-			assert!(!session.consume(OsStr::new(arg)).unwrap());
-		}
-		assert!(
-			!session
-				.consume(&OsString::from_vec(b"--foreign=\xff".to_vec()))
-				.unwrap()
-		);
-		assert!(!session.consume(OsStr::new("--")).unwrap());
-		assert!(session.ended());
-		assert!(
-			!session
-				.consume(OsStr::new(&format!("--tg-{component}-enabled")))
-				.unwrap()
-		);
-		let settings = session.into_settings();
-		assert!(!settings.enabled);
-		assert_eq!(settings.text, "hello, world=1");
 	}
+	for source in ["", "--", "@file", "operand", "--TG-example-text"] {
+		assert!(name(source).is_none());
+	}
+	let arg = OsString::from_vec(b"--tg-example-text=\xff".to_vec());
+	let (source, value) = split(&arg).unwrap();
+	assert_eq!(name(source), Some("example-text"));
+	assert_eq!(value.unwrap().as_bytes(), b"\xff");
+	assert!(split(&OsString::from_vec(b"--tg-example-\xff=x".to_vec())).is_none());
 }
 
 #[test]
-fn defaults_and_validation() {
-	let session = Session::new(
-		"example",
-		DECLARATIONS,
-		Settings::default(),
-		|_| None,
-		apply,
-	)
-	.unwrap();
-	let settings = session.into_settings();
-	assert!(!settings.enabled);
-	assert!(settings.text.is_empty());
-	for value in ["", " true", "false ", "yes", "2", "true\n"] {
-		assert!(
-			Session::new(
-				"example",
-				DECLARATIONS,
-				Settings::default(),
-				|_| Some(value.into()),
-				apply
-			)
-			.is_err()
-		);
-		let mut session = Session::new(
-			"example",
-			DECLARATIONS,
-			Settings::default(),
-			|_| None,
-			apply,
-		)
-		.unwrap();
-		let error = session
-			.consume(OsStr::new(&format!("--tg-example-enabled={value}")))
-			.unwrap_err();
-		assert!(error.to_string().contains("--tg-example-enabled"));
-	}
-	let mut session = Session::new(
-		"example",
-		DECLARATIONS,
-		Settings::default(),
-		|_| None,
-		apply,
-	)
-	.unwrap();
-	assert!(session.consume(OsStr::new("--tg-example-text")).is_err());
-	assert!(!session.consume(OsStr::new("operand")).unwrap());
-	assert!(
-		session
-			.consume(&OsString::from_vec(b"--tg-example-text=\xff".to_vec()))
-			.is_err()
-	);
-	assert!(session.consume(OsStr::new("--tg-example-text=")).unwrap());
-}
-
-#[test]
-fn declaration_validation() {
-	assert!(
-		Session::new(
-			"Example",
-			DECLARATIONS,
-			Settings::default(),
-			|_| None,
-			apply
-		)
-		.is_err()
-	);
-	for declarations in [
-		vec![Declaration {
-			id: 0,
-			kind: Kind::Boolean,
-			suffix: "bad--name",
-		}],
-		vec![
-			Declaration {
-				id: 0,
-				kind: Kind::Boolean,
-				suffix: "one",
-			},
-			Declaration {
-				id: 0,
-				kind: Kind::Value,
-				suffix: "two",
-			},
-		],
-		vec![
-			Declaration {
-				id: 0,
-				kind: Kind::Boolean,
-				suffix: "one",
-			},
-			Declaration {
-				id: 1,
-				kind: Kind::Value,
-				suffix: "one",
-			},
-		],
+fn boolean_values() {
+	for (value, expected) in [
+		("true", true),
+		("TrUe", true),
+		("1", true),
+		("false", false),
+		("FaLsE", false),
+		("0", false),
 	] {
-		assert!(
-			Session::new(
-				"example",
-				&declarations,
-				Settings::default(),
-				|_| None,
-				apply
-			)
-			.is_err()
-		);
+		assert_eq!(boolean(OsStr::new(value), "TGCC_ENABLE").unwrap(), expected);
 	}
+	for value in ["", " true", "false ", "yes", "2", "true\n", "SECRET_MARKER"] {
+		let error = boolean(OsStr::new(value), "TGCC_ENABLE").unwrap_err();
+		assert!(error.to_string().contains("TGCC_ENABLE"));
+		assert!(!format!("{error:?}").contains("SECRET_MARKER"));
+	}
+	assert!(boolean(&OsString::from_vec(b"\xff".to_vec()), "TGCC_ENABLE").is_err());
+}
+
+#[test]
+fn required_text_values() {
+	let source = "--tg-example-text";
+	assert!(value(None, source).is_err());
+	assert_eq!(value(Some(OsStr::new("")), source).unwrap(), "");
+	assert_eq!(
+		value(Some(OsStr::new("hello, world=1")), source).unwrap(),
+		"hello, world=1"
+	);
+	let text = OsString::from_vec(b"SECRET_MARKER\xff".to_vec());
+	let error = value(Some(&text), source).unwrap_err();
+	assert!(error.to_string().contains(source));
+	assert!(!format!("{error:?}").contains("SECRET_MARKER"));
 }

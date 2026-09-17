@@ -1,46 +1,9 @@
 use {
 	crate::{LibraryPathStrategy, payload},
-	proxy::options::{Declaration, Kind, Source, Value},
+	proxy::options,
+	std::ffi::{OsStr, OsString},
 	tangram_client::prelude::*,
 };
-
-pub const DECLARATIONS: &[Declaration<Id>] = &[
-	Declaration {
-		id: Id::DisallowMissing,
-		kind: Kind::Boolean,
-		suffix: "disallow-missing-libraries",
-	},
-	Declaration {
-		id: Id::Embed,
-		kind: Kind::Boolean,
-		suffix: "embed-wrapper",
-	},
-	Declaration {
-		id: Id::LibraryPathStrategy,
-		kind: Kind::Value,
-		suffix: "library-path-strategy",
-	},
-	Declaration {
-		id: Id::MaxDepth,
-		kind: Kind::Value,
-		suffix: "library-search-depth",
-	},
-	Declaration {
-		id: Id::Passthrough,
-		kind: Kind::Boolean,
-		suffix: "passthrough",
-	},
-	Declaration {
-		id: Id::WrapperArgs,
-		kind: Kind::Value,
-		suffix: "wrapper-args",
-	},
-	Declaration {
-		id: Id::WrapperEnv,
-		kind: Kind::Value,
-		suffix: "wrapper-env",
-	},
-];
 
 #[derive(Debug)]
 pub struct Settings {
@@ -53,47 +16,82 @@ pub struct Settings {
 	pub wrapper_env_value: Option<tg::Mutation>,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub enum Id {
-	DisallowMissing,
-	Embed,
-	LibraryPathStrategy,
-	MaxDepth,
-	Passthrough,
-	WrapperArgs,
-	WrapperEnv,
-}
-
-pub fn apply(settings: &mut Settings, id: Id, value: Value<'_>, source: &Source) -> tg::Result<()> {
-	match (id, value) {
-		(Id::DisallowMissing, Value::Boolean(value)) => settings.disallow_missing = value,
-		(Id::Embed, Value::Boolean(value)) => settings.embed = value,
-		(Id::LibraryPathStrategy, Value::Text(value)) => {
-			settings.library_path_strategy = value.parse().map_err(|_| {
-				source
-					.invalid("a library path strategy (none, filter, resolve, isolate, or combine)")
-			})?;
-		},
-		(Id::MaxDepth, Value::Text(value)) => {
-			if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
-				return Err(source.invalid("a nonnegative decimal integer within usize"));
-			}
-			settings.max_depth = value
-				.parse()
-				.map_err(|_| source.invalid("a nonnegative decimal integer within usize"))?;
-		},
-		(Id::Passthrough, Value::Boolean(value)) => settings.passthrough = value,
-		(Id::WrapperArgs, Value::Text(value)) => {
-			settings.wrapper_arg_value =
-				Some(payload::args(value).map_err(|expected| source.invalid(expected))?);
-		},
-		(Id::WrapperEnv, Value::Text(value)) => {
-			settings.wrapper_env_value =
-				Some(payload::env(value).map_err(|expected| source.invalid(expected))?);
-		},
-		_ => unreachable!("the declarations specify the control types"),
+impl Settings {
+	pub fn from_env(mut lookup: impl FnMut(&str) -> Option<OsString>) -> tg::Result<Self> {
+		let mut settings = Self::default();
+		let source = "TANGRAM_LINKER_DISALLOW_MISSING_LIBRARIES";
+		if let Some(value) = lookup(source) {
+			settings.disallow_missing = options::boolean(&value, source)?;
+		}
+		let source = "TANGRAM_LINKER_EMBED_WRAPPER";
+		if let Some(value) = lookup(source) {
+			settings.embed = options::boolean(&value, source)?;
+		}
+		let source = "TANGRAM_LINKER_LIBRARY_PATH_STRATEGY";
+		if let Some(value) = lookup(source) {
+			settings.library_path_strategy = library_path_strategy(Some(&value), source)?;
+		}
+		let source = "TANGRAM_LINKER_LIBRARY_SEARCH_DEPTH";
+		if let Some(value) = lookup(source) {
+			settings.max_depth = max_depth(Some(&value), source)?;
+		}
+		let source = "TANGRAM_LINKER_PASSTHROUGH";
+		if let Some(value) = lookup(source) {
+			settings.passthrough = options::boolean(&value, source)?;
+		}
+		let source = "TANGRAM_LINKER_WRAPPER_ARGS";
+		if let Some(value) = lookup(source) {
+			settings.wrapper_arg_value = Some(
+				payload::args(options::value(Some(&value), source)?)
+					.map_err(|expected| options::invalid(source, expected))?,
+			);
+		}
+		let source = "TANGRAM_LINKER_WRAPPER_ENV";
+		if let Some(value) = lookup(source) {
+			settings.wrapper_env_value = Some(
+				payload::env(options::value(Some(&value), source)?)
+					.map_err(|expected| options::invalid(source, expected))?,
+			);
+		}
+		Ok(settings)
 	}
-	Ok(())
+
+	/// Consume an owned control in an option position before the delimiter.
+	pub fn consume(&mut self, arg: &OsStr) -> tg::Result<bool> {
+		let Some((source, value)) = options::split(arg) else {
+			return Ok(false);
+		};
+		match options::name(source) {
+			Some("linker-disallow-missing-libraries") => {
+				self.disallow_missing =
+					options::boolean(value.unwrap_or(OsStr::new("true")), source)?;
+			},
+			Some("linker-embed-wrapper") => {
+				self.embed = options::boolean(value.unwrap_or(OsStr::new("true")), source)?;
+			},
+			Some("linker-library-path-strategy") => {
+				self.library_path_strategy = library_path_strategy(value, source)?;
+			},
+			Some("linker-library-search-depth") => self.max_depth = max_depth(value, source)?,
+			Some("linker-passthrough") => {
+				self.passthrough = options::boolean(value.unwrap_or(OsStr::new("true")), source)?;
+			},
+			Some("linker-wrapper-args") => {
+				self.wrapper_arg_value = Some(
+					payload::args(options::value(value, source)?)
+						.map_err(|expected| options::invalid(source, expected))?,
+				);
+			},
+			Some("linker-wrapper-env") => {
+				self.wrapper_env_value = Some(
+					payload::env(options::value(value, source)?)
+						.map_err(|expected| options::invalid(source, expected))?,
+				);
+			},
+			_ => return Ok(false),
+		}
+		Ok(true)
+	}
 }
 
 impl Default for Settings {
@@ -108,6 +106,28 @@ impl Default for Settings {
 			wrapper_env_value: None,
 		}
 	}
+}
+
+fn library_path_strategy(value: Option<&OsStr>, source: &str) -> tg::Result<LibraryPathStrategy> {
+	options::value(value, source)?.parse().map_err(|_| {
+		options::invalid(
+			source,
+			"a library path strategy (none, filter, resolve, isolate, or combine)",
+		)
+	})
+}
+
+fn max_depth(value: Option<&OsStr>, source: &str) -> tg::Result<usize> {
+	let value = options::value(value, source)?;
+	if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+		return Err(options::invalid(
+			source,
+			"a nonnegative decimal integer within usize",
+		));
+	}
+	value
+		.parse()
+		.map_err(|_| options::invalid(source, "a nonnegative decimal integer within usize"))
 }
 
 #[cfg(test)]

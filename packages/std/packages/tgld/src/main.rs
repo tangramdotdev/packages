@@ -123,25 +123,21 @@ fn read_options_with_args(
 		lookup("TANGRAM_LINKER_INTERPRETER_ARGS").and_then(|value| value.into_string().ok());
 	let injection_path =
 		lookup("TANGRAM_LINKER_INJECTION_PATH").and_then(|value| value.into_string().ok());
-	let mut session = proxy::options::Session::new(
-		"linker",
-		controls::DECLARATIONS,
-		controls::Settings::default(),
-		lookup,
-		controls::apply,
-	)?;
+	let mut controls = controls::Settings::from_env(lookup)?;
+	let mut ended = false;
 	let mut additional_library_candidate_paths = Vec::new();
 
 	// Handle the arguments.
 	while let Some(arg) = args.next() {
-		if session.consume(&arg)? {
+		if !ended && controls.consume(&arg)? {
 			continue;
 		}
+		ended |= arg == "--";
 		command_args.push(arg.clone());
 		let Some(arg) = arg.to_str() else {
 			continue;
 		};
-		if session.ended() {
+		if ended {
 			if is_library_candidate(arg)
 				&& let Ok(path) = std::fs::canonicalize(arg)
 			{
@@ -212,7 +208,6 @@ fn read_options_with_args(
 
 	// If no explicit output path was provided, instead look for `a.out`.
 	let output_path = output_path.unwrap_or_else(|| "a.out".into());
-	let controls = session.into_settings();
 
 	let options = Options {
 		additional_library_candidate_paths,

@@ -1,19 +1,13 @@
 use {
 	common::{Manifest, manifest},
-	proxy::options::{Declaration, Kind, Session, Source, Value},
+	proxy::options,
 	std::{
-		ffi::OsString,
+		ffi::{OsStr, OsString},
 		os::unix::fs::PermissionsExt,
 		path::{Path, PathBuf},
 	},
 	tangram_client::prelude::*,
 };
-
-const DECLARATIONS: &[Declaration<()>] = &[Declaration {
-	id: (),
-	kind: Kind::Boolean,
-	suffix: "passthrough",
-}];
 
 fn main() {
 	// Setup tracing.
@@ -318,20 +312,27 @@ impl Options {
 		let strip_runtime_library_path = lookup("TANGRAM_STRIP_RUNTIME_LIBRARY_PATH")
 			.and_then(|value| value.into_string().ok())
 			.filter(|value| !value.is_empty());
-		let mut session = Session::new("strip", DECLARATIONS, false, lookup, apply)?;
+		let mut passthrough = lookup("TANGRAM_STRIP_PASSTHROUGH")
+			.map(|value| options::boolean(&value, "TANGRAM_STRIP_PASSTHROUGH"))
+			.transpose()?
+			.unwrap_or(false);
+		let mut ended = false;
 		let mut command_args = Vec::new();
 		let mut strip_targets = Vec::new();
 		for arg in args {
-			let ended = session.ended();
-			if session.consume(&arg)? {
+			if !ended
+				&& let Some((source, value)) = options::split(&arg)
+				&& options::name(source) == Some("strip-passthrough")
+			{
+				passthrough = options::boolean(value.unwrap_or(OsStr::new("true")), source)?;
 				continue;
 			}
 			if ended || !arg.as_encoded_bytes().starts_with(b"-") {
 				strip_targets.push(command_args.len());
 			}
+			ended |= arg == "--";
 			command_args.push(arg);
 		}
-		let passthrough = session.into_settings();
 		let options = Self {
 			command_args,
 			passthrough,
@@ -357,15 +358,6 @@ impl Options {
 			})
 			.collect()
 	}
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn apply(passthrough: &mut bool, (): (), value: Value<'_>, _: &Source) -> tg::Result<()> {
-	let Value::Boolean(value) = value else {
-		unreachable!("the declaration specifies a boolean");
-	};
-	*passthrough = value;
-	Ok(())
 }
 
 fn read_manifest(path: &Path) -> tg::Result<Option<Manifest>> {

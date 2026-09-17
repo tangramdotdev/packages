@@ -63,27 +63,17 @@ retain their names. `TANGRAM_ENV_` is reserved for sandbox transport.
 
 ## Adding a component
 
-`proxy::options::Session` performs no I/O or environment mutation. Declare an ID,
-suffix, and kind once, then pass initialized settings, an environment lookup,
-and an application callback. Validate specialized text in that callback and use
-`Source::invalid` to report an expected type without exposing the payload.
-Namespaces `wrapper`, `linker`, and `strip` belong to their respective consumers;
-`rustc` is reserved for future tgrustc controls.
+Each component reads its environment settings, then handles controls in its native
+argument loop. `proxy::options` provides stateless helpers: `split` separates the
+source name from its optional value, `name` removes either CLI prefix, and
+`boolean` and `value` validate owned values. Match exact component option names
+before validating values so foreign arguments retain their original OS strings.
+Use `invalid` with the source name and expected type to keep payloads out of errors.
 
-```rust,ignore
-let declarations = [Declaration { id: Id::Enabled, kind: Kind::Boolean, suffix: "enabled" }];
-let mut session = Session::new("example", &declarations, Settings::default(), std::env::var_os, apply)?;
-let mut args = std::env::args_os().skip(1);
-while let Some(arg) = args.next() {
-    if session.consume(&arg)? { continue; }
-    let takes_operand = !session.ended() && arg == "-o";
-    forwarded.push(arg);
-    if takes_operand {
-        if let Some(operand) = args.next() { forwarded.push(operand); }
-    }
-}
-let settings = session.into_settings();
-```
+Keep delimiter state in the argument loop and skip interception for native
+operands. Apply each supplied value immediately, including values overridden
+later. Namespaces `wrapper`, `linker`, and `strip` belong to their respective
+consumers; `rustc` is reserved for future tgrustc controls.
 
 Run any dispatch first and exclude leading protocol arguments. A future tgrustc
 consumer must also exclude the real rustc executable argument after dispatch.

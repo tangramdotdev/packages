@@ -1,30 +1,32 @@
-use {super::*, proxy::options::Session, std::ffi::OsStr};
+use {super::*, std::os::unix::ffi::OsStringExt as _};
 
 #[test]
 fn aliases_environment_and_replacement() {
 	for alias in ["tg", "tangram"] {
-		let mut session = Session::new(
-			"linker",
-			DECLARATIONS,
-			Settings::default(),
-			|key| {
-				Some(
-					match key {
-						"TANGRAM_LINKER_DISALLOW_MISSING_LIBRARIES"
-						| "TANGRAM_LINKER_EMBED_WRAPPER"
-						| "TANGRAM_LINKER_PASSTHROUGH" => "true",
-						"TANGRAM_LINKER_LIBRARY_PATH_STRATEGY" => "CoMbInE",
-						"TANGRAM_LINKER_LIBRARY_SEARCH_DEPTH" => "0",
-						"TANGRAM_LINKER_WRAPPER_ARGS" => "[tg.template([\"environment\"])]",
-						"TANGRAM_LINKER_WRAPPER_ENV" => "tg.mutation({\"kind\":\"unset\"})",
-						_ => panic!("unexpected environment key"),
-					}
-					.into(),
-				)
-			},
-			apply,
-		)
+		let mut settings = Settings::from_env(|key| {
+			Some(
+				match key {
+					"TANGRAM_LINKER_DISALLOW_MISSING_LIBRARIES"
+					| "TANGRAM_LINKER_EMBED_WRAPPER"
+					| "TANGRAM_LINKER_PASSTHROUGH" => "true",
+					"TANGRAM_LINKER_LIBRARY_PATH_STRATEGY" => "CoMbInE",
+					"TANGRAM_LINKER_LIBRARY_SEARCH_DEPTH" => "0",
+					"TANGRAM_LINKER_WRAPPER_ARGS" => "[tg.template([\"environment\"])]",
+					"TANGRAM_LINKER_WRAPPER_ENV" => "tg.mutation({\"kind\":\"unset\"})",
+					_ => panic!("unexpected environment key"),
+				}
+				.into(),
+			)
+		})
 		.unwrap();
+		assert!(settings.disallow_missing && settings.embed && settings.passthrough);
+		assert_eq!(settings.library_path_strategy, LibraryPathStrategy::Combine);
+		assert_eq!(settings.max_depth, 0);
+		assert_eq!(settings.wrapper_arg_value.as_ref().unwrap().len(), 1);
+		assert!(matches!(
+			settings.wrapper_env_value,
+			Some(tg::Mutation::Unset)
+		));
 		for (suffix, value) in [
 			("disallow-missing-libraries", "false"),
 			("embed-wrapper", "0"),
@@ -38,12 +40,11 @@ fn aliases_environment_and_replacement() {
 			),
 		] {
 			assert!(
-				session
+				settings
 					.consume(OsStr::new(&format!("--{alias}-linker-{suffix}={value}")))
 					.unwrap()
 			);
 		}
-		let settings = session.into_settings();
 		assert!(!settings.disallow_missing && !settings.embed && !settings.passthrough);
 		assert_eq!(settings.library_path_strategy, LibraryPathStrategy::Filter);
 		assert_eq!(settings.max_depth, 1);
@@ -58,11 +59,14 @@ fn aliases_environment_and_replacement() {
 #[test]
 fn invalid_values_fail_before_overrides() {
 	for (suffix, values) in [
+		("disallow-missing-libraries", vec!["", " true", "yes"]),
+		("embed-wrapper", vec!["", "false ", "2"]),
 		("library-path-strategy", vec!["", " filter", "unknown"]),
 		(
 			"library-search-depth",
 			vec!["", "-1", "+1", " 1", "1.0", "999999999999999999999999999"],
 		),
+		("passthrough", vec!["", "true\n", "no"]),
 		(
 			"wrapper-args",
 			vec!["[\"SECRET_MARKER\"]", "[] SECRET_MARKER"],
@@ -73,32 +77,66 @@ fn invalid_values_fail_before_overrides() {
 		),
 	] {
 		for value in values {
-			let mut session =
-				Session::new("linker", DECLARATIONS, Settings::default(), |_| None, apply).unwrap();
-			let error = session
+			let mut settings = Settings::default();
+			let error = settings
 				.consume(OsStr::new(&format!("--tg-linker-{suffix}={value}")))
 				.unwrap_err();
 			assert!(error.to_string().contains(suffix));
 			assert!(!format!("{error:?}").contains("SECRET_MARKER"));
 			assert!(
-				Session::new(
-					"linker",
-					DECLARATIONS,
-					Settings::default(),
-					|key| (key
-						== format!("TANGRAM_LINKER_{}", suffix.replace('-', "_").to_uppercase()))
-					.then(|| value.into()),
-					apply
-				)
+				Settings::from_env(|key| (key
+					== format!("TANGRAM_LINKER_{}", suffix.replace('-', "_").to_uppercase()))
+				.then(|| value.into()))
 				.is_err()
 			);
 		}
-		let mut session =
-			Session::new("linker", DECLARATIONS, Settings::default(), |_| None, apply).unwrap();
-		assert!(
-			session
-				.consume(OsStr::new(&format!("--tg-linker-{suffix}")))
-				.is_err()
+		let mut settings = Settings::default();
+		let source = format!("--tg-linker-{suffix}");
+		let boolean = matches!(
+			suffix,
+			"disallow-missing-libraries" | "embed-wrapper" | "passthrough"
 		);
+		assert_eq!(settings.consume(OsStr::new(&source)).is_ok(), boolean);
+		let arg = OsString::from_vec([source.as_bytes(), b"=SECRET_MARKER\xff"].concat());
+		let error = settings.consume(&arg).unwrap_err();
+		assert!(error.to_string().contains(&source));
+		assert!(!format!("{error:?}").contains("SECRET_MARKER"));
+	}
+}
+
+#[test]
+fn defaults_ownership_and_alias_precedence() {
+	let mut settings = Settings::from_env(|_| None).unwrap();
+	assert!(!settings.disallow_missing && !settings.embed && !settings.passthrough);
+	assert_eq!(settings.library_path_strategy, LibraryPathStrategy::Isolate);
+	assert_eq!(settings.max_depth, 16);
+	assert!(settings.wrapper_arg_value.is_none() && settings.wrapper_env_value.is_none());
+	for arg in [
+		"",
+		"--",
+		"@file",
+		"--tg-strip-passthrough",
+		"--tangram-suppress-args",
+		"--tg-linker-passthrough-extra",
+		"--TG-linker-passthrough",
+		"--tg-linker-wrapper-args-extra=x",
+	] {
+		assert!(!settings.consume(OsStr::new(arg)).unwrap());
+	}
+	for arg in [
+		b"--foreign=\xff".as_slice(),
+		b"--tg-linker-wrapper-args-extra=\xff",
+		b"--tg-linker-passthrough\xff",
+	] {
+		assert!(!settings.consume(&OsString::from_vec(arg.to_vec())).unwrap());
+	}
+	for (arg, expected) in [
+		("--tg-linker-passthrough", true),
+		("--tangram-linker-passthrough=false", false),
+		("--tangram-linker-passthrough", true),
+		("--tg-linker-passthrough=0", false),
+	] {
+		assert!(settings.consume(OsStr::new(arg)).unwrap());
+		assert_eq!(settings.passthrough, expected);
 	}
 }
