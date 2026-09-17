@@ -1,6 +1,45 @@
 use super::*;
 
 #[test]
+fn inline_artifact_contents_remain_available() {
+	let parsed = args(r#"[tg.template([tg.file("inline payload")])]"#).unwrap();
+	let mut objects = parsed[0].objects();
+	for value in [
+		r#"tg.file("inline payload")"#,
+		r#"tg.template([tg.file("inline payload")])"#,
+		r#"tg.mutation({"kind":"set","value":tg.file("inline payload")})"#,
+		r#"tg.mutation({"kind":"set_if_unset","value":tg.file("inline payload")})"#,
+		r#"tg.mutation({"kind":"prefix","template":tg.template([tg.file("inline payload")])})"#,
+		r#"tg.mutation({"kind":"suffix","template":tg.template([tg.file("inline payload")])})"#,
+	] {
+		let parsed = env(&format!(
+			"tg.mutation({{\"kind\":\"set\",\"value\":{{\"FILE\":{value}}}}})"
+		))
+		.unwrap();
+		let dependencies = parsed.objects();
+		assert_eq!(dependencies.len(), 1);
+		objects.extend(dependencies);
+	}
+	for object in objects {
+		let object = object.state().object().expect("expected the inline file");
+		let file = object.try_unwrap_file().unwrap();
+		let tg::file::Object::Node(file) = file.as_ref() else {
+			panic!("expected a file node");
+		};
+		let object = file
+			.contents
+			.state()
+			.object()
+			.expect("expected the inline contents");
+		let blob = object.try_unwrap_blob().unwrap();
+		let tg::blob::Object::Leaf(leaf) = blob.as_ref() else {
+			panic!("expected a blob leaf");
+		};
+		assert_eq!(leaf.bytes.as_ref(), b"inline payload");
+	}
+}
+
+#[test]
 fn authorized_artifacts_and_subpaths_remain_intact() {
 	let file = tg::File::with_contents("payload");
 	let mut referent = file.to_referent().map(tg::artifact::Id::from);
@@ -80,11 +119,9 @@ fn authorized_artifacts_and_subpaths_remain_intact() {
 	let root = tg::Directory::with_entries(std::collections::BTreeMap::new());
 	referent.options.id = Some(root.id().into());
 	referent.options.path = Some("lib".into());
-	let mut template =
-		tg::template::Data::with_components([tg::template::data::Component::Artifact(
-			referent.clone(),
-		)]);
-	validate_template(&mut template).unwrap();
+	let template = proxy::template_from_referent(&referent).unwrap();
+	validate_template(&template).unwrap();
+	let template = template.to_data();
 	let tg::template::data::Component::Artifact(actual) = &template.components[0] else {
 		panic!("expected an artifact root");
 	};
