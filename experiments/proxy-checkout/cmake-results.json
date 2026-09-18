@@ -1,0 +1,109 @@
+{
+  "source_revision": "50eb3ebc5fd441cc20e258941d04088b432db9d8",
+  "platform": "aarch64-darwin",
+  "verified_at": "2026-09-18 16:55:38 UTC",
+  "verification_command": "tg build --cached=true --no-tokens ./packages/cmake#test",
+  "method": "Retrieved the successful cached process for the current checkout and verified selected native dependency processes and their parent edges. No builds were started during this verification.",
+  "root": {
+    "id": "pcs_0006gbahmjnxtsz51esm865m6f88",
+    "command": "cmd_017353wrt1g45vp7mh2y41w53pk91xte93ky82maxb69aa368ss3n0",
+    "status": "finished",
+    "exit": 0,
+    "output": true,
+    "started_at": "2026-09-18T16:08:16.000Z",
+    "finished_at": "2026-09-18T16:22:11.000Z"
+  },
+  "proxy_suite": {
+    "id": "pcs_0006gb2rzcb1r4kaf39w2ydxtv34",
+    "command": "cmd_01h2ad0ffq3nsxejpx02b9ffyqk4d3sfz606hnpj87qq1vw72vnm20",
+    "status": "finished",
+    "exit": 0,
+    "output": true
+  },
+  "native_builds": [
+    {
+      "package": "cmake",
+      "id": "pcs_0006gbakqtwxrg337jva0s77w634",
+      "path": [
+        "pcs_0006gbahmjnxtsz51esm865m6f88"
+      ],
+      "status": "finished",
+      "exit": 0,
+      "output": {
+        "kind": "object",
+        "value": "dir_01dxeebz02cd3yk51xgdvn7f6p2r3q52hwhy3k7zvxmrkn4s3qqbk0"
+      },
+      "command": "cmd_015t7ggyaedssthy1eyvae5jaa6jn7anrbdp1sqwfswt95pj4b2d20",
+      "started_at": "2026-09-18T16:17:27.000Z",
+      "finished_at": "2026-09-18T16:20:32.000Z"
+    },
+    {
+      "package": "libpsl",
+      "id": "pcs_0006gbak9ac1t5nfsgv1yt72gq0g",
+      "path": [
+        "pcs_0006gbahmjnxtsz51esm865m6f88",
+        "pcs_0006gbahpzwxrbxbcgbxq4ac9w6m"
+      ],
+      "status": "finished",
+      "exit": 0,
+      "output": {
+        "kind": "object",
+        "value": "dir_01ftkqh0qtxvcvaf24fwfz2dq87wa2p823gvxxcs0tnvz2n3474b9g"
+      },
+      "command": "cmd_015e6e8wfj4ghy2688wd1qqtjsr31cdy4yep1yre8e7pkfvt69ejxg",
+      "started_at": "2026-09-18T16:15:28.000Z",
+      "finished_at": "2026-09-18T16:15:50.000Z"
+    },
+    {
+      "package": "ncurses",
+      "id": "pcs_0006gba1wq4dre5chkaqqbr7zty0",
+      "path": [
+        "pcs_0006gbahmjnxtsz51esm865m6f88",
+        "pcs_0006gba1w271vq3506tqjmzx5h4m"
+      ],
+      "status": "finished",
+      "exit": 0,
+      "output": {
+        "kind": "object",
+        "value": "dir_01w649zwjzcc84dwp9exd6sn50qm9b380nnfyahb8sxtqa44yhh2c0"
+      },
+      "command": "cmd_01f8efc05pk4zhffkhwy4mjkvzz87ace6rjex9z7mmqxdg257np180",
+      "started_at": "2026-09-18T14:59:28.000Z",
+      "finished_at": "2026-09-18T15:00:18.000Z"
+    },
+    {
+      "package": "ninja",
+      "id": "pcs_0006gbamqj3ds8h7zmb56t9xnvxr",
+      "path": [
+        "pcs_0006gbahmjnxtsz51esm865m6f88"
+      ],
+      "status": "finished",
+      "exit": 0,
+      "output": {
+        "kind": "object",
+        "value": "dir_01ycpqve4dgjh97p1djfp8cp4xhp55zcqrcymkaw4kd2s9490q5ck0"
+      },
+      "command": "cmd_017c5jh33etkqsyyz7134f35denqy3aq458h51x0r4tfs9wt6vkrp0",
+      "started_at": "2026-09-18T16:21:47.000Z",
+      "finished_at": "2026-09-18T16:21:57.000Z"
+    },
+    {
+      "package": "python",
+      "id": "pcs_0006gbajb085s4hfkycq9qf6rt4m",
+      "path": [
+        "pcs_0006gbahmjnxtsz51esm865m6f88",
+        "pcs_0006gbahpzwxrbxbcgbxq4ac9w6m",
+        "pcs_0006gbahr10dtmb79v15kygt2jnw"
+      ],
+      "status": "finished",
+      "exit": 0,
+      "output": {
+        "kind": "object",
+        "value": "dir_012p7q7m8m3gf6y9wk78r794p3nwfnyxv8k746ydg98ze48h6thevg"
+      },
+      "command": "cmd_01a6422egt6782rtb03jarqt2gtz8t2s77kztp1je47txd8vjm6g60",
+      "started_at": "2026-09-18T16:11:20.000Z",
+      "finished_at": "2026-09-18T16:14:25.000Z"
+    }
+  ]
+}

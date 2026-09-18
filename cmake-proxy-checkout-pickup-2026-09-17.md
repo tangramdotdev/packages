@@ -1,8 +1,27 @@
 # CMake / linker-proxy pickup — September 17, 2026
 
-## Read this first
+## Verification update — September 18, 2026
 
-The implementation is complete and its focused validation passed. **The full CMake test has not completed.** At the user's request, the running CMake build was canceled at approximately **22:21 UTC / 18:21 EDT on September 17, 2026**, in preparation for a reboot. The cancellation was verified, including the remaining dependency branch: no active processes were found in that canceled subtree.
+**The full CMake package test has now passed on aarch64-darwin.** The user completed the build after reboot and asked to continue verification. `tg build --cached=true --no-tokens ./packages/cmake#test` retrieved the successful result for the unchanged production checkout at `50eb3ebc5fd441cc20e258941d04088b432db9d8`. No new build was needed.
+
+| Verified process | Result |
+| --- | --- |
+| CMake test `pcs_0006gbahmjnxtsz51esm865m6f88` | Finished, exit 0, output `true`; September 18, 16:08:16–16:22:11 UTC. |
+| Native Python build `pcs_0006gbajb085s4hfkycq9qf6rt4m` | Exit 0; installation reached successful pip installation. |
+| Native ncurses build `pcs_0006gba1wq4dre5chkaqqbr7zty0` | Exit 0; installation completed through the C++ library headers. |
+| Native libpsl build `pcs_0006gbak9ac1t5nfsgv1yt72gq0g` | Exit 0. |
+| Native CMake build `pcs_0006gbakqtwxrg337jva0s77w634` | Exit 0; installation completed. |
+| Native Ninja build `pcs_0006gbamqj3ds8h7zmb56t9xnvxr` | Exit 0; installation completed. |
+
+The verified CMake root has the same command ID as the September 17 canceled run: `cmd_017353wrt1g45vp7mh2y41w53pk91xte93ky82maxb69aa368ss3n0`. The parent edges connecting each selected native process to the successful root were checked. The previously successful full proxy suite was also confirmed as finished with exit 0 and output `true`.
+
+The durable record is [experiments/proxy-checkout/cmake-results.json](experiments/proxy-checkout/cmake-results.json). Together with the 17 Rust tests, the full proxy suite, and the minimal experiment, this completes the planned macOS verification. No production code changes were needed after the pickup commit. Linux execution and the other limits described below remain outside this validation.
+
+**The following sections preserve the September 17 handoff. Their canceled/pending status and restart instructions are historical and are superseded by this update.**
+
+## Historical handoff — September 17, 2026
+
+At the September 17 handoff, the implementation and its focused validation were complete, but the full CMake test had not completed. At the user's request, the running CMake build was canceled at approximately **22:21 UTC / 18:21 EDT on September 17, 2026**, in preparation for a reboot. The cancellation was verified, including the remaining dependency branch: no active processes were found in that canceled subtree.
 
 The user's last requests were:
 
