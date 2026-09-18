@@ -61,11 +61,8 @@ pub async fn checkout_artifact(artifact: tg::Artifact) -> tg::Result<PathBuf> {
 
 /// Check out a single artifact to the given path, overwriting whatever is already there.
 pub async fn checkout_artifact_to_path(artifact: tg::Artifact, path: PathBuf) -> tg::Result<()> {
-	// Materialize only the dependencies so the output itself is checked out directly.
-	let dependencies = artifact.dependencies().await?;
-	if !dependencies.is_empty() {
-		checkout_artifacts(dependencies).await?;
-	}
+	// Materialize dependencies in the store so the output can run immediately.
+	checkout_artifact(artifact.clone()).await?;
 	tg::checkout(tg::checkout::Arg {
 		dependencies: false,
 		extension: None,
