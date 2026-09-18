@@ -86,7 +86,9 @@ The [production measurements](production-results.json) passed every cold/warm ti
 
 The SDK regression `testLinkerOutputCheckout` now includes an unrelated FIFO to verify deterministically that the live directory is not checked in wholesale. `testProxyOutputMetadata` supplies native tool outputs with known mtimes and tests ordinary and date-preserving strip behavior.
 
-The final implementation passed all 17 Rust tests in `common`, `tgld`, and `tgstrip`. The complete SDK proxy test export also returned `true` on aarch64-darwin: `pcs_0006gb2rzcb1r4kaf39w2ydxtv34`. The CMake test remains a separate end-to-end validation.
+The final implementation passed all 17 Rust tests in `common`, `tgld`, and `tgstrip`. The complete SDK proxy test export also returned `true` on aarch64-darwin: `pcs_0006gb2rzcb1r4kaf39w2ydxtv34`.
+
+On September 18, the full CMake package test passed with the final implementation: `pcs_0006gbahmjnxtsz51esm865m6f88`, exit 0, output `true`. Verification retrieved the existing successful result for the current checkout with `tg build --cached=true --no-tokens ./packages/cmake#test`; it did not start another build. The native Python, ncurses, libpsl, CMake, and Ninja build processes in that dependency graph all exited successfully, including the two earlier failure points. The [CMake verification record](cmake-results.json) preserves the process IDs, parent edges, output artifacts, and completion times. This closes the remaining macOS validation; Linux execution remains outside the recorded coverage.
 
 ## Semantics supported by the experiment
 
