@@ -63,7 +63,7 @@ fn repeated_artifacts_merge_authorization() {
 	}
 	referent.options.tokens = tg::Tokens::with_local_entry(tg::tokens::Entry {
 		authorization,
-		sync: None,
+		sync: Vec::new(),
 	});
 	let location = tg::Location::Remote(tg::location::Remote {
 		name: "test".into(),
@@ -77,7 +77,7 @@ fn repeated_artifacts_merge_authorization() {
 	token.metadata.key = "another-signer".into();
 	other.options.tokens = tg::Tokens::with_local_entry(tg::tokens::Entry {
 		authorization: vec![token],
-		sync: None,
+		sync: Vec::new(),
 	});
 	let env = env(&format!(
 		"tg.mutation({{\"kind\":\"set\",\"value\":{{\"ARTIFACT\":{other}}}}})"

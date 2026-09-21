@@ -78,7 +78,10 @@ pub async fn run() -> tg::Result<()> {
 		tg::Process::spawn(process_arg, tg::process::spawn::Options::default()).await?;
 	let process_id = process.id().unwrap_right().clone();
 	let cached = process.cached().unwrap_or(false);
-	let command_id = process.command().await?.id();
+	let command_id = match process.command().await? {
+		tg::Either::Left(command) => command.id()?,
+		tg::Either::Right(command) => command.id(),
+	};
 	let wait = process.wait(tg::process::wait::Options::default()).await?;
 	let elapsed_ms = start.elapsed().as_millis();
 	eprintln!(
