@@ -473,6 +473,8 @@ export async function test() {
 		testBasic(),
 		testProxyArguments(),
 		testLinkerControls(),
+		testLinkerOutputCheckout(),
+		testProxyOutputMetadata(),
 		testSdkControlPrecedence(),
 		testStripControls(),
 		testCompilerLocalPaths(),
@@ -976,6 +978,107 @@ export async function testBasic(target?: string) {
 		);
 	}
 	return tg.directory({ output });
+}
+
+/** Newly linked outputs must retain build ordering and have their runtime dependencies available. */
+export async function testLinkerOutputCheckout() {
+	const toolchain = await bootstrap.sdk();
+	const darwin = std.triple.os(std.triple.host()) === "darwin";
+	const library = darwin ? "libmessage.dylib" : "libmessage.so";
+	const libraryNameFlag = darwin ? `-Wl,-install_name,@rpath/${library}` : "";
+	await std
+		.build(std.shBootstrap`
+			# Give each execution a distinct library so an earlier test cannot materialize its wrapper.
+			cat > library.c <<EOF
+const char *message(void) { return "$PWD"; }
+EOF
+			cat > main.c <<'EOF'
+const char *message(void);
+int main(void) { return message()[0] != '/'; }
+EOF
+			mkdir lib
+			cc -fPIC -shared library.c ${libraryNameFlag} -o lib/${library}
+			# A live library directory can contain unrelated files that cannot be checked in.
+			mkfifo lib/unrelated.a-temporary
+			printf 'not a shared library' > lib/unrelated.a
+			printf 'not an object file' > lib/libunrelated.${darwin ? "dylib" : "so"}
+			cc -c main.c -o main.o
+			cc main.o -Llib -lmessage -o program
+			test ! program -ot main.o
+			rm lib/${library}
+			./program
+			# A shared library can have a filename ending in .a.
+			cc -fPIC -shared library.c ${libraryNameFlag} -o lib/libmessage.a
+			cc main.o -Llib -lmessage -o program
+			rm lib/libmessage.a
+			./program
+			touch ${tg.output}
+		`)
+		.env(toolchain);
+	return true;
+}
+
+/** Wrapping must preserve the native tool's output metadata, including date-preserving strip operations. */
+export async function testProxyOutputMetadata() {
+	const toolchain = await bootstrap.sdk();
+	const rawToolchain = await bootstrap.sdk.env(std.triple.host());
+	const { ld, strip } = await std.sdk.toolchainComponents({
+		env: await std.env.compose(rawToolchain),
+		host: bootstrap.toolchainTriple(std.triple.host()),
+	});
+	const darwin = std.triple.os(std.triple.host()) === "darwin";
+	await std.build(std.shBootstrap`
+		cat > native-linker <<'EOF'
+#!/bin/sh
+set -eu
+previous=
+output=a.out
+for arg do
+	if test "$previous" = -o; then output="$arg"; fi
+	previous="$arg"
+done
+${ld} "$@"
+touch -r "$METADATA_REFERENCE" "$output"
+chmod 751 "$output"
+EOF
+		cat > native-strip <<'EOF'
+#!/bin/sh
+set -eu
+for output do :; done
+touch -r "$output" "$PWD/strip-input-time"
+${strip} "$@"
+if test "$PRESERVE_DATE" = true; then
+	touch -r "$PWD/strip-input-time" "$output"
+else
+	touch -r "$METADATA_REFERENCE" "$output"
+fi
+EOF
+		chmod +x native-linker native-strip
+		printf 'int main(void) { return 0; }' > main.c
+		export METADATA_REFERENCE="$PWD/reference"
+		touch -t 202601010000 reference
+		export TANGRAM_LINKER_COMMAND_PATH="$PWD/native-linker"
+		# Link without the embedded wrapper last so the strip proxy below sees a manifest it can rewrite.
+		for embed in ${darwin ? "false" : "true false"}; do
+			cc -g main.c -Wl,--tg-linker-embed-wrapper=$embed -o program
+			test ! program -ot reference
+			test ! reference -ot program
+			test "$(stat -c %a program)" = 751
+			./program
+		done
+		export TANGRAM_STRIP_COMMAND_PATH="$PWD/native-strip"
+		touch -t 202602020000 reference
+		# Move the reference forward first, so the preserving run can only match it by carrying the wrapper's own time through.
+		for preserve in false true; do
+			PRESERVE_DATE=$preserve strip -S program
+			test ! program -ot reference
+			test ! reference -ot program
+			test "$(stat -c %a program)" = 751
+			./program
+		done
+		touch ${tg.output}
+	`).env(toolchain);
+	return true;
 }
 
 type MakeSharedArg = {

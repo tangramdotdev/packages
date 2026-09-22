@@ -228,11 +228,12 @@ fn read_options_with_args(
 async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	// Analyze the output file.
 	let AnalyzeOutputFileOutput {
-		is_executable,
+		entrypoint,
 		interpreter,
+		is_executable,
 		name,
 		needed_libraries: initial_needed_libraries,
-		entrypoint,
+		..
 	} = analyze_output_file(&options.output_path).await?;
 	tracing::debug!(?is_executable, ?interpreter, ?initial_needed_libraries);
 
@@ -272,7 +273,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	)
 	.await?;
 
-	// Check in each library directory and retain the context returned by the server.
+	// Capture the libraries and retain any containing artifact context returned by the server.
 	let mut library_paths = command_line_library_path
 		.into_iter()
 		.chain(
@@ -293,13 +294,12 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	tracing::debug!(?library_paths, "Library paths");
 
 	// Obtain the file artifact from the output path.
-	let (output_file, original_permissions) = {
-		// Store the original file permissions before check in.
+	let (output_file, original_metadata) = {
+		// Preserve the native output metadata before check-in and wrapping.
 		let output_path = std::fs::canonicalize(&options.output_path)
 			.map_err(|error| tg::error!(source = error, "cannot canonicalize output path"))?;
 		let original_metadata = std::fs::metadata(&output_path)
 			.map_err(|error| tg::error!(source = error, "failed to read file metadata"))?;
-		let original_permissions = original_metadata.permissions();
 
 		tracing::debug!(?output_path, "about to check in output file");
 		let output = tg::checkin(tg::checkin::Arg {
@@ -321,7 +321,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			.try_unwrap_file()
 			.map_err(|error| tg::error!(source = error, "expected a file"))?;
 
-		(output_file, original_permissions)
+		(output_file, original_metadata)
 	};
 	let output_file_id = output_file.id();
 	tracing::debug!(?output_file_id, "checked in output file");
@@ -423,11 +423,19 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let artifact = tg::Artifact::from(output_file);
 		common::checkout_artifact_to_path(artifact, output_path.clone()).await?;
 
-		// Restore the original file permissions after checkout.
-		std::fs::set_permissions(&output_path, original_permissions).map_err(
+		// Restore the permissions first so the file can be opened to set its modification time.
+		std::fs::set_permissions(&output_path, original_metadata.permissions()).map_err(
 			|error| tg::error!(!error, path = %output_path.display(), "failed to restore file permissions"),
 		)?;
-		tracing::debug!(?output_path, "restored original file permissions");
+
+		// Restore the native modification time even when checkout reuses an epoch-dated store file.
+		let modified = original_metadata
+			.modified()
+			.map_err(|error| tg::error!(!error, "failed to read the output modification time"))?;
+		std::fs::File::open(&output_path)
+			.and_then(|file| file.set_modified(modified))
+			.map_err(|error| tg::error!(!error, path = %output_path.display(), "failed to restore the output modification time"))?;
+		tracing::debug!(?output_path, "restored the original output metadata");
 	}
 
 	Ok(())
@@ -438,95 +446,95 @@ fn deduplicate_library_paths(library_paths: &mut Vec<DirectoryWithSubpath>) {
 	library_paths.retain(|path| seen.insert((path.directory.id(), path.subpath.clone())));
 }
 
-// Keep the server's containing root, adding aliases for local libraries whose SONAME or install name differs from their filename.
+// Capture local libraries individually so unrelated build outputs are not included in the check-in.
 async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubpath>> {
-	if !std::path::Path::new(path).is_dir() {
-		return Ok(None);
-	}
+	let path = match tokio::fs::canonicalize(path).await {
+		Ok(path) if path.is_dir() => path,
+		_ => return Ok(None),
+	};
 	let mut entries = tokio::fs::read_dir(path)
 		.await
-		.map_err(|error| tg::error!(!error, "failed to read library directory"))?;
-	if entries
-		.next_entry()
-		.await
-		.map_err(|error| tg::error!(!error, "failed to read library directory entry"))?
-		.is_none()
-	{
-		return Ok(None);
-	}
-	let mut output = common::checkin_path(path).await?;
-	if matches!(output.artifact.node, tg::artifact::Id::Symlink(_)) {
-		let target = std::fs::canonicalize(path)
-			.map_err(|error| tg::error!(!error, "failed to resolve library directory symlink"))?;
-		output = common::checkin_path(target).await?;
-	}
-	let artifact = tg::Artifact::with_referent(output.artifact.clone());
-	let directory = artifact
-		.try_unwrap_directory()
-		.map_err(|_| tg::error!("expected a library directory"))?;
-	let (root, subpath) = common::artifact_path(&output.artifact)?;
-	let root = root
-		.try_unwrap_directory()
-		.map_err(|_| tg::error!("expected a containing directory"))?;
-	if !library_path_needs_aliases(&output.artifact) {
-		return Ok(Some(DirectoryWithSubpath {
-			directory: root,
-			subpath,
-		}));
-	}
-	// Start a fresh scan so the emptiness check does not consume the first entry.
-	let mut entries = tokio::fs::read_dir(path)
-		.await
-		.map_err(|error| tg::error!(!error, "failed to read library directory"))?;
-	let prefix = subpath.clone().unwrap_or_default();
-	let mut builder: Option<tg::directory::Builder> = None;
+		.map_err(|error| tg::error!(!error, "failed to read the library directory"))?;
+	let mut paths = Vec::new();
 	while let Some(entry) = entries
 		.next_entry()
 		.await
-		.map_err(|error| tg::error!(!error, "failed to read library directory entry"))?
+		.map_err(|error| tg::error!(!error, "failed to read a library directory entry"))?
 	{
-		if !entry
-			.file_type()
+		paths.push(entry.path());
+	}
+	paths.sort();
+	let mut libraries = BTreeMap::new();
+	let mut aliases = BTreeMap::new();
+	for path in paths {
+		// Ignore entries that disappear or are not shared libraries before selecting them for check-in.
+		if !tokio::fs::metadata(&path)
 			.await
-			.map_err(|error| tg::error!(!error, "failed to read file type"))?
-			.is_file()
+			.is_ok_and(|metadata| metadata.is_file())
 		{
 			continue;
 		}
 		let Ok(AnalyzeOutputFileOutput {
-			name: Some(name), ..
-		}) = analyze_output_file(entry.path()).await
+			is_library: true,
+			name,
+			..
+		}) = analyze_output_file(&path).await
 		else {
 			continue;
 		};
-		if entry.file_name() == name.as_str() || directory.try_get(&name).await?.is_some() {
-			continue;
+		let mut output = common::checkin_path(&path).await?;
+		// A store file identifies its immutable containing directory without scanning the live directory. A directory is either entirely inside an artifact or entirely live, so returning here cannot discard a library captured by an earlier iteration.
+		if let Some(directory) = library_directory_from_referent(&output.artifact)? {
+			return Ok(Some(directory));
 		}
-		let alias = tg::Symlink::with_artifact_and_path(
-			root.clone().into(),
-			prefix.join(entry.file_name()),
-		);
-		let current = match builder.take() {
-			Some(builder) => builder,
-			None => root.to_builder().await?,
-		};
-		builder = Some(current.add(&prefix.join(name), alias.into()).await?);
+		if matches!(output.artifact.node, tg::artifact::Id::Symlink(_)) {
+			let target = tokio::fs::canonicalize(&path)
+				.await
+				.map_err(|error| tg::error!(!error, "failed to resolve the library symlink"))?;
+			output = common::checkin_path(target).await?;
+		}
+		let file = tg::Artifact::with_referent(output.artifact)
+			.try_unwrap_file()
+			.map_err(|_| tg::error!("expected a library file"))?;
+		let filename = path
+			.file_name()
+			.and_then(|name| name.to_str())
+			.ok_or_else(|| tg::error!("the library filename is not valid UTF-8"))?;
+		libraries.insert(filename.to_owned(), tg::Artifact::from(file.clone()));
+		if let Some(name) = name {
+			aliases
+				.entry(name)
+				.or_insert_with(|| tg::Artifact::from(file));
+		}
 	}
-	let root = builder.map_or(root, tg::directory::Builder::build);
+	if libraries.is_empty() {
+		return Ok(None);
+	}
+	// Keep the real filenames and supply missing SONAME or install-name aliases.
+	for (name, file) in aliases {
+		libraries.entry(name).or_insert(file);
+	}
+	let directory = tg::Directory::with_entries(libraries);
 	Ok(Some(DirectoryWithSubpath {
-		directory: root,
-		subpath,
+		directory,
+		subpath: None,
 	}))
 }
 
-fn library_path_needs_aliases(referent: &tg::Referent<tg::artifact::Id>) -> bool {
-	// Checkin returns an absolute source path for local directories and a relative subpath or no path for store artifacts.
-	referent.options.id.is_none()
-		&& referent
-			.options
-			.path
-			.as_ref()
-			.is_some_and(|path| path.is_absolute())
+fn library_directory_from_referent(
+	referent: &tg::Referent<tg::artifact::Id>,
+) -> tg::Result<Option<DirectoryWithSubpath>> {
+	if referent.options.id.is_none() {
+		return Ok(None);
+	}
+	let (root, path) = common::artifact_path(referent)?;
+	let directory = root
+		.try_unwrap_directory()
+		.map_err(|_| tg::error!("expected a containing library directory"))?;
+	let path = path.ok_or_else(|| tg::error!("expected a library subpath"))?;
+	let parent = path.parent().filter(|path| !path.as_os_str().is_empty());
+	let subpath = parent.map(std::path::Path::to_owned);
+	Ok(Some(DirectoryWithSubpath { directory, subpath }))
 }
 
 fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {
@@ -651,16 +659,18 @@ async fn create_manifest(
 }
 
 struct AnalyzeOutputFileOutput {
-	/// Is the output file executable?
-	is_executable: bool,
+	/// The entrypoint of the executable.
+	entrypoint: Option<u64>,
 	/// Does the output file need an interpreter? On macOS, This should always get `Some(None)`. On Linux, None indicates a statically-linked executable, `Some(None)` indicates a dynamically-linked executable with a default ldso path, and `Some(Some(symlink))` indicates the `PT_INTERP` field has been explicitly set to point at a non-standard path we need to retain.
 	interpreter: InterpreterRequirement,
+	/// Is the output file executable?
+	is_executable: bool,
+	/// Whether the output is a shared library or a loadable bundle.
+	is_library: bool,
 	/// The name of this library, if present. This is soname on Linux and name on macOS.
 	name: Option<String>,
 	/// Does the output file specify libraries required at runtime?
 	needed_libraries: Vec<String>,
-	/// The entrypoint of the executable.
-	entrypoint: Option<u64>,
 }
 
 /// The possible interpreter requirements of an output file.
@@ -1111,6 +1121,7 @@ async fn determine_interpreter_flavor(
 }
 
 /// Analyze an executable.
+#[allow(clippy::too_many_lines)]
 fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 	// Parse the object and analyze it.
 	let object = goblin::Object::parse(bytes)
@@ -1118,11 +1129,12 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 	let result = match object {
 		// Handle an archive file.
 		goblin::Object::Archive(_) => AnalyzeOutputFileOutput {
-			is_executable: false,
+			entrypoint: None,
 			interpreter: InterpreterRequirement::None,
+			is_executable: false,
+			is_library: false,
 			name: None,
 			needed_libraries: vec![],
-			entrypoint: None,
 		},
 
 		// Handle an ELF file.
@@ -1134,6 +1146,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 
 			// Read the ELF header to determine if it is an executable.
 			let is_executable = !elf.is_lib || is_pie;
+			let is_library = elf.is_lib && !is_pie;
 
 			let name = elf.soname.map(std::string::ToString::to_string);
 
@@ -1168,11 +1181,12 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 				};
 
 			AnalyzeOutputFileOutput {
-				is_executable,
+				entrypoint,
 				interpreter,
+				is_executable,
+				is_library,
 				name,
 				needed_libraries,
-				entrypoint,
 			}
 		},
 
@@ -1180,6 +1194,10 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 		goblin::Object::Mach(mach) => match mach {
 			goblin::mach::Mach::Binary(mach) => {
 				let is_executable = mach.header.filetype == goblin::mach::header::MH_EXECUTE;
+				let is_library = matches!(
+					mach.header.filetype,
+					goblin::mach::header::MH_DYLIB | goblin::mach::header::MH_BUNDLE
+				);
 				let name = mach.name.map(extract_filename);
 				let needed_libraries = mach
 					.libs
@@ -1189,38 +1207,46 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 					.collect_vec();
 				let entrypoint = mach.entry;
 				AnalyzeOutputFileOutput {
-					is_executable,
+					entrypoint: Some(entrypoint),
 					interpreter: InterpreterRequirement::Default(InterpreterFlavor::Dyld),
+					is_executable,
+					is_library,
 					name,
 					needed_libraries,
-					entrypoint: Some(entrypoint),
 				}
 			},
 			goblin::mach::Mach::Fat(mach) => {
-				let (is_executable, name, needed_libraries) =
+				let (is_executable, is_library, name, needed_libraries) =
 					mach.into_iter().filter_map(std::result::Result::ok).fold(
-						(false, None, vec![]),
+						(false, false, None, vec![]),
 						|acc, arch| match arch {
-							goblin::mach::SingleArch::Archive(_) => (true, None, acc.2),
+							goblin::mach::SingleArch::Archive(_) => (true, acc.1, None, acc.3),
 							goblin::mach::SingleArch::MachO(mach) => {
 								let acc_executable = acc.0;
-								let mut libs = acc.2;
+								let mut libs = acc.3;
 								let executable = acc_executable
 									|| (mach.header.filetype == goblin::mach::header::MH_EXECUTE);
+								let library = acc.1
+									|| matches!(
+										mach.header.filetype,
+										goblin::mach::header::MH_DYLIB
+											| goblin::mach::header::MH_BUNDLE
+									);
 								let name = mach.name.map(extract_filename);
 								libs.extend(mach.libs.iter().map(extract_filename).filter(
 									|file_name| name.as_ref().is_none_or(|n| n != file_name),
 								));
-								(executable, name, libs)
+								(executable, library, name, libs)
 							},
 						},
 					);
 				AnalyzeOutputFileOutput {
-					is_executable,
+					entrypoint: None,
 					interpreter: InterpreterRequirement::Default(InterpreterFlavor::Dyld),
+					is_executable,
+					is_library,
 					name,
 					needed_libraries,
-					entrypoint: None,
 				}
 			},
 		},
@@ -1277,7 +1303,7 @@ mod tests {
 		super::{
 			AnalyzeOutputFileOutput, DirectoryWithSubpath, InterpreterRequirement,
 			LibraryPathStrategy, analyze_output_file, deduplicate_library_paths,
-			library_path_needs_aliases, optimize_library_paths, verify_missing_libraries,
+			library_directory_from_referent, optimize_library_paths, verify_missing_libraries,
 		},
 		tangram_client::prelude::*,
 	};
@@ -1356,17 +1382,27 @@ mod tests {
 	}
 
 	#[test]
-	fn alias_scans_are_limited_to_local_checkins() {
-		let id = tg::directory::Id::new(b"library directory");
+	fn library_checkins_preserve_the_containing_directory() {
+		let id = tg::file::Id::new(b"library file");
 		let root = tg::directory::Id::new(b"containing directory");
 		let mut referent = tg::Referent::with_node(id.into());
-		assert!(!library_path_needs_aliases(&referent));
-		referent.options.id = Some(root.into());
-		referent.options.path = Some("lib".into());
-		assert!(!library_path_needs_aliases(&referent));
-		referent.options.id = None;
-		referent.options.path = Some("/work/libraries".into());
-		assert!(library_path_needs_aliases(&referent));
+		referent.options.path = Some("/work/libexample.so".into());
+		assert!(
+			library_directory_from_referent(&referent)
+				.unwrap()
+				.is_none()
+		);
+		referent.options.id = Some(root.clone().into());
+		for (path, expected) in [
+			("lib/libexample.so", Some("lib".into())),
+			("usr/lib/libexample.so", Some("usr/lib".into())),
+			("libexample.so", None),
+		] {
+			referent.options.path = Some(path.into());
+			let directory = library_directory_from_referent(&referent).unwrap().unwrap();
+			assert_eq!(directory.directory.id(), root);
+			assert_eq!(directory.subpath, expected);
+		}
 	}
 
 	#[test]
@@ -1468,12 +1504,31 @@ mod tests {
 
 		// Test analyzing a shared library.
 		compile(&["-shared"]);
-		let AnalyzeOutputFileOutput { is_executable, .. } =
-			analyze_output_file(&executable).await.unwrap();
+		let AnalyzeOutputFileOutput {
+			is_executable,
+			is_library,
+			name,
+			..
+		} = analyze_output_file(&executable).await.unwrap();
+		assert!(is_library);
 		assert!(
 			!is_executable,
 			"Dynamically linked library was detected as an executable."
 		);
+		// A library is still a library without a SONAME, so the name cannot stand in for the classification.
+		assert_eq!(name.is_none(), cfg!(target_os = "linux"));
+
+		// A relocatable object must not be captured as a runtime library.
+		compile(&["-c"]);
+		assert!(!analyze_output_file(&executable).await.unwrap().is_library);
+		#[cfg(target_os = "macos")]
+		{
+			// A loadable bundle can be a runtime dependency without an install name.
+			compile(&["-bundle"]);
+			let output = analyze_output_file(&executable).await.unwrap();
+			assert!(output.is_library);
+			assert!(output.name.is_none());
+		}
 
 		// Test analyzing a dynamic executable with an interpreter.
 		compile(&[]);
