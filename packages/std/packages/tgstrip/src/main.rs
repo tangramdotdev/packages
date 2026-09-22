@@ -175,12 +175,14 @@ async fn run_proxy(
 				.await
 				.map_err(|error| tg::error!(!error, path = %local_executable_path.display(), "failed to set file permissions"))?;
 			// Give date-preserving strip operations the wrapper's modification time instead of the store's epoch.
-			let modified = original_metadata
-				.modified()
-				.map_err(|error| tg::error!(!error, "failed to read the wrapper modification time"))?;
+			let wrapper_modified = original_metadata.modified().map_err(|error| {
+				tg::error!(!error, "failed to read the wrapper modification time")
+			})?;
 			std::fs::File::open(&local_executable_path)
-				.and_then(|file| file.set_modified(modified))
-				.map_err(|error| tg::error!(!error, "failed to set the strip input modification time"))?;
+				.and_then(|file| file.set_modified(wrapper_modified))
+				.map_err(|error| {
+					tg::error!(!error, "failed to set the strip input modification time")
+				})?;
 
 			// Call strip with the correct arguments on the executable.
 			let args = options.wrapper_args(target_index, &local_executable_path);
@@ -189,9 +191,11 @@ async fn run_proxy(
 			tracing::info!(?local_executable_path, "strip succeeded");
 
 			// Preserve the native strip output's modification time before check-in and wrapping.
-			let modified = std::fs::metadata(&local_executable_path)
+			let stripped_modified = std::fs::metadata(&local_executable_path)
 				.and_then(|metadata| metadata.modified())
-				.map_err(|error| tg::error!(!error, "failed to read the strip output modification time"))?;
+				.map_err(|error| {
+					tg::error!(!error, "failed to read the strip output modification time")
+				})?;
 
 			// Check in the result.
 			let output = tg::checkin(tg::checkin::Arg {
@@ -257,12 +261,18 @@ async fn run_proxy(
 
 			let artifact = tg::Artifact::from(new_wrapper);
 			common::checkout_artifact_to_path(artifact, canonical_target_path.clone()).await?;
-			std::fs::File::open(&canonical_target_path)
-				.and_then(|file| file.set_modified(modified))
-				.map_err(|error| tg::error!(!error, "failed to restore the strip output modification time"))?;
+			// Restore the permissions first so the file can be opened to set its modification time.
 			tokio::fs::set_permissions(&canonical_target_path, original_metadata.permissions())
 				.await
 				.map_err(|error| tg::error!(!error, "failed to restore the wrapper permissions"))?;
+			std::fs::File::open(&canonical_target_path)
+				.and_then(|file| file.set_modified(stripped_modified))
+				.map_err(|error| {
+					tg::error!(
+						!error,
+						"failed to restore the strip output modification time"
+					)
+				})?;
 			#[cfg(feature = "tracing")]
 			tracing::info!("checked out the new output file");
 		},

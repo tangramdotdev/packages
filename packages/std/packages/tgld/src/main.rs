@@ -228,11 +228,11 @@ fn read_options_with_args(
 async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	// Analyze the output file.
 	let AnalyzeOutputFileOutput {
-		is_executable,
+		entrypoint,
 		interpreter,
+		is_executable,
 		name,
 		needed_libraries: initial_needed_libraries,
-		entrypoint,
 		..
 	} = analyze_output_file(&options.output_path).await?;
 	tracing::debug!(?is_executable, ?interpreter, ?initial_needed_libraries);
@@ -423,6 +423,11 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let artifact = tg::Artifact::from(output_file);
 		common::checkout_artifact_to_path(artifact, output_path.clone()).await?;
 
+		// Restore the permissions first so the file can be opened to set its modification time.
+		std::fs::set_permissions(&output_path, original_metadata.permissions()).map_err(
+			|error| tg::error!(!error, path = %output_path.display(), "failed to restore file permissions"),
+		)?;
+
 		// Restore the native modification time even when checkout reuses an epoch-dated store file.
 		let modified = original_metadata
 			.modified()
@@ -430,10 +435,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		std::fs::File::open(&output_path)
 			.and_then(|file| file.set_modified(modified))
 			.map_err(|error| tg::error!(!error, path = %output_path.display(), "failed to restore the output modification time"))?;
-		std::fs::set_permissions(&output_path, original_metadata.permissions()).map_err(
-			|error| tg::error!(!error, path = %output_path.display(), "failed to restore file permissions"),
-		)?;
-		tracing::debug!(?output_path, "restored original file permissions");
+		tracing::debug!(?output_path, "restored the original output metadata");
 	}
 
 	Ok(())
@@ -472,6 +474,13 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 		{
 			continue;
 		}
+		// Archives and relocatable objects are link-time only, so do not read them to find runtime libraries.
+		if path
+			.extension()
+			.is_some_and(|extension| extension == "a" || extension == "o")
+		{
+			continue;
+		}
 		let Ok(AnalyzeOutputFileOutput {
 			is_library: true,
 			name,
@@ -481,7 +490,7 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 			continue;
 		};
 		let mut output = common::checkin_path(&path).await?;
-		// A store file identifies its immutable containing directory without scanning the live directory.
+		// A store file identifies its immutable containing directory without scanning the live directory. A directory is either entirely inside an artifact or entirely live, so returning here cannot discard a library captured by an earlier iteration.
 		if let Some(directory) = library_directory_from_referent(&output.artifact)? {
 			return Ok(Some(directory));
 		}
@@ -500,7 +509,9 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 			.ok_or_else(|| tg::error!("the library filename is not valid UTF-8"))?;
 		libraries.insert(filename.to_owned(), tg::Artifact::from(file.clone()));
 		if let Some(name) = name {
-			aliases.entry(name).or_insert_with(|| tg::Artifact::from(file));
+			aliases
+				.entry(name)
+				.or_insert_with(|| tg::Artifact::from(file));
 		}
 	}
 	if libraries.is_empty() {
@@ -530,10 +541,7 @@ fn library_directory_from_referent(
 	let path = path.ok_or_else(|| tg::error!("expected a library subpath"))?;
 	let parent = path.parent().filter(|path| !path.as_os_str().is_empty());
 	let subpath = parent.map(std::path::Path::to_owned);
-	Ok(Some(DirectoryWithSubpath {
-		directory,
-		subpath,
-	}))
+	Ok(Some(DirectoryWithSubpath { directory, subpath }))
 }
 
 fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {
@@ -1120,6 +1128,7 @@ async fn determine_interpreter_flavor(
 }
 
 /// Analyze an executable.
+#[allow(clippy::too_many_lines)]
 fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 	// Parse the object and analyze it.
 	let object = goblin::Object::parse(bytes)
@@ -1227,7 +1236,8 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 								let library = acc.1
 									|| matches!(
 										mach.header.filetype,
-										goblin::mach::header::MH_DYLIB | goblin::mach::header::MH_BUNDLE
+										goblin::mach::header::MH_DYLIB
+											| goblin::mach::header::MH_BUNDLE
 									);
 								let name = mach.name.map(extract_filename);
 								libs.extend(mach.libs.iter().map(extract_filename).filter(
@@ -1384,7 +1394,11 @@ mod tests {
 		let root = tg::directory::Id::new(b"containing directory");
 		let mut referent = tg::Referent::with_node(id.into());
 		referent.options.path = Some("/work/libexample.so".into());
-		assert!(library_directory_from_referent(&referent).unwrap().is_none());
+		assert!(
+			library_directory_from_referent(&referent)
+				.unwrap()
+				.is_none()
+		);
 		referent.options.id = Some(root.clone().into());
 		for (path, expected) in [
 			("lib/libexample.so", Some("lib".into())),
@@ -1500,6 +1514,7 @@ mod tests {
 		let AnalyzeOutputFileOutput {
 			is_executable,
 			is_library,
+			name,
 			..
 		} = analyze_output_file(&executable).await.unwrap();
 		assert!(is_library);
@@ -1507,8 +1522,8 @@ mod tests {
 			!is_executable,
 			"Dynamically linked library was detected as an executable."
 		);
-		#[cfg(target_os = "linux")]
-		assert!(analyze_output_file(&executable).await.unwrap().name.is_none());
+		// A library is still a library without a SONAME, so the name cannot stand in for the classification.
+		assert_eq!(name.is_none(), cfg!(target_os = "linux"));
 
 		// A relocatable object must not be captured as a runtime library.
 		compile(&["-c"]);

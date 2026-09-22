@@ -985,9 +985,7 @@ export async function testLinkerOutputCheckout() {
 	const toolchain = await bootstrap.sdk();
 	const darwin = std.triple.os(std.triple.host()) === "darwin";
 	const library = darwin ? "libmessage.dylib" : "libmessage.so";
-	const libraryName = darwin
-		? `-Wl,-install_name,@rpath/${library}`
-		: "";
+	const libraryNameFlag = darwin ? `-Wl,-install_name,@rpath/${library}` : "";
 	await std
 		.build(std.shBootstrap`
 			# Give each execution a distinct library so an earlier test cannot materialize its wrapper.
@@ -999,10 +997,11 @@ const char *message(void);
 int main(void) { return message()[0] != '/'; }
 EOF
 			mkdir lib
-			cc -fPIC -shared library.c ${libraryName} -o lib/${library}
+			cc -fPIC -shared library.c ${libraryNameFlag} -o lib/${library}
 			# A live library directory can contain unrelated files that cannot be checked in.
 			mkfifo lib/unrelated.a-temporary
 			printf 'not a shared library' > lib/unrelated.a
+			printf 'not an object file' > lib/libunrelated.${darwin ? "dylib" : "so"}
 			cc -c main.c -o main.o
 			cc main.o -Llib -lmessage -o program
 			test ! program -ot main.o
@@ -1054,6 +1053,7 @@ EOF
 		export METADATA_REFERENCE="$PWD/reference"
 		touch -t 202601010000 reference
 		export TANGRAM_LINKER_COMMAND_PATH="$PWD/native-linker"
+		# Link without the embedded wrapper last so the strip proxy below sees a manifest it can rewrite.
 		for embed in ${darwin ? "false" : "true false"}; do
 			cc -g main.c -Wl,--tg-linker-embed-wrapper=$embed -o program
 			test ! program -ot reference
@@ -1063,6 +1063,7 @@ EOF
 		done
 		export TANGRAM_STRIP_COMMAND_PATH="$PWD/native-strip"
 		touch -t 202602020000 reference
+		# Move the reference forward first, so the preserving run can only match it by carrying the wrapper's own time through.
 		for preserve in false true; do
 			PRESERVE_DATE=$preserve strip -S program
 			test ! program -ot reference
