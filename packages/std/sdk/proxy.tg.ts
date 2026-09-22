@@ -1007,6 +1007,11 @@ EOF
 			test ! program -ot main.o
 			rm lib/${library}
 			./program
+			# A shared library can have a filename ending in .a.
+			cc -fPIC -shared library.c ${libraryNameFlag} -o lib/libmessage.a
+			cc main.o -Llib -lmessage -o program
+			rm lib/libmessage.a
+			./program
 			touch ${tg.output}
 		`)
 		.env(toolchain);

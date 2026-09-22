@@ -474,13 +474,6 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 		{
 			continue;
 		}
-		// Archives and relocatable objects are link-time only, so do not read them to find runtime libraries.
-		if path
-			.extension()
-			.is_some_and(|extension| extension == "a" || extension == "o")
-		{
-			continue;
-		}
 		let Ok(AnalyzeOutputFileOutput {
 			is_library: true,
 			name,
