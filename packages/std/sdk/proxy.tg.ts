@@ -1017,7 +1017,7 @@ EOF
 /** Wrapping must preserve the native tool's output metadata, including date-preserving strip operations. */
 export async function testProxyOutputMetadata() {
 	const toolchain = await bootstrap.sdk();
-	const rawToolchain = await bootstrap.sdk.env();
+	const rawToolchain = await bootstrap.sdk.env(std.triple.host());
 	const { ld, strip } = await std.sdk.toolchainComponents({
 		env: await std.env.compose(rawToolchain),
 		host: bootstrap.toolchainTriple(std.triple.host()),
