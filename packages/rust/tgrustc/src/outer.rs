@@ -152,10 +152,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let process_id = process.id().unwrap_right().clone();
 	append_spawn_log(&process_id);
 	let cached = process.cached().unwrap_or(false);
-	let command_id = match process.command().await? {
-		tg::Either::Left(command) => command.id()?,
-		tg::Either::Right(command) => command.id(),
-	};
+	let command_id = process.command().await?.id();
 	let wait = process.wait(tg::process::wait::Options::default()).await?;
 	timing.spawn = spawn_start.elapsed();
 	let display_name = display_crate_name(args.crate_name.as_deref());
