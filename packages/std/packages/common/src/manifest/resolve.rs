@@ -2,18 +2,18 @@ use super::*;
 
 type Objects = BTreeMap<tg::object::Id, tg::Object>;
 
-fn object(id: &tg::object::Id, objects: &Objects) -> tg::Result<tg::Object> {
+fn object(id: &tg::object::Id, objects: &Objects) -> tg::Object {
 	objects
 		.get(id)
 		.cloned()
-		.ok_or_else(|| tg::error!(%id, "missing manifest dependency"))
+		.unwrap_or_else(|| tg::Object::with_id(id.clone()))
 }
 
 // Replace deserialized references with the original dependency handles, including their state.
 pub(super) fn template(template: &mut tg::Template, objects: &Objects) -> tg::Result<()> {
 	for component in &mut template.components {
 		if let tg::template::Component::Artifact(artifact) = component {
-			*artifact = object(&artifact.id().into(), objects)?.try_into()?;
+			*artifact = object(&artifact.id().into(), objects).try_into()?;
 		}
 	}
 	Ok(())
@@ -21,7 +21,7 @@ pub(super) fn template(template: &mut tg::Template, objects: &Objects) -> tg::Re
 
 fn value(value: &mut tg::Value, objects: &Objects) -> tg::Result<()> {
 	match value {
-		tg::Value::Object(handle) => *handle = object(&handle.id(), objects)?,
+		tg::Value::Object(handle) => *handle = object(&handle.id(), objects),
 		tg::Value::Template(value) => template(value, objects)?,
 		tg::Value::Mutation(value) => mutation(value, objects)?,
 		tg::Value::Array(values) => {
@@ -37,10 +37,10 @@ fn value(value: &mut tg::Value, objects: &Objects) -> tg::Result<()> {
 		tg::Value::Module(module) => {
 			if let tg::module::Source::Edge(edge) = &mut module.referent.node {
 				match edge {
-					tg::graph::Edge::Object(handle) => *handle = object(&handle.id(), objects)?,
+					tg::graph::Edge::Object(handle) => *handle = object(&handle.id(), objects),
 					tg::graph::Edge::Pointer(pointer) => {
 						if let Some(graph) = &mut pointer.graph {
-							*graph = object(&graph.id().into(), objects)?
+							*graph = object(&graph.id().into(), objects)
 								.try_unwrap_graph()
 								.map_err(|_| tg::error!("expected a graph"))?;
 						}

@@ -85,6 +85,46 @@ async fn serialized_manifests_restore_dependency_handles() {
 	}
 }
 
+#[tokio::test]
+async fn serialized_manifests_restore_missing_dependencies() {
+	tg::init().unwrap();
+	for manifest in manifests() {
+		let expected = manifest.dependencies();
+		for retained in [0, 1] {
+			let dependencies = expected
+				.iter()
+				.take(retained)
+				.map(|(key, value)| (key.clone(), value.clone()))
+				.collect::<BTreeMap<_, _>>();
+			let wrapper = tg::File::builder()
+				.contents("wrapper without complete dependency metadata")
+				.dependencies(dependencies)
+				.build()
+				.unwrap();
+			let bytes = serde_json::to_vec(&manifest.to_data()).unwrap();
+			let mut restored =
+				Manifest::try_from_data(serde_json::from_slice(&bytes).unwrap()).unwrap();
+			restored.resolve_from_file(&wrapper).await.unwrap();
+			assert_eq!(serde_json::to_vec(&restored.to_data()).unwrap(), bytes);
+			let actual = restored.dependencies();
+			assert_eq!(
+				actual.keys().collect::<Vec<_>>(),
+				expected.keys().collect::<Vec<_>>()
+			);
+			for (reference, dependency) in expected.iter().take(retained) {
+				let original = dependency.as_ref().unwrap().0.node.as_ref().unwrap();
+				let recovered = actual[reference].as_ref().unwrap().0.node.as_ref().unwrap();
+				let original = original.clone().try_unwrap_file().unwrap();
+				let recovered = recovered.clone().try_unwrap_file().unwrap();
+				assert!(std::sync::Arc::ptr_eq(
+					&original.object().await.unwrap(),
+					&recovered.object().await.unwrap(),
+				));
+			}
+		}
+	}
+}
+
 #[test]
 fn serialized_manifests_omit_location() {
 	for manifest in manifests() {

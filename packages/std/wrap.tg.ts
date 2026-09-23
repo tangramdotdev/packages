@@ -11,7 +11,6 @@ export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
 
 /** This module provides the `std.wrap()` function, which can be used to bundle an executable with a predefined environment and arguments, either of which may point to other Tangram artifacts.*/
 
-// Retain authorized objects separately from the token-free manifest.
 export type ManifestReferences = Map<tg.Object.Id, tg.Object>;
 
 /** Wrap an executable. */
@@ -1120,8 +1119,11 @@ function getManifestReference(
 	id: tg.Object.Id,
 	references?: ManifestReferences,
 ): tg.Object {
-	const object = references?.get(id);
-	tg.assert(object !== undefined, `missing manifest dependency ${id}`);
+	let object = references?.get(id);
+	if (object === undefined) {
+		object = tg.Object.withId(id);
+		references?.set(id, object);
+	}
 	return object;
 }
 
@@ -2788,6 +2790,9 @@ export async function test() {
 		tg.build(testRewrapEmbeddedExecutableRetainsNeededLibraries, {
 			name: "rewrap embedded executable retains needed libraries",
 		}),
+		tg.build(testRewrapWithoutDependencies, {
+			name: "rewrap without dependencies",
+		}),
 		tg.build(testNeededLibrariesAuthorization, {
 			name: "needed libraries authorization",
 		}),
@@ -2962,6 +2967,39 @@ export async function testRewrapEmbeddedExecutableRetainsNeededLibraries() {
 		.build(std.shBootstrap`${wrapper} > ${tg.output}`)
 		.then(tg.File.expect);
 	tg.assert((await output.text).includes("argv[0]"));
+
+	return true;
+}
+
+export async function testRewrapWithoutDependencies() {
+	const dependency = await tg.directory({ message: tg.file("dependency") });
+	const executable = await wrap(await argAndEnvDump(), {
+		args: ["recovered argument"],
+		env: { RECOVERED: dependency },
+	});
+	const manifest = await wrap.Manifest.read(executable);
+	tg.assert(manifest !== undefined);
+
+	// Copy only the bytes, as installers that discard xattrs do.
+	const copy = await tg.file({
+		contents: await executable.contents,
+		executable: true,
+	});
+	tg.assert((await copy.dependencyObjects).length === 0);
+	const wrapper = await wrap(copy);
+	const dependencies = new Set(
+		(await wrapper.dependencyObjects).map((object) => object.id),
+	);
+	for (const dependency of manifestDependencies(manifest)) {
+		tg.assert(dependencies.has(dependency.id));
+	}
+
+	const output = await std
+		.build(std.shBootstrap`${wrapper} > ${tg.output}`)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(text.includes("recovered argument"));
+	tg.assert(text.includes("RECOVERED="));
 
 	return true;
 }
@@ -3172,6 +3210,24 @@ export async function testManifestReferences() {
 		tg.assert(
 			(await valueFromManifestValue(manifestValue, dependencies)) ===
 				dependencies.get(artifact.id),
+		);
+
+		// Recover references from the manifest when the dependency metadata is missing.
+		const missing: ManifestReferences = new Map();
+		const recovered = await templateFromManifestTemplate(
+			manifestTemplate,
+			missing,
+		);
+		const reference = missing.get(artifact.id);
+		tg.assert(reference !== undefined);
+		tg.assert(recovered.components[0] === reference);
+		tg.assert(
+			(await valueFromManifestValue(manifestValue, missing)) === reference,
+		);
+		const withoutReferences =
+			await templateFromManifestTemplate(manifestTemplate);
+		tg.assert(
+			tg.Artifact.expect(withoutReferences.components[0]).id === artifact.id,
 		);
 	}
 	return true;
