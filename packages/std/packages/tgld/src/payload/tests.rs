@@ -61,8 +61,8 @@ fn repeated_artifacts_merge_authorization() {
 		};
 		authorization.push(token);
 	}
-	let entry = tg::tokens::Entry { authorization };
-	referent.options.tokens = tg::Tokens::with_local_entry(entry);
+	let entry = tg::authorization::tokens::Entry { authorization };
+	referent.options.tokens = tg::authorization::Tokens::with_local_entry(entry);
 	let location = tg::Location::Remote(tg::location::Remote {
 		name: "test".into(),
 		region: None,
@@ -73,10 +73,10 @@ fn repeated_artifacts_merge_authorization() {
 	let mut other = referent.clone();
 	let mut token = referent.options.tokens.local().unwrap().authorization[0].clone();
 	token.metadata.key = "another-signer".into();
-	let entry = tg::tokens::Entry {
+	let entry = tg::authorization::tokens::Entry {
 		authorization: vec![token],
 	};
-	other.options.tokens = tg::Tokens::with_local_entry(entry);
+	other.options.tokens = tg::authorization::Tokens::with_local_entry(entry);
 	let env = env(&format!(
 		"tg.mutation({{\"kind\":\"set\",\"value\":{{\"ARTIFACT\":{other}}}}})"
 	))
@@ -104,7 +104,7 @@ fn repeated_artifacts_merge_authorization() {
 	assert_manifest_omits_credentials(&manifest, &expected);
 }
 
-fn assert_manifest_omits_credentials(manifest: &common::Manifest, tokens: &tg::Tokens) {
+fn assert_manifest_omits_credentials(manifest: &common::Manifest, tokens: &tg::authorization::Tokens) {
 	let output = tempfile::NamedTempFile::new().unwrap();
 	std::fs::copy(std::env::current_exe().unwrap(), output.path()).unwrap();
 	manifest.write_to_path(output.path());
