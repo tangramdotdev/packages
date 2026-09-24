@@ -482,16 +482,21 @@ async fn checkin_library_path(path: &str) -> tg::Result<Option<DirectoryWithSubp
 		else {
 			continue;
 		};
-		let mut output = common::checkin_path(&path).await?;
+		let Ok(mut output) = common::checkin_path(&path).await else {
+			continue;
+		};
 		// A store file identifies its immutable containing directory without scanning the live directory. A directory is either entirely inside an artifact or entirely live, so returning here cannot discard a library captured by an earlier iteration.
 		if let Some(directory) = library_directory_from_referent(&output.artifact)? {
 			return Ok(Some(directory));
 		}
 		if matches!(output.artifact.node, tg::artifact::Id::Symlink(_)) {
-			let target = tokio::fs::canonicalize(&path)
-				.await
-				.map_err(|error| tg::error!(!error, "failed to resolve the library symlink"))?;
-			output = common::checkin_path(target).await?;
+			let Ok(target) = tokio::fs::canonicalize(&path).await else {
+				continue;
+			};
+			let Ok(target) = common::checkin_path(target).await else {
+				continue;
+			};
+			output = target;
 		}
 		let file = tg::Artifact::with_referent(output.artifact)
 			.try_unwrap_file()

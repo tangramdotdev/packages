@@ -489,6 +489,9 @@ export async function test() {
 		testStrip(),
 		testStripMultipleFiles(),
 	];
+	if (std.triple.os(std.triple.host()) === "linux") {
+		tests.push(testLinkerParallelLibraries());
+	}
 	await Promise.all(tests);
 	return true;
 }
@@ -1015,6 +1018,31 @@ EOF
 			touch ${tg.output}
 		`)
 		.env(toolchain);
+	return true;
+}
+
+/** Parallel links must not fail while the proxy replaces an unrelated shared library. */
+export async function testLinkerParallelLibraries(rounds = 20, jobs = 8) {
+	tg.assert(std.triple.os(std.triple.host()) === "linux");
+	const toolchain = await bootstrap.sdk();
+	await std.build(std.shBootstrap`
+		mkdir lib
+		printf 'int leaf(void) { return 42; }' > leaf.c
+		printf 'int leaf(void); int value(void) { return leaf(); }' > value.c
+		cc -nostdlib -shared -fPIC leaf.c -o lib/libleaf.so
+		cc -fPIC -c value.c -o value.o
+		for round in $(seq ${String(rounds)}); do
+			pids=
+			for job in $(seq ${String(jobs)}); do
+				cc -nostdlib -shared value.o -Llib -lleaf -o lib/lib$job.so &
+				pids="$pids $!"
+			done
+			status=0
+			for pid in $pids; do wait "$pid" || status=1; done
+			test "$status" -eq 0
+		done
+		touch ${tg.output}
+	`).env(toolchain);
 	return true;
 }
 
