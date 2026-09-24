@@ -61,10 +61,8 @@ fn repeated_artifacts_merge_authorization() {
 		};
 		authorization.push(token);
 	}
-	referent.options.tokens = tg::Tokens::with_local_entry(tg::tokens::Entry {
-		authorization,
-		sync: Vec::new(),
-	});
+	let entry = tg::tokens::Entry { authorization };
+	referent.options.tokens = tg::Tokens::with_local_entry(entry);
 	let location = tg::Location::Remote(tg::location::Remote {
 		name: "test".into(),
 		region: None,
@@ -75,10 +73,10 @@ fn repeated_artifacts_merge_authorization() {
 	let mut other = referent.clone();
 	let mut token = referent.options.tokens.local().unwrap().authorization[0].clone();
 	token.metadata.key = "another-signer".into();
-	other.options.tokens = tg::Tokens::with_local_entry(tg::tokens::Entry {
+	let entry = tg::tokens::Entry {
 		authorization: vec![token],
-		sync: Vec::new(),
-	});
+	};
+	other.options.tokens = tg::Tokens::with_local_entry(entry);
 	let env = env(&format!(
 		"tg.mutation({{\"kind\":\"set\",\"value\":{{\"ARTIFACT\":{other}}}}})"
 	))
