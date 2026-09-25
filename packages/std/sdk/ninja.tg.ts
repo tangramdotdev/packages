@@ -64,9 +64,9 @@ export async function ninja(...args: tg.Args<Arg>) {
 export default ninja;
 
 export async function test() {
-	// FIXME
-	// await std.assert.pkg({ buildFn: ninja, binaries: ["ninja"], metadata });
-	return true;
+	return std.assert.pkg(ninja, {
+		binaries: [std.assert.displaysVersion("ninja", metadata.version)],
+	});
 }
 
 /** The tests in this module, grouped by tier. */
