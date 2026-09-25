@@ -22,6 +22,10 @@ export type Arg = {
 	linkerExe?: tg.File | tg.Symlink | tg.Template | null;
 	/** The triple of the computer the toolchain being proxied produces binaries for. */
 	host?: string | null;
+	/** Should `install_name_tool` get proxied when both the build and host machines run macOS? Default: true. */
+	installNameTool?: boolean;
+	/** Optional `install_name_tool` command to use. If omitted, will use the `install_name_tool` located with the toolchain. */
+	installNameToolExe?: tg.File | tg.Symlink | tg.Template | null;
 	/** Should `strip` get proxied? Default: true.  */
 	strip?: boolean;
 	/** Optional strip command to use. If omitted, will use the strip located with the toolchain. */
@@ -38,13 +42,21 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		reduce: { toolchain: "set" },
 	});
 
+	const host = arg.host ?? std.triple.host();
+	const build = arg.build ?? host;
+	const os = std.triple.os(host);
+
 	const proxyCompiler = arg.compiler ?? false;
 	const proxyLinker = arg.linker ?? true;
 	const proxyStrip = arg.strip ?? true;
+	const proxyInstallNameTool =
+		(arg.installNameTool ?? true) &&
+		os === "darwin" &&
+		std.triple.os(build) === "darwin";
 	const buildToolchainDir = arg.toolchain;
 	const buildToolchain = await std.env.compose(buildToolchainDir);
 
-	if (!proxyCompiler && !proxyLinker && !proxyStrip) {
+	if (!proxyCompiler && !proxyLinker && !proxyStrip && !proxyInstallNameTool) {
 		return buildToolchainDir;
 	}
 
@@ -53,10 +65,6 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 			"Received a linkerExe argument, but linker is not being proxied",
 		);
 	}
-
-	const host = arg.host ?? std.triple.host();
-	const build = arg.build ?? host;
-	const os = std.triple.os(host);
 
 	const {
 		cc: cc_,
@@ -223,6 +231,24 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 			...(os === "darwin" ? { runtimeLibraryPath: tg`${directory}/lib` } : {}),
 		});
 		replacements.strip = stripProxyArtifact;
+	}
+
+	if (proxyInstallNameTool) {
+		const installNameToolCommand =
+			arg.installNameToolExe ??
+			(await std.env.tryWhich({
+				env: buildToolchain,
+				name: "install_name_tool",
+			}));
+		if (installNameToolCommand !== undefined) {
+			replacements.install_name_tool = await installNameToolProxy({
+				build,
+				buildToolchain,
+				host,
+				installNameToolCommand,
+				runtimeLibraryPath: tg`${directory}/lib`,
+			});
+		}
 	}
 
 	// Build a thin bin directory overlay.
@@ -409,13 +435,54 @@ type StripProxyArg = {
 };
 
 export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
+	const { stripCommand, ...rest } = await tg.resolve(arg);
+	return await toolProxy("TANGRAM_STRIP", workspace.stripProxy, {
+		...rest,
+		command: stripCommand,
+	});
+}
+
+type InstallNameToolProxyArg = {
+	build?: string;
+	buildToolchain: std.env.Arg;
+	host?: string;
+	installNameToolCommand: tg.File | tg.Symlink | tg.Template;
+	runtimeLibraryPath?: tg.Directory | tg.Template;
+};
+
+/** Proxy `install_name_tool` so that editing a wrapper edits its executable, and editing a file keeps its dependencies. */
+export async function installNameToolProxy(
+	arg: tg.Unresolved<InstallNameToolProxyArg>,
+) {
+	const { installNameToolCommand, ...rest } = await tg.resolve(arg);
+	return await toolProxy(
+		"TANGRAM_INSTALL_NAME_TOOL",
+		workspace.installNameToolProxy,
+		{ ...rest, command: installNameToolCommand },
+	);
+}
+
+type ToolProxyArg = {
+	build?: string;
+	buildToolchain: std.env.Arg;
+	command: tg.File | tg.Symlink | tg.Template;
+	host?: string;
+	runtimeLibraryPath?: tg.Directory | tg.Template;
+};
+
+/** Wrap a proxy that rewrites wrappers and files with a tool, configuring it through environment variables that start with the prefix. */
+async function toolProxy(
+	prefix: string,
+	proxy: (arg: tg.Unresolved<workspace.Arg>) => Promise<tg.File>,
+	arg: ToolProxyArg,
+) {
 	const {
 		build: build_,
 		buildToolchain,
+		command,
 		host: host_,
-		stripCommand,
 		runtimeLibraryPath,
-	} = await tg.resolve(arg);
+	} = arg;
 
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
@@ -430,8 +497,8 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 				});
 	await hostWrapper.store();
 
-	// The strip proxy runs on the build machine.
-	const stripProxy = await workspace.stripProxy({
+	// The proxy runs on the build machine.
+	const proxyExe = await proxy({
 		build,
 		host: build,
 	});
@@ -447,9 +514,9 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 
 	const envs: tg.Args<std.env.Arg> = [
 		{
-			TANGRAM_STRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
+			[`${prefix}_COMMAND_PATH`]: tg.Mutation.setIfUnset<
 				tg.File | tg.Symlink | tg.Template
-			>(stripCommand),
+			>(command),
 			TANGRAM_WRAPPER_EXE_PATH: tg.Mutation.setIfUnset(hostWrapper),
 			...(codesign !== undefined
 				? { TANGRAM_CODESIGN_PATH: tg.Mutation.setIfUnset(codesign) }
@@ -458,11 +525,11 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 	];
 	if (runtimeLibraryPath !== undefined) {
 		envs.push({
-			TANGRAM_STRIP_RUNTIME_LIBRARY_PATH: runtimeLibraryPath,
+			[`${prefix}_RUNTIME_LIBRARY_PATH`]: runtimeLibraryPath,
 		});
 	}
 
-	return await std.wrap(stripProxy, {
+	return await std.wrap(proxyExe, {
 		buildToolchain,
 		env: std.env.compose(...envs),
 	});
@@ -491,6 +558,9 @@ export async function test() {
 	];
 	if (std.triple.os(std.triple.host()) === "linux") {
 		tests.push(testLinkerParallelLibraries());
+	}
+	if (std.triple.os(std.triple.host()) === "darwin") {
+		tests.push(testInstallNameTool());
 	}
 	await Promise.all(tests);
 	return true;
@@ -653,6 +723,16 @@ export async function testProxyArguments() {
 			TANGRAM_STRIP_PASSTHROUGH: tg.Mutation.unset(),
 		},
 	});
+	const installNameTool = await std.wrap(
+		await workspace.installNameToolProxy({}),
+		{
+			buildToolchain,
+			env: {
+				TANGRAM_INSTALL_NAME_TOOL_COMMAND_PATH: commandRecorder,
+				TANGRAM_INSTALL_NAME_TOOL_PASSTHROUGH: tg.Mutation.unset(),
+			},
+		},
+	);
 	const check = async (
 		executable: tg.File,
 		args: string[],
@@ -723,20 +803,38 @@ export async function testProxyArguments() {
 		'--tangram-linker-wrapper-env=tg.mutation({"kind":"unset"})',
 	];
 	const stripFlags = ["--tangram-strip-passthrough"];
+	const installNameToolFlags = ["--tangram-install-name-tool-passthrough"];
 	await check(
 		wrapper,
-		[...linkerFlags, ...stripFlags],
-		["manifest argument", ...linkerFlags, ...stripFlags],
+		[...linkerFlags, ...stripFlags, ...installNameToolFlags],
+		[
+			"manifest argument",
+			...linkerFlags,
+			...stripFlags,
+			...installNameToolFlags,
+		],
 	);
 	await check(
 		linker,
-		[...linkerFlags, ...unknown, ...stripFlags, "-L", "library path"],
-		[...unknown, ...stripFlags, "-L", "library path"],
+		[
+			...linkerFlags,
+			...unknown,
+			...stripFlags,
+			...installNameToolFlags,
+			"-L",
+			"library path",
+		],
+		[...unknown, ...stripFlags, ...installNameToolFlags, "-L", "library path"],
 	);
 	await check(
 		strip,
-		[...stripFlags, ...unknown, ...linkerFlags],
-		[...unknown, ...linkerFlags],
+		[...stripFlags, ...unknown, ...linkerFlags, ...installNameToolFlags],
+		[...unknown, ...linkerFlags, ...installNameToolFlags],
+	);
+	await check(
+		installNameTool,
+		[...installNameToolFlags, ...unknown, ...linkerFlags, ...stripFlags],
+		[...unknown, ...linkerFlags, ...stripFlags],
 	);
 	const afterDelimiter = [
 		"--",
@@ -792,8 +890,13 @@ export async function testProxyArguments() {
 		tg.assert((await output.text).includes("an attached value (=VALUE)"));
 	}
 	await check(strip, ["--tg-strip-passthrough=false", "--tangram-strip-passthrough", ...unknown], unknown);
-	for (const component of ["linker", "strip"]) {
-		const executable = component === "linker" ? linker : strip;
+	for (const component of ["linker", "strip", "install-name-tool"]) {
+		const executable =
+			component === "linker"
+				? linker
+				: component === "strip"
+					? strip
+					: installNameTool;
 		const error = await std.build(std.shBootstrap`
 			if ${executable} ${await interpreterArgsTemplate([`--tg-${component}-passthrough= true`, `--tangram-${component}-passthrough=false`])} > /dev/null 2> ${tg.output}; then exit 1; fi
 		`).then(tg.File.expect);
@@ -1018,6 +1121,72 @@ EOF
 			touch ${tg.output}
 		`)
 		.env(toolchain);
+	return true;
+}
+
+/** On macOS, `install_name_tool` must edit a wrapper's executable, keep a library's dependencies, and leave a library without dependencies to the native tool. */
+export async function testInstallNameTool() {
+	if (std.triple.os(std.triple.host()) !== "darwin") {
+		return true;
+	}
+	const toolchain = await bootstrap.sdk();
+	const output = await std
+		.build(std.shBootstrap`
+			cat > greeting.c <<'EOF'
+const char *greeting(void) { return "hello"; }
+EOF
+			cat > message.c <<'EOF'
+#include <stdio.h>
+const char *greeting(void);
+void message(void) { printf("%s from a library\\n", greeting()); }
+EOF
+			cat > main.c <<'EOF'
+void message(void);
+int main(void) { message(); return 0; }
+EOF
+			mkdir -p ${tg.output}/bin ${tg.output}/lib
+			cc -shared greeting.c -Wl,-install_name,@rpath/libgreeting.dylib -o ${tg.output}/lib/libgreeting.dylib
+			cc -shared message.c -L${tg.output}/lib -lgreeting -Wl,-install_name,@rpath/libmessage.dylib -o ${tg.output}/lib/libmessage.dylib
+			cc main.c -L${tg.output}/lib -lmessage -Wl,-rpath,/tangram/build -o ${tg.output}/bin/program
+			chmod 751 ${tg.output}/bin/program ${tg.output}/lib/libmessage.dylib
+			install_name_tool -delete_rpath /tangram/build -add_rpath @loader_path/../lib ${tg.output}/bin/program
+			install_name_tool -id @rpath/libmessage.1.dylib ${tg.output}/lib/libmessage.dylib
+			install_name_tool -id @rpath/libgreeting.1.dylib ${tg.output}/lib/libgreeting.dylib
+			test "$(stat -c %a ${tg.output}/bin/program)" = 751
+			test "$(stat -c %a ${tg.output}/lib/libmessage.dylib)" = 751
+			otool -D ${tg.output}/lib/libmessage.dylib | grep -q @rpath/libmessage.1.dylib
+			otool -D ${tg.output}/lib/libgreeting.dylib | grep -q @rpath/libgreeting.1.dylib
+			${tg.output}/bin/program | grep -q "hello from a library"
+		`)
+		.env(toolchain)
+		.then(tg.Directory.expect);
+
+	// The program must still be a wrapper, and the edit must reach its executable.
+	const program = await output.get("bin/program").then(tg.File.expect);
+	const manifest = await wrap.Manifest.read(program);
+	tg.assert(
+		manifest?.executable.kind === "path",
+		"expected the program to remain a wrapper",
+	);
+	const executable = tg.File.expect(
+		await wrap.executableFromManifestExecutable(manifest.executable),
+	);
+	await std
+		.build(std.shBootstrap`
+			otool -l ${executable} > load-commands
+			grep -q @loader_path/../lib load-commands
+			! grep -q /tangram/build load-commands
+			touch ${tg.output}
+		`)
+		.env(toolchain);
+
+	// The library with dependencies must keep them.
+	const library = await output.get("lib/libmessage.dylib").then(tg.File.expect);
+	tg.assert(
+		(await library.dependencyObjects).length > 0,
+		"expected the library to retain its dependencies",
+	);
+
 	return true;
 }
 
