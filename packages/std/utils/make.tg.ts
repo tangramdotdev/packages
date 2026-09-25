@@ -23,14 +23,18 @@ export type Arg = {
 	source?: tg.Directory | null;
 };
 
-export async function build(arg?: tg.Unresolved<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ? await tg.resolve(arg) : {};
+	} = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
+		args,
+		map: async (arg) => arg,
+		reduce: {},
+	});
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
