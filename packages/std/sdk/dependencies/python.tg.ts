@@ -1,4 +1,3 @@
-import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.ts";
 
 export const metadata = {
@@ -67,11 +66,9 @@ export async function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
-	const host = bootstrap.toolchainTriple(std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
-	// FIXME
-	// await std.assert.pkg({ buildFn: build, binaries: ["python3"], metadata });
-	return true;
+	return std.assert.pkg(build, {
+		binaries: [std.assert.displaysVersion("python3", metadata.version)],
+	});
 }
 
 /** The tests in this module, grouped by tier. */
