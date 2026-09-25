@@ -344,9 +344,9 @@ export async function build(...args: tg.Args<BuildArg>) {
 }
 
 export async function test() {
-	// FIXME
-	// await std.assert.pkg({ buildFn: cmake, binaries: ["cmake"], metadata });
-	return true;
+	return std.assert.pkg(cmake, {
+		binaries: [std.assert.displaysVersion("cmake", metadata.version)],
+	});
 }
 
 /** The tests in this module, grouped by tier. */
