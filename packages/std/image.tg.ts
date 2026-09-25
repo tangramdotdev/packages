@@ -98,7 +98,7 @@ export async function testBasicRootfsWithEnvAndEntrypoint() {
 	const env = { NAME: "Tangram" };
 	const imageFile = await image(rootFs, {
 		buildToolchain: await bootstrapBuildToolchain(),
-		cmd: ["-c", "cat /hello.txt && cat $NAME"],
+		cmd: ["-c", "cat /hello.txt && echo $NAME"],
 		env,
 		entrypoint: ["/bin/sh"],
 	});
