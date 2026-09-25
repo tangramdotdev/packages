@@ -1,0 +1,31 @@
+--- a/src/util.c
++++ b/src/util.c
+@@ -39,6 +39,8 @@
+ #if USE_XATTR
+ # include <attr/error_context.h>
+ # include <attr/libattr.h>
++#elif defined __APPLE__
++# include <copyfile.h>
+ #endif
+ 
+ #include <pch.h>
+@@ -280,6 +282,19 @@
+    * pathname. A safe_ version of attr_copy_file() might still be slightly
+    * more efficient for deep paths. */
+   return attr_copy_file (src_path, dst_path, copy_attr_check, &ctx);
++}
++
++#elif defined __APPLE__
++
++static int
++copy_attr (char const *src_path, int src_fd,
++           char const *dst_path, int dst_fd)
++{
++  if (0 <= src_fd && 0 <= dst_fd)
++    return fcopyfile (src_fd, dst_fd, NULL, COPYFILE_XATTR);
++
++  return copyfile (src_path, dst_path, NULL,
++                   COPYFILE_XATTR | COPYFILE_NOFOLLOW);
+ }
+ 
+ #else  /* USE_XATTR */
