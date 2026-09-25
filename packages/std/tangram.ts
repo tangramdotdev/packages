@@ -184,6 +184,7 @@ function testActions(): Record<string, () => any> {
 		proxySamePrefixDirect: sdk.proxy.testSamePrefixDirect,
 		proxyDifferentPrefixDirect: sdk.proxy.testDifferentPrefixDirect,
 		proxyStrip: sdk.proxy.testStrip,
+		proxyInstallNameTool: sdk.proxy.testInstallNameTool,
 		proxySharedWithDep: sdk.proxy.testSharedLibraryWithDep,
 		proxy: sdk.proxy.test,
 		utilsPrerequisites: utils.testPrerequisites,

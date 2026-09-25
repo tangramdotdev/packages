@@ -1,0 +1,113 @@
+--- a/Source/kwsys/SystemTools.cxx
++++ b/Source/kwsys/SystemTools.cxx
+@@ -92,9 +92,15 @@
+ 
+ #ifdef __linux
+ #  include <linux/fs.h>
++#  include <linux/limits.h>
++#  include <sys/xattr.h>
+ #endif
+ 
+-#if defined(__APPLE__) &&                                                     \
++#ifdef __APPLE__
++#  include <sys/xattr.h>
++#endif
++
++#if defined(__APPLE__) &&                                                   \
+   (__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ - 0 >= 101200)
+ #  define KWSYS_SYSTEMTOOLS_HAVE_MACOS_COPYFILE_CLONE
+ #  include <copyfile.h>
+@@ -2400,6 +2406,75 @@
+   return false;
+ }
+ 
++static SystemTools::CopyStatus CopyUserXattrs(std::string const& source,
++                                              std::string const& destination)
++{
++  using CopyStatus = SystemTools::CopyStatus;
++#ifdef __linux
++  std::vector<char> names(XATTR_LIST_MAX);
++  ssize_t namesSize = listxattr(source.c_str(), names.data(), names.size());
++  if (namesSize < 0) {
++    if (errno == ENOTSUP) {
++      return CopyStatus{ Status::Success(), CopyStatus::NoPath };
++    }
++    return CopyStatus{ Status::POSIX_errno(), CopyStatus::SourcePath };
++  }
++  std::vector<char> value(XATTR_SIZE_MAX);
++  for (char const* name = names.data(); name < names.data() + namesSize;
++       name += strlen(name) + 1) {
++    if (strncmp(name, "user.", 5) != 0) {
++      continue;
++    }
++    ssize_t valueSize =
++      getxattr(source.c_str(), name, value.data(), value.size());
++    if (valueSize < 0) {
++      return CopyStatus{ Status::POSIX_errno(), CopyStatus::SourcePath };
++    }
++    if (setxattr(destination.c_str(), name, value.data(), valueSize, 0) < 0) {
++      return CopyStatus{ Status::POSIX_errno(), CopyStatus::DestPath };
++    }
++  }
++#elif defined(__APPLE__)
++  ssize_t namesSize = listxattr(source.c_str(), nullptr, 0, 0);
++  if (namesSize < 0) {
++    if (errno == ENOTSUP) {
++      return CopyStatus{ Status::Success(), CopyStatus::NoPath };
++    }
++    return CopyStatus{ Status::POSIX_errno(), CopyStatus::SourcePath };
++  }
++  std::vector<char> names(static_cast<size_t>(namesSize) + 1);
++  namesSize = listxattr(source.c_str(), names.data(), names.size(), 0);
++  if (namesSize < 0) {
++    return CopyStatus{ Status::POSIX_errno(), CopyStatus::SourcePath };
++  }
++  std::vector<char> value;
++  for (char const* name = names.data(); name < names.data() + namesSize;
++       name += strlen(name) + 1) {
++    if (strncmp(name, "user.", 5) != 0) {
++      continue;
++    }
++    ssize_t valueSize = getxattr(source.c_str(), name, nullptr, 0, 0, 0);
++    if (valueSize < 0) {
++      return CopyStatus{ Status::POSIX_errno(), CopyStatus::SourcePath };
++    }
++    value.resize(static_cast<size_t>(valueSize) + 1);
++    valueSize =
++      getxattr(source.c_str(), name, value.data(), value.size(), 0, 0);
++    if (valueSize < 0) {
++      return CopyStatus{ Status::POSIX_errno(), CopyStatus::SourcePath };
++    }
++    if (setxattr(destination.c_str(), name, value.data(), valueSize, 0, 0) <
++        0) {
++      return CopyStatus{ Status::POSIX_errno(), CopyStatus::DestPath };
++    }
++  }
++#else
++  static_cast<void>(source);
++  static_cast<void>(destination);
++#endif
++  return CopyStatus{ Status::Success(), CopyStatus::NoPath };
++}
++
+ SystemTools::CopyStatus SystemTools::CopyFileContentBlockwise(
+   std::string const& source, std::string const& destination)
+ {
+@@ -2450,7 +2525,7 @@
+     return CopyStatus{ Status::POSIX_errno(), CopyStatus::DestPath };
+   }
+ 
+-  return CopyStatus{ Status::Success(), CopyStatus::NoPath };
++  return CopyUserXattrs(source, destination);
+ }
+ 
+ /**
+@@ -2500,7 +2575,7 @@
+   close(in);
+   close(out);
+ 
+-  return status;
++  return status.IsSuccess() ? CopyUserXattrs(source, destination) : status;
+ #elif defined(__APPLE__) &&                                                   \
+   defined(KWSYS_SYSTEMTOOLS_HAVE_MACOS_COPYFILE_CLONE)
+   // When running as root, copyfile() copies more metadata than we

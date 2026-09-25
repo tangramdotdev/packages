@@ -3,6 +3,7 @@ members = [
   "packages/common",
   "packages/proxy",
   "packages/tgcc",
+  "packages/tginstallnametool",
   "packages/tgld",
   "packages/tgstrip",
   "packages/wrap",
@@ -64,6 +65,7 @@ common = { path = "packages/common" }
 proxy = { path = "packages/proxy" }
 wrap = { path = "packages/wrap" }
 tgcc = { path = "packages/tgcc" }
+tginstallnametool = { path = "packages/tginstallnametool" }
 tgld = { path = "packages/tgld" }
 tgstrip = { path = "packages/tgstrip" }
 

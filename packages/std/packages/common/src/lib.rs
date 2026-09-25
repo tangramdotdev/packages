@@ -11,6 +11,8 @@ pub mod tracing;
 
 pub mod error;
 
+pub mod rewrite;
+
 /// Get a template with a single artifact component.
 #[must_use]
 pub fn template_from_artifact(artifact: tg::Artifact) -> tg::Template {
