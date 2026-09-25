@@ -1,5 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
+import preserveUserXattrs from "./cmake_preserve_user_xattrs.patch" with { type: "file" };
 import ninja from "./ninja.tg.ts";
 
 export const metadata = {
@@ -18,14 +19,16 @@ export function source() {
 	const owner = "Kitware";
 	const repo = "CMake";
 	const tag = `v${version}`;
-	return std.download.fromGithub({
-		checksum,
-		owner,
-		repo,
-		source: "release",
-		tag,
-		version,
-	});
+	return std.download
+		.fromGithub({
+			checksum,
+			owner,
+			repo,
+			source: "release",
+			tag,
+			version,
+		})
+		.then((source) => bootstrap.patchGnu(source, preserveUserXattrs));
 }
 
 export type Arg = {
@@ -35,7 +38,7 @@ export type Arg = {
 	source?: tg.Directory | null;
 };
 
-/** Build `cmake`. */
+/** Build `cmake`. It only builds the LLVM flavor of the SDK, so it supports only Linux hosts. */
 export async function cmake(...args: tg.Args<Arg>) {
 	const {
 		build: build_,
@@ -49,6 +52,10 @@ export async function cmake(...args: tg.Args<Arg>) {
 	});
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
+	const os = std.triple.os(host);
+	if (os !== "linux") {
+		throw new Error(`std's cmake is only supported on Linux, detected ${os}.`);
+	}
 
 	const sourceDir = source_ ?? source();
 
@@ -56,7 +63,7 @@ export async function cmake(...args: tg.Args<Arg>) {
 	const configure = {
 		command: `./bootstrap`,
 		args: [
-			`--parallel=$(nproc)`, // FIXME - this doesn't work on macOS, no nproc.
+			`--parallel=$(nproc)`,
 			`--`,
 			`-DCMAKE_USE_OPENSSL=OFF`,
 			`-DBUILD_SHARED_LIBS=OFF`,
@@ -71,13 +78,11 @@ export async function cmake(...args: tg.Args<Arg>) {
 		{
 			TANGRAM_LINKER_PASSTHROUGH: true,
 		},
-	];
-	if (std.triple.os(host) === "linux") {
-		envs.push({
+		{
 			CC: "cc -static",
 			CXX: "c++ -static",
-		});
-	}
+		},
+	];
 	const env = std.env.compose(...envs, env_ ?? null);
 
 	const result = std.autotools.build({
@@ -344,7 +349,115 @@ export async function build(...args: tg.Args<BuildArg>) {
 }
 
 export async function test() {
+	// This cmake only supports Linux hosts.
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		return true;
+	}
+	await testDependencyXattrs();
+	await testInstallTargets();
 	// FIXME
 	// await std.assert.pkg({ buildFn: cmake, binaries: ["cmake"], metadata });
 	return true;
+}
+
+/** Check that cmake copies keep a file's dependencies, including when the source is a symlink. */
+export async function testDependencyXattrs() {
+	const cmakeArtifact = await tg
+		.build(cmake)
+		.named("cmake")
+		.then(tg.Directory.expect);
+	await assertCopiesKeepDependencies(cmakeArtifact);
+	return true;
+}
+
+/** Check that installing an executable and a library that link other libraries from the same project keeps their dependencies. */
+export async function testInstallTargets() {
+	const output = await build({ source: await installTargetsSource() });
+	await assertInstallTargets(output);
+	return true;
+}
+
+/** Assert that copies made by the given cmake keep a file's dependencies and contents. */
+export async function assertCopiesKeepDependencies(
+	cmakeArtifact: tg.Unresolved<tg.Directory>,
+) {
+	const dependency = await tg.file("dependency");
+	const source = await tg.directory({
+		installed: tg.file({
+			contents: "executable",
+			dependencies: { [dependency.id]: { node: dependency } },
+			executable: true,
+		}),
+		link: tg.symlink("installed"),
+	});
+	const script = await tg.file(
+		[
+			'file(INSTALL DESTINATION "${DESTINATION}" TYPE EXECUTABLE FILES "${SOURCE}/installed")',
+			'configure_file("${SOURCE}/link" "${DESTINATION}/configured" COPYONLY)',
+			"",
+		].join("\n"),
+	);
+	const output = await std
+		.build(std.shBootstrap`
+			cmake -E make_directory ${tg.output}
+			cmake -E copy ${source}/installed ${tg.output}/copied
+			cmake -E copy ${source}/link ${tg.output}/copied-link
+			cmake -DSOURCE=${source} -DDESTINATION=${tg.output} -P ${script}
+		`)
+		.env(await tg.resolve(cmakeArtifact))
+		.then(tg.Directory.expect);
+	for (const name of ["configured", "copied", "copied-link", "installed"]) {
+		const file = await output.get(name).then(tg.File.expect);
+		const ids = (await file.dependencyObjects).map((object) => object.id);
+		tg.assert(
+			ids.length === 1 && ids[0] === dependency.id,
+			`expected the ${name} file to retain its dependency`,
+		);
+		tg.assert(
+			(await file.text) === "executable",
+			`expected the ${name} file to retain its contents`,
+		);
+	}
+}
+
+/** A project whose install step edits the RPATHs of an executable and a library. Any failed edit fails the install. */
+export async function installTargetsSource() {
+	return await tg.directory({
+		"CMakeLists.txt": tg.file(`cmake_minimum_required(VERSION 3.28)
+project(install_targets C)
+add_library(greeting SHARED greeting.c)
+add_library(message SHARED message.c)
+# Link greeting publicly so that the program links it directly, because the linker proxy does not follow the dependencies of a library passed by its full path.
+target_link_libraries(message PUBLIC greeting)
+add_executable(program main.c)
+target_link_libraries(program PRIVATE message)
+if(APPLE)
+  set_target_properties(program PROPERTIES INSTALL_RPATH "@loader_path/../lib")
+endif()
+install(CODE "set(CMAKE_EXECUTE_PROCESS_COMMAND_ERROR_IS_FATAL ANY)")
+install(TARGETS greeting message program)
+`),
+		"greeting.c": tg.file(`const char *greeting(void) { return "hello"; }\n`),
+		"main.c": tg.file(
+			`void message(void);\nint main(void) { message(); return 0; }\n`,
+		),
+		"message.c": tg.file(
+			`#include <stdio.h>\nconst char *greeting(void);\nvoid message(void) { printf("%s from a library\\n", greeting()); }\n`,
+		),
+	});
+}
+
+/** Assert that the installed executable and library from `installTargetsSource` kept their dependencies, and that the executable runs. */
+export async function assertInstallTargets(output: tg.Directory) {
+	const extension =
+		std.triple.os(std.triple.host()) === "darwin" ? "dylib" : "so";
+	for (const name of ["bin/program", `lib/libmessage.${extension}`]) {
+		const file = await output.get(name).then(tg.File.expect);
+		tg.assert(
+			(await file.dependencyObjects).length > 0,
+			`expected ${name} to retain its dependencies`,
+		);
+	}
+	const program = await output.get("bin/program").then(tg.File.expect);
+	await std.assert.stdoutIncludes(program, "hello from a library");
 }

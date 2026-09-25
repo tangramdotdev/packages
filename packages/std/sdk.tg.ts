@@ -61,6 +61,7 @@ export async function sdkInner(...args: tg.Args<sdk.ResolvedArg>) {
 		embedWrapper,
 		host,
 		proxyCompiler,
+		proxyInstallNameTool,
 		proxyLinker,
 		proxyStrip,
 		target,
@@ -78,6 +79,7 @@ export async function sdkInner(...args: tg.Args<sdk.ResolvedArg>) {
 		reduce: {
 			host: "set",
 			proxyCompiler: "set",
+			proxyInstallNameTool: "set",
 			proxyLinker: "set",
 			proxyStrip: "set",
 			target: "set",
@@ -144,6 +146,7 @@ export async function sdkInner(...args: tg.Args<sdk.ResolvedArg>) {
 	let proxyArg: proxy.Arg = {
 		compiler: proxyCompiler,
 		...(embedWrapper !== undefined ? { embedWrapper } : {}),
+		installNameTool: proxyInstallNameTool,
 		linker: proxyLinker,
 		strip: proxyStrip,
 		toolchain: toolchain,
@@ -224,6 +227,8 @@ export namespace sdk {
 		linker?: LinkerKind | null;
 		/** Use the compiler proxy? Default: false. */
 		proxyCompiler?: boolean;
+		/** Use the `install_name_tool` proxy when both the host and target run macOS? Default: true. */
+		proxyInstallNameTool?: boolean;
 		/** Use the linker proxy? Default: true. */
 		proxyLinker?: boolean;
 		/** Use the strip proxy? Default: true. */
@@ -240,6 +245,7 @@ export namespace sdk {
 			host: host_,
 			linker,
 			proxyCompiler = false,
+			proxyInstallNameTool = true,
 			proxyLinker = true,
 			proxyStrip = true,
 			target,
@@ -289,6 +295,7 @@ export namespace sdk {
 		return {
 			host,
 			proxyCompiler,
+			proxyInstallNameTool,
 			proxyLinker,
 			proxyStrip,
 			target,
@@ -1349,6 +1356,7 @@ export namespace sdk {
 		embedWrapper?: boolean;
 		host: string;
 		proxyCompiler: boolean;
+		proxyInstallNameTool: boolean;
 		proxyLinker: boolean;
 		proxyStrip: boolean;
 		target: string;
@@ -1365,6 +1373,7 @@ export namespace sdk {
 			resolved.embedWrapper === undefined &&
 			resolved.linker === undefined &&
 			resolved.proxyCompiler === false &&
+			resolved.proxyInstallNameTool === true &&
 			resolved.proxyLinker === true &&
 			resolved.proxyStrip === true &&
 			resolved.toolchain === defaultToolchain

@@ -426,7 +426,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 	const mergedPhases = await std.phases.arg(defaultPhases, ...userPhasesArray);
 
 	const system = std.triple.archAndOs(host);
-	let output = await std.phases
+	return await std.phases
 		.run({
 			bootstrap: true,
 			debug,
@@ -439,33 +439,30 @@ export async function build(...args: tg.Args<BuildArg>) {
 			...(processName !== undefined ? { processName } : {}),
 		})
 		.then(tg.Directory.expect);
-
-	// cmake's file(INSTALL) strips xattrs. Re-wrap compiled binaries to
-	// restore tgld dependency metadata.
-	try {
-		const binDir = await output.get("bin").then(tg.Directory.expect);
-		for await (const [name, artifact] of binDir) {
-			if (artifact instanceof tg.File) {
-				const meta = await std.file.tryExecutableMetadata(artifact);
-				if (meta?.format === "elf" || meta?.format === "mach-o") {
-					output = await tg.directory(output, {
-						[`bin/${name}`]: std.wrap(artifact),
-					});
-				}
-			}
-		}
-	} catch {
-		// No bin directory (library-only packages) - nothing to re-wrap.
-	}
-
-	return output;
 }
 
 export async function test() {
+	await testDependencyXattrs();
+	await testInstallTargets();
+
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(self, spec);
 
 	await ninja.test();
 
+	return true;
+}
+
+/** Check that cmake copies keep a file's dependencies, including when the source is a symlink. */
+export async function testDependencyXattrs() {
+	await std.sdkModule.cmake.assertCopiesKeepDependencies(self());
+	return true;
+}
+
+/** Check that installing an executable and a library that link other libraries from the same project keeps their dependencies. */
+export async function testInstallTargets() {
+	const source = await std.sdkModule.cmake.installTargetsSource();
+	const output = await build({ source });
+	await std.sdkModule.cmake.assertInstallTargets(output);
 	return true;
 }

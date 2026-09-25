@@ -3,7 +3,6 @@ use {
 	proxy::options,
 	std::{
 		ffi::{OsStr, OsString},
-		os::unix::fs::PermissionsExt,
 		path::{Path, PathBuf},
 	},
 	tangram_client::prelude::*,
@@ -85,196 +84,24 @@ fn main_inner() -> tg::Result<()> {
 	Ok(())
 }
 
-#[allow(clippy::too_many_lines)]
 async fn run_proxy(
 	options: &Options,
 	target_index: usize,
 	target_path: &Path,
-	mut manifest: Manifest,
+	manifest: Manifest,
 ) -> tg::Result<()> {
-	if matches!(&manifest.executable, manifest::Executable::Path(_)) {
-		// The bytes contain IDs only. Recover the wrapper's authorized dependencies before rebuilding it.
-		let path = std::path::absolute(target_path)
-			.map_err(|error| tg::error!(!error, "invalid wrapper path"))?;
-		let output = tg::checkin(tg::checkin::Arg {
-			options: tg::checkin::Options {
-				destructive: false,
-				deterministic: true,
-				ignore: false,
-				lock: None,
-				root: true,
-				..tg::checkin::Options::default()
-			},
-			path,
-			updates: Vec::new(),
-		})
-		.await?;
-		let file = tg::Artifact::with_referent(output.artifact)
-			.try_unwrap_file()
-			.map_err(|error| tg::error!(!error, "expected a wrapper file"))?;
-		manifest.resolve_from_file(&file).await?;
-	}
-
 	// Handle the executable based on its type.
-	match manifest.executable {
-		manifest::Executable::Path(artifact_path) => {
-			let original_metadata = tokio::fs::metadata(target_path)
-				.await
-				.map_err(|error| tg::error!(!error, "failed to read the wrapper metadata"))?;
-			#[cfg(feature = "tracing")]
-			tracing::info!(?artifact_path, "found executable artifact path");
-
-			// Get the path to the actual executable.
-			let executable_path = artifact_path
-				.try_render(|component| async move {
-					match component {
-						tg::template::Component::String(string) => Ok(string.clone()),
-						tg::template::Component::Artifact(artifact) => {
-							common::checkout_artifact(artifact.clone())
-								.await?
-								.into_os_string()
-								.into_string()
-								.map_err(|_| tg::error!("checkout path is not UTF-8"))
-						},
-						tg::template::Component::Placeholder(_) => {
-							Err(tg::error!("cannot render an unresolved placeholder"))
-						},
-					}
-				})
-				.await
-				.map(std::path::PathBuf::from)
-				.map_err(|error| {
-					tg::error!(!error, ?artifact_path, "unable to render executable path")
-				})?;
-
-			#[cfg(feature = "tracing")]
-			tracing::info!(?executable_path, "found executable path");
-
-			// Copy the file to a temp directory.
-			#[cfg(target_os = "linux")]
-			let tmpdir = tempfile::TempDir::new_in("/")
-				.map_err(|error| tg::error!(!error, "failed to create tempdir"))?;
-			#[cfg(target_os = "macos")]
-			let tmpdir = tempfile::TempDir::new()
-				.map_err(|error| tg::error!(!error, "failed to create tempdir"))?;
-			let tmp_path = tmpdir.path();
-			let local_executable_path = tmp_path.join("executable");
-			#[cfg(feature = "tracing")]
-			tracing::info!(?local_executable_path, "copying the executable");
-
-			tokio::fs::copy(&executable_path, &local_executable_path)
-				.await
-				.map_err(|error| tg::error!(source = error, "failed to copy the executable"))?;
-
-			// Set the file to be writable.
-			let mut perms = tokio::fs::metadata(&local_executable_path)
-				.await
-				.map_err(|error| tg::error!(!error, path = %local_executable_path.display(), "failed to get the file metadata"))?.permissions();
-			perms.set_mode(perms.mode() | 0o200);
-			tokio::fs::set_permissions(&local_executable_path, perms)
-				.await
-				.map_err(|error| tg::error!(!error, path = %local_executable_path.display(), "failed to set file permissions"))?;
-			// Give date-preserving strip operations the wrapper's modification time instead of the store's epoch.
-			let wrapper_modified = original_metadata.modified().map_err(|error| {
-				tg::error!(!error, "failed to read the wrapper modification time")
-			})?;
-			std::fs::File::open(&local_executable_path)
-				.and_then(|file| file.set_modified(wrapper_modified))
-				.map_err(|error| {
-					tg::error!(!error, "failed to set the strip input modification time")
-				})?;
-
-			// Call strip with the correct arguments on the executable.
-			let args = options.wrapper_args(target_index, &local_executable_path);
-			run_strip(&options.strip_program, &args)?;
-			#[cfg(feature = "tracing")]
-			tracing::info!(?local_executable_path, "strip succeeded");
-
-			// Preserve the native strip output's modification time before check-in and wrapping.
-			let stripped_modified = std::fs::metadata(&local_executable_path)
-				.and_then(|metadata| metadata.modified())
-				.map_err(|error| {
-					tg::error!(!error, "failed to read the strip output modification time")
-				})?;
-
-			// Check in the result.
-			let output = tg::checkin(tg::checkin::Arg {
-				options: tg::checkin::Options {
-					source_dependencies: true,
-					destructive: false,
-					deterministic: true,
-					ignore: false,
-					locked: false,
-					lock: Some(tg::checkin::Lock::Attr),
-					root: true,
-					..tg::checkin::Options::default()
-				},
-				path: local_executable_path,
-				updates: vec![],
+	match &manifest.executable {
+		manifest::Executable::Path(_) => {
+			common::rewrite::wrapper(target_path, manifest, |executable| {
+				// Call strip with the correct arguments on the executable.
+				let args = options.wrapper_args(target_index, executable);
+				run_strip(&options.strip_program, &args)?;
+				#[cfg(feature = "tracing")]
+				tracing::info!(?executable, "strip succeeded");
+				Ok(())
 			})
 			.await?;
-			let stripped_file = tg::Artifact::with_referent(output.artifact)
-				.try_unwrap_file()
-				.map_err(|error| tg::error!(source = error, "expected a file"))?;
-			#[cfg(feature = "tracing")]
-			tracing::info!(stripped_file_id = ?stripped_file.id(), "checked in the stripped executable");
-
-			#[cfg(feature = "tracing")]
-			if let Err(e) = tmpdir.close() {
-				tracing::warn!(?e, "failed to close tempdir");
-			}
-			#[cfg(not(feature = "tracing"))]
-			let _ = tmpdir.close();
-
-			// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
-			let new_manifest = Manifest {
-				executable: manifest::Executable::Path(common::template_from_artifact(
-					stripped_file.into(),
-				)),
-				..manifest
-			};
-			#[cfg(feature = "tracing")]
-			tracing::info!(?new_manifest, "created new manifest");
-
-			let new_wrapper = new_manifest.write().await?;
-			new_wrapper.store().await?;
-			#[cfg(feature = "tracing")]
-			{
-				let new_wrapper_id = new_wrapper.id();
-				tracing::info!(?new_wrapper_id, "wrote new wrapper");
-			}
-
-			// Check out the new output file.
-			let canonical_target_path = std::fs::canonicalize(target_path).map_err(|error| {
-				tg::error!(
-					source = error,
-					"could not get canonical path for the output file"
-				)
-			})?;
-			#[cfg(feature = "tracing")]
-			tracing::info!(?canonical_target_path, "checking out the new output file");
-
-			// Remove the existing file.
-			tokio::fs::remove_file(&canonical_target_path)
-				.await
-				.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
-
-			let artifact = tg::Artifact::from(new_wrapper);
-			common::checkout_artifact_to_path(artifact, canonical_target_path.clone()).await?;
-			// Restore the permissions first so the file can be opened to set its modification time.
-			tokio::fs::set_permissions(&canonical_target_path, original_metadata.permissions())
-				.await
-				.map_err(|error| tg::error!(!error, "failed to restore the wrapper permissions"))?;
-			std::fs::File::open(&canonical_target_path)
-				.and_then(|file| file.set_modified(stripped_modified))
-				.map_err(|error| {
-					tg::error!(
-						!error,
-						"failed to restore the strip output modification time"
-					)
-				})?;
-			#[cfg(feature = "tracing")]
-			tracing::info!("checked out the new output file");
 		},
 		manifest::Executable::Address(_address) => {
 			#[cfg(feature = "tracing")]
