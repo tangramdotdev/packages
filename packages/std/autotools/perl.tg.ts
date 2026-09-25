@@ -30,14 +30,18 @@ export type Arg = {
 	source?: tg.Directory | null;
 };
 
-export async function build(arg?: tg.Unresolved<Arg>) {
+export async function build(...args: tg.Args<Arg>) {
 	const {
 		build: buildTriple_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ? await tg.resolve(arg) : {};
+	} = await tg.Args.apply<Arg, tg.ValueOrMaybeMutationMap<Arg>, Arg>({
+		args,
+		map: async (arg) => arg,
+		reduce: {},
+	});
 	const host = host_ ?? std.triple.host();
 	const os = std.triple.os(host);
 	const build = buildTriple_ ?? host;
@@ -144,11 +148,9 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 export default build;
 
 export async function test() {
-	const host = bootstrap.toolchainTriple(std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
-	// FIXME
-	// await std.assert.pkg({ buildFn: build, binaries: ["perl"], metadata });
-	return true;
+	return std.assert.pkg(build, {
+		binaries: [std.assert.displaysVersion("perl", metadata.version)],
+	});
 }
 
 /** The tests in this module, grouped by tier. */
