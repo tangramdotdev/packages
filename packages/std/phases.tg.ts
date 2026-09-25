@@ -852,9 +852,9 @@ export async function testOrder() {
 }
 
 export async function testOverride() {
-	const prepare = `echo "preparing"`;
+	const prepare = tg`echo "preparing" >> ${tg.output}`;
 	const configure = {
-		command: `echo "configuring"`,
+		command: tg`echo "configuring" >> ${tg.output}`,
 		args: ["--default-arg"],
 	};
 	const build_ = {
@@ -862,8 +862,8 @@ export async function testOverride() {
 		args: ["--default-arg"],
 	};
 	const check = `echo "checking"`;
-	const install = `echo "installing"`;
-	const fixup = `echo "fixing up"`;
+	const install = tg`echo "installing" >> ${tg.output}`;
+	const fixup = tg`echo "fixing up" >> ${tg.output}`;
 
 	const defaultPhases = {
 		prepare,
@@ -881,7 +881,7 @@ export async function testOverride() {
 
 	// Should remove the args on build and replace the command.
 	const buildOverride: std.phases.CommandArg = {
-		command: `echo "building override"`,
+		command: tg`echo "building override" >> ${tg.output}`,
 		args: tg.Mutation.unset(),
 	};
 
@@ -937,7 +937,8 @@ export async function testOverride() {
 	tg.assert(resolved.fixup !== undefined, "fixup phase should exist");
 
 	// Also verify the full run still works using the merged phases.
-	await run({ phases: resolved, bootstrap: true });
+	const output = await run({ phases: resolved, bootstrap: true }).then(tg.File.expect);
+	tg.assert((await output.text) === "preparing\nconfiguring --default-arg --arg1 --arg2\nbuilding override\ninstalling\nfixing up\n");
 	return true;
 }
 
