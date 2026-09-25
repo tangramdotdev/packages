@@ -50,10 +50,35 @@ export async function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
-	const host = bootstrap.toolchainTriple(std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
-	// FIXME
-	// await std.assert.pkg({ metadata, buildFn: build, libraries: ["xcrypt"] });
+	const directory = await build();
+	await std.assert.fileExists({ directory, subpath: "include/crypt.h" });
+	const host = std.triple.host();
+	const testSource = `
+		#include <crypt.h>
+		#include <string.h>
+		int main(void) {
+			char *hash = crypt("password", "$6$salt$");
+			return hash == 0 || strncmp(hash, "$6$salt$", 8) != 0;
+		}
+	`;
+	await std.assert.assertDylib({
+		directory,
+		host,
+		libraryName: "crypt",
+		pkgConfigName: "libxcrypt",
+		runtimeDepDirs: [],
+		testSource,
+	});
+	const staticDirectory = await tg.directory({
+		include: directory.get("include"),
+		"lib/libcrypt.a": directory.get("lib/libcrypt.a"),
+	});
+	await std.assert.assertStaticlib({
+		directory: staticDirectory,
+		host,
+		library: "crypt",
+		testSource,
+	});
 	return true;
 }
 
