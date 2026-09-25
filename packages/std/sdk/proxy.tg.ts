@@ -843,7 +843,7 @@ export async function testLinkerControls() {
 
 /** SDK defaults yield to incoming environment and then invocation-local linker controls. */
 export async function testSdkControlPrecedence() {
-	const rawToolchain = await bootstrap.sdk.env();
+	const rawToolchain = await bootstrap.sdk.env(std.triple.host());
 	const source = await tg.file`#include <stdio.h>
 int main(void) { puts("SDK controls"); }`;
 	const linux = std.triple.os(std.triple.host()) === "linux";
@@ -920,7 +920,11 @@ export async function testBasic(target?: string) {
 			printf("Hello from a TGLD-wrapped binary!\\n");
 			return 0;
 		}`;
-	const cmd = target ? `cc -target ${target}` : `cc`;
+	const cmd = target
+		? std.triple.os(std.triple.host()) === "linux"
+			? `${target}-gcc`
+			: `cc -target ${target}`
+		: "cc";
 	const output = await std
 		.build((target ? std.sh : std.shBootstrap)`
 				set -x
@@ -1103,7 +1107,11 @@ async function makeShared(arg: tg.Unresolved<MakeSharedArg>) {
 	const flags = tg.Template.join(" ", ...flagArgs);
 	const targetTriple = target ?? std.triple.host();
 	const dylibExt = std.triple.os(targetTriple) === "darwin" ? "dylib" : "so";
-	const cmd = target ? `cc -target ${target}` : `cc`;
+	const cmd = target
+		? std.triple.os(std.triple.host()) === "linux"
+			? `${target}-gcc`
+			: `cc -target ${target}`
+		: "cc";
 	return await std
 		.build(
 			(target
@@ -1157,7 +1165,11 @@ export async function testSharedLibraryWithDep(target?: string) {
 		["main.c"]: mainSource,
 	});
 
-	const cmd = target ? `cc -target ${target}` : `cc`;
+	const cmd = target
+		? std.triple.os(std.triple.host()) === "linux"
+			? `${target}-gcc`
+			: `cc -target ${target}`
+		: "cc";
 	const output = await std
 		.build((target ? std.sh : std.shBootstrap)`
 		set -x
@@ -1249,7 +1261,12 @@ export async function testLinuxToDarwinLdProxy() {
 export async function testTransitive(optLevel?: OptLevel, target?: string) {
 	const opt = optLevel ?? "filter";
 	const host = std.triple.host();
-	const targetTriple = target ?? host;
+	const targetTriple = target ?? bootstrap.toolchainTriple(host);
+	const compiler = target
+		? std.triple.os(host) === "linux"
+			? `${target}-gcc`
+			: `cc -target ${target}`
+		: "cc";
 	const sdkArg = target ? { host, target } : undefined;
 	const testSDK = target
 		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
@@ -1373,7 +1390,7 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 		.build(
 			(target
 				? std.sh
-				: std.shBootstrap)`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o ${tg.output}`,
+				: std.shBootstrap)`${compiler} -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o ${tg.output}`,
 		)
 		.env(
 			std.env.compose(testSDK, {
@@ -1388,7 +1405,9 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 	tg.assert(manifest !== undefined);
 	const interpreter = manifest.interpreter;
 	tg.assert(interpreter !== undefined);
-	const expectedInterpreterKind = os === "darwin" ? "dyld" : "ld-musl";
+	const expectedInterpreterKind = os === "darwin"
+		? "dyld"
+		: std.triple.environment(targetTriple) === "musl" ? "ld-musl" : "ld-linux";
 	tg.assert(
 		interpreter.kind === expectedInterpreterKind,
 		`expected ${expectedInterpreterKind}, got ${interpreter.kind}`,
@@ -1508,10 +1527,12 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 	}
 
 	// Make sure the executable runs without errors and produces the expected output.
-	await std.assert.stdoutIncludes(
-		output,
-		"Hello from transitive constants A!\nHello from transitive constants B!",
-	);
+	if (std.assert.canRun(targetTriple)) {
+		await std.assert.stdoutIncludes(
+			output,
+			"Hello from transitive constants A!\nHello from transitive constants B!",
+		);
+	}
 
 	return output;
 }
@@ -1714,7 +1735,7 @@ export async function testStrip(target?: string) {
 /** Strip preserves target positions, duplicate occurrences, and real executable behavior. */
 export async function testStripControls() {
 	const toolchain = await bootstrap.sdk();
-	const rawToolchain = await bootstrap.sdk.env();
+	const rawToolchain = await bootstrap.sdk.env(std.triple.host());
 	const { strip: realStrip } = await std.sdk.toolchainComponents({
 		env: await std.env.compose(rawToolchain),
 		host: bootstrap.toolchainTriple(std.triple.host()),
@@ -1848,7 +1869,12 @@ export async function testStripMultipleFiles() {
 /** Test that TGLD discovers transitive dependencies when only the top-level library is explicitly linked. This mirrors the ncurses case where multiple libraries are in the same directory, but only one is explicitly linked. This test would catch the bug where TGLD returns early before analyzing libraries for their dependencies. */
 export async function testTransitiveDiscovery(target?: string) {
 	const host = std.triple.host();
-	const targetTriple = target ?? host;
+	const targetTriple = target ?? bootstrap.toolchainTriple(host);
+	const compiler = target
+		? std.triple.os(host) === "linux"
+			? `${target}-gcc`
+			: `cc -target ${target}`
+		: "cc";
 	const sdkArg = target ? { host, target } : undefined;
 	const testSDK = target
 		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
@@ -1911,12 +1937,12 @@ export async function testTransitiveDiscovery(target?: string) {
 	// On Linux, we need -rpath-link to help the linker find transitive dependencies at link time.
 	const rpathLink = os === "linux" ? tg`-Wl,-rpath-link,${combined}/lib` : "";
 	// Native outputs must run before the build returns and checks out their dependencies.
-	const runInBuild = target === undefined ? tg`${tg.output}` : "";
+	const runInBuild = std.assert.canRun(targetTriple) ? tg`${tg.output}` : "";
 	const output = await std
 		.build(
 			(target
 				? std.sh
-				: std.shBootstrap)`set -x && cc -v -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output}
+				: std.shBootstrap)`set -x && ${compiler} -v -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output}
 			${runInBuild}`,
 		)
 		.env(
@@ -1932,7 +1958,9 @@ export async function testTransitiveDiscovery(target?: string) {
 	tg.assert(manifest !== undefined);
 	const interpreter = manifest.interpreter;
 	tg.assert(interpreter !== undefined);
-	const expectedInterpreterKind = os === "darwin" ? "dyld" : "ld-musl";
+	const expectedInterpreterKind = os === "darwin"
+		? "dyld"
+		: std.triple.environment(targetTriple) === "musl" ? "ld-musl" : "ld-linux";
 	tg.assert(
 		interpreter.kind === expectedInterpreterKind,
 		`expected ${expectedInterpreterKind}, got ${interpreter.kind}`,
@@ -1949,7 +1977,9 @@ export async function testTransitiveDiscovery(target?: string) {
 	);
 
 	// Verify the executable runs correctly.
-	await std.assert.stdoutIncludes(output, "Hello from bottom library!");
+	if (std.assert.canRun(targetTriple)) {
+		await std.assert.stdoutIncludes(output, "Hello from bottom library!");
+	}
 	if (target === undefined) {
 		// Zero depth stops discovery, and explicit false disables missing-library rejection.
 		const limited = await std.build(std.shBootstrap`
