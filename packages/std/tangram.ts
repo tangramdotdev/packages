@@ -337,7 +337,19 @@ export async function test(...filters: Array<string>) {
 				results[name] = result.value;
 			} else {
 				const error = result.reason;
-				const detail = error instanceof tg.Error ? tg.Value.stringify(error) : String(error);
+				let detail = String(error);
+				if (error instanceof tg.Error) {
+					// Store the original error and include every cause and process reference.
+					const id = await error.store();
+					const causes: Array<string> = [];
+					let cause: tg.Error | tg.Error.Object | undefined = error;
+					while (cause !== undefined) {
+						const object: tg.Error.Object = cause instanceof tg.Error ? await cause.load() : cause;
+						causes.push(`${object.message ?? "an error occurred"} ${JSON.stringify(object.values)}`);
+						cause = object.source?.node;
+					}
+					detail = `${causes.join("\n  caused by: ")}\n  error: ${id}`;
+				}
 				failures.push(`${name}: ${detail}`);
 				errors.push(error);
 			}
