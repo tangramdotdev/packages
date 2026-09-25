@@ -562,8 +562,10 @@ export async function test() {
 			printf("Hello, world!\\n");
 			return 0;
 		}`;
+	const linkerFlags = os === "linux" ? "-fuse-ld=lld" : "";
+	const unwindFlags = os === "linux" ? "-unwindlib=libunwind" : "";
 	const cOut = await $(std.shBootstrap`
-		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o ${tg.output}
+		set -x && clang -v -xc ${testCSource} ${linkerFlags} -o ${tg.output}
 	`)
 		.env(directory)
 		.host(system)
@@ -597,7 +599,7 @@ export async function test() {
 		}
 	`;
 	const cxxOut = await $(std.shBootstrap`
-		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ -fuse-ld=lld -unwindlib=libunwind -o ${tg.output}
+		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ ${linkerFlags} ${unwindFlags} -o ${tg.output}
 	`)
 		.env(directory)
 		.host(system)
