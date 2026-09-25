@@ -71,13 +71,7 @@ export async function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
-	// const spec = {
-	// 	...std.assert.defaultSpec(metadata),
-	// 	bootstrapMode: true,
-	// };
-	// FIXME - must be args to use std.assert.pkg.
-	// return await std.assert.pkg(build, spec);
-	return await build();
+	return std.assert.pkg(build, std.assert.defaultSpec(metadata));
 }
 
 /** The tests in this module, grouped by tier. */
