@@ -83,10 +83,9 @@ export async function test() {
 		console.log("skipped sdk/mold.tg.ts#test: requires Linux");
 		return null;
 	}
-
-	// FIXME
-	// await std.assert.pkg({ buildFn: mold, binaries: ["mold"], metadata });
-	return true;
+	return std.assert.pkg(mold, {
+		binaries: [std.assert.displaysVersion("mold", metadata.version)],
+	});
 }
 
 /** The tests in this module, grouped by tier. */
