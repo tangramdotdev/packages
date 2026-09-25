@@ -41,7 +41,7 @@ export async function build(...args: tg.Args<Arg>) {
 	const build = "./build.sh";
 	const install: std.phases.PhaseArg = {
 		pre: await tg`mkdir -p ${tg.output}/bin`,
-		body: await tg`cp make ${tg.output}/bin`,
+		body: await tg`mv make ${tg.output}/bin`,
 	};
 	const phases: std.phases.Arg = {
 		configure,
