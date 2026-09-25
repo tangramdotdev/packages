@@ -632,7 +632,7 @@ export async function test() {
 
 	// Assert the native workspace was built for the host.
 	const os = std.triple.os(std.triple.archAndOs(host));
-	const nativeWrapper = await nativeWorkspace.get("bin/wrapper");
+	const nativeWrapper = await nativeWorkspace.get("bin/wrapper.exe");
 	tg.File.assert(nativeWrapper);
 	const nativeMetadata = await std.file.executableMetadata(nativeWrapper);
 	if (os === "linux") {
@@ -695,7 +695,7 @@ export async function testCross() {
 	});
 
 	// Assert the cross workspace was built for the target.
-	const crossWrapper = await crossWorkspace.get("bin/wrapper");
+	const crossWrapper = await crossWorkspace.get("bin/wrapper.exe");
 	tg.File.assert(crossWrapper);
 	const crossMetadata = await std.file.executableMetadata(crossWrapper);
 	tg.assert(crossMetadata.format === "elf");
