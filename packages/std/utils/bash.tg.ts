@@ -142,3 +142,8 @@ export async function test() {
 	tg.assert(totalDeps > 0, "expected depdendencies to be set");
 	return bashDir;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

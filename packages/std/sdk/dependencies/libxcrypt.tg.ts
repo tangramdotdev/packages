@@ -56,3 +56,8 @@ export async function test() {
 	// await std.assert.pkg({ metadata, buildFn: build, libraries: ["xcrypt"] });
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	sdk: [test],
+};

@@ -464,13 +464,14 @@ export async function testBuildToolsSelectionOverrides() {
 	return true;
 }
 
-export async function test() {
-	await Promise.all([
-		testBuildToolsPresets(),
-		testBuildToolsOverridesBeatPreset(),
-		testBuildToolsSelectionPresets(),
-		testBuildToolsSelectionKeepsPrebuilt(),
-		testBuildToolsSelectionOverrides(),
-	]);
-	return true;
-}
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		testBuildToolsPresets,
+		testBuildToolsOverridesBeatPreset,
+		testBuildToolsSelectionPresets,
+		testBuildToolsSelectionKeepsPrebuilt,
+		testBuildToolsSelectionOverrides,
+	],
+};

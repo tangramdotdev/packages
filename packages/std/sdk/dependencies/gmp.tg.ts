@@ -39,3 +39,8 @@ export default build;
 export async function test() {
 	return await build();
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	sdk: [test],
+};

@@ -79,7 +79,17 @@ export async function mold(...args: tg.Args<Arg>) {
 export default mold;
 
 export async function test() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/mold.tg.ts#test: requires Linux");
+		return null;
+	}
+
 	// FIXME
 	// await std.assert.pkg({ buildFn: mold, binaries: ["mold"], metadata });
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	extended: [test],
+};

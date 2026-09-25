@@ -68,3 +68,8 @@ export async function test() {
 	// await std.assert.pkg({ buildFn: ninja, binaries: ["ninja"], metadata });
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	sdk: [test],
+};

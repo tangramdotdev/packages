@@ -83,3 +83,8 @@ export async function test() {
 		env: std.env.compose(sdk),
 	});
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

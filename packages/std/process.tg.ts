@@ -38,12 +38,6 @@ export const spawn: ProcessBuilderFactory<"spawn"> = (...args: any): any =>
 
 export const $ = run;
 
-export async function testBuildAll() {
-	await testBuildArgs();
-	await testBuildTemplate();
-	return true;
-}
-
 /** Test the arg form, which passes through to tg untouched. */
 export async function testBuildArgs() {
 	const output = await build({
@@ -65,13 +59,6 @@ export async function testBuildTemplate() {
 	const actual = await output.text;
 	const expected = "template\n";
 	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
-	return true;
-}
-
-export async function testRunAll() {
-	await testDollar();
-	await testDollarBootstrap();
-	await testEnvClear();
 	return true;
 }
 
@@ -117,3 +104,16 @@ export async function testEnvClear() {
 	tg.assert(!actual.includes("foo!"), "expected output to not contain `foo!`");
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		testBuildArgs,
+		testDollarBootstrap,
+		testEnvClear,
+	],
+	sdk: [
+		testBuildTemplate,
+		testDollar,
+	],
+};

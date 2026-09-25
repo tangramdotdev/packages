@@ -21,3 +21,12 @@ export function caCertificates(arg?: Arg) {
 }
 
 export default caCertificates;
+
+export async function test() {
+	return caCertificates();
+}
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

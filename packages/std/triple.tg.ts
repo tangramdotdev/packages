@@ -341,3 +341,8 @@ export function test() {
 
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

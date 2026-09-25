@@ -316,3 +316,9 @@ export async function testCross() {
 		return tg.unreachable();
 	}
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+	extended: [testCross],
+};

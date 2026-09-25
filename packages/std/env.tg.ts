@@ -735,3 +735,8 @@ export async function test() {
 	tg.assert(component === "bar", "expected the string to be 'bar'");
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

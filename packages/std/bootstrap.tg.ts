@@ -198,7 +198,6 @@ export function componentList(host?: string): Array<string> | undefined {
 }
 
 export async function test() {
-	testSelection();
 	const host = std.triple.host();
 	const components = componentList(host);
 	if (!components) {
@@ -260,4 +259,12 @@ const checksums: Record<string, tg.Checksum> = {
 		"sha256:10b0cf8ca64429f4362f8aaded78326d418db8a1d4d7f2fa91a5f8019dbb49de",
 	utils_x86_64_linux:
 		"sha256:c60c8c54913fd8be2b8614c8abe0b2bb9752fc4ebf5d3a0a13e81701020078cf",
+};
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		test,
+		testSelection,
+	],
 };

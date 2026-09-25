@@ -112,22 +112,23 @@ export async function test() {
 	const detectedHost = std.triple.host();
 	const host = bootstrap.toolchainTriple(detectedHost);
 	if (std.triple.os(host) !== "linux") {
-		return;
+		console.log("skipped sdk/kernel_headers.tg.ts#test: requires Linux");
+		return null;
 	}
 
 	// test host
-	await testKernelHeaders(host);
+	await assertKernelHeaders(host);
 
 	// test cross
 	const hostArch = std.triple.arch(host);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	const target = std.triple.create(host, { arch: targetArch });
-	await testKernelHeaders(host, target);
+	await assertKernelHeaders(host, target);
 
 	return true;
 }
 
-export async function testKernelHeaders(host: string, target?: string) {
+export async function assertKernelHeaders(host: string, target?: string) {
 	const target_ = target ?? host;
 	const buildEnv = std.env.compose(
 		bootstrap.sdk(host),
@@ -146,3 +147,8 @@ export async function testKernelHeaders(host: string, target?: string) {
 	const kernelHContents = await kernelH.text;
 	tg.assert(kernelHContents.includes("#ifndef _LINUX_KERNEL_H"));
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

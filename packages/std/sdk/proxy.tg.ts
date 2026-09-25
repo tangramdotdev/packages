@@ -468,34 +468,6 @@ export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 	});
 }
 
-export async function test() {
-	const tests = [
-		testBasic(),
-		testProxyArguments(),
-		testLinkerControls(),
-		testLinkerOutputCheckout(),
-		testProxyOutputMetadata(),
-		testSdkControlPrecedence(),
-		testStripControls(),
-		testCompilerLocalPaths(),
-		testLdProxyDependencies(),
-		testLdProxyInterpreterArgs(),
-		testTransitiveAll(),
-		testTransitiveDiscovery(),
-		testSamePrefix(),
-		testSamePrefixDirect(),
-		testDifferentPrefixDirect(),
-		testSharedLibraryWithDep(),
-		testStrip(),
-		testStripMultipleFiles(),
-	];
-	if (std.triple.os(std.triple.host()) === "linux") {
-		tests.push(testLinkerParallelLibraries());
-	}
-	await Promise.all(tests);
-	return true;
-}
-
 const ldProxyArtifactEnvVars = (host: string) => [
 	...(std.triple.os(host) === "darwin" ? ["TANGRAM_CODESIGN_PATH"] : []),
 	"TANGRAM_WRAPPER_EXE_PATH",
@@ -1023,7 +995,10 @@ EOF
 
 /** Parallel links must not fail while the proxy replaces an unrelated shared library. */
 export async function testLinkerParallelLibraries(rounds = 20, jobs = 8) {
-	tg.assert(std.triple.os(std.triple.host()) === "linux");
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/proxy.tg.ts#testLinkerParallelLibraries: requires Linux");
+		return null;
+	}
 	const toolchain = await bootstrap.sdk();
 	await std.build(std.shBootstrap`
 		mkdir lib
@@ -1221,15 +1196,6 @@ export async function testSharedLibraryWithDep(target?: string) {
 
 type OptLevel = "none" | "filter" | "resolve" | "isolate" | "combine";
 
-export async function testTransitiveAll(target?: string) {
-	return await Promise.all([
-		testTransitive(undefined, target),
-		testTransitiveNone(target),
-		testTransitiveResolve(target),
-		testTransitiveIsolate(target),
-		testTransitiveCombine(target),
-	]);
-}
 export function testTransitiveNone(target?: string) {
 	return testTransitive("none", target);
 }
@@ -1248,7 +1214,8 @@ export async function testCrossGccLdProxy() {
 	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
-		throw new Error(`Cross-compilation is not supported on Darwin`);
+		console.log("skipped sdk/proxy.tg.ts#testCrossGccLdProxy: requires Linux");
+		return null;
 	}
 	const detectedArch = std.triple.arch(detectedHost);
 	const crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
@@ -1261,7 +1228,8 @@ export async function testCrossGccLdProxy() {
 export async function testDarwinToLinuxLdProxy() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
-		throw new Error(`This test is only valid on Darwin`);
+		console.log("skipped sdk/proxy.tg.ts#testDarwinToLinuxLdProxy: requires Darwin");
+		return null;
 	}
 	const target = "x86_64-unknown-linux-gnu";
 	return await testTransitive(undefined, target);
@@ -1270,7 +1238,8 @@ export async function testDarwinToLinuxLdProxy() {
 export async function testLinuxToDarwinLdProxy() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
-		throw new Error(`This test is only valid on Linux`);
+		console.log("skipped sdk/proxy.tg.ts#testLinuxToDarwinLdProxy: requires Linux");
+		return null;
 	}
 	const target = "aarch64-apple-darwin";
 	return await testTransitive(undefined, target);
@@ -2065,3 +2034,37 @@ export async function benchLdProxy() {
 		.env(std.env.compose(buildToolchain))
 		.then(tg.File.expect);
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		testLdProxyDependencies,
+		testLdProxyInterpreterArgs,
+		testProxyArguments,
+		testLinkerControls,
+		testSdkControlPrecedence,
+		testCompilerLocalPaths,
+		testBasic,
+		testLinkerOutputCheckout,
+		testLinkerParallelLibraries,
+		testProxyOutputMetadata,
+		testSharedLibraryWithDep,
+		testTransitiveNone,
+		testTransitiveResolve,
+		testTransitiveIsolate,
+		testTransitiveCombine,
+		testTransitive,
+		testSamePrefix,
+		testSamePrefixDirect,
+		testDifferentPrefixDirect,
+		testStrip,
+		testStripControls,
+		testStripMultipleFiles,
+		testTransitiveDiscovery,
+	],
+	extended: [
+		testCrossGccLdProxy,
+		testDarwinToLinuxLdProxy,
+		testLinuxToDarwinLdProxy,
+	],
+};

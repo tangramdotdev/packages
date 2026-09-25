@@ -74,3 +74,8 @@ export async function test() {
 	const sdk = await bootstrap.sdk(host);
 	return build({ host, sdk: "none", env: sdk });
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

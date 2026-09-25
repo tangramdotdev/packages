@@ -659,7 +659,8 @@ export async function test() {
 export async function testDarwin() {
 	const build = std.triple.host();
 	if (std.triple.os(build) !== "darwin") {
-		return true;
+		console.log("skipped wrap/workspace.tg.ts#testDarwin: requires Darwin");
+		return null;
 	}
 	for (const arch of ["aarch64", "x86_64"]) {
 		const host = `${arch}-apple-darwin`;
@@ -744,3 +745,12 @@ export async function rcodesign(host?: string) {
 		.get(`apple-codesign-${version}-${target}/rcodesign`)
 		.then(tg.File.expect);
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		test,
+		testDarwin,
+	],
+	extended: [testCross],
+};

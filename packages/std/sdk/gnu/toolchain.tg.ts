@@ -372,11 +372,21 @@ export async function extractSysrootMusl() {
 }
 
 export async function testCanadianCross() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/gnu/toolchain.tg.ts#testCanadianCross: requires Linux");
+		return null;
+	}
+
 	const toolchainDir = await canadianCross();
 	return toolchainDir;
 }
 
 export async function testCross() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/gnu/toolchain.tg.ts#testCross: requires Linux");
+		return null;
+	}
+
 	const host = std.triple.host();
 	const hostArch = std.triple.arch(host);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
@@ -386,6 +396,11 @@ export async function testCross() {
 }
 
 export async function testCrossMips() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/gnu/toolchain.tg.ts#testCrossMips: requires Linux");
+		return null;
+	}
+
 	const host = std.triple.host();
 	const target = "mips-unknown-linux-gnu";
 	const dir = await toolchain({ host, target });
@@ -393,8 +408,23 @@ export async function testCrossMips() {
 }
 
 export async function testCrossRpi() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/gnu/toolchain.tg.ts#testCrossRpi: requires Linux");
+		return null;
+	}
+
 	const host = std.triple.host();
 	const target = "armv7l-linux-gnueabihf";
 	const dir = await toolchain({ host, target });
 	return dir;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	sdk: [testCanadianCross],
+	extended: [
+		testCross,
+		testCrossMips,
+		testCrossRpi,
+	],
+};

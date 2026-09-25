@@ -108,3 +108,8 @@ export async function test() {
 	await std.sdk.assertValid(sdkEnv, arg);
 	return sdkEnv;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

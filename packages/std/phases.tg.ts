@@ -792,23 +792,7 @@ export async function maybeMutationToTemplate(
 	}
 }
 
-export async function test() {
-	await Promise.all([
-		basic(),
-		order(),
-		override(),
-		testPrefixSuffix(),
-		testSetIfUnset(),
-		testScriptToCommand(),
-		testPrePostHooks(),
-		testMultipleArgs(),
-		testArrayInput(),
-		testCommandMutations(),
-	]);
-	return true;
-}
-
-export async function basic() {
+export async function testBasic() {
 	const prepare = tg`echo "preparing" >> ${tg.output}`;
 	const configure = tg`echo "configuring" >> ${tg.output}`;
 	const build_ = tg`echo "building" >> ${tg.output}`;
@@ -837,7 +821,7 @@ export async function basic() {
 	return true;
 }
 
-export async function order() {
+export async function testOrder() {
 	const prepare = tg`echo "preparing" >> ${tg.output}`;
 	const configure = tg`echo "configuring" >> ${tg.output}`;
 	const build_ = tg`echo "building" >> ${tg.output}`;
@@ -867,7 +851,7 @@ export async function order() {
 	return true;
 }
 
-export async function override() {
+export async function testOverride() {
 	const prepare = `echo "preparing"`;
 	const configure = {
 		command: `echo "configuring"`,
@@ -1214,3 +1198,19 @@ export async function testCommandMutations() {
 
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		testBasic,
+		testOrder,
+		testOverride,
+		testPrefixSuffix,
+		testSetIfUnset,
+		testScriptToCommand,
+		testPrePostHooks,
+		testMultipleArgs,
+		testArrayInput,
+		testCommandMutations,
+	],
+};

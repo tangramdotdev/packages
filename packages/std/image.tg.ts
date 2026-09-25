@@ -14,25 +14,15 @@ export default image;
 
 import * as bootstrap from "./bootstrap.tg.ts";
 
-export async function test() {
-	const tests = [
-		testWrappedEntrypoint(),
-		testBasicRootfs(),
-		testBootstrapEnvImageDocker(),
-		testBootstrapEnvImageOci(),
-		testBootstrapEnvImageDockerMultipleUsers(),
-		testBootstrapEnvImageDockerUsersWithDefault(),
-		testBootstrapEnvImageDockerUsersWithSpecs(),
-	];
-	await Promise.all(tests);
-	return true;
-}
-
 export async function bootstrapBuildToolchain() {
 	return await std.env.compose(bootstrap.sdk(), bootstrap.make.build());
 }
 
 export async function testWrappedEntrypoint() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testWrappedEntrypoint: requires Linux");
+		return null;
+	}
 	const script = `echo "Hello, world!"`;
 	const buildToolchain = await bootstrapBuildToolchain();
 	const exe = await std.wrap(script, { buildToolchain });
@@ -43,6 +33,10 @@ export async function testWrappedEntrypoint() {
 }
 
 export async function testWrappedEntrypointWithEnv() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testWrappedEntrypointWithEnv: requires Linux");
+		return null;
+	}
 	const script = `echo "Hello, $NAME!"`;
 	const buildToolchain = await bootstrapBuildToolchain();
 	const env = { NAME: "Tangram" };
@@ -57,6 +51,10 @@ export async function testWrappedEntrypointWithEnv() {
 }
 
 export async function testBasicRootfs() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBasicRootfs: requires Linux");
+		return null;
+	}
 	const utils = bootstrap.sdk.prepareBootstrapUtils();
 	const rootFs = tg.directory(utils, {
 		"hello.txt": tg.file`Hello, world!`,
@@ -70,6 +68,10 @@ export async function testBasicRootfs() {
 }
 
 export async function testBasicRootfsWithEnv() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBasicRootfsWithEnv: requires Linux");
+		return null;
+	}
 	const utils = bootstrap.sdk.prepareBootstrapUtils();
 	const rootFs = tg.directory(utils, {
 		"hello.txt": tg.file`Hello, world!`,
@@ -85,6 +87,10 @@ export async function testBasicRootfsWithEnv() {
 }
 
 export async function testBasicRootfsWithEnvAndEntrypoint() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBasicRootfsWithEnvAndEntrypoint: requires Linux");
+		return null;
+	}
 	const utils = bootstrap.sdk.prepareBootstrapUtils();
 	const rootFs = tg.directory(utils, {
 		"hello.txt": tg.file`Hello, world!`,
@@ -115,6 +121,10 @@ export async function testBootstrapEnv() {
 }
 
 export async function testBootstrapEnvImageDocker() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBootstrapEnvImageDocker: requires Linux");
+		return null;
+	}
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(bootstrapEnv, {
@@ -125,6 +135,10 @@ export async function testBootstrapEnvImageDocker() {
 }
 
 export async function testBootstrapEnvImageDockerAlt() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBootstrapEnvImageDockerAlt: requires Linux");
+		return null;
+	}
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image("sh", {
@@ -135,6 +149,10 @@ export async function testBootstrapEnvImageDockerAlt() {
 }
 
 export async function testBootstrapEnvImageDockerUser() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBootstrapEnvImageDockerUser: requires Linux");
+		return null;
+	}
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(bootstrapEnv, {
@@ -146,6 +164,10 @@ export async function testBootstrapEnvImageDockerUser() {
 }
 
 export async function testBootstrapEnvImageDockerMultipleUsers() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBootstrapEnvImageDockerMultipleUsers: requires Linux");
+		return null;
+	}
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(bootstrapEnv, {
@@ -157,6 +179,10 @@ export async function testBootstrapEnvImageDockerMultipleUsers() {
 }
 
 export async function testBootstrapEnvImageDockerUsersWithDefault() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBootstrapEnvImageDockerUsersWithDefault: requires Linux");
+		return null;
+	}
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(bootstrapEnv, {
@@ -169,6 +195,10 @@ export async function testBootstrapEnvImageDockerUsersWithDefault() {
 }
 
 export async function testBootstrapEnvImageDockerUsersWithSpecs() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBootstrapEnvImageDockerUsersWithSpecs: requires Linux");
+		return null;
+	}
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(bootstrapEnv, {
@@ -184,6 +214,10 @@ export async function testBootstrapEnvImageDockerUsersWithSpecs() {
 }
 
 export async function testBootstrapEnvImageOci() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBootstrapEnvImageOci: requires Linux");
+		return null;
+	}
 	const basicEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(basicEnv, {
@@ -214,6 +248,10 @@ export async function testBasicEnv() {
 }
 
 export async function testBasicEnvImageDocker() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBasicEnvImageDocker: requires Linux");
+		return null;
+	}
 	const basicEnv = await testBasicEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(basicEnv, {
@@ -224,6 +262,10 @@ export async function testBasicEnvImageDocker() {
 }
 
 export async function testBasicEnvImageOci() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testBasicEnvImageOci: requires Linux");
+		return null;
+	}
 	const basicEnv = await testBasicEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(basicEnv, {
@@ -235,6 +277,10 @@ export async function testBasicEnvImageOci() {
 }
 
 export async function testLabelsFeature() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testLabelsFeature: requires Linux");
+		return null;
+	}
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const labels = {
@@ -250,3 +296,26 @@ export async function testLabelsFeature() {
 	});
 	return imageFile;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		testWrappedEntrypoint,
+		testBasicRootfs,
+		testBasicRootfsWithEnv,
+		testBasicRootfsWithEnvAndEntrypoint,
+		testBootstrapEnv,
+		testBootstrapEnvImageDocker,
+		testBootstrapEnvImageDockerAlt,
+		testBootstrapEnvImageDockerUser,
+		testBootstrapEnvImageDockerMultipleUsers,
+		testBootstrapEnvImageDockerUsersWithDefault,
+		testBootstrapEnvImageDockerUsersWithSpecs,
+		testBootstrapEnvImageOci,
+		testBasicEnv,
+		testBasicEnvImageDocker,
+		testBasicEnvImageOci,
+		testLabelsFeature,
+	],
+	sdk: [testWrappedEntrypointWithEnv],
+};

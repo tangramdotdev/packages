@@ -185,3 +185,11 @@ export async function testPrerequisites() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	return await prerequisites(host);
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		test,
+		testPrerequisites,
+	],
+};

@@ -79,3 +79,8 @@ export async function test() {
 	// return await std.assert.pkg(build, spec);
 	return await build();
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

@@ -223,10 +223,6 @@ export namespace download {
 	}
 }
 
-export async function test() {
-	return await Promise.all([testTgDownload(), testStdDownload()]);
-}
-
 export async function testTgDownload() {
 	return await tg.download(
 		"https://github.com/tangramdotdev/bootstrap/releases/download/v2024.06.20/dash_universal_darwin.tar.zst",
@@ -242,3 +238,11 @@ export async function testStdDownload() {
 		mode: "extract",
 	});
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		testTgDownload,
+		testStdDownload,
+	],
+};

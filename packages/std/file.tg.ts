@@ -107,10 +107,6 @@ export async function executableTriples(
 	return arches.map((arch) => std.triple.create({ arch, os }));
 }
 
-export async function test() {
-	await Promise.all([testBinary(), testShebang()]);
-}
-
 export async function testBinary() {
 	// Set up platform details.
 	const bootstrapSDK = await bootstrap.sdk();
@@ -240,3 +236,11 @@ export async function testShebang() {
 	`,
 	);
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		testBinary,
+		testShebang,
+	],
+};

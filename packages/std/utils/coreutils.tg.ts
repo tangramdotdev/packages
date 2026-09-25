@@ -268,3 +268,8 @@ export async function test() {
 	tg.assert(contents === expected);
 	return coreutils;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

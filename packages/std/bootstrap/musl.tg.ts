@@ -90,3 +90,17 @@ export function linkerPath(triple: string) {
 	std.triple.assert(triple);
 	return `${triple}/bin/ld`;
 }
+
+export async function test() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped bootstrap/musl.tg.ts#test: requires Linux");
+		return null;
+	}
+
+	return build();
+}
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

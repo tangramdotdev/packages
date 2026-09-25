@@ -2721,103 +2721,6 @@ export async function demoFindStoreDirHostRun() {
 	});
 }
 
-export async function test() {
-	await Promise.all([
-		tg.build(testSingleArgObjectNoMutations, {
-			name: "single arg object no mutations",
-		}),
-		tg.build(wrapperModule.testWrapperPositionIndependent, {
-			name: "position-independent wrapper",
-		}),
-		tg.build(wrapperModule.testStatic, { name: "static executable" }),
-		tg.build(wrapperModule.testBssManifest, { name: "BSS manifest" }),
-		tg.build(wrapperModule.testStripPreservesManifest, {
-			name: "strip preserves manifest",
-		}),
-		tg.build(wrapperModule.testEmbedNonuniformWrapper, {
-			name: "embed nonuniform wrapper",
-		}),
-		tg.build(testConcurrentRelink, { name: "concurrent relink" }),
-		tg.build(testConcurrentRelinkStandalone, {
-			name: "concurrent relink standalone",
-		}),
-		tg.build(testConcurrentRelinkTransient, {
-			name: "concurrent relink transient",
-		}),
-		tg.build(testDependencies, { name: "dependencies" }),
-		tg.build(testDylibPath, { name: "dylib path" }),
-		tg.build(testEnvObjectFromArtifactDependencies, {
-			name: "env object from artifact dependencies",
-		}),
-		tg.build(testFilterLibraryPathsWithoutExecutable, {
-			name: "filter library paths without executable",
-		}),
-		tg.build(testContentExecutable, { name: "content executable" }),
-		tg.build(testContentExecutableVariadic, {
-			name: "content executable variadic",
-		}),
-		tg.build(testManifestDependenciesDynamicInterpreterArgs, {
-			name: "manifest dependencies dynamic interpreter args",
-		}),
-		tg.build(testManifestDependenciesMergeMutation, {
-			name: "manifest dependencies merge mutation",
-		}),
-		tg.build(testDarwinInjection).named("Darwin injection"),
-		tg.build(testDarwinLargeManifestOverwrite, {
-			name: "Darwin large manifest overwrite",
-		}),
-		tg.build(testManifestMutationPrependRoundTrip, {
-			name: "manifest mutation prepend round trip",
-		}),
-		tg.build(testManifestReferences, {
-			name: "manifest references",
-		}),
-		tg.build(testManifestTemplatePlaceholderRoundTrip, {
-			name: "manifest template placeholder round trip",
-		}),
-		tg.build(testManifestWriteRequiresAuthorizedReferences, {
-			name: "manifest write requires authorized references",
-		}),
-		tg.build(testMergeFalseDoesNotReuseManifest, {
-			name: "merge false does not reuse manifest",
-		}),
-		tg.build(testMergeFalsePreservesWrapperExecutable, {
-			name: "merge false preserves wrapper executable",
-		}),
-		tg.build(testMergedWrapperArgumentOrder, {
-			name: "merged wrapper argument order",
-		}),
-		tg.build(testRewrapEmbeddedExecutableRetainsNeededLibraries, {
-			name: "rewrap embedded executable retains needed libraries",
-		}),
-		tg.build(testRewrapWithoutDependencies, {
-			name: "rewrap without dependencies",
-		}),
-		tg.build(testNeededLibrariesAuthorization, {
-			name: "needed libraries authorization",
-		}),
-		tg.build(testOptimizeLibraryPathsDoesNotMutateInput, {
-			name: "optimize library paths does not mutate input",
-		}),
-		tg.build(testPreservedLibraryPaths, {
-			name: "preserved library paths",
-		}),
-		tg.build(testTransitiveNeededLibraries, {
-			name: "transitive needed libraries",
-		}),
-		tg.build(testInterpreterSwappingNormal, {
-			name: "interpreter swapping normal",
-		}),
-		tg.build(testInterpreterNull, {
-			name: "interpreter null",
-		}),
-		tg.build(testInterpreterWrappingPreloads, {
-			name: "interpreter wrapping preloads",
-		}),
-	]);
-	return true;
-}
-
 export async function testSingleArgObjectNoMutations() {
 	const executable = await argAndEnvDump();
 	await executable.store();
@@ -2910,7 +2813,8 @@ export async function testSingleArgObjectNoMutations() {
 
 export async function testRewrapEmbeddedExecutableRetainsNeededLibraries() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
-		return true;
+		console.log("skipped wrap.tg.ts#testRewrapEmbeddedExecutableRetainsNeededLibraries: requires Linux");
+		return null;
 	}
 
 	const executable = await argAndEnvDump();
@@ -3008,7 +2912,8 @@ export async function testBasicCross() {
 	const detectedBuild = std.triple.host();
 	const detectedOs = std.triple.os(detectedBuild);
 	if (detectedOs === "darwin") {
-		throw new Error(`Cross-compilation is not supported on Darwin`);
+		console.log("skipped wrap.tg.ts#testBasicCross: requires Linux");
+		return null;
 	}
 	const detectedArch = std.triple.arch(detectedBuild);
 	const crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
@@ -3249,7 +3154,8 @@ export async function testManifestMutationPrependRoundTrip() {
 
 export async function testDarwinLargeManifestOverwrite() {
 	if (std.triple.os(std.triple.host()) !== "darwin") {
-		return true;
+		console.log("skipped wrap.tg.ts#testDarwinLargeManifestOverwrite: requires Darwin");
+		return null;
 	}
 
 	const executable = {
@@ -3659,7 +3565,8 @@ async function testWrapperBinary(): Promise<tg.File> {
 export async function testDarwinInjection() {
 	const build = std.triple.host();
 	if (std.triple.os(build) !== "darwin") {
-		return true;
+		console.log("skipped wrap.tg.ts#testDarwinInjection: requires Darwin");
+		return null;
 	}
 	for (const arch of ["aarch64", "x86_64"]) {
 		const host = `${arch}-apple-darwin`;
@@ -3902,6 +3809,11 @@ import callHelloSource from "./wrap/test/call_hello.c" with { type: "file" };
 import dlopenSource from "./wrap/test/dlopen.c" with { type: "file" };
 import printEnvSource from "./wrap/test/print_env.c" with { type: "file" };
 export async function testLoadThroughEnvLdLibraryPath() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped wrap.tg.ts#testLoadThroughEnvLdLibraryPath: requires Linux");
+		return null;
+	}
+
 	const host = std.triple.host();
 	const os = std.triple.os(host);
 	const expectedKind = os === "darwin" ? "dyld" : "ld-musl";
@@ -3948,7 +3860,8 @@ export async function testLdLibraryPathPreservedThroughNestedWrapping() {
 	const host = std.triple.host();
 	const os = std.triple.os(host);
 	if (os === "darwin") {
-		return true; // Skip on macOS, different mechanism.
+		console.log("skipped wrap.tg.ts#testLdLibraryPathPreservedThroughNestedWrapping: requires Linux");
+		return null;
 	}
 
 	const toolchain = await bootstrap.sdk(host);
@@ -4176,3 +4089,44 @@ export async function testConcurrentRelinkTransient() {
 	);
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		testSingleArgObjectNoMutations,
+		testRewrapEmbeddedExecutableRetainsNeededLibraries,
+		testRewrapWithoutDependencies,
+		testContentExecutable,
+		testContentExecutableVariadic,
+		testDependencies,
+		testDylibPath,
+		testManifestReferences,
+		testManifestMutationPrependRoundTrip,
+		testDarwinLargeManifestOverwrite,
+		testManifestDependenciesDynamicInterpreterArgs,
+		testManifestDependenciesMergeMutation,
+		testManifestTemplatePlaceholderRoundTrip,
+		testManifestWriteRequiresAuthorizedReferences,
+		testMergeFalsePreservesWrapperExecutable,
+		testMergeFalseDoesNotReuseManifest,
+		testMergedWrapperArgumentOrder,
+		testEnvObjectFromArtifactDependencies,
+		testNeededLibrariesAuthorization,
+		testFilterLibraryPathsWithoutExecutable,
+		testOptimizeLibraryPathsDoesNotMutateInput,
+		testPreservedLibraryPaths,
+		testTransitiveNeededLibraries,
+		testDarwinInjection,
+		testInterpreterSwappingNormal,
+		testInterpreterNull,
+		testInterpreterWrappingPreloads,
+		testConcurrentRelink,
+		testConcurrentRelinkStandalone,
+		testConcurrentRelinkTransient,
+	],
+	sdk: [
+		testLoadThroughEnvLdLibraryPath,
+		testLdLibraryPathPreservedThroughNestedWrapping,
+	],
+	extended: [testBasicCross],
+};

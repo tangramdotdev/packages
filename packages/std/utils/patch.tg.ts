@@ -171,3 +171,8 @@ export async function test() {
 
 	return patchArtifact;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

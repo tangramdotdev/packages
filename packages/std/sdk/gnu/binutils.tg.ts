@@ -103,6 +103,11 @@ export async function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/gnu/binutils.tg.ts#test: requires Linux");
+		return null;
+	}
+
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 
@@ -121,3 +126,8 @@ export async function test() {
 	// await std.assert.pkg({ buildFn: build, binaries, metadata });
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	sdk: [test],
+};

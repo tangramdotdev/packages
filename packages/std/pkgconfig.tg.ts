@@ -75,3 +75,8 @@ Version: 1.0.0`;
 	console.log("pkgconfig normalization tests passed");
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+};

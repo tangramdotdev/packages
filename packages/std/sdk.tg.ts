@@ -1527,7 +1527,8 @@ export async function testDefault() {
 export async function testMold() {
 	const detectedHost = std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
-		throw new Error(`mold is only available on Linux`);
+		console.log("skipped sdk.tg.ts#testMold: requires Linux");
+		return null;
 	}
 
 	const sdkArg = { host: detectedHost, linker: "mold" as const };
@@ -1542,7 +1543,8 @@ export async function testMold() {
 export async function testGccLld() {
 	const detectedHost = std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
-		throw new Error(`mold is only available on Linux`);
+		console.log("skipped sdk.tg.ts#testGccLld: requires Linux");
+		return null;
 	}
 
 	const sdkArg = { host: detectedHost, linker: "lld" as const };
@@ -1557,7 +1559,8 @@ export async function testGccLld() {
 export async function testMusl() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
-		throw new Error(`musl is only available on Linux`);
+		console.log("skipped sdk.tg.ts#testMusl: requires Linux");
+		return null;
 	}
 	const muslHost = std.triple.create(host, { environment: "musl" });
 	const sdkArg = { host: muslHost };
@@ -1570,7 +1573,8 @@ export async function testCrossGcc() {
 	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
-		throw new Error(`Cross-compilation is not supported on Darwin`);
+		console.log("skipped sdk.tg.ts#testCrossGcc: requires Linux");
+		return null;
 	}
 	const detectedArch = std.triple.arch(detectedHost);
 	const crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
@@ -1592,7 +1596,8 @@ export async function testLLVM() {
 export async function testLLVMMold() {
 	const detectedHost = std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
-		throw new Error(`mold is only available on Linux`);
+		console.log("skipped sdk.tg.ts#testLLVMMold: requires Linux");
+		return null;
 	}
 
 	const sdkArg = {
@@ -1612,7 +1617,8 @@ export async function testLLVMMold() {
 export async function testLLVMBfd() {
 	const detectedHost = std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
-		throw new Error(`bfd is only available on Linux`);
+		console.log("skipped sdk.tg.ts#testLLVMBfd: requires Linux");
+		return null;
 	}
 
 	const sdkArg = {
@@ -1631,7 +1637,8 @@ export async function testLLVMBfd() {
 export async function testExplicitGlibcVersion() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
-		throw new Error(`glibc is only available on Linux`);
+		console.log("skipped sdk.tg.ts#testExplicitGlibcVersion: requires Linux");
+		return null;
 	}
 	const oldGlibcHost = std.triple.create(host, {
 		environment: "gnu",
@@ -1646,7 +1653,8 @@ export async function testExplicitGlibcVersion() {
 export async function testLLVMMusl() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
-		throw new Error(`musl is only available on Linux`);
+		console.log("skipped sdk.tg.ts#testLLVMMusl: requires Linux");
+		return null;
 	}
 	const muslHost = std.triple.create(host, { environment: "musl" });
 	const sdkArg = { host: muslHost, toolchain: "llvm" as const };
@@ -1659,7 +1667,8 @@ export async function testCrossLLVM() {
 	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
-		throw new Error(`Cross-compilation is not supported on Darwin`);
+		console.log("skipped sdk.tg.ts#testCrossLLVM: requires Linux");
+		return null;
 	}
 	const detectedArch = std.triple.arch(detectedHost);
 	const crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
@@ -1677,6 +1686,11 @@ export async function testCrossLLVM() {
 }
 
 export async function testDarwinToLinux() {
+	if (std.triple.os(std.triple.host()) !== "darwin") {
+		console.log("skipped sdk.tg.ts#testDarwinToLinux: requires Darwin");
+		return null;
+	}
+
 	const targets = [
 		"aarch64-unknown-linux-gnu",
 		"aarch64-unknown-linux-musl",
@@ -1684,12 +1698,12 @@ export async function testDarwinToLinux() {
 		"x86_64-unknown-linux-musl",
 	];
 	await Promise.all(
-		targets.map(async (target) => await testDarwinToLinuxSingle(target)),
+		targets.map(async (target) => await assertDarwinToLinux(target)),
 	);
 	return true;
 }
 
-export async function testDarwinToLinuxSingle(target: string) {
+export async function assertDarwinToLinux(target: string) {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
 		throw new Error(`This test is only valid on Darwin`);
@@ -1704,7 +1718,8 @@ export async function testDarwinToLinuxSingle(target: string) {
 export async function testLinuxToDarwin() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
-		throw new Error(`This test is only valid on Linux`);
+		console.log("skipped sdk.tg.ts#testLinuxToDarwin: requires Linux");
+		return null;
 	}
 
 	const target = "aarch64-apple-darwin";
@@ -1786,7 +1801,7 @@ export async function allSdkArgs(): Promise<Array<std.sdk.ArgObject>> {
 	];
 }
 
-export async function assertAllSdks() {
+export async function testAllSdks() {
 	await Promise.all(
 		(await allSdkArgs()).map(async (arg) => {
 			await sdk.assertValid(await sdk(arg), arg);
@@ -1794,3 +1809,24 @@ export async function assertAllSdks() {
 	);
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	sdk: [testDefault],
+	extended: [
+		testMold,
+		testGccLld,
+		testMusl,
+		testCrossGcc,
+		testLLVM,
+		testLLVMMold,
+		testLLVMBfd,
+		testExplicitGlibcVersion,
+		testLLVMMusl,
+		testCrossLLVM,
+		testDarwinToLinux,
+		testLinuxToDarwin,
+		testAllNativeProxied,
+		testAllSdks,
+	],
+};

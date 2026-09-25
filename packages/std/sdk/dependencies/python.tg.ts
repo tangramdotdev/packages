@@ -73,3 +73,8 @@ export async function test() {
 	// await std.assert.pkg({ buildFn: build, binaries: ["python3"], metadata });
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	sdk: [test],
+};

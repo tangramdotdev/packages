@@ -6,7 +6,7 @@
   },
   "scripts": {
     "auto": "bun scripts/package_automation.ts $@",
-    "check": "oxlint scripts && bun scripts/package_automation.ts --check",
+    "check": "oxlint scripts && bun scripts/check_std_tests.ts && bun scripts/package_automation.ts --check",
     "format": "oxfmt --write scripts && bun scripts/package_automation.ts --format",
     "test": "bun scripts/package_automation.ts --test"
   }

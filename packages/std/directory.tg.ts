@@ -145,10 +145,6 @@ export async function provides(
 	};
 }
 
-export async function test() {
-	await testKeepSubdirectories();
-}
-
 export async function testKeepSubdirectories() {
 	// Include two entries to drop, so that dropping one cannot mask a failure to
 	// accumulate the removals.
@@ -166,3 +162,8 @@ export async function testKeepSubdirectories() {
 	tg.assert((await filtered.tryGet("b")) === null, "dropped b");
 	tg.assert((await filtered.tryGet("d")) === null, "dropped d");
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [testKeepSubdirectories],
+};

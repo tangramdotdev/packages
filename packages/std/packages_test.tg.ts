@@ -316,7 +316,7 @@ async function testBuildtimeKindSetsBuildAsHost() {
 	);
 }
 
-async function testDepsEnv() {
+export async function testDepsEnv() {
 	const resolved = await std.packages.applyArgs<MockDepsArg>({
 		host: "x86_64-unknown-linux-gnu",
 		dependencies: { pkgA: { pkgAOption: "test-env" } },
@@ -927,7 +927,6 @@ export async function test() {
 		testTransitiveDependencyArgs(),
 		testKindSubdirectoryFiltering(),
 		testBuildtimeKindSetsBuildAsHost(),
-		testDepsEnv(),
 		testBooleanFlags(),
 		testConditionEvaluation(),
 		testWhenExcludesDependency(),
@@ -953,3 +952,9 @@ export async function test() {
 	]);
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [test],
+	sdk: [testDepsEnv],
+};

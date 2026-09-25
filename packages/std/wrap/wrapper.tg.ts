@@ -156,7 +156,10 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 
 export async function testDarwin() {
 	const host = std.triple.host();
-	tg.assert(std.triple.os(host) === "darwin");
+	if (std.triple.os(host) !== "darwin") {
+		console.log("skipped wrap/wrapper.tg.ts#testDarwin: requires Darwin");
+		return null;
+	}
 	for (const arch of ["aarch64", "x86_64"]) {
 		const target = `${arch}-apple-darwin`;
 		const output = await tg.build(build, { host, target, source });
@@ -331,7 +334,8 @@ export async function testCompile() {
 export async function testWrapperPositionIndependent() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
-		return true;
+		console.log("skipped wrap/wrapper.tg.ts#testWrapperPositionIndependent: requires Linux");
+		return null;
 	}
 	const output = await workspace({ host, release: true });
 	const wrapper = await output.get("bin/wrapper.exe").then(tg.File.expect);
@@ -368,7 +372,8 @@ export async function testWrapperPositionIndependent() {
 
 export async function testStatic() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
-		return true;
+		console.log("skipped wrap/wrapper.tg.ts#testStatic: requires Linux");
+		return null;
 	}
 	const toolchain = std.bootstrap.sdk();
 	const source = tg.directory({
@@ -476,7 +481,8 @@ export async function testStatic() {
 
 export async function testBssManifest() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
-		return true;
+		console.log("skipped wrap/wrapper.tg.ts#testBssManifest: requires Linux");
+		return null;
 	}
 	const toolchain = std.bootstrap.sdk();
 	const source = tg.directory({
@@ -599,7 +605,8 @@ export async function testBssManifest() {
 
 export async function testStripPreservesManifest() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
-		return true;
+		console.log("skipped wrap/wrapper.tg.ts#testStripPreservesManifest: requires Linux");
+		return null;
 	}
 	const toolchain = std.bootstrap.sdk();
 	const source = tg.directory({
@@ -641,7 +648,8 @@ export async function testStripPreservesManifest() {
 export async function testEmbedNonuniformWrapper() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
-		return true;
+		console.log("skipped wrap/wrapper.tg.ts#testEmbedNonuniformWrapper: requires Linux");
+		return null;
 	}
 	const toolchain = std.bootstrap.sdk();
 	const source = tg.directory({
@@ -760,6 +768,11 @@ export async function testFull() {
 }
 
 export async function testStrip() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped wrap/wrapper.tg.ts#testStrip: requires Linux");
+		return null;
+	}
+
 	const toolchain = std.bootstrap.sdk();
 	const source = tg.directory({
 		"main.c": tg.file(`
@@ -939,7 +952,7 @@ export async function testPrintManifest() {
 	return true;
 }
 
-export async function testModify() {
+export async function demoModify() {
 	let file = await tg.file("nothing to see here\n");
 	return std.run(std.shBootstrap`
 		ls -al /.tangram/store
@@ -949,6 +962,11 @@ export async function testModify() {
 }
 
 export async function testPreloadIsolation() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped wrap/wrapper.tg.ts#testPreloadIsolation: requires Linux");
+		return null;
+	}
+
 	const toolchain = await bootstrap.sdk();
 
 	const sources = await tg.directory({
@@ -1009,3 +1027,22 @@ export async function testPreloadIsolation() {
 	);
 	return true;
 }
+
+/** The tests in this module, grouped by tier. */
+export const tests = {
+	bootstrap: [
+		testDarwin,
+		test,
+		testCompile,
+		testWrapperPositionIndependent,
+		testStatic,
+		testBssManifest,
+		testStripPreservesManifest,
+		testEmbedNonuniformWrapper,
+		testStrip,
+		testControls,
+		testPrintManifest,
+		testPreloadIsolation,
+	],
+	sdk: [testFull],
+};
