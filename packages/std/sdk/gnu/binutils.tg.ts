@@ -1,4 +1,3 @@
-import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.ts";
 
 export const metadata = {
@@ -108,9 +107,6 @@ export async function test() {
 		return null;
 	}
 
-	const host = bootstrap.toolchainTriple(std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
-
 	const binaries = [
 		"ar",
 		"as",
@@ -122,9 +118,9 @@ export async function test() {
 		"strip",
 	];
 
-	// FIXME
-	// await std.assert.pkg({ buildFn: build, binaries, metadata });
-	return true;
+	return std.assert.pkg(build, {
+		binaries: binaries.map((name) => std.assert.displaysVersion(name, metadata.version)),
+	});
 }
 
 /** The tests in this module, grouped by tier. */
