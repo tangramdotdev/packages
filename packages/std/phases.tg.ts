@@ -880,8 +880,8 @@ export async function testOverride() {
 	};
 
 	// Should remove the args on build and replace the command.
-	const buildOverride: std.phases.CommandArg = {
-		command: tg`echo "building override" >> ${tg.output}`,
+	const buildOverride: std.phases.CommandBodyArg = {
+		command: await tg`echo "building override" >> ${tg.output}`,
 		args: tg.Mutation.unset(),
 	};
 
