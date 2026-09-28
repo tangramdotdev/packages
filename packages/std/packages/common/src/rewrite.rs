@@ -1,10 +1,15 @@
 use {
 	crate::{Manifest, manifest},
-	std::{fs::Permissions, os::unix::fs::PermissionsExt as _, path::Path, time::SystemTime},
+	std::{
+		fs::Permissions,
+		os::unix::fs::PermissionsExt as _,
+		path::{Path, PathBuf},
+		time::SystemTime,
+	},
 	tangram_client::prelude::*,
 };
 
-/// Run a tool on a copy of a wrapper's executable, then replace the wrapper with one that wraps the tool's output.
+/// Run a tool on a copy of a wrapper's executable, then replace the wrapper with one that wraps the tool's output. A symlink that names the wrapper is kept, and its target is replaced.
 #[allow(clippy::too_many_lines)]
 pub async fn wrapper(
 	path: &Path,
@@ -16,9 +21,11 @@ pub async fn wrapper(
 		return Err(tg::error!("expected a wrapper with an executable path"));
 	}
 
+	// Resolve the wrapper's path.
+	let path = resolve(path)?;
+	let path = path.as_path();
+
 	// The bytes contain IDs only. Recover the wrapper's authorized dependencies before rebuilding it.
-	let absolute_path =
-		std::path::absolute(path).map_err(|error| tg::error!(!error, "invalid wrapper path"))?;
 	let output = tg::checkin(tg::checkin::Arg {
 		options: tg::checkin::Options {
 			destructive: false,
@@ -28,7 +35,7 @@ pub async fn wrapper(
 			root: true,
 			..tg::checkin::Options::default()
 		},
-		path: absolute_path,
+		path: path.to_owned(),
 		updates: Vec::new(),
 	})
 	.await?;
@@ -164,12 +171,16 @@ pub async fn wrapper(
 	Ok(())
 }
 
-/// Run a tool that rewrites a file in place, then restore the dependencies that the rewrite discarded.
-pub async fn file(path: &Path, run: impl FnOnce() -> tg::Result<()>) -> tg::Result<()> {
+/// Run a tool that rewrites a file in place, then restore the dependencies that the rewrite discarded. The tool receives the resolved path, so a symlink that names the file is kept, and its target is rewritten.
+pub async fn file(path: &Path, run: impl FnOnce(&Path) -> tg::Result<()>) -> tg::Result<()> {
+	// Resolve the file's path.
+	let path = resolve(path)?;
+	let path = path.as_path();
+
 	// Run the tool directly if the file has no dependencies.
 	let dependencies = tg::file::xattrs::read_dependencies(path)?;
 	if dependencies.is_none_or(|dependencies| dependencies.is_empty()) {
-		return run();
+		return run(path);
 	}
 
 	// Check in the original file to recover its authorized dependencies.
@@ -183,7 +194,7 @@ pub async fn file(path: &Path, run: impl FnOnce() -> tg::Result<()>) -> tg::Resu
 	tracing::info!(?path, ?dependencies, "recovered the file dependencies");
 
 	// Run the tool.
-	run()?;
+	run(path)?;
 
 	// Check in the output and rebuild it with the original dependencies.
 	let modified = std::fs::metadata(path)
@@ -208,10 +219,14 @@ pub async fn file(path: &Path, run: impl FnOnce() -> tg::Result<()>) -> tg::Resu
 	Ok(())
 }
 
-/// Check in a file without writing to it.
+/// Resolve a path to the file that it names, following any symlinks.
+fn resolve(path: &Path) -> tg::Result<PathBuf> {
+	std::fs::canonicalize(path)
+		.map_err(|error| tg::error!(!error, path = %path.display(), "failed to resolve the path"))
+}
+
+/// Check in the file at a resolved path without writing to it.
 async fn checkin_file(path: &Path) -> tg::Result<tg::File> {
-	let path =
-		std::path::absolute(path).map_err(|error| tg::error!(!error, "invalid file path"))?;
 	let output = tg::checkin(tg::checkin::Arg {
 		options: tg::checkin::Options {
 			destructive: false,
@@ -223,7 +238,7 @@ async fn checkin_file(path: &Path) -> tg::Result<tg::File> {
 			root: true,
 			..tg::checkin::Options::default()
 		},
-		path,
+		path: path.to_owned(),
 		updates: vec![],
 	})
 	.await?;
@@ -233,7 +248,7 @@ async fn checkin_file(path: &Path) -> tg::Result<tg::File> {
 	Ok(file)
 }
 
-/// Check out an artifact in place of a file, then restore the file's permissions and modification time.
+/// Check out an artifact in place of the file at a resolved path, then restore the file's permissions and modification time.
 async fn replace(
 	path: &Path,
 	artifact: tg::Artifact,
@@ -241,26 +256,20 @@ async fn replace(
 	modified: SystemTime,
 ) -> tg::Result<()> {
 	// Remove the existing file.
-	let path = std::fs::canonicalize(path).map_err(|error| {
-		tg::error!(
-			source = error,
-			"could not get canonical path for the output file"
-		)
-	})?;
 	#[cfg(feature = "tracing")]
 	tracing::info!(?path, "checking out the new output file");
-	tokio::fs::remove_file(&path)
+	tokio::fs::remove_file(path)
 		.await
 		.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
 
 	// Check out the artifact.
-	crate::checkout_artifact_to_path(artifact, path.clone()).await?;
+	crate::checkout_artifact_to_path(artifact, path.to_owned()).await?;
 
 	// Restore the permissions first so the file can be opened to set its modification time.
-	tokio::fs::set_permissions(&path, permissions)
+	tokio::fs::set_permissions(path, permissions)
 		.await
 		.map_err(|error| tg::error!(!error, "failed to restore the output permissions"))?;
-	std::fs::File::open(&path)
+	std::fs::File::open(path)
 		.and_then(|file| file.set_modified(modified))
 		.map_err(|error| tg::error!(!error, "failed to restore the output modification time"))?;
 	#[cfg(feature = "tracing")]

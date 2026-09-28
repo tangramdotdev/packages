@@ -118,10 +118,7 @@ fn main_inner() -> tg::Result<()> {
 }
 
 async fn run_proxy(options: &Options, input: usize) -> tg::Result<()> {
-	// Check in and edit the target file, preserving any symlink used to name it.
-	let path = std::fs::canonicalize(&options.command_args[input])
-		.map_err(|error| tg::error!(!error, "failed to resolve the input path"))?;
-	let path = path.as_path();
+	let path = Path::new(&options.command_args[input]);
 
 	// Handle a wrapper, whose stub the native tool cannot edit.
 	let manifest = Manifest::read_from_path(path).map_err(|error| {
@@ -145,7 +142,7 @@ async fn run_proxy(options: &Options, input: usize) -> tg::Result<()> {
 					?path,
 					"found a content executable, running install_name_tool on the wrapper itself"
 				);
-				run(options, &options.input_args(input, path))?;
+				run(options, &options.command_args)?;
 			},
 			manifest::Executable::Path(_) => {
 				#[cfg(feature = "tracing")]
@@ -160,7 +157,7 @@ async fn run_proxy(options: &Options, input: usize) -> tg::Result<()> {
 	}
 
 	// Edit any other file in place and keep its dependencies.
-	common::rewrite::file(path, || run(options, &options.input_args(input, path))).await?;
+	common::rewrite::file(path, |path| run(options, &options.input_args(input, path))).await?;
 
 	Ok(())
 }

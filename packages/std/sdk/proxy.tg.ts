@@ -2021,8 +2021,10 @@ export async function testStripMultipleFiles() {
 		cc -g -o progA -xc ${sourceA}
 		cc -g -o progB -xc ${sourceB}
 		cc -g -o progC -xc ${sourceC}
-		# Try to strip all three files in one invocation.
-	  strip progA progB progC
+		ln -s progC progC-link
+		# Try to strip all three files in one invocation, naming one through a symlink.
+	  strip progA progB progC-link
+		test "$(readlink progC-link)" = progC
 		# Move them to output.
 		mkdir -p ${tg.output}
 		mv progA ${tg.output}/progA
