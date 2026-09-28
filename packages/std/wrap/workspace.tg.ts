@@ -9,6 +9,7 @@ import * as wrapperSrc from "./wrapper.tg.ts";
 import common from "../packages/common" with { type: "directory" };
 import proxy from "../packages/proxy" with { type: "directory" };
 import tgcc from "../packages/tgcc" with { type: "directory" };
+import tginstallnametool from "../packages/tginstallnametool" with { type: "directory" };
 import tgld from "../packages/tgld" with { type: "directory" };
 import tgstrip from "../packages/tgstrip" with { type: "directory" };
 import wrap_ from "../packages/wrap" with { type: "directory" };
@@ -41,6 +42,7 @@ export async function workspace(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		common,
 		proxy,
 		tgcc,
+		tginstallnametool,
 		tgld,
 		tgstrip,
 		["wrap"]: wrap_,
@@ -170,6 +172,26 @@ export async function stripProxy(arg: tg.Unresolved<Arg>) {
 		.build(workspace, arg)
 		.named("workspace")
 		.then((dir) => dir.get("bin/tgstrip"))
+		.then(tg.File.expect);
+}
+
+export async function installNameToolProxy(arg: tg.Unresolved<Arg>) {
+	const resolved = await tg.resolve(arg ?? {});
+	const { build, host, release = true, source, verbose = false } = resolved;
+
+	if (
+		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
+	) {
+		const workspace = await tg
+			.build(std.buildDefaultWorkspace)
+			.named("default workspace");
+		return workspace.get("bin/tginstallnametool").then(tg.File.expect);
+	}
+
+	return await tg
+		.build(workspace, arg)
+		.named("workspace")
+		.then((dir) => dir.get("bin/tginstallnametool"))
 		.then(tg.File.expect);
 }
 
@@ -556,7 +578,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	};
 
 	const buildType = release ? "/release" : "/debug";
-	const items = ["tgcc", "tgld", "tgstrip", "wrap"];
+	const items = ["tgcc", "tginstallnametool", "tgld", "tgstrip", "wrap"];
 	const install = {
 		pre: tg`mkdir -p ${tg.output}/bin`,
 		body: tg`
@@ -664,7 +686,14 @@ export async function testDarwin() {
 	for (const arch of ["aarch64", "x86_64"]) {
 		const host = `${arch}-apple-darwin`;
 		const output = await tg.build(workspace, { build, host, release: false });
-		for (const name of ["tgcc", "tgld", "tgstrip", "wrap", "wrapper.exe"]) {
+		for (const name of [
+			"tgcc",
+			"tginstallnametool",
+			"tgld",
+			"tgstrip",
+			"wrap",
+			"wrapper.exe",
+		]) {
 			const executable = await output.get(`bin/${name}`).then(tg.File.expect);
 			const metadata = await std.file.executableMetadata(executable);
 			tg.assert(metadata.format === "mach-o");
