@@ -1148,11 +1148,17 @@ EOF
 			install_name_tool -delete_rpath /tangram/build -add_rpath @loader_path/../lib ${tg.output}/bin/program
 			install_name_tool -id @rpath/libmessage.1.dylib ${tg.output}/lib/libmessage.dylib
 			install_name_tool -id @rpath/libgreeting.1.dylib ${tg.output}/lib/libgreeting.dylib
+			ln -s program ${tg.output}/bin/program-link
+			ln -s libmessage.dylib ${tg.output}/lib/libmessage-link.dylib
+			install_name_tool -add_rpath /tangram/symlink ${tg.output}/bin/program-link
+			install_name_tool -id @rpath/libmessage.2.dylib ${tg.output}/lib/libmessage-link.dylib
+			test "$(readlink ${tg.output}/bin/program-link)" = program
+			test "$(readlink ${tg.output}/lib/libmessage-link.dylib)" = libmessage.dylib
 			test "$(stat -c %a ${tg.output}/bin/program)" = 751
 			test "$(stat -c %a ${tg.output}/lib/libmessage.dylib)" = 751
-			otool -D ${tg.output}/lib/libmessage.dylib | grep -q @rpath/libmessage.1.dylib
+			otool -D ${tg.output}/lib/libmessage.dylib | grep -q @rpath/libmessage.2.dylib
 			otool -D ${tg.output}/lib/libgreeting.dylib | grep -q @rpath/libgreeting.1.dylib
-			${tg.output}/bin/program | grep -q "hello from a library"
+			${tg.output}/bin/program-link | grep -q "hello from a library"
 			printf 'not a binary' > notes.txt
 			if install_name_tool -id @rpath/libnotes.dylib notes.txt 2> error.txt; then exit 1; fi
 			grep -q "is not a Mach-O file" error.txt
@@ -1174,6 +1180,7 @@ EOF
 		.build(std.shBootstrap`
 			otool -l ${executable} > load-commands
 			grep -q @loader_path/../lib load-commands
+			grep -q /tangram/symlink load-commands
 			! grep -q /tangram/build load-commands
 			touch ${tg.output}
 		`)
