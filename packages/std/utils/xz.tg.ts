@@ -4,15 +4,15 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 
 export const metadata = {
 	name: "xz",
-	version: "5.8.3",
-	tag: "xz/5.8.3",
+	version: "5.8.4",
+	tag: "xz/5.8.4",
 };
 
 export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:3d3a1b973af218114f4f889bbaa2f4c037deaae0c8e815eec381c3d546b974a0";
+		"sha256:0014c7886930454fe8bd4228665b51af55eeae560ea135c9c4cd33f55b2591d9";
 	const base = `https://github.com/tukaani-project/xz/releases/download/v${version}`;
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
