@@ -1,27 +1,29 @@
 import * as std from "std" with { source: "./std" };
+import systemHeadersPatch from "./std/utils/gzip-system-headers.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/gzip",
 	license: "GPL-3.0-or-later",
 	name: "gzip",
 	repository: "https://git.savannah.gnu.org/git/gzip.git",
-	version: "1.14",
-	tag: "gzip/1.14",
+	version: "1.15",
+	tag: "gzip/1.15",
 	provides: {
 		binaries: ["gzip"],
 	},
 };
 
-function source() {
+async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:01a7b881bd220bfdf615f97b8718f80bdfd3f6add385b993dcf6efd14e8c0ac6";
-	return std.download.fromGnu({
+		"sha256:9aa0cc780dec156b8282844833b342ab7cb08c25d2cd9a1869cdd0df31deff48";
+	const source = await std.download.fromGnu({
 		name,
 		version,
 		compression: "xz",
 		checksum,
 	});
+	return std.patch(source, systemHeadersPatch);
 }
 
 const scriptNames = [

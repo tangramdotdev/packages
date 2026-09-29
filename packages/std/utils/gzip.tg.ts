@@ -1,5 +1,7 @@
+import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
+import systemHeadersPatch from "./gzip-system-headers.patch" with { type: "file" };
 
 export const metadata = {
 	name: "gzip",
@@ -7,16 +9,17 @@ export const metadata = {
 	tag: "gzip/1.15",
 };
 
-export function source() {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9aa0cc780dec156b8282844833b342ab7cb08c25d2cd9a1869cdd0df31deff48";
-	return std.download.fromGnu({
+	const source = await std.download.fromGnu({
 		name,
 		version,
 		compression: "xz",
 		checksum,
 	});
+	return bootstrap.patch(source, systemHeadersPatch);
 }
 
 export type Arg = {
@@ -73,8 +76,6 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 }
 
 export default build;
-
-import * as bootstrap from "../bootstrap.tg.ts";
 
 export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
