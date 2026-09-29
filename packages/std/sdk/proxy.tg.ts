@@ -545,6 +545,7 @@ export async function test() {
 		testLdProxyInterpreterArgs(),
 		testTransitiveAll(),
 		testTransitiveDiscovery(),
+		testTransitiveDirect(),
 		testSamePrefix(),
 		testSamePrefixDirect(),
 		testDifferentPrefixDirect(),
@@ -2176,6 +2177,56 @@ export async function testTransitiveDiscovery(target?: string) {
 		await std.assert.stdoutIncludes(retained, "Hello from bottom library!");
 	}
 
+	return true;
+}
+
+/** Check that directly linked libraries retain their private runtime dependencies after the build directory is gone. */
+export async function testTransitiveDirect(
+	strategy: Exclude<OptLevel, "none"> = "isolate",
+) {
+	const toolchain = await bootstrap.sdk();
+	const os = std.triple.os(std.triple.host());
+	const extension = os === "darwin" ? "dylib" : "so";
+	const nameFlag = os === "darwin" ? "install_name" : "soname";
+	const namePrefix = os === "darwin" ? "@rpath/" : "";
+	// Let the loader resolve the private dependency without adding its directory to the linker's search paths.
+	const linkFlags = os === "linux" ? "-Wl,--allow-shlib-undefined" : "";
+	const source = await tg.directory({
+		"greeting.c": tg.file(
+			'const char *greeting(void) { return "hello from a private dependency"; }\n',
+		),
+		"main.c": tg.file(
+			"void message(void);\nint main(void) { message(); return 0; }\n",
+		),
+		"message.c": tg.file(
+			'#include <stdio.h>\nconst char *greeting(void);\nvoid message(void) { puts(greeting()); }\n',
+		),
+		"override.c": tg.file(
+			'const char *greeting(void) { return "hello from an explicit search path"; }\n',
+		),
+	});
+	for (const greetingDirectory of ["message", "greeting"]) {
+		const output = await std
+			.build(std.shBootstrap`
+			mkdir -p message ${greetingDirectory} override ${tg.output}
+			cc -fPIC -shared ${source}/greeting.c -Wl,-${nameFlag},${namePrefix}libgreeting.${extension} -o ${greetingDirectory}/libgreeting.${extension}
+			cc -fPIC -shared ${source}/message.c ${greetingDirectory}/libgreeting.${extension} -Wl,-${nameFlag},${namePrefix}libmessage.${extension} -Wl,-rpath,$PWD/${greetingDirectory} -o message/libmessage.${extension}
+			cc ${source}/main.c message/libmessage.${extension} ${linkFlags} -o ${tg.output}/program
+			cc -fPIC -shared ${source}/override.c -Wl,-${nameFlag},${namePrefix}libgreeting.${extension} -o override/libgreeting.${extension}
+			cc ${source}/main.c message/libmessage.${extension} ${linkFlags} -Loverride -o ${tg.output}/override
+		`)
+			.env(toolchain, { TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: strategy })
+			.then(tg.Directory.expect);
+		// Run in a fresh process so the temporary RPATH cannot supply the missing library.
+		await std.assert.stdoutIncludes(
+			output.get("program").then(tg.File.expect),
+			"hello from a private dependency",
+		);
+		await std.assert.stdoutIncludes(
+			output.get("override").then(tg.File.expect),
+			"hello from an explicit search path",
+		);
+	}
 	return true;
 }
 

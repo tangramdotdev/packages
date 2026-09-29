@@ -387,8 +387,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		// If the linker generated a library, then add the library paths to its references.
 		let mut dependencies = output_file.dependencies().await?;
 		for path in library_paths {
-			let reference = tg::Reference::with_object(path.directory.id().into());
-			let object = path.directory.into();
+			let directory = path.resolve().await?;
+			let reference = tg::Reference::with_object(directory.id().into());
+			let object = directory.into();
 			dependencies.entry(reference).or_insert_with(|| {
 				Some(tg::file::Dependency(tg::Referent::with_node(Some(object))))
 			});
@@ -780,7 +781,7 @@ fn is_library_candidate(arg: &str) -> bool {
 /// Produce the library paths for the output wrapper according to the given configuration.
 async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	file: &tg::File,
-	library_paths: Vec<DirectoryWithSubpath>,
+	mut library_paths: Vec<DirectoryWithSubpath>,
 	needed_libraries: &mut HashMap<String, Option<DirectoryWithSubpath>, H>,
 	strategy: LibraryPathStrategy,
 	max_depth: usize,
@@ -791,7 +792,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
-	find_transitive_needed_libraries(file, &library_paths, needed_libraries, max_depth, 0).await?;
+	find_transitive_needed_libraries(file, &mut library_paths, needed_libraries, max_depth, 0).await?;
 	tracing::debug!(?needed_libraries, "post-find");
 
 	let filtered_library_paths = library_paths
@@ -975,7 +976,7 @@ async fn resolve_directories(
 /// Recursively find all needed libraries for an executable.
 async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync>(
 	file: &tg::File,
-	library_paths: &[DirectoryWithSubpath],
+	library_paths: &mut Vec<DirectoryWithSubpath>,
 	all_needed_libraries: &mut HashMap<String, Option<DirectoryWithSubpath>, H>,
 	max_depth: usize,
 	depth: usize,
@@ -1007,7 +1008,26 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 		return Ok(());
 	}
 
-	for dir_with_subpath in library_paths {
+	// Search a needed library's recorded directories after the explicit library paths.
+	if depth > 0 {
+		let dependencies = file.dependencies().await?;
+		for dependency in dependencies.values().flatten() {
+			let Some(tg::Object::Directory(directory)) = &dependency.0.node else {
+				continue;
+			};
+			let path = DirectoryWithSubpath {
+				directory: directory.clone(),
+				subpath: None,
+			};
+			library_paths.push(path);
+		}
+		deduplicate_library_paths(library_paths);
+	}
+
+	// Recursive discovery can append more library paths.
+	let mut index = 0;
+	while let Some(dir_with_subpath) = library_paths.get(index).cloned() {
+		index += 1;
 		tracing::trace!(?dir_with_subpath, "Checking directory for libraries.");
 
 		let names = all_needed_libraries

@@ -427,8 +427,7 @@ export async function installTargetsSource() {
 project(install_targets C)
 add_library(greeting SHARED greeting.c)
 add_library(message SHARED message.c)
-# Link greeting publicly so that the program links it directly, because the linker proxy does not follow the dependencies of a library passed by its full path.
-target_link_libraries(message PUBLIC greeting)
+target_link_libraries(message PRIVATE greeting)
 add_executable(program main.c)
 target_link_libraries(program PRIVATE message)
 if(APPLE)

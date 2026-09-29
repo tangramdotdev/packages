@@ -175,6 +175,7 @@ function testActions(): Record<string, () => any> {
 		proxyLdInterpreterArgs: sdk.proxy.testLdProxyInterpreterArgs,
 		proxyCompilerLocalPaths: sdk.proxy.testCompilerLocalPaths,
 		proxyTransitiveAll: sdk.proxy.testTransitiveAll,
+		proxyTransitiveDirect: sdk.proxy.testTransitiveDirect,
 		proxyNone: sdk.proxy.testTransitiveNone,
 		proxyFilter: sdk.proxy.testTransitive,
 		proxyResolve: sdk.proxy.testTransitiveResolve,
