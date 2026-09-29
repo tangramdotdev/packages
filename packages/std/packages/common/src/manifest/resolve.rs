@@ -37,13 +37,12 @@ fn value(value: &mut tg::Value, objects: &Objects) -> tg::Result<()> {
 		tg::Value::Module(module) => {
 			if let tg::module::Source::Edge(edge) = &mut module.referent.node {
 				match edge {
+					tg::graph::Edge::Index(_) => {},
 					tg::graph::Edge::Object(handle) => *handle = object(&handle.id(), objects),
 					tg::graph::Edge::Pointer(pointer) => {
-						if let Some(graph) = &mut pointer.graph {
-							*graph = object(&graph.id().into(), objects)
-								.try_unwrap_graph()
-								.map_err(|_| tg::error!("expected a graph"))?;
-						}
+						pointer.graph = object(&pointer.graph.id().into(), objects)
+							.try_unwrap_graph()
+							.map_err(|_| tg::error!("expected a graph"))?;
 					},
 				}
 			}
