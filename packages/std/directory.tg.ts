@@ -145,10 +145,6 @@ export async function provides(
 	};
 }
 
-export async function test() {
-	await testKeepSubdirectories();
-}
-
 export async function testKeepSubdirectories() {
 	// Include two entries to drop, so that dropping one cannot mask a failure to
 	// accumulate the removals.

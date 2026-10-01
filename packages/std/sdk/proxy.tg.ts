@@ -531,39 +531,6 @@ async function toolProxy(
 	});
 }
 
-export async function test() {
-	const tests = [
-		testBasic(),
-		testProxyArguments(),
-		testLinkerControls(),
-		testLinkerOutputCheckout(),
-		testProxyOutputMetadata(),
-		testSdkControlPrecedence(),
-		testStripControls(),
-		testCompilerLocalPaths(),
-		testLdProxyDependencies(),
-		testLdProxyInterpreterArgs(),
-		testTransitiveAll(),
-		testTransitiveDiscovery(),
-		testTransitiveDirect(),
-		testSamePrefix(),
-		testSamePrefixDirect(),
-		testDifferentPrefixDirect(),
-		testSharedLibraryWithDep(),
-		testStrip(),
-		testStripMultipleFiles(),
-	];
-	if (std.triple.os(std.triple.host()) === "linux") {
-		tests.push(testEmbedInput());
-		tests.push(testLinkerParallelLibraries());
-	}
-	if (std.triple.os(std.triple.host()) === "darwin") {
-		tests.push(testInstallNameTool());
-	}
-	await Promise.all(tests);
-	return true;
-}
-
 const ldProxyArtifactEnvVars = (host: string) => [
 	...(std.triple.os(host) === "darwin" ? ["TANGRAM_CODESIGN_PATH"] : []),
 	"TANGRAM_WRAPPER_EXE_PATH",
@@ -972,7 +939,7 @@ export async function testLinkerControls() {
 
 /** SDK defaults yield to incoming environment and then invocation-local linker controls. */
 export async function testSdkControlPrecedence() {
-	const rawToolchain = await bootstrap.sdk.env();
+	const rawToolchain = await bootstrap.sdk.env(std.triple.host());
 	const source = await tg.file`#include <stdio.h>
 int main(void) { puts("SDK controls"); }`;
 	const linux = std.triple.os(std.triple.host()) === "linux";
@@ -1087,7 +1054,8 @@ export async function testBasic(target?: string) {
 /** Embed a newly checked-in executable without reopening its store path. */
 export async function testEmbedInput() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
-		return true;
+		console.log("skipped sdk/proxy.tg.ts#testEmbedInput: requires Linux");
+		return null;
 	}
 	const toolchain = await bootstrap.sdk();
 	await std.build(std.shBootstrap`
@@ -1146,7 +1114,8 @@ EOF
 /** On macOS, `install_name_tool` must edit a wrapper's executable, keep a library's dependencies, and leave a library without dependencies or a file that is not Mach-O to the native tool. */
 export async function testInstallNameTool() {
 	if (std.triple.os(std.triple.host()) !== "darwin") {
-		return true;
+		console.log("skipped sdk/proxy.tg.ts#testInstallNameTool: requires Darwin");
+		return null;
 	}
 	const toolchain = await bootstrap.sdk();
 	const output = await std
@@ -1196,8 +1165,11 @@ EOF
 		manifest?.executable.kind === "path",
 		"expected the program to remain a wrapper",
 	);
+	const references = new Map(
+		(await program.dependencyObjects).map((object) => [object.id, object]),
+	);
 	const executable = tg.File.expect(
-		await wrap.executableFromManifestExecutable(manifest.executable),
+		await wrap.executableFromManifestExecutable(manifest.executable, references),
 	);
 	await std
 		.build(std.shBootstrap`
@@ -1221,7 +1193,10 @@ EOF
 
 /** Parallel links must not fail while the proxy replaces an unrelated shared library. */
 export async function testLinkerParallelLibraries(rounds = 20, jobs = 8) {
-	tg.assert(std.triple.os(std.triple.host()) === "linux");
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/proxy.tg.ts#testLinkerParallelLibraries: requires Linux");
+		return null;
+	}
 	const toolchain = await bootstrap.sdk();
 	await std.build(std.shBootstrap`
 		mkdir lib
@@ -1419,15 +1394,6 @@ export async function testSharedLibraryWithDep(target?: string) {
 
 type OptLevel = "none" | "filter" | "resolve" | "isolate" | "combine";
 
-export async function testTransitiveAll(target?: string) {
-	return await Promise.all([
-		testTransitive(undefined, target),
-		testTransitiveNone(target),
-		testTransitiveResolve(target),
-		testTransitiveIsolate(target),
-		testTransitiveCombine(target),
-	]);
-}
 export function testTransitiveNone(target?: string) {
 	return testTransitive("none", target);
 }
@@ -1446,7 +1412,8 @@ export async function testCrossGccLdProxy() {
 	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
-		throw new Error(`Cross-compilation is not supported on Darwin`);
+		console.log("skipped sdk/proxy.tg.ts#testCrossGccLdProxy: requires Linux");
+		return null;
 	}
 	const detectedArch = std.triple.arch(detectedHost);
 	const crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
@@ -1459,7 +1426,8 @@ export async function testCrossGccLdProxy() {
 export async function testDarwinToLinuxLdProxy() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
-		throw new Error(`This test is only valid on Darwin`);
+		console.log("skipped sdk/proxy.tg.ts#testDarwinToLinuxLdProxy: requires Darwin");
+		return null;
 	}
 	const target = "x86_64-unknown-linux-gnu";
 	return await testTransitive(undefined, target);
@@ -1468,7 +1436,8 @@ export async function testDarwinToLinuxLdProxy() {
 export async function testLinuxToDarwinLdProxy() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
-		throw new Error(`This test is only valid on Linux`);
+		console.log("skipped sdk/proxy.tg.ts#testLinuxToDarwinLdProxy: requires Linux");
+		return null;
 	}
 	const target = "aarch64-apple-darwin";
 	return await testTransitive(undefined, target);
@@ -1943,7 +1912,7 @@ export async function testStrip(target?: string) {
 /** Strip preserves target positions, duplicate occurrences, and real executable behavior. */
 export async function testStripControls() {
 	const toolchain = await bootstrap.sdk();
-	const rawToolchain = await bootstrap.sdk.env();
+	const rawToolchain = await bootstrap.sdk.env(std.triple.host());
 	const { strip: realStrip } = await std.sdk.toolchainComponents({
 		env: await std.env.compose(rawToolchain),
 		host: bootstrap.toolchainTriple(std.triple.host()),

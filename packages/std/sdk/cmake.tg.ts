@@ -351,17 +351,20 @@ export async function build(...args: tg.Args<BuildArg>) {
 export async function test() {
 	// This cmake only supports Linux hosts.
 	if (std.triple.os(std.triple.host()) !== "linux") {
-		return true;
+		console.log("skipped sdk/cmake.tg.ts#test: requires Linux");
+		return null;
 	}
-	await testDependencyXattrs();
-	await testInstallTargets();
-	// FIXME
-	// await std.assert.pkg({ buildFn: cmake, binaries: ["cmake"], metadata });
-	return true;
+	return std.assert.pkg(cmake, {
+		binaries: [std.assert.displaysVersion("cmake", metadata.version)],
+	});
 }
 
 /** Check that cmake copies keep a file's dependencies, including when the source is a symlink. */
 export async function testDependencyXattrs() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/cmake.tg.ts#testDependencyXattrs: requires Linux");
+		return null;
+	}
 	const cmakeArtifact = await tg
 		.build(cmake)
 		.named("cmake")
@@ -372,6 +375,10 @@ export async function testDependencyXattrs() {
 
 /** Check that installing an executable and a library that link other libraries from the same project keeps their dependencies. */
 export async function testInstallTargets() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/cmake.tg.ts#testInstallTargets: requires Linux");
+		return null;
+	}
 	const output = await build({ source: await installTargetsSource() });
 	await assertInstallTargets(output);
 	return true;
