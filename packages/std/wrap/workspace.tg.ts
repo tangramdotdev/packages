@@ -376,6 +376,7 @@ type BuildArg = {
 	release?: boolean;
 	source: tg.Directory;
 	target?: string;
+	test?: boolean;
 	verbose?: boolean;
 };
 
@@ -526,6 +527,17 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 		chmod +x rustc.sh
 		export RUSTC=$PWD/rustc.sh
 		`;
+	if (arg.test) {
+		const rustdoc = tg`${interpreter} ${rustToolchain}/bin/rustdoc`;
+		prepare = tg`
+			${prepare}
+			echo "#!/usr/bin/env sh" > rustdoc.sh
+			echo 'set -eu' >> rustdoc.sh
+			echo 'exec ${rustdoc} --sysroot ${rustToolchain} "$@"' >> rustdoc.sh
+			chmod +x rustdoc.sh
+			export RUSTDOC=$PWD/rustdoc.sh
+		`;
+	}
 	if (hostOs === "darwin" && std.triple.os(target) === "linux") {
 		const hostFlag = tg`--sysroot ${bootstrap.macOsSdk(undefined, host)}/MacOSX.sdk`;
 		const { directory: targetDirectory } = await std.sdk.toolchainComponents({
@@ -587,13 +599,17 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 			done
 		`,
 	};
+	const phases: Record<string, tg.Unresolved<std.phases.PhaseArg>> = { prepare, build, install };
+	if (arg.test) {
+		phases.check = { command: tg`${cargo} test`, args };
+	}
 
-	// Build and install all the crates/
+	// Build, optionally test, and install all the crates.
 	const crates = await std.phases
 		.run({
 			bootstrap: true,
 			env: std.env.compose(...env),
-			phases: { prepare, build, install },
+			phases,
 			host: system,
 			checksum: "sha256:any",
 			network: true,
@@ -654,7 +670,7 @@ export async function test() {
 
 	// Assert the native workspace was built for the host.
 	const os = std.triple.os(std.triple.archAndOs(host));
-	const nativeWrapper = await nativeWorkspace.get("bin/wrapper");
+	const nativeWrapper = await nativeWorkspace.get("bin/wrapper.exe");
 	tg.File.assert(nativeWrapper);
 	const nativeMetadata = await std.file.executableMetadata(nativeWrapper);
 	if (os === "linux") {
@@ -681,7 +697,8 @@ export async function test() {
 export async function testDarwin() {
 	const build = std.triple.host();
 	if (std.triple.os(build) !== "darwin") {
-		return true;
+		console.log("skipped wrap/workspace.tg.ts#testDarwin: requires Darwin");
+		return null;
 	}
 	for (const arch of ["aarch64", "x86_64"]) {
 		const host = `${arch}-apple-darwin`;
@@ -701,6 +718,16 @@ export async function testDarwin() {
 		}
 	}
 	return true;
+}
+
+/** Run every Rust unit test and documentation test with the bootstrap toolchain. */
+export async function testRust() {
+	return tg.build(build, {
+		host: bootstrap.toolchainTriple(),
+		release: false,
+		source: std.rustSource,
+		test: true,
+	}).named("workspace Rust tests");
 }
 
 export async function testCross() {
@@ -723,7 +750,7 @@ export async function testCross() {
 	});
 
 	// Assert the cross workspace was built for the target.
-	const crossWrapper = await crossWorkspace.get("bin/wrapper");
+	const crossWrapper = await crossWorkspace.get("bin/wrapper.exe");
 	tg.File.assert(crossWrapper);
 	const crossMetadata = await std.file.executableMetadata(crossWrapper);
 	tg.assert(crossMetadata.format === "elf");

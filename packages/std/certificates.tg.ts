@@ -21,3 +21,7 @@ export function caCertificates(arg?: Arg) {
 }
 
 export default caCertificates;
+
+export async function test() {
+	return caCertificates();
+}
