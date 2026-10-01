@@ -25,7 +25,13 @@ fn controls_preserve_arguments_and_target_positions() {
 	assert_eq!(options.strip_targets, [0, 2, 6, 7]);
 	assert_eq!(
 		options.wrapper_args(6, Path::new("/executable")),
-		["-v".into(), "--tg-linker-passthrough".into(), input[6].clone(), "--".into(), "/executable".into()]
+		[
+			"-v".into(),
+			"--tg-linker-passthrough".into(),
+			input[6].clone(),
+			"--".into(),
+			"/executable".into()
+		]
 	);
 }
 

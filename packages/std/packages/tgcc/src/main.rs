@@ -631,7 +631,7 @@ mod tests {
 						},
 					]
 				);
-				assert!(args.cli.is_empty());
+				assert_eq!(args.cli, Vec::<String>::new());
 				assert_eq!(args.output.as_deref(), Some("main"));
 			}
 		}

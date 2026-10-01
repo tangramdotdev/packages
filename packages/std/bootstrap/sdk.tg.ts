@@ -68,11 +68,9 @@ export namespace sdk {
 	}
 
 	/** Get a build environment containing only the components from the pre-built bootstrap artifacts with no proxies. Instead of using this env directly, consider using `std.sdk({ bootstrapMode: true })`, which can optionally include the linker and/or cc proxies. */
-	export async function env(hostArg: string) {
-		const t = await toolchain(hostArg);
-		const bootstrapHost = bootstrap.toolchainTriple(
-			hostArg ?? std.triple.host(),
-		);
+	export async function env(host = std.triple.host()) {
+		const t = await toolchain(host);
+		const bootstrapHost = bootstrap.toolchainTriple(host);
 		const utils = await prepareBootstrapUtils(bootstrapHost);
 		const tEntries = await t.entries;
 		const utilsEntries = await utils.entries;

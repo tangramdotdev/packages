@@ -1225,7 +1225,7 @@ export async function testLinkerParallelLibraries(rounds = 20, jobs = 8) {
 /** Wrapping must preserve the native tool's output metadata, including date-preserving strip operations. */
 export async function testProxyOutputMetadata() {
 	const toolchain = await bootstrap.sdk();
-	const rawToolchain = await bootstrap.sdk.env(std.triple.host());
+	const rawToolchain = await bootstrap.sdk.env();
 	const { ld, strip } = await std.sdk.toolchainComponents({
 		env: await std.env.compose(rawToolchain),
 		host: bootstrap.toolchainTriple(std.triple.host()),

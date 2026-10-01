@@ -225,8 +225,9 @@ export function testSelection() {
 	] as const) {
 		const suffix = std.triple.archAndOs(host).replace("-", "_");
 		const components = componentList(host);
-		tg.assert(components?.includes(`toolchain_${suffix}`));
-		tg.assert(components?.includes(`utils_${suffix}`));
+		tg.assert(components, `Unknown host: ${host}.`);
+		tg.assert(components.includes(`toolchain_${suffix}`));
+		tg.assert(components.includes(`utils_${suffix}`));
 		tg.assert(components.every((name) => checksums[name] !== undefined));
 		tg.assert(defaultMacOsSdkVersion(host) === sdkVersion);
 	}

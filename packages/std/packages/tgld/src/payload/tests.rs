@@ -104,7 +104,10 @@ fn repeated_artifacts_merge_authorization() {
 	assert_manifest_omits_credentials(&manifest, &expected);
 }
 
-fn assert_manifest_omits_credentials(manifest: &common::Manifest, tokens: &tg::authorization::Tokens) {
+fn assert_manifest_omits_credentials(
+	manifest: &common::Manifest,
+	tokens: &tg::authorization::Tokens,
+) {
 	let output = tempfile::NamedTempFile::new().unwrap();
 	std::fs::copy(std::env::current_exe().unwrap(), output.path()).unwrap();
 	manifest.write_to_path(output.path());

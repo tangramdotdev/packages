@@ -261,11 +261,11 @@ export async function rust(
 	const hostSystem = std.triple.archAndOs(host);
 
 	// Download and parse the Rust manifest for the selected version.
-	const version = "1.98.1";
+	const version = "1.99.0";
 	const manifestBlob = await std.download({
 		url: `https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
 		checksum:
-			"sha256:a7c8774a5fd8441c997d94c029776cbc5eb111e9d72ab5d256fa69866644347e",
+			"sha256:ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2",
 	});
 	tg.Blob.assert(manifestBlob);
 	const manifestFile = await tg.file(manifestBlob as tg.Blob);

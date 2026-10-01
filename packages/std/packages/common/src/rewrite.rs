@@ -104,8 +104,8 @@ pub async fn wrapper(
 	let wrapper_modified = original_metadata
 		.modified()
 		.map_err(|error| tg::error!(!error, "failed to read the wrapper modification time"))?;
-	std::fs::File::open(&local_executable_path)
-		.and_then(|file| file.set_modified(wrapper_modified))
+	let times = std::fs::FileTimes::new().set_modified(wrapper_modified);
+	std::fs::set_times(&local_executable_path, times)
 		.map_err(|error| tg::error!(!error, "failed to set the tool input modification time"))?;
 
 	// Run the tool on the executable.
@@ -265,12 +265,12 @@ async fn replace(
 	// Check out the artifact.
 	crate::checkout_artifact_to_path(artifact, path.to_owned()).await?;
 
-	// Restore the permissions first so the file can be opened to set its modification time.
+	// Restore the permissions and modification time.
 	tokio::fs::set_permissions(path, permissions)
 		.await
 		.map_err(|error| tg::error!(!error, "failed to restore the output permissions"))?;
-	std::fs::File::open(path)
-		.and_then(|file| file.set_modified(modified))
+	let times = std::fs::FileTimes::new().set_modified(modified);
+	std::fs::set_times(path, times)
 		.map_err(|error| tg::error!(!error, "failed to restore the output modification time"))?;
 	#[cfg(feature = "tracing")]
 	tracing::info!("checked out the new output file");

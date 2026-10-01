@@ -7,7 +7,7 @@ homepage = "https://www.tangram.dev"
 license = "MIT"
 publish = false
 repository = "https://github.com/tangramdotdev/packages"
-rust-version = "1.91"
+rust-version = "1.99"
 version = "0.0.0"
 
 [lints.clippy]
@@ -21,7 +21,7 @@ result_large_err = "allow"
 proxy = { path = "../../std/packages/proxy" }
 rustix = { version = "1", features = ["stdio"] }
 serde = { version = "1", default-features = false, features = ["derive", "std"] }
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "895f530aa29b53b6cb8b8c62566fa40aad2b44a6" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "c2c29870a25da58966a7d628e9227899061b2920" }
 tokio = { version = "1", default-features = false, features = ["rt", "fs"] }
 toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
 which = "8"

@@ -424,7 +424,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let artifact = tg::Artifact::from(output_file);
 		common::checkout_artifact_to_path(artifact, output_path.clone()).await?;
 
-		// Restore the permissions first so the file can be opened to set its modification time.
+		// Restore the original permissions.
 		std::fs::set_permissions(&output_path, original_metadata.permissions()).map_err(
 			|error| tg::error!(!error, path = %output_path.display(), "failed to restore file permissions"),
 		)?;
@@ -433,8 +433,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let modified = original_metadata
 			.modified()
 			.map_err(|error| tg::error!(!error, "failed to read the output modification time"))?;
-		std::fs::File::open(&output_path)
-			.and_then(|file| file.set_modified(modified))
+		let times = std::fs::FileTimes::new().set_modified(modified);
+		std::fs::set_times(&output_path, times)
 			.map_err(|error| tg::error!(!error, path = %output_path.display(), "failed to restore the output modification time"))?;
 		tracing::debug!(?output_path, "restored the original output metadata");
 	}
@@ -792,7 +792,8 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
-	find_transitive_needed_libraries(file, &mut library_paths, needed_libraries, max_depth, 0).await?;
+	find_transitive_needed_libraries(file, &mut library_paths, needed_libraries, max_depth, 0)
+		.await?;
 	tracing::debug!(?needed_libraries, "post-find");
 
 	let filtered_library_paths = library_paths
