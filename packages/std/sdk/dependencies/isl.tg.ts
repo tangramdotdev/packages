@@ -1,4 +1,5 @@
 import * as std from "../../tangram.ts";
+import gmp from "./gmp.tg.ts";
 
 export const metadata = {
 	homepage: "https://libisl.sourceforge.io",
@@ -39,5 +40,5 @@ export async function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
-	return await build();
+	return await build({ env: std.env.compose(gmp()) });
 }
