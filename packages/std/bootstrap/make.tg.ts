@@ -41,7 +41,7 @@ export async function build(...args: tg.Args<Arg>) {
 	const build = "./build.sh";
 	const install: std.phases.PhaseArg = {
 		pre: await tg`mkdir -p ${tg.output}/bin`,
-		body: await tg`cp make ${tg.output}/bin`,
+		body: await tg`mv make ${tg.output}/bin`,
 	};
 	const phases: std.phases.Arg = {
 		configure,
@@ -71,11 +71,5 @@ export async function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
-	// const spec = {
-	// 	...std.assert.defaultSpec(metadata),
-	// 	bootstrapMode: true,
-	// };
-	// FIXME - must be args to use std.assert.pkg.
-	// return await std.assert.pkg(build, spec);
-	return await build();
+	return std.assert.pkg(build, std.assert.defaultSpec(metadata));
 }

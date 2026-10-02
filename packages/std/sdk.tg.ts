@@ -1004,19 +1004,38 @@ export namespace sdk {
 		if (lang === "fortran") {
 			langStr = "f95";
 		}
+		// Supply the macOS SDK explicitly when the compiler wrapper is disabled.
+		const env: tg.Args<std.env.Arg> = [arg.sdkEnv];
+		if (!proxiedLinker && std.triple.os(expectedTarget) === "darwin") {
+			env.push({
+				MACOSX_DEPLOYMENT_TARGET: sdk.macOsDeploymentTarget,
+				SDKROOT: tg`${bootstrap.macOsSdk(undefined, expectedHost)}/MacOSX.sdk`,
+			});
+		}
 		const compiledProgram = await std
 			.build(std.shBootstrap`echo "testing ${title}, proxied linker: ${proxiedLinker.toString()}"
 				set -x
 				${cmd} -v -x${langStr} ${testProgram} -o ${tg.output}`)
-			.env(arg.sdkEnv)
+			.env(std.env.compose(...env))
 			.host(std.triple.archAndOs(expectedHost))
 			.then(tg.File.expect);
 
 		// Assert the resulting program was compiled for the expected target.
 		const expectedArch = std.triple.arch(expectedTarget);
+		const manifest = await std.wrap.Manifest.read(compiledProgram);
 		let metadata = await std.file.executableMetadata(compiledProgram);
 		if (metadata.format === "elf") {
+			tg.assert(metadata.arch === expectedArch);
 			let executable = compiledProgram;
+			// A separate static launcher keeps the program dependencies in its executable.
+			if (manifest?.executable.kind === "path") {
+				const references = new Map(
+					(await compiledProgram.dependencyObjects).map((object) => [object.id, object]),
+				);
+				executable = tg.File.expect(
+					await std.wrap.executableFromManifestExecutable(manifest.executable, references),
+				);
+			}
 			metadata = await std.file.executableMetadata(executable);
 			// Assert the executable has the correct format, architecture, and dependencies.
 			tg.assert(metadata.format === "elf");
@@ -1045,7 +1064,6 @@ export namespace sdk {
 			throw new Error(`Unexpected executable format ${metadata.format}.`);
 		}
 
-		const manifest = await std.wrap.Manifest.read(compiledProgram);
 		if (proxiedLinker) {
 			tg.assert(
 				manifest !== undefined,
@@ -1172,7 +1190,10 @@ export namespace sdk {
 					);
 				}
 
-				let proxiedLinker = arg?.proxyLinker ?? true;
+				// The linker proxy only wraps the target selected for this SDK.
+				const proxiedLinker =
+					(arg.proxyLinker ?? true) &&
+					sdk.canonicalTriple(target) === sdk.canonicalTriple(expected.target);
 
 				// The mold and LLD linkers leave comments in the binary. Check for these if applicable.
 				let linkerFlavor = undefined;

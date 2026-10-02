@@ -1,7 +1,7 @@
 #pragma once
 #include <stddef.h>
 
-__attribute__((naked)) 
+__attribute__((naked, noreturn))
 static void jump_to_entrypoint (void* stack, void* entrypoint) {
 	asm volatile (
 		"mov %rdi, %rsp;"	// set the stack pointer.

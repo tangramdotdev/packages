@@ -74,7 +74,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 				host: host_,
 			});
 			suffix = tg.Template
-				.raw` -target ${target} --sysroot ${targetDirectory}/${target}/sysroot`;
+				.raw` -target ${target} -fuse-ld=lld --sysroot ${targetDirectory}/${target}/sysroot`;
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host_);
 		}
@@ -96,12 +96,10 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 
 	let osArgs: string[] = [];
 	if (os === "linux") {
-		osArgs = [
-			"-nolibc",
-			"-nostdlib",
-			"-fno-tree-loop-distribute-patterns",
-			"-static-pie",
-		];
+		osArgs = ["-nostdlib", "-static-pie"];
+		if (hostOs === "linux") {
+			osArgs.push("-nolibc", "-fno-tree-loop-distribute-patterns");
+		}
 	}
 	if (os === "darwin") {
 		// The manifest is stored immediately before the code signature.

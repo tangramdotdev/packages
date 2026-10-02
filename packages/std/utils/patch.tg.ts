@@ -179,7 +179,10 @@ export async function test() {
 	);
 
 	const contents = (await output.text).trim();
-	tg.assert(contents === expected);
+	tg.assert(
+		contents === expected,
+		`expected the patch output ${JSON.stringify(expected)}, got ${JSON.stringify(contents)}`,
+	);
 
 	return patchArtifact;
 }
