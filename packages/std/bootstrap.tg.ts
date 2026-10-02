@@ -198,7 +198,6 @@ export function componentList(host?: string): Array<string> | undefined {
 }
 
 export async function test() {
-	testSelection();
 	const host = std.triple.host();
 	const components = componentList(host);
 	if (!components) {

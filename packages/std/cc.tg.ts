@@ -463,14 +463,3 @@ export async function testBuildToolsSelectionOverrides() {
 	);
 	return true;
 }
-
-export async function test() {
-	await Promise.all([
-		testBuildToolsPresets(),
-		testBuildToolsOverridesBeatPreset(),
-		testBuildToolsSelectionPresets(),
-		testBuildToolsSelectionKeepsPrebuilt(),
-		testBuildToolsSelectionOverrides(),
-	]);
-	return true;
-}
