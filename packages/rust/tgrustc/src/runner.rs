@@ -82,13 +82,13 @@ pub async fn run() -> tg::Result<()> {
 		tg::Either::Left(command) => command.id()?,
 		tg::Either::Right(command) => command.id(),
 	};
-	let wait = process.wait(tg::process::wait::Options::default()).await?;
+	let outcome = process.wait(tg::process::wait::Options::default()).await?;
 	let elapsed_ms = start.elapsed().as_millis();
 	eprintln!(
 		"runner_complete crate_name={crate_name} cached={cached} elapsed_ms={elapsed_ms} process_id={process_id} command_id={command_id}"
 	);
 
-	let output_dir = outer::process_output_or_exit(wait, &process_id, "the runner").await?;
+	let output_dir = outer::process_output_or_exit(outcome, &process_id, "the runner").await?;
 
 	let cargo_out_dir = std::env::var("OUT_DIR").map_err(|_| {
 		tg::error!("OUT_DIR is not set; cargo did not provide a build-script out dir")

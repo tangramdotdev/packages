@@ -156,13 +156,13 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		tg::Either::Left(command) => command.id()?,
 		tg::Either::Right(command) => command.id(),
 	};
-	let wait = process.wait(tg::process::wait::Options::default()).await?;
+	let outcome = process.wait(tg::process::wait::Options::default()).await?;
 	timing.spawn = spawn_start.elapsed();
 	let display_name = display_crate_name(args.crate_name.as_deref());
 
 	// A failed compile materializes nothing and `process_output_or_exit` does
 	// not return, so emit the timing before it.
-	if wait.exit != 0 {
+	if outcome.exit != 0 {
 		emit_proxy_complete(
 			&display_name,
 			cached,
@@ -173,7 +173,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		);
 	}
 
-	let output_dir = process_output_or_exit(wait, &process_id, "the sandbox").await?;
+	let output_dir = process_output_or_exit(outcome, &process_id, "the sandbox").await?;
 
 	// Materialize outputs before forwarding logs. Cargo treats rustc's stdout
 	// as a pipelining readiness signal; releasing it before checkout completes
@@ -391,12 +391,12 @@ pub(crate) async fn checkout_artifact_entries(
 }
 
 pub(crate) async fn process_output_or_exit(
-	wait: tg::process::wait::Wait,
+	outcome: tg::process::Outcome,
 	process_id: &tg::process::Id,
 	label: &str,
 ) -> tg::Result<tg::Directory> {
-	if wait.exit != 0 {
-		if let Some(output) = wait.output.as_ref()
+	if outcome.exit != 0 {
+		if let Some(output) = outcome.output.as_ref()
 			&& let Ok(object) = output.clone().try_unwrap_object()
 			&& let Ok(output_dir) = object.try_unwrap_directory()
 		{
@@ -404,11 +404,11 @@ pub(crate) async fn process_output_or_exit(
 		}
 		eprintln!(
 			"tgrustc: {label} exited {}. tangram log {process_id}",
-			wait.exit
+			outcome.exit
 		);
-		std::process::exit(wait.exit.into());
+		std::process::exit(outcome.exit.into());
 	}
-	let output_dir: tg::Directory = wait
+	let output_dir: tg::Directory = outcome
 		.output
 		.ok_or_else(|| tg::error!("{label} produced no output (id {process_id})"))?
 		.try_unwrap_object()
