@@ -14,7 +14,11 @@ const table = source.match(
 if (table === undefined) {
 	problems.push("the root module is missing the testModules table");
 }
-const entries = [...(table ?? "").matchAll(/^\s*"([^"]+)":\s*\[(\w+),\s*"(?:bootstrap|sdk|extended)"\],?\s*$/gm)];
+const entries = [
+	...(table ?? "").matchAll(
+		/^\s*"([^"]+)":\s*\[(\w+),\s*"(?:bootstrap|sdk|extended)"\],?\s*$/gm,
+	),
+];
 for (const [, path, name] of entries) {
 	if (imports.get(name!) !== path) {
 		problems.push(
@@ -33,9 +37,7 @@ for await (const path of files.scan(`${root}/packages/std`)) {
 	for (const [, name] of text.matchAll(
 		/^export\s+(?:const|let|var)\s+(test\w*)\b/gm,
 	)) {
-		problems.push(
-			`${path}#${name}: declare the test as an exported function`,
-		);
+		problems.push(`${path}#${name}: declare the test as an exported function`);
 	}
 	for (const [, names] of text.matchAll(/^export\s*\{([^}]+)\}/gm)) {
 		for (const entry of names!.split(",")) {
