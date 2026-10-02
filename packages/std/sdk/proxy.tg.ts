@@ -176,22 +176,30 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 					target: host,
 					toolchainDir: directory,
 				});
-				// On Linux, don't wrap in place.
-				const merge = os === "darwin";
-				wrappedCC = std.wrap(cc, {
-					args: [...clangArgs],
-					buildToolchain: buildToolchainDir,
-					env,
-					host: build,
-					merge,
-				});
-				wrappedCXX = std.wrap(cxx, {
-					args: [...clangxxArgs],
-					buildToolchain: buildToolchainDir,
-					env,
-					host: build,
-					merge,
-				});
+				const wrapCompiler = async (
+					compiler: tg.File | tg.Symlink,
+					name: string,
+					args: tg.Args<tg.Template.Arg>,
+				) => {
+					const darwinCross = isCross && std.triple.os(build) === "darwin";
+					// Run the raw driver so frontend invocations do not reenter the wrapper.
+					const executable = darwinCross
+						? await tg.symlink({
+								artifact: directory,
+								path: `bin/${prefix}${name}`,
+							})
+						: compiler;
+					return std.wrap(executable, {
+						args: [...args, ...(darwinCross ? [tg`--ld-path=${ldProxyArtifact}`] : [])],
+						buildToolchain: buildToolchainDir,
+						env,
+						host: build,
+						...(darwinCross ? { interpreter: null } : {}),
+						merge: os === "darwin",
+					});
+				};
+				wrappedCC = wrapCompiler(cc, "clang", clangArgs);
+				wrappedCXX = wrapCompiler(cxx, "clang++", clangxxArgs);
 				if (isCross) {
 					replacements[`${host}-clang`] = wrappedCC;
 					replacements[`${host}-clang++`] = wrappedCXX;
@@ -1016,7 +1024,7 @@ export async function testBasic(target?: string) {
 			printf("Hello from a TGLD-wrapped binary!\\n");
 			return 0;
 		}`;
-	const cmd = target ? `cc -target ${target}` : `cc`;
+	const cmd = target ? `${target}-cc` : "cc";
 	const output = await std
 		.build((target ? std.sh : std.shBootstrap)`
 				set -x
@@ -1279,13 +1287,9 @@ async function makeShared(arg: tg.Unresolved<MakeSharedArg>) {
 	const flags = tg.Template.join(" ", ...flagArgs);
 	const targetTriple = target ?? std.triple.host();
 	const dylibExt = std.triple.os(targetTriple) === "darwin" ? "dylib" : "so";
-	const cmd = target ? `cc -target ${target}` : `cc`;
+	const cmd = target ? `${target}-cc` : "cc";
 	return await std
-		.build(
-			(target
-				? std.sh
-				: std.shBootstrap)`set -x && mkdir -p ${tg.output}/lib && ${cmd} -v -shared -xc ${source} -o ${tg.output}/lib/${libName}.${dylibExt} ${flags} && ls -al ${tg.output}/lib`,
-		)
+		.build(std.shBootstrap`set -x && mkdir -p ${tg.output}/lib && ${cmd} -v -shared -xc ${source} -o ${tg.output}/lib/${libName}.${dylibExt} ${flags} && ls -al ${tg.output}/lib`)
 		.env(
 			std.env.compose(sdk, {
 				TANGRAM_LINKER_TRACING: "tgld=trace",
@@ -1333,7 +1337,7 @@ export async function testSharedLibraryWithDep(target?: string) {
 		["main.c"]: mainSource,
 	});
 
-	const cmd = target ? `cc -target ${target}` : `cc`;
+	const cmd = target ? `${target}-cc` : "cc";
 	const output = await std
 		.build((target ? std.sh : std.shBootstrap)`
 		set -x
@@ -1425,7 +1429,8 @@ export async function testLinuxToDarwinLdProxy() {
 export async function testTransitive(optLevel?: OptLevel, target?: string) {
 	const opt = optLevel ?? "filter";
 	const host = std.triple.host();
-	const targetTriple = target ?? host;
+	const targetTriple = target ?? bootstrap.toolchainTriple(host);
+	const compiler = target ? `${target}-cc` : "cc";
 	const sdkArg = target ? { host, target } : undefined;
 	const testSDK = target
 		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
@@ -1546,11 +1551,7 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 
 	// Compile the executable.
 	const output = await std
-		.build(
-			(target
-				? std.sh
-				: std.shBootstrap)`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o ${tg.output}`,
-		)
+		.build(std.shBootstrap`${compiler} -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o ${tg.output}`)
 		.env(
 			std.env.compose(testSDK, {
 				TANGRAM_LINKER_TRACING: "tgld=trace",
@@ -1564,7 +1565,9 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 	tg.assert(manifest !== undefined);
 	const interpreter = manifest.interpreter;
 	tg.assert(interpreter !== undefined);
-	const expectedInterpreterKind = os === "darwin" ? "dyld" : "ld-musl";
+	const expectedInterpreterKind = os === "darwin"
+		? "dyld"
+		: std.triple.environment(targetTriple) === "musl" ? "ld-musl" : "ld-linux";
 	tg.assert(
 		interpreter.kind === expectedInterpreterKind,
 		`expected ${expectedInterpreterKind}, got ${interpreter.kind}`,
@@ -1684,10 +1687,12 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 	}
 
 	// Make sure the executable runs without errors and produces the expected output.
-	await std.assert.stdoutIncludes(
-		output,
-		"Hello from transitive constants A!\nHello from transitive constants B!",
-	);
+	if (std.assert.canRun(targetTriple)) {
+		await std.assert.stdoutIncludes(
+			output,
+			"Hello from transitive constants A!\nHello from transitive constants B!",
+		);
+	}
 
 	return output;
 }
@@ -2026,7 +2031,8 @@ export async function testStripMultipleFiles() {
 /** Test that TGLD discovers transitive dependencies when only the top-level library is explicitly linked. This mirrors the ncurses case where multiple libraries are in the same directory, but only one is explicitly linked. This test would catch the bug where TGLD returns early before analyzing libraries for their dependencies. */
 export async function testTransitiveDiscovery(target?: string) {
 	const host = std.triple.host();
-	const targetTriple = target ?? host;
+	const targetTriple = target ?? bootstrap.toolchainTriple(host);
+	const compiler = target ? `${target}-cc` : "cc";
 	const sdkArg = target ? { host, target } : undefined;
 	const testSDK = target
 		? await sdk.sdk(...(sdkArg !== undefined ? [sdkArg] : []))
@@ -2089,12 +2095,12 @@ export async function testTransitiveDiscovery(target?: string) {
 	// On Linux, we need -rpath-link to help the linker find transitive dependencies at link time.
 	const rpathLink = os === "linux" ? tg`-Wl,-rpath-link,${combined}/lib` : "";
 	// Native outputs must run before the build returns and checks out their dependencies.
-	const runInBuild = target === undefined ? tg`${tg.output}` : "";
+	const runInBuild = std.assert.canRun(targetTriple) ? tg`${tg.output}` : "";
 	const output = await std
 		.build(
 			(target
 				? std.sh
-				: std.shBootstrap)`set -x && cc -v -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output}
+				: std.shBootstrap)`set -x && ${compiler} -v -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output}
 			${runInBuild}`,
 		)
 		.env(
@@ -2110,7 +2116,9 @@ export async function testTransitiveDiscovery(target?: string) {
 	tg.assert(manifest !== undefined);
 	const interpreter = manifest.interpreter;
 	tg.assert(interpreter !== undefined);
-	const expectedInterpreterKind = os === "darwin" ? "dyld" : "ld-musl";
+	const expectedInterpreterKind = os === "darwin"
+		? "dyld"
+		: std.triple.environment(targetTriple) === "musl" ? "ld-musl" : "ld-linux";
 	tg.assert(
 		interpreter.kind === expectedInterpreterKind,
 		`expected ${expectedInterpreterKind}, got ${interpreter.kind}`,
@@ -2127,7 +2135,9 @@ export async function testTransitiveDiscovery(target?: string) {
 	);
 
 	// Verify the executable runs correctly.
-	await std.assert.stdoutIncludes(output, "Hello from bottom library!");
+	if (std.assert.canRun(targetTriple)) {
+		await std.assert.stdoutIncludes(output, "Hello from bottom library!");
+	}
 	if (target === undefined) {
 		// Zero depth stops discovery, and explicit false disables missing-library rejection.
 		const limited = await std.build(std.shBootstrap`

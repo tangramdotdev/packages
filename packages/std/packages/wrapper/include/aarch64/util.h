@@ -1,5 +1,6 @@
 #pragma once
 
+__attribute__((noreturn))
 static void jump_to_entrypoint (void* stack, void* entrypoint) {
 	register long x0 asm("x0") = (long)stack;
 	register long x1 asm("x1") = (long)entrypoint;

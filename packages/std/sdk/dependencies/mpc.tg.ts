@@ -1,4 +1,6 @@
 import * as std from "../../tangram.ts";
+import gmp from "./gmp.tg.ts";
+import mpfr from "./mpfr.tg.ts";
 
 export const metadata = {
 	homepage: "https://www.multiprecision.org",
@@ -33,5 +35,6 @@ export async function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
-	return await build();
+	const gmpEnv = std.env.compose(gmp());
+	return await build({ env: std.env.compose(gmpEnv, mpfr({ env: gmpEnv })) });
 }

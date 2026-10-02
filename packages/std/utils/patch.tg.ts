@@ -1,10 +1,12 @@
-import { sdk as bootstrapSdk, toolchainTriple } from "../bootstrap.tg.ts";
+import { patch as bootstrapPatch, sdk as bootstrapSdk, toolchainTriple } from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 import attr from "./attr.tg.ts";
 import libiconv from "./libiconv.tg.ts";
 import coreutils from "./coreutils.tg.ts";
 import diffutils from "./diffutils.tg.ts";
+import darwinXattrsPatch from "./patch-darwin-xattrs.patch" with { type: "file" };
+
 export const metadata = {
 	name: "patch",
 	version: "2.8",
@@ -20,7 +22,7 @@ export async function source() {
 		version,
 		compression: "xz",
 		checksum,
-	});
+	}).then((source) => bootstrapPatch(source, darwinXattrsPatch));
 }
 
 export type Arg = {
@@ -171,7 +173,7 @@ export async function test() {
 	);
 
 	const contents = (await output.text).trim();
-	tg.assert(contents === expected);
+	tg.assert(contents === expected, `expected the patch output ${JSON.stringify(expected)}, got ${JSON.stringify(contents)}`);
 
 	return patchArtifact;
 }
