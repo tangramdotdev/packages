@@ -1,12 +1,13 @@
-use std::{
-	collections::BTreeMap,
-	os::unix::fs::PermissionsExt,
-	path::{Path, PathBuf},
+use {
+	crate::checkout_artifact,
+	std::{
+		collections::BTreeMap,
+		os::unix::fs::PermissionsExt as _,
+		path::{Path, PathBuf},
+	},
+	tangram_client::prelude::*,
+	tokio::io::AsyncWriteExt as _,
 };
-use tangram_client::prelude::*;
-use tokio::io::AsyncWriteExt;
-
-use crate::checkout_artifact;
 
 mod data;
 mod resolve;
@@ -84,24 +85,33 @@ impl Manifest {
 			.ok_or_else(|| tg::error!("missing wrapper exe"))?;
 		let objcopy = std::env::var_os("TANGRAM_OBJCOPY_PATH").map(PathBuf::from);
 
-		// Check out the input file, which is not a dependency of this executable, to get its path on
-		// disk.
-		let input = checkout_artifact(file.clone().into())
-			.await
-			.map_err(|error| tg::error!(!error, "failed to check out the input file"))?;
-
 		// Provide the context to wrap.
 		wrap::set_wrapper_exe_path(wrapper_exe);
 		if let Some(objcopy) = objcopy {
 			wrap::set_objcopy_path(objcopy);
 		}
 
-		// Copy the input file to a a temp.
-		let tempfile = tempfile::NamedTempFile::new()
-			.map_err(|error| tg::error!(!error, "failed to create temp file"))?;
-		tokio::fs::copy(&input, tempfile.path())
+		// Copy the input through its authorized handle into a writable temporary file.
+		let mut input = file
+			.read(tg::read::Options::default())
 			.await
-			.map_err(|error| tg::error!(!error, "failed to copy file"))?;
+			.map_err(|error| tg::error!(!error, "failed to read the input file"))?;
+		let tempfile = tempfile::NamedTempFile::new()
+			.map_err(|error| tg::error!(!error, "failed to create the temporary file"))?;
+		let output = tempfile
+			.reopen()
+			.map_err(|error| tg::error!(!error, "failed to reopen the temporary file"))?;
+		let mut output = tokio::fs::File::from_std(output);
+		tokio::io::copy(&mut input, &mut output)
+			.await
+			.map_err(|error| tg::error!(!error, "failed to copy the input file"))?;
+
+		// Finish the asynchronous writes before the embedding code accesses the file.
+		output
+			.flush()
+			.await
+			.map_err(|error| tg::error!(!error, "failed to flush the temporary file"))?;
+		drop(output);
 		tokio::fs::set_permissions(tempfile.path(), std::fs::Permissions::from_mode(0o755))
 			.await
 			.map_err(|error| tg::error!(!error, "failed to set permissions"))?;
