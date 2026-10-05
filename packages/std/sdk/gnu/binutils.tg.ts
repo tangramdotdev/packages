@@ -1,4 +1,3 @@
-import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.ts";
 
 export const metadata = {
@@ -103,8 +102,10 @@ export async function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
-	const host = bootstrap.toolchainTriple(std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/gnu/binutils.tg.ts#test: requires Linux");
+		return null;
+	}
 
 	const binaries = [
 		"ar",
@@ -117,7 +118,9 @@ export async function test() {
 		"strip",
 	];
 
-	// FIXME
-	// await std.assert.pkg({ buildFn: build, binaries, metadata });
-	return true;
+	return std.assert.pkg(build, {
+		binaries: binaries.map((name) =>
+			std.assert.displaysVersion(name, metadata.version),
+		),
+	});
 }

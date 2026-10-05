@@ -501,7 +501,7 @@ export async function linkableLib(arg: LibraryArg) {
 				directory: arg.directory,
 				subpath: `lib/${dylibName_}`,
 			}).then(() =>
-				testDylib({
+				assertDylib({
 					directory: arg.directory,
 					libraryName: name,
 					...(resolvedPkgConfigName !== undefined
@@ -523,7 +523,7 @@ export async function linkableLib(arg: LibraryArg) {
 				directory: arg.directory,
 				subpath: `lib/lib${name}.a`,
 			}).then(() =>
-				testStaticlib({
+				assertStaticlib({
 					directory: arg.directory,
 					library: name,
 					...(resolvedPkgConfigName !== undefined
@@ -572,7 +572,7 @@ type TestDylibArg = {
 };
 
 /** Compile, link, and run a program against a dynamic library. */
-export async function testDylib(arg: TestDylibArg) {
+export async function assertDylib(arg: TestDylibArg) {
 	if (!canRun(arg.host)) {
 		return true;
 	}
@@ -696,7 +696,7 @@ type TestStaticlibArg = {
 };
 
 /** Compile, link, and run a program against a static library. */
-export async function testStaticlib(arg: TestStaticlibArg) {
+export async function assertStaticlib(arg: TestStaticlibArg) {
 	if (!canRun(arg.host)) {
 		return true;
 	}

@@ -177,13 +177,6 @@ export type CommandBuilderFactory = {
 export const command: CommandBuilderFactory = (...args: any): any =>
 	tg.command(...stdArgs(args)).envMapper(envMapper);
 
-export async function test() {
-	await testCommandArgs();
-	await testCommandTemplate();
-	await testCommandEnvArtifact();
-	return true;
-}
-
 /** Test the arg form, which passes through to tg untouched. */
 export async function testCommandArgs() {
 	const cmd = await command({

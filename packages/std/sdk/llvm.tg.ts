@@ -443,6 +443,11 @@ export async function linuxToDarwin(arg?: LinuxToDarwinArg) {
 }
 
 export async function testLinuxToDarwin(arg?: LinuxToDarwinArg) {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/llvm.tg.ts#testLinuxToDarwin: requires Linux");
+		return null;
+	}
+
 	const { target = "aarch64-apple-darwin" } = arg ?? {
 		host: std.triple.host(),
 		target: "aarch64-apple-darwin",

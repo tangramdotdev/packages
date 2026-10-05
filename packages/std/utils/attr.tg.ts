@@ -100,6 +100,11 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 export default build;
 
 export async function test() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped utils/attr.tg.ts#test: requires Linux");
+		return null;
+	}
+
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	return build({ host, sdk: "none", env: sdk });

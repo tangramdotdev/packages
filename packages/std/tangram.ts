@@ -24,34 +24,20 @@ export * as utils from "./utils.tg.ts";
 export { wrap } from "./wrap.tg.ts";
 export { stripProxy } from "./sdk/proxy.tg.ts";
 export * as bootstrap from "./bootstrap.tg.ts";
+export { test } from "./test.tg.ts";
 
 import * as bootstrap from "./bootstrap.tg.ts";
-import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
-import * as gettext from "./autotools/gettext.tg.ts";
-import * as pkgconf from "./autotools/pkgconf.tg.ts";
-import * as process_ from "./process.tg.ts";
-import caCertificates from "./certificates.tg.ts";
-import * as cc from "./cc.tg.ts";
-import * as command_ from "./command.tg.ts";
+import * as coreutils from "./utils/coreutils.tg.ts";
 import * as dependencies from "./sdk/dependencies.tg.ts";
-import * as directory from "./directory.tg.ts";
-import * as download from "./download.tg.ts";
-import * as env from "./env.tg.ts";
-import { env as stdEnv } from "./env.tg.ts";
-import * as file from "./file.tg.ts";
-import * as image from "./image.tg.ts";
-import * as injection from "./wrap/injection.tg.ts";
-import * as nativeWrapper from "./wrap/wrapper.tg.ts";
-import * as packages from "./packages_test.tg.ts";
-import * as phases from "./phases.tg.ts";
-import * as pkgconfig from "./pkgconfig.tg.ts";
-import * as sdk from "./sdk.tg.ts";
+import * as gettext from "./autotools/gettext.tg.ts";
 import * as glibc from "./sdk/libc/glibc.tg.ts";
+import * as injection from "./wrap/injection.tg.ts";
+import * as pkgconf from "./autotools/pkgconf.tg.ts";
+import * as sdk from "./sdk.tg.ts";
 import * as triple from "./triple.tg.ts";
 import * as utils from "./utils.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
-import * as wrap from "./wrap.tg.ts";
-import * as coreutils from "./utils/coreutils.tg.ts";
+import { env as stdEnv } from "./env.tg.ts";
 
 export const metadata = {
 	name: "std",
@@ -130,193 +116,6 @@ export const rustSource = tg.directory({
 	"Cargo.lock": rustCargoLock,
 	packages: rustPackages,
 });
-
-/** Mapping of strings to pass to "test" to the test targets they run. */
-function testActions(): Record<string, () => any> {
-	return {
-		hostSystem: triple.host,
-		triple: triple.test,
-		download: download.test,
-		phases: phases.test,
-		pkgconfig: pkgconfig.test,
-		packages: packages.test,
-		cc: cc.test,
-		certificates: caCertificates,
-		bootstrapUtils: bootstrap.utils,
-		bootstrapToolchain: bootstrap.toolchain,
-		bootstrapMacOsSdk: bootstrap.macOsSdk,
-		bootstrapComponents: bootstrap.test,
-		hostInjection: injection.test,
-		earlyRust: workspace.rust,
-		workspace: workspace.test,
-		darwinWorkspace: workspace.testDarwin,
-		bootstrapSdk: bootstrapSdk.test,
-		bootstrapMake: bootstrap.make.test,
-		bootstrapMusl: bootstrap.musl.build,
-		file: file.test,
-		fileBinary: file.testBinary,
-		fileShebang: file.testShebang,
-		directory: directory.test,
-		wrapArgAndEnvDump: wrap.argAndEnvDump,
-		wrapBasic: wrap.testSingleArgObjectNoMutations,
-		wrapperControls: nativeWrapper.testControls,
-		wrapContent: wrap.testContentExecutable,
-		wrapContentVariadic: wrap.testContentExecutableVariadic,
-		wrapDylib: wrap.testDylibPath,
-		wrapDarwinInjection: wrap.testDarwinInjection,
-		wrap: wrap.test,
-		env: env.test,
-		proxyBasic: sdk.proxy.testBasic,
-		proxyArguments: sdk.proxy.testProxyArguments,
-		proxyLinkerControls: sdk.proxy.testLinkerControls,
-		proxySdkControlPrecedence: sdk.proxy.testSdkControlPrecedence,
-		proxyStripControls: sdk.proxy.testStripControls,
-		proxyLdDependencies: sdk.proxy.testLdProxyDependencies,
-		proxyLdInterpreterArgs: sdk.proxy.testLdProxyInterpreterArgs,
-		proxyCompilerLocalPaths: sdk.proxy.testCompilerLocalPaths,
-		proxyTransitiveAll: sdk.proxy.testTransitiveAll,
-		proxyTransitiveDirect: sdk.proxy.testTransitiveDirect,
-		proxyNone: sdk.proxy.testTransitiveNone,
-		proxyFilter: sdk.proxy.testTransitive,
-		proxyResolve: sdk.proxy.testTransitiveResolve,
-		proxyIsolate: sdk.proxy.testTransitiveIsolate,
-		proxyCombine: sdk.proxy.testTransitiveCombine,
-		proxySamePrefix: sdk.proxy.testSamePrefix,
-		proxySamePrefixDirect: sdk.proxy.testSamePrefixDirect,
-		proxyDifferentPrefixDirect: sdk.proxy.testDifferentPrefixDirect,
-		proxyStrip: sdk.proxy.testStrip,
-		proxyInstallNameTool: sdk.proxy.testInstallNameTool,
-		proxySharedWithDep: sdk.proxy.testSharedLibraryWithDep,
-		proxy: sdk.proxy.test,
-		utilsPrerequisites: utils.testPrerequisites,
-		utilsBash: utils.bash.test,
-		utilsCoreutils: utils.coreutils.test,
-		utilsStaticGnuEnv: utils.coreutils.gnuEnv,
-		utilsLibiconv: utils.libiconv.test,
-		utilsAttr: utils.attr.test,
-		utilsBzip2: utils.bzip2.test,
-		utilsDiffutils: utils.diffutils.test,
-		utilsFindutils: utils.findutils.test,
-		utilsGawk: utils.gawk.test,
-		utilsGrep: utils.grep.test,
-		utilsGzip: utils.gzip.test,
-		utilsMake: utils.make.test,
-		utilsPatch: utils.patch.test,
-		utilsSed: utils.sed.test,
-		utilsTar: utils.tar.test,
-		utilsXz: utils.xz.test,
-		utils: utils.test,
-		kernelHeaders: sdk.kernelHeaders.test,
-		binutils: sdk.gnu.binutils.test,
-		gccSource: sdk.gnu.gcc.source,
-		gnuCanadianCross: sdk.gnu.gnuToolchain.testCanadianCross,
-		gnuCross: sdk.gnu.gnuToolchain.testCross,
-		gnuSysrootGlibc: sdk.gnu.gnuToolchain.extractSysrootGlibc,
-		gnuSysrootMusl: sdk.gnu.gnuToolchain.extractSysrootMusl,
-		gnuCrossMips: sdk.gnu.gnuToolchain.testCrossMips,
-		gnuCrossRpi: sdk.gnu.gnuToolchain.testCrossRpi,
-		llvmSource: sdk.llvm.source,
-		llvmToolchain: sdk.llvm.toolchain,
-		llvmBuildLLd: sdk.llvm.buildLld,
-		llvmAppleLibdispatch: sdk.llvm.appleLibdispatch.build,
-		llvmAppleLibtapi: sdk.llvm.appleLibtapi.build,
-		llvmLibBsd: sdk.llvm.libBsd.build,
-		llvmLibMd: sdk.llvm.libMd.build,
-		llvmLinuxToDarwinToolchain: sdk.llvm.testLinuxToDarwin,
-		sdkDepsBison: sdk.dependencies.bison.test,
-		sdkDepsFlex: sdk.dependencies.flex.test,
-		sdkDepsGmp: sdk.dependencies.gmp.test,
-		sdkDepsM4: sdk.dependencies.m4.test,
-		sdkDepsMpc: sdk.dependencies.mpc.test,
-		sdkDepsMpfr: sdk.dependencies.mpfr.test,
-		sdkDepsLibxcrypt: sdk.dependencies.libxcrypt.test,
-		sdkDepsPerl: sdk.dependencies.perl.test,
-		sdkDepsPython: sdk.dependencies.python.test,
-		sdkDepsCmake: sdk.cmake.test,
-		sdkDepsNinja: sdk.ninja.test,
-		sdkDepsMoldSource: sdk.mold.source,
-		sdkDepsMold: sdk.mold.test,
-		sdkDefault: sdk.testDefault,
-		sdkGccCross: sdk.testCrossGcc,
-		sdkGccLld: sdk.testGccLld,
-		sdkLlvm: sdk.testLLVM,
-		sdkLlvmBfd: sdk.testLLVMBfd,
-		sdkLlvmMold: sdk.testLLVMMold,
-		sdkLLvmMusl: sdk.testLLVMMusl,
-		sdkMold: sdk.testMold,
-		sdkMusl: sdk.testMusl,
-		sdkAllNative: sdk.testAllNativeProxied,
-		sdkExplicitGlibcVersion: sdk.testExplicitGlibcVersion,
-		sdkDarwinToLinux: sdk.testDarwinToLinux,
-		sdkLinuxToDarwin: sdk.testLinuxToDarwin,
-		sdkAll: sdk.assertAllSdks,
-		crossInjection: injection.testCross,
-		crossWorkspace: workspace.testCross,
-		imageWrappedEntrypoint: image.testWrappedEntrypoint,
-		imageBasicRootfs: image.testBasicRootfs,
-		imageBootstrapEnv: image.testBootstrapEnv,
-		imageBootstrapEnvImageDocker: image.testBootstrapEnvImageDocker,
-		imageBootstrapEnvImageOci: image.testBootstrapEnvImageOci,
-		imageBasicEnv: image.testBasicEnv,
-		imageBasicEnvImageDocker: image.testBasicEnvImageDocker,
-		imageBasicEnvImageOci: image.testBasicEnvImageOci,
-		image: image.test,
-		stdBuild: process_.testBuildAll,
-		stdRun: process_.testRunAll,
-		stdCommand: command_.test,
-	};
-}
-
-/** A subset of all defined tests to run in the correct order. */
-const defaultTests = [
-	"hostSystem",
-	"triple",
-	"phases",
-	"packages",
-	"cc",
-	"certificates",
-	"proxy",
-	"file",
-	"wrap",
-	"sdkDefault",
-	"stdBuild",
-	"stdRun",
-	"stdCommand",
-];
-
-/** With no arguments, runs a set of default tests. Pass test names to run individual component tests. */
-export async function test(...tests: Array<string>) {
-	if (tests.length === 0) {
-		tests = defaultTests;
-	}
-	tests = validateTestNames(...tests);
-	console.log("Running tests: ", tests.join(", "));
-
-	let results: Record<string, tg.Value> = {};
-	const actionsTable = testActions();
-	for (const testName of tests) {
-		const func = actionsTable[testName];
-		if (func === undefined) {
-			return tg.unreachable(`no such test: ${testName}`);
-		}
-		const result = await tg.build(func);
-		console.log(await tg`${testName}: ${result}`);
-		results[testName] = result;
-	}
-
-	return results;
-}
-
-/** Returns a deduplicated array of the tests passed in. Throws if any are unrecognized. */
-function validateTestNames(...testNames: Array<string>) {
-	const validNames = new Set(Object.keys(testActions()));
-	const uniqueTests = new Set(testNames);
-	const invalidTests = testNames.filter((name) => !validNames.has(name));
-	if (invalidTests.length > 0) {
-		throw new Error(`unrecognized test names: ${invalidTests.join(", ")}`);
-	}
-	return [...uniqueTests];
-}
 
 export async function buildGnuEnv() {
 	return coreutils.gnuEnv();

@@ -241,15 +241,8 @@ export async function test() {
 	const os = std.triple.os(std.triple.archAndOs(detectedHost));
 	const nativeMetadata = await std.file.executableMetadata(nativeInjection);
 	if (os === "linux") {
-		std.assert.assertJsonSnapshot(
-			nativeMetadata,
-			`
-			{
-				"format": "elf",
-				"arch": "${hostArch}"
-			}
-		`,
-		);
+		tg.assert(nativeMetadata.format === "elf");
+		tg.assert(nativeMetadata.arch === hostArch);
 	} else if (os === "darwin") {
 		tg.assert(nativeMetadata.format === "mach-o");
 		tg.assert(
@@ -298,15 +291,8 @@ export async function testCross() {
 	// Assert the injection dylib was built for the target machine.
 	const nativeMetadata = await std.file.executableMetadata(nativeInjection);
 	if (os === "linux") {
-		std.assert.assertJsonSnapshot(
-			nativeMetadata,
-			`
-			{
-				"format": "elf",
-				"arch": "${targetArch}"
-			}
-		`,
-		);
+		tg.assert(nativeMetadata.format === "elf");
+		tg.assert(nativeMetadata.arch === targetArch);
 	} else if (os === "darwin") {
 		tg.assert(nativeMetadata.format === "mach-o");
 		tg.assert(

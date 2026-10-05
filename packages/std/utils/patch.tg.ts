@@ -1,10 +1,16 @@
-import { sdk as bootstrapSdk, toolchainTriple } from "../bootstrap.tg.ts";
+import {
+	patch as bootstrapPatch,
+	sdk as bootstrapSdk,
+	toolchainTriple,
+} from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 import attr from "./attr.tg.ts";
 import libiconv from "./libiconv.tg.ts";
 import coreutils from "./coreutils.tg.ts";
 import diffutils from "./diffutils.tg.ts";
+import macOsXattrsPatch from "./patch-macos-xattrs.patch" with { type: "file" };
+
 export const metadata = {
 	name: "patch",
 	version: "2.8",
@@ -15,12 +21,14 @@ export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f87cee69eec2b4fcbf60a396b030ad6aa3415f192aa5f7ee84cad5e11f7f5ae3";
-	return std.download.fromGnu({
+	const source = await std.download.fromGnu({
 		name,
 		version,
 		compression: "xz",
 		checksum,
 	});
+	// GNU patch preserves xattrs only through libattr, so preserve them with copyfile on macOS.
+	return bootstrapPatch(source, macOsXattrsPatch);
 }
 
 export type Arg = {
