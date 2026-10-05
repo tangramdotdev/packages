@@ -1089,15 +1089,8 @@ export async function testEmbedInput() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
 		return true;
 	}
-	await tg.build(await testEmbedInputCommand());
-	return true;
-}
-
-/** Prepare the regression command for scripts/test-embed-input.nu to run with authorization searches disabled. */
-export async function testEmbedInputCommand() {
-	tg.assert(std.triple.os(std.triple.host()) === "linux");
 	const toolchain = await bootstrap.sdk();
-	return std.command(std.shBootstrap`
+	await std.build(std.shBootstrap`
 		# Make each executable unique so an earlier run cannot populate its VFS authorization state.
 		cat > main.c <<EOF
 #include <stdio.h>
@@ -1109,6 +1102,7 @@ EOF
 		grep '"kind":"address"' manifest.json
 		touch ${tg.output}
 	`).env(toolchain);
+	return true;
 }
 
 /** Newly linked outputs must retain build ordering and have their runtime dependencies available. */
