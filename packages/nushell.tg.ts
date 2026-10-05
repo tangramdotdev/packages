@@ -7,8 +7,8 @@ export const metadata = {
 	license: "MIT",
 	name: "nushell",
 	repository: "https://github.com/nushell/nushell",
-	version: "0.115.1",
-	tag: "nushell/0.115.1",
+	version: "0.116.1",
+	tag: "nushell/0.116.1",
 	provides: {
 		binaries: ["nu"],
 	},
@@ -17,7 +17,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:06df93281a0f858019d09ea6cf821b19a7cd9017cdfb9e898cfe8dd4bd8101c2";
+		"sha256:0cca0c5bc9d9eb608dee00c75b6b511917df6e66c784b034468bab2ff0fbb9b4";
 	const owner = name;
 	const repo = name;
 	const tag = version;
