@@ -554,6 +554,7 @@ export async function test() {
 		testStripMultipleFiles(),
 	];
 	if (std.triple.os(std.triple.host()) === "linux") {
+		tests.push(testEmbedInput());
 		tests.push(testLinkerParallelLibraries());
 	}
 	if (std.triple.os(std.triple.host()) === "darwin") {
@@ -1081,6 +1082,33 @@ export async function testBasic(target?: string) {
 		);
 	}
 	return tg.directory({ output });
+}
+
+/** Embed a newly checked-in executable without reopening its store path. */
+export async function testEmbedInput() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		return true;
+	}
+	await tg.build(await testEmbedInputCommand());
+	return true;
+}
+
+/** Prepare the regression command for scripts/test-embed-input.nu to run with authorization searches disabled. */
+export async function testEmbedInputCommand() {
+	tg.assert(std.triple.os(std.triple.host()) === "linux");
+	const toolchain = await bootstrap.sdk();
+	return std.command(std.shBootstrap`
+		# Make each executable unique so an earlier run cannot populate its VFS authorization state.
+		cat > main.c <<EOF
+#include <stdio.h>
+int main(void) { puts("$PWD"); return 0; }
+EOF
+		cc main.c -Wl,--tg-linker-embed-wrapper=true -o program
+		test "$(./program)" = "$PWD"
+		./program --tg-wrapper-print-manifest > manifest.json
+		grep '"kind":"address"' manifest.json
+		touch ${tg.output}
+	`).env(toolchain);
 }
 
 /** Newly linked outputs must retain build ordering and have their runtime dependencies available. */

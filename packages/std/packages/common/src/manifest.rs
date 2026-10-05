@@ -105,12 +105,6 @@ impl Manifest {
 		tokio::io::copy(&mut input, &mut output)
 			.await
 			.map_err(|error| tg::error!(!error, "failed to copy the input file"))?;
-
-		// Finish the asynchronous writes before the embedding code accesses the file.
-		output
-			.flush()
-			.await
-			.map_err(|error| tg::error!(!error, "failed to flush the temporary file"))?;
 		drop(output);
 		tokio::fs::set_permissions(tempfile.path(), std::fs::Permissions::from_mode(0o755))
 			.await
