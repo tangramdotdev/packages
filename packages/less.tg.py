@@ -5,19 +5,14 @@
 # [tool.tangram.imports.pcre2]
 # specifier = "pcre2"
 # attributes = { source = "./pcre2.tg.ts" }
-# [tool.tangram.imports.std_assert]
+# [tool.tangram.imports.std]
 # specifier = "std"
-# attributes = { source = "./std", get = "assert.tg.ts" }
-# [tool.tangram.imports.std_autotools]
-# specifier = "std"
-# attributes = { source = "./std", get = "autotools.tg.ts" }
+# attributes = { source = "./std" }
 # ///
 
-# Python cannot import the std root module because it uses `export *`, so this module imports std submodules directly.
 import ncurses
 import pcre2
-import std_assert
-import std_autotools
+import std
 
 metadata = {
     "homepage": "https://www.greenwoodsoftware.com/less/",
@@ -33,12 +28,18 @@ metadata = {
 
 
 async def source() -> tg.Directory:
-    name = metadata["name"]
-    version = metadata["version"]
     checksum = "sha256:d1008fb78dcae1323ddab664bcb352a61f022b1b131bd8018548e021d975ec7a"
-    url = f"https://www.greenwoodsoftware.com/less/{name}-{version}.tar.gz"
-    archive = tg.Directory.expect(await tg.download(url, checksum, {"mode": "extract"}))
-    return tg.Directory.expect(await archive.get(f"{name}-{version}"))
+    archive = await std.download(
+        {
+            "base": "https://www.greenwoodsoftware.com/less",
+            "checksum": checksum,
+            "extension": ".tar.gz",
+            "mode": "extract",
+            "name": metadata["name"],
+            "version": metadata["version"],
+        }
+    )
+    return tg.Directory.expect(await std.directory.unwrap(archive))
 
 
 async def deps() -> dict[str, tg.Value.Type]:
@@ -57,12 +58,12 @@ async def build(*args: tg.Value.Type) -> tg.Directory:
             "configure": {"args": ["--with-regex=pcre2"]},
         },
     }
-    return tg.Directory.expect(await std_autotools.build(arg, *args))
+    return tg.Directory.expect(await std.autotools.build(arg, *args))
 
 
 default = build
 
 
 async def test() -> tg.Value.Type:
-    spec = await std_assert.defaultSpec(metadata)
-    return await std_assert.pkg(await tg.command(build), spec)
+    spec = await std.assert_.defaultSpec(metadata)
+    return await std.assert_.pkg(await tg.command(build), spec)
