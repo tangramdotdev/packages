@@ -175,17 +175,21 @@ function resolvePackages(filter: PackageFilter): string[] {
 		const entries = fs.readdirSync(packagesPath(), { withFileTypes: true });
 
 		for (const entry of entries) {
-			// Handle directory packages (with tangram.ts inside)
+			// Handle directory packages, which contain a root module.
 			if (entry.isDirectory()) {
 				if (blacklist.has(entry.name)) continue;
 				const fullPath = path.join(packagesPath(), entry.name);
-				if (fs.existsSync(path.join(fullPath, "tangram.ts"))) {
+				if (hasRootModule(fullPath)) {
 					packages.push(entry.name);
 				}
 			}
-			// Handle single-file packages (.tg.ts files)
-			else if (entry.isFile() && entry.name.endsWith(".tg.ts")) {
-				const packageName = entry.name.replace(/\.tg\.ts$/, "");
+			// Handle single-file packages, which are .tg.ts or .tg.py files.
+			else if (entry.isFile()) {
+				const extension = moduleExtensions.find((suffix) =>
+					entry.name.endsWith(suffix),
+				);
+				if (extension === undefined) continue;
+				const packageName = entry.name.slice(0, -extension.length);
 				if (blacklist.has(packageName)) continue;
 				packages.push(packageName);
 			}
@@ -971,17 +975,32 @@ function packagesPath() {
 	return path.join(path.dirname(import.meta.dir), "packages");
 }
 
+/** The file extensions of single-file packages. */
+const moduleExtensions = [".tg.ts", ".tg.py"];
+
+/** The file names of directory package root modules. */
+const rootModuleNames = ["tangram.ts", "tangram.py"];
+
+/** Returns whether the directory contains a root module. */
+function hasRootModule(dirPath: string): boolean {
+	return rootModuleNames.some((name) =>
+		fs.existsSync(path.join(dirPath, name)),
+	);
+}
+
 /** Returns the package path, or null if the package does not exist */
 export function getPackagePath(name: string): string | null {
 	const pkgPath = packagesPath();
 	// Check for single-file package
-	const filePath = path.join(pkgPath, `${name}.tg.ts`);
-	if (fs.existsSync(filePath)) {
-		return filePath;
+	for (const extension of moduleExtensions) {
+		const filePath = path.join(pkgPath, `${name}${extension}`);
+		if (fs.existsSync(filePath)) {
+			return filePath;
+		}
 	}
 	// Check for directory package
 	const dirPath = path.join(pkgPath, name);
-	if (fs.existsSync(path.join(dirPath, "tangram.ts"))) {
+	if (hasRootModule(dirPath)) {
 		return dirPath;
 	}
 	return null;
