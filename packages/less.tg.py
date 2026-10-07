@@ -29,17 +29,16 @@ metadata = {
 
 async def source() -> tg.Directory:
     checksum = "sha256:d1008fb78dcae1323ddab664bcb352a61f022b1b131bd8018548e021d975ec7a"
-    archive = await std.download(
+    archive = await std.download.extractArchive(
         {
             "base": "https://www.greenwoodsoftware.com/less",
             "checksum": checksum,
             "extension": ".tar.gz",
-            "mode": "extract",
             "name": metadata["name"],
             "version": metadata["version"],
         }
     )
-    return tg.Directory.expect(await std.directory.unwrap(archive))
+    return tg.Directory.expect(await std.directory.unwrap(tg.Directory.expect(archive)))
 
 
 async def deps() -> dict[str, tg.Value.Type]:
