@@ -1200,6 +1200,7 @@ export async function test() {
 		testCacheHitVendoredDeps(),
 		testMultiVersionCacheHit(),
 		testCacheHitWithDepVars(),
+		testSysLinkCache(),
 	]);
 	return true;
 }

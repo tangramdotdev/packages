@@ -628,6 +628,14 @@ linker = "${hostLinker}"`;
 		envs.push(proxyEnv);
 	}
 
+	// Filter the workspace once per source rather than once per build script. An in-tree build copies the source out of the store, so its build scripts already see only their own crate.
+	if (useHostRunner && !buildInTree) {
+		const runnerWorkspace = await tg
+			.build(filterRunnerWorkspace, source)
+			.then(tg.Directory.expect);
+		envs.push({ TGRUSTC_RUNNER_WORKSPACE: runnerWorkspace });
+	}
+
 	{
 		const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
 		if (effectiveJobs !== undefined) {
@@ -804,6 +812,32 @@ export async function extractCargoManifests(
 	}
 
 	return extractManifests(source, "");
+}
+
+/** Replace every Rust source file in a source directory with an empty placeholder. A workspace member's build script runs against this tree with its own crate grafted back in, so editing another crate's Rust code does not change the build script's inputs. */
+export async function filterRunnerWorkspace(
+	source: tg.Directory,
+): Promise<tg.Directory> {
+	const placeholder = await tg.file("");
+
+	async function filter(dir: tg.Directory): Promise<tg.Directory> {
+		const entries = await dir.entries;
+		const filtered = await Promise.all(
+			Object.entries(entries).map(async ([name, artifact]) => {
+				// node_modules never contains Rust sources that a build script reads and can be huge.
+				if (artifact instanceof tg.Directory && name !== "node_modules") {
+					return [name, await filter(artifact)] as const;
+				}
+				if (artifact instanceof tg.File && name.endsWith(".rs")) {
+					return [name, placeholder] as const;
+				}
+				return [name, artifact] as const;
+			}),
+		);
+		return tg.directory(Object.fromEntries(filtered));
+	}
+
+	return filter(source);
 }
 
 /** Run `cargo vendor` to download dependencies. */
