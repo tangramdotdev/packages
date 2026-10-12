@@ -5,8 +5,8 @@ export const metadata = {
 	license: "MIT",
 	name: "bun",
 	repository: "https://github.com/oven-sh/bun",
-	version: "1.4.2",
-	tag: "bun/1.4.2",
+	version: "1.4.3",
+	tag: "bun/1.4.3",
 	provides: {
 		binaries: ["bun"],
 	},
@@ -52,13 +52,13 @@ export default self;
 // Taken from https://github.com/oven-sh/bun/releases/download/bun-v${version}/SHASUMS256.txt.asc
 const binaryChecksums: { [key: string]: tg.Checksum } = {
 	["aarch64-linux"]:
-		"sha256:54328bbc2d9c8e0c9f892c544d66c57a83b84139e34909e5ee81758f1ac8fda7",
+		"sha256:efa9813da5ed72423bf847f916e8d2c47c0d776add972354026a75e10da9aa21",
 	["x86_64-linux"]:
-		"sha256:36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
+		"sha256:3e730528d89775f03f87f05c06787c4df4099d0a37f3f252e7b829cb23816e18",
 	["aarch64-darwin"]:
-		"sha256:90987a3a16d7db556d886ac3d551e7b6d3edf0a1cf43acaed622e8676be1d12f",
+		"sha256:80afd4c069b46a6fa8f3ec520bebc750a7843e4a8d5b9583d29ad436c00a3403",
 	["x86_64-darwin"]:
-		"sha256:80520d7e17526308c9185d261679ac6d27798d3803a0e9f7ff9121ab8affb012",
+		"sha256:62660e6438eb872278877acca77e1152d5d031324df368d4a81b428211489d2d",
 };
 
 export async function test() {

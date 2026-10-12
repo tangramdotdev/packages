@@ -5,8 +5,8 @@ export const metadata = {
 	license: "https://github.com/pkgconf/pkgconf?tab=License-1-ov-file#readme",
 	name: "pkgconf",
 	repository: "https://github.com/pkgconf/pkgconf",
-	version: "3.0.7",
-	tag: "pkgconf/3.0.7",
+	version: "3.0.8",
+	tag: "pkgconf/3.0.8",
 	provides: {
 		binaries: ["pkgconf"],
 	},
@@ -17,7 +17,7 @@ export async function source() {
 	const extension = ".tar.xz";
 	const base = `https://distfiles.ariadne.space/pkgconf`;
 	const checksum =
-		"sha256:c926ff491cbd9a331a589160811bd97ab1749b4d5198a519338f2cdfabe6940a";
+		"sha256:943f0bc88bcaeceb630b00262e2a8ad5ea4fac3fba72a4267d8b9ec6b35d1194";
 	return std.download
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
