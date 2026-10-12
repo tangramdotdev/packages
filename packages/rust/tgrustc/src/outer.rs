@@ -435,8 +435,11 @@ pub(crate) fn is_denied_host_env(key: &str) -> bool {
 	if matches!(
 		key,
 		// Shell / process identity — varies per host, no rustc effect.
-		"HOME" | "USER" | "LOGNAME" | "SHELL" | "PWD" | "OLDPWD"
+		"HOME" | "USER" | "LOGNAME" | "SHELL" | "SHLVL" | "PWD" | "OLDPWD"
 		| "MAIL" | "HOSTNAME" | "TMPDIR" | "TMP" | "TEMP"
+		// The sandbox sets these for each process, and the outer process's values embed its own sandbox id and token.
+		| "TANGRAM_CONFIG" | "TANGRAM_DIRECTORY" | "TANGRAM_MODE" | "TANGRAM_OUTPUT"
+		| "TANGRAM_TOKEN" | "TANGRAM_TRACING" | "TANGRAM_URL"
 		// Jobserver fds — tangram does not propagate them.
 		| "CARGO_MAKEFLAGS" | "MAKEFLAGS"
 		// Host-side cargo / rustup state — host paths absent in the sandbox.
@@ -444,7 +447,7 @@ pub(crate) fn is_denied_host_env(key: &str) -> bool {
 		| "RUSTUP_HOME" | "RUSTUP_TOOLCHAIN"
 		| "RUSTC" | "RUSTC_BOOTSTRAP" | "RUSTC_WORKSPACE_WRAPPER"
 		// Per-invocation paths embedding the outer cargo sandbox's pid.
-		| "TARGET_DIR" | "LD_LIBRARY_PATH"
+		| "TARGET_DIR" | "LD_LIBRARY_PATH" | "DYLD_FALLBACK_LIBRARY_PATH"
 		// Locale — varies per host, would destabilise the cache key.
 		| "LANG" | "LC_ALL" | "LC_CTYPE" | "LC_MESSAGES"
 		| "LC_COLLATE" | "LC_NUMERIC" | "LC_TIME" | "LC_MONETARY"
