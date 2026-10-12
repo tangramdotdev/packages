@@ -31,7 +31,6 @@ enum Closure {
 	All,
 	Packages(BTreeSet<String>),
 	Stems(BTreeSet<String>),
-	// Cargo's new build-dir layout passes a separate directory for each unit the compilation reaches, which leaves nothing to bound.
 	Units,
 }
 
