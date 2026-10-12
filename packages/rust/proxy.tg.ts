@@ -758,14 +758,10 @@ async function assertCacheHitWithLayout(
 			status?.cached === expectedCached,
 			`${crate_name} should be a ${label} with the ${layout} layout, got cached=${status?.cached}`,
 		);
-	}
-
-	// Only the new layout reports `units`, so the closure shows which layout Cargo used.
-	for (const crate_name of Object.keys(expectations)) {
-		const closure = getCrateStatus(secondStats, crate_name)?.closure;
+		// Only the new layout reports `units`, so the closure shows which layout Cargo used.
 		tg.assert(
-			(closure === "units") === (layout === "new"),
-			`${crate_name} reported closure=${closure}, which does not match the ${layout} layout`,
+			(status?.closure === "units") === (layout === "new"),
+			`${crate_name} reported closure=${status?.closure}, which does not match the ${layout} layout`,
 		);
 	}
 
@@ -1201,6 +1197,9 @@ export async function test() {
 		testRunnerPathExec(),
 		testRunnerWorkspaceRootAccess(),
 		testRunnerCacheHitWorkspace(),
+		testCacheHitVendoredDeps(),
+		testMultiVersionCacheHit(),
+		testCacheHitWithDepVars(),
 	]);
 	return true;
 }
