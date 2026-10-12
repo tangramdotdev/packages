@@ -31,6 +31,8 @@ enum Closure {
 	All,
 	Packages(BTreeSet<String>),
 	Stems(BTreeSet<String>),
+	// Cargo's new build-dir layout passes a separate directory for each unit the compilation reaches, which leaves nothing to bound.
+	Units,
 }
 
 impl Closure {
@@ -39,6 +41,12 @@ impl Closure {
 		dependency_dirs: &BTreeSet<PathBuf>,
 		lock_root: &Path,
 	) -> Self {
+		if !dependency_dirs
+			.iter()
+			.any(|dir| is_shared_dependency_dir(dir))
+		{
+			return Self::Units;
+		}
 		let dirs: Vec<&Path> = dependency_dirs.iter().map(PathBuf::as_path).collect();
 		let stems: Vec<String> = direct_stems_by_dir.values().flatten().cloned().collect();
 		let (visited, complete) = sidecar::closure_from_sidecars(&dirs, &stems);
@@ -50,7 +58,7 @@ impl Closure {
 
 	fn contains(&self, stem: &str) -> bool {
 		match self {
-			Self::All => true,
+			Self::All | Self::Units => true,
 			Self::Packages(packages) => lock::package_names(stem)
 				.iter()
 				.any(|name| packages.contains(name)),
@@ -63,8 +71,14 @@ impl Closure {
 			Self::All => "all",
 			Self::Packages(_) => "packages",
 			Self::Stems(_) => "stems",
+			Self::Units => "units",
 		}
 	}
+}
+
+// Cargo's legacy build-dir layout shares one `deps` directory among every unit, while the new layout gives each unit its own `build/<package>/<hash>/out` directory.
+fn is_shared_dependency_dir(path: &Path) -> bool {
+	path.file_name().is_some_and(|name| name == "deps")
 }
 
 fn emit_proxy_complete(
@@ -357,9 +371,9 @@ async fn rewrite_depfile_source_paths(
 	Ok(())
 }
 
-// Per-file checkout: `--out-dir` (typically `target/<triple>/<profile>/deps`)
-// is shared across every crate, so a directory-level checkout with
-// `force: true` would delete sibling crates' outputs.
+// Per-file checkout: Cargo's legacy build-dir layout shares `--out-dir`
+// (`target/<triple>/<profile>/deps`) across every crate, so a directory-level
+// checkout with `force: true` would delete sibling crates' outputs.
 pub(crate) async fn checkout_artifact_entries(
 	dir: &tg::Directory,
 	target: &Path,
@@ -528,8 +542,10 @@ async fn build_spawn_args(
 			let value = iter
 				.next()
 				.ok_or_else(|| tg::error!("-L was the last argument; expected a value"))?;
-			spawn_args.push(tg::Value::String("-L".to_owned()));
-			spawn_args.push(rewrite_search_path(value, closure).await?);
+			if let Some(value) = rewrite_search_path(value, closure).await? {
+				spawn_args.push(tg::Value::String("-L".to_owned()));
+				spawn_args.push(value);
+			}
 			continue;
 		}
 		if let Some(value) = arg.strip_prefix("--extern=") {
@@ -538,8 +554,10 @@ async fn build_spawn_args(
 			continue;
 		}
 		if let Some(value) = arg.strip_prefix("-L") {
-			spawn_args.push("-L".to_owned().into());
-			spawn_args.push(rewrite_search_path(value, closure).await?);
+			if let Some(value) = rewrite_search_path(value, closure).await? {
+				spawn_args.push("-L".to_owned().into());
+				spawn_args.push(value);
+			}
 			continue;
 		}
 		if arg == "--sysroot" || arg.starts_with("--sysroot=") {
@@ -583,14 +601,18 @@ fn display_crate_name(crate_name: Option<&str>) -> String {
 // path (`.rlib`, `.rmeta`, `.so`, `.dylib`, `.a`). Anything else (notably
 // cargo's `.d` depfiles, whose content embeds per-process sandbox paths)
 // makes the checkin non-deterministic.
-async fn rewrite_search_path(value: &str, closure: &Closure) -> tg::Result<tg::Value> {
+async fn rewrite_search_path(value: &str, closure: &Closure) -> tg::Result<Option<tg::Value>> {
 	let (prefix, path) = match value.split_once('=') {
 		Some((kind, p)) => (format!("{kind}="), p),
 		None => (String::new(), value),
 	};
 	let p = Path::new(path);
+	// For a target unit, Cargo's new build-dir layout passes a host `dependency=` directory that it never creates. Rustc ignores a missing search directory, so drop it rather than let its absolute path vary the command.
+	if prefix == "dependency=" && p.is_absolute() && !p.exists() {
+		return Ok(None);
+	}
 	if !p.is_absolute() || !p.is_dir() {
-		return Ok(tg::Value::String(value.to_owned()));
+		return Ok(Some(tg::Value::String(value.to_owned())));
 	}
 	// Only `dependency=` names the crate graph; the other kinds point at native
 	// library dirs the closure says nothing about.
@@ -600,7 +622,7 @@ async fn rewrite_search_path(value: &str, closure: &Closure) -> tg::Result<tg::V
 		tg::template::Component::String(prefix),
 		tg::template::Component::Artifact(artifact),
 	]);
-	Ok(tg::Value::Template(template))
+	Ok(Some(tg::Value::Template(template)))
 }
 
 async fn checkin_loadable_search_path(

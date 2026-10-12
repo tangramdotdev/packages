@@ -50,6 +50,7 @@ type StatsSummary = {
 	closureStems: number;
 	closurePackages: number;
 	closureAll: number;
+	closureUnits: number;
 };
 
 /** Result of running all scenarios for one project. */
@@ -249,10 +250,10 @@ function formatClosureRow(
 	summary: StatsSummary | undefined,
 ): string {
 	if (summary === undefined) {
-		return `  ${label.padEnd(15)}    n/a         n/a         n/a`;
+		return `  ${label.padEnd(15)}    n/a         n/a         n/a         n/a`;
 	}
-	const { closureStems, closurePackages, closureAll } = summary;
-	return `  ${label.padEnd(15)}  ${String(closureStems).padStart(5)}    ${String(closurePackages).padStart(8)}    ${String(closureAll).padStart(8)}`;
+	const { closureStems, closurePackages, closureAll, closureUnits } = summary;
+	return `  ${label.padEnd(15)}  ${String(closureStems).padStart(5)}    ${String(closurePackages).padStart(8)}    ${String(closureAll).padStart(8)}    ${String(closureUnits).padStart(8)}`;
 }
 
 /** Format a single benchmark result as a text report section. */
@@ -321,8 +322,8 @@ function formatResultSection(result: BenchmarkResult): string {
 	// Closure split. An `all` invocation snapshots the whole deps dir, so it is
 	// both slow and uncacheable; a rising count is the signal to look at.
 	lines.push("");
-	lines.push("  Closure          Stems    Packages         All");
-	lines.push("  -------          -----    --------         ---");
+	lines.push("  Closure          Stems    Packages         All       Units");
+	lines.push("  -------          -----    --------         ---       -----");
 	lines.push(formatClosureRow("Proxy Cold", coldSummary));
 	lines.push(formatClosureRow("Proxy Warm", warmSummary));
 

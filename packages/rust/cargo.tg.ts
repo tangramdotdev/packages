@@ -3,14 +3,14 @@ import { $ } from "std" with { source: "../std" };
 import openssl from "openssl" with { source: "../openssl.tg.ts" };
 import pkgconf from "pkgconf" with { source: "../pkgconf.tg.ts" };
 import * as proxy_ from "./proxy.tg.ts";
-import { rustTriple, self } from "./tangram.ts";
+import { NIGHTLY, rustTriple, self } from "./tangram.ts";
 
 /** Fields shared between sandboxed `build()` and unsandboxed `run()`. */
 type CommonArg = {
 	/** The machine performing the compilation. */
 	build?: string;
 
-	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD". When proxy is enabled, defaults to "nightly". */
+	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD". When proxy is enabled, defaults to the pinned `NIGHTLY`. */
 	channel?: "stable" | "nightly" | string;
 
 	/** Dependencies configuration. When provided, deps are resolved to env automatically. */
@@ -455,7 +455,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	// `host.runner` requires `-Zhost-config`, a nightly-only cargo flag.
 	// Without nightly we still proxy rustc invocations but build scripts run
 	// on the host (no sandbox, no cache).
-	const channel = channel_ ?? (proxy ? "nightly" : "stable");
+	const channel = channel_ ?? (proxy ? NIGHTLY : "stable");
 	const rustArtifact = await self({
 		host: rustHost,
 		target,
