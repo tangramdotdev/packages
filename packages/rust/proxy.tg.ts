@@ -1198,6 +1198,7 @@ export async function test() {
 		testRunnerWorkspaceRootAccess(),
 		testRunnerCacheHitWorkspace(),
 		testCacheHitVendoredDeps(),
+		testCacheHitSharedDepsAcrossProjects(),
 		testMultiVersionCacheHit(),
 		testCacheHitWithDepVars(),
 		testSysLinkCache(),

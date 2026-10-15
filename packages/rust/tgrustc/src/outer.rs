@@ -226,6 +226,8 @@ async fn build_env(
 	// Retain the existing filter's distinction between host strings and typed values.
 	// Recover paths from the live strings so shell overrides take effect.
 	let mut env = tg::process::env::env()?;
+	// Remove the runner's filtered workspace, which only build scripts read, so that it does not vary every compilation.
+	env.remove("TGRUSTC_RUNNER_WORKSPACE");
 	for (name, value) in &mut env {
 		if name == "OUT_DIR"
 			|| name.starts_with("CARGO_MANIFEST_")
