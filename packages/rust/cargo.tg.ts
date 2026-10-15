@@ -628,7 +628,7 @@ linker = "${hostLinker}"`;
 		envs.push(proxyEnv);
 	}
 
-	// Filter the workspace once per source rather than once per build script. An in-tree build copies the source out of the store, so its build scripts already see only their own crate.
+	// Filter the workspace once for all of its build scripts. An in-tree build copies the source out of the store, so its build scripts already see only their own crate.
 	if (useHostRunner && !buildInTree) {
 		const runnerWorkspace = await tg
 			.build(filterRunnerWorkspace, source)

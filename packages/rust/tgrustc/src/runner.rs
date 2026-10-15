@@ -76,8 +76,6 @@ pub async fn run() -> tg::Result<()> {
 		..Default::default()
 	};
 
-	// Everything up to here is preparation: the check-ins, the source scoping, and the env rewriting.
-	let prepare_ms = start.elapsed().as_millis();
 	let process: tg::Process =
 		tg::Process::spawn(process_arg, tg::process::spawn::Options::default()).await?;
 	let process_id = process.id().unwrap_right().clone();
@@ -89,7 +87,7 @@ pub async fn run() -> tg::Result<()> {
 	let outcome = process.wait(tg::process::wait::Options::default()).await?;
 	let elapsed_ms = start.elapsed().as_millis();
 	eprintln!(
-		"runner_complete crate_name={crate_name} cached={cached} prepare_ms={prepare_ms} elapsed_ms={elapsed_ms} process_id={process_id} command_id={command_id}"
+		"runner_complete crate_name={crate_name} cached={cached} elapsed_ms={elapsed_ms} process_id={process_id} command_id={command_id}"
 	);
 
 	let output_dir = outer::process_output_or_exit(outcome, &process_id, "the runner").await?;
@@ -122,7 +120,7 @@ pub async fn run() -> tg::Result<()> {
 	Ok(())
 }
 
-// The source a build script runs against, with the manifest directory's path within it. A workspace member gets the filtered workspace from `TGRUSTC_RUNNER_WORKSPACE` with its own crate grafted back in, so editing another member's Rust code does not change its inputs. Any other crate gets only its own directory, because a package from a registry or a vendor directory cannot rely on files outside of it.
+// The source a build script runs against, with the manifest directory's path within it. A crate inside the Cargo source gets the filtered workspace from `TGRUSTC_RUNNER_WORKSPACE` with its own crate grafted back in, so editing another crate's Rust code does not change its inputs. Any other crate gets only its own directory, because a package from a registry or a vendor directory cannot rely on files outside of it.
 async fn source(manifest_dir: &Path) -> tg::Result<(tg::Artifact, Option<PathBuf>)> {
 	let output = outer::checkin(manifest_dir).await?;
 	let (root, subpath) = proxy::artifact_path(&output.artifact)?;
