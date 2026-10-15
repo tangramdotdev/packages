@@ -3,14 +3,14 @@ import { $ } from "std" with { source: "../std" };
 import openssl from "openssl" with { source: "../openssl.tg.ts" };
 import pkgconf from "pkgconf" with { source: "../pkgconf.tg.ts" };
 import * as proxy_ from "./proxy.tg.ts";
-import { rustTriple, self } from "./tangram.ts";
+import { NIGHTLY, rustTriple, self } from "./tangram.ts";
 
 /** Fields shared between sandboxed `build()` and unsandboxed `run()`. */
 type CommonArg = {
 	/** The machine performing the compilation. */
 	build?: string;
 
-	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD". When proxy is enabled, defaults to "nightly". */
+	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD". When proxy is enabled, defaults to the pinned `NIGHTLY`. */
 	channel?: "stable" | "nightly" | string;
 
 	/** Dependencies configuration. When provided, deps are resolved to env automatically. */
@@ -455,7 +455,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	// `host.runner` requires `-Zhost-config`, a nightly-only cargo flag.
 	// Without nightly we still proxy rustc invocations but build scripts run
 	// on the host (no sandbox, no cache).
-	const channel = channel_ ?? (proxy ? "nightly" : "stable");
+	const channel = channel_ ?? (proxy ? NIGHTLY : "stable");
 	const rustArtifact = await self({
 		host: rustHost,
 		target,
@@ -626,6 +626,14 @@ linker = "${hostLinker}"`;
 			TGRUSTC_SANDBOX_SDK: sandboxSdk,
 		};
 		envs.push(proxyEnv);
+	}
+
+	// Filter the workspace once for all of its build scripts. An in-tree build copies the source out of the store, so its build scripts already see only their own crate.
+	if (useHostRunner && !buildInTree) {
+		const runnerWorkspace = await tg
+			.build(filterRunnerWorkspace, source)
+			.then(tg.Directory.expect);
+		envs.push({ TGRUSTC_RUNNER_WORKSPACE: runnerWorkspace });
 	}
 
 	{
@@ -804,6 +812,32 @@ export async function extractCargoManifests(
 	}
 
 	return extractManifests(source, "");
+}
+
+/** Replace every Rust source file in a source directory with an empty placeholder. A workspace member's build script runs against this tree with its own crate grafted back in, so editing another crate's Rust code does not change the build script's inputs. */
+export async function filterRunnerWorkspace(
+	source: tg.Directory,
+): Promise<tg.Directory> {
+	const placeholder = await tg.file("");
+
+	async function filter(dir: tg.Directory): Promise<tg.Directory> {
+		const entries = await dir.entries;
+		const filtered = await Promise.all(
+			Object.entries(entries).map(async ([name, artifact]) => {
+				// node_modules never contains Rust sources that a build script reads and can be huge.
+				if (artifact instanceof tg.Directory && name !== "node_modules") {
+					return [name, await filter(artifact)] as const;
+				}
+				if (artifact instanceof tg.File && name.endsWith(".rs")) {
+					return [name, placeholder] as const;
+				}
+				return [name, artifact] as const;
+			}),
+		);
+		return tg.directory(Object.fromEntries(filtered));
+	}
+
+	return filter(source);
 }
 
 /** Run `cargo vendor` to download dependencies. */

@@ -587,11 +587,12 @@ export async function testMissingExternsFallback() {
  * timings split an invocation into preparation, the spawn itself, and
  * materialization; a failed compile reports `materialize_ms=0`. `closure` is
  * how the `-L dependency=` snapshot was bounded: `stems` from sidecars,
- * `packages` from `Cargo.lock`, or `all` when neither could be proven. */
+ * `packages` from `Cargo.lock`, `all` when neither could be proven, or `units`
+ * when Cargo's new build-dir layout passes one directory per reachable unit. */
 export type RustcStats = {
 	crate_name: string;
 	cached: boolean;
-	closure: "stems" | "packages" | "all";
+	closure: "stems" | "packages" | "all" | "units";
 	prepare_ms: number;
 	elapsed_ms: number;
 	materialize_ms: number;
@@ -614,7 +615,7 @@ export async function parseStats(
 		if (!line.includes(eventName)) continue;
 		const crateMatch = /crate_name=(\S+)/.exec(line);
 		const cachedMatch = /cached=(true|false)/.exec(line);
-		const closureMatch = /closure=(stems|packages|all)/.exec(line);
+		const closureMatch = /closure=(stems|packages|all|units)/.exec(line);
 		const prepareMatch = /prepare_ms=(\d+)/.exec(line);
 		const elapsedMatch = /elapsed_ms=(\d+)/.exec(line);
 		const materializeMatch = /materialize_ms=(\d+)/.exec(line);
@@ -659,6 +660,7 @@ export function summarizeStats(stats: Array<RustcStats>) {
 		closureStems: count("stems"),
 		closurePackages: count("packages"),
 		closureAll: count("all"),
+		closureUnits: count("units"),
 	};
 }
 
@@ -681,22 +683,47 @@ type CacheTestConfig = {
 	tag?: string;
 };
 
+/** Cargo's build-dir layouts. The new layout is the default on the pinned nightly and from Cargo 1.100, and a temporary opt-out restores the legacy layout until Cargo removes it. */
+type Layout = "legacy" | "new";
+
+const layoutArgs: Record<Layout, cargo.Arg> = {
+	legacy: { env: { __CARGO_TEMPORARY_BUILD_DIR_NEW_LAYOUT_OPT_OUT: "1" } },
+	new: {},
+};
+
+type CacheHitResult = {
+	layout: Layout;
+	first: Array<RustcStats>;
+	second: Array<RustcStats>;
+	secondResult: tg.Directory;
+};
+
 const cacheTestArgs: cargo.Arg = {
 	proxy: true,
 	captureStderr: true,
 };
 
-async function assertCacheHit(config: CacheTestConfig): Promise<{
-	first: Array<RustcStats>;
-	second: Array<RustcStats>;
-	secondResult: tg.Directory;
-}> {
+/** Run a cache test under each build-dir layout the proxy supports. */
+async function assertCacheHit(
+	config: CacheTestConfig,
+): Promise<Array<CacheHitResult>> {
+	const layouts: Array<Layout> = ["legacy", "new"];
+	return await Promise.all(
+		layouts.map((layout) => assertCacheHitWithLayout(config, layout)),
+	);
+}
+
+async function assertCacheHitWithLayout(
+	config: CacheTestConfig,
+	layout: Layout,
+): Promise<CacheHitResult> {
 	const { source, modifyPath, expectations, buildArgs = [], tag } = config;
 	const comment = `${tag ?? "cache test modification"} ${Date.now()}`;
 
 	const firstResult = await cargo.build(
 		{ source },
 		...buildArgs,
+		layoutArgs[layout],
 		cacheTestArgs,
 	);
 	const firstStats = await parseStats(firstResult);
@@ -712,6 +739,7 @@ async function assertCacheHit(config: CacheTestConfig): Promise<{
 	const secondResult = await cargo.build(
 		{ source: modifiedSource },
 		...buildArgs,
+		layoutArgs[layout],
 		cacheTestArgs,
 	);
 	const secondStats = await parseStats(secondResult);
@@ -728,18 +756,23 @@ async function assertCacheHit(config: CacheTestConfig): Promise<{
 		const label = expectedCached ? "cache hit" : "cache miss";
 		tg.assert(
 			status?.cached === expectedCached,
-			`${crate_name} should be a ${label}, got cached=${status?.cached}`,
+			`${crate_name} should be a ${label} with the ${layout} layout, got cached=${status?.cached}`,
+		);
+		// Only the new layout reports `units`, so the closure shows which layout Cargo used.
+		tg.assert(
+			(status?.closure === "units") === (layout === "new"),
+			`${crate_name} reported closure=${status?.closure}, which does not match the ${layout} layout`,
 		);
 	}
 
-	return { first: firstStats, second: secondStats, secondResult };
+	return { layout, first: firstStats, second: secondStats, secondResult };
 }
 
 export async function testCacheHitVendoredDeps() {
 	const source = await tests.get("parallel-deps").then(tg.Directory.expect);
 	await cargo.build({ source, proxy: true });
 	await buildWithStats({ source });
-	const { second, secondResult } = await assertCacheHit({
+	const results = await assertCacheHit({
 		source,
 		modifyPath: "src/main.rs",
 		expectations: {
@@ -749,11 +782,13 @@ export async function testCacheHitVendoredDeps() {
 			memchr: true,
 		},
 	});
-	tg.assert(summarizeStats(second).hits >= 2);
-	const out = await $`parallel-deps | tee ${tg.output}`
-		.env(secondResult)
-		.then(tg.File.expect);
-	tg.assert((await out.text).trim().length > 0);
+	for (const { second, secondResult } of results) {
+		tg.assert(summarizeStats(second).hits >= 2);
+		const out = await $`parallel-deps | tee ${tg.output}`
+			.env(secondResult)
+			.then(tg.File.expect);
+		tg.assert((await out.text).trim().length > 0);
+	}
 }
 
 export async function testCacheHitSharedDepsAcrossProjects() {
@@ -798,7 +833,7 @@ export async function testCacheHitSharedDepsAcrossProjects() {
 
 export async function testCacheHitUnchangedWorkspaceCrates() {
 	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
-	const { second, secondResult } = await assertCacheHit({
+	const results = await assertCacheHit({
 		source,
 		modifyPath: "packages/cli/src/main.rs",
 		expectations: {
@@ -807,16 +842,18 @@ export async function testCacheHitUnchangedWorkspaceCrates() {
 			bytes: true,
 		},
 	});
-	tg.assert(summarizeStats(second).hits >= 2);
-	const out = await $`cli | tee ${tg.output}`
-		.env(secondResult)
-		.then(tg.File.expect);
-	tg.assert((await out.text).trim() === "Hello from a workspace!");
+	for (const { second, secondResult } of results) {
+		tg.assert(summarizeStats(second).hits >= 2);
+		const out = await $`cli | tee ${tg.output}`
+			.env(secondResult)
+			.then(tg.File.expect);
+		tg.assert((await out.text).trim() === "Hello from a workspace!");
+	}
 }
 
 export async function testMultiVersionCacheHit() {
 	const source = await tests.get("multi-version").then(tg.Directory.expect);
-	const { second } = await assertCacheHit({
+	const results = await assertCacheHit({
 		source,
 		modifyPath: "crate-b/src/main.rs",
 		expectations: {
@@ -824,13 +861,15 @@ export async function testMultiVersionCacheHit() {
 			crate_b: false,
 		},
 	});
-	const unexpected = second.filter(
-		(s) => !s.cached && s.crate_name !== "crate_b",
-	);
-	tg.assert(
-		unexpected.length === 0,
-		`Expected all crates except crate_b to be cache hits, misses: ${unexpected.map((s) => s.crate_name).join(", ")}.`,
-	);
+	for (const { layout, second } of results) {
+		const unexpected = second.filter(
+			(s) => !s.cached && s.crate_name !== "crate_b",
+		);
+		tg.assert(
+			unexpected.length === 0,
+			`Expected all crates except crate_b to be cache hits with the ${layout} layout, misses: ${unexpected.map((s) => s.crate_name).join(", ")}.`,
+		);
+	}
 }
 
 export async function testCacheHitWithDepVars() {
@@ -1158,6 +1197,11 @@ export async function test() {
 		testRunnerPathExec(),
 		testRunnerWorkspaceRootAccess(),
 		testRunnerCacheHitWorkspace(),
+		testCacheHitVendoredDeps(),
+		testCacheHitSharedDepsAcrossProjects(),
+		testMultiVersionCacheHit(),
+		testCacheHitWithDepVars(),
+		testSysLinkCache(),
 	]);
 	return true;
 }

@@ -1,5 +1,8 @@
 use crate::outer;
-use std::{path::Path, time::Instant};
+use std::{
+	path::{Path, PathBuf},
+	time::Instant,
+};
 use tangram_client::prelude::*;
 
 // Literal name used as `OUT_DIR` inside the runner sandbox. The driver
@@ -37,8 +40,7 @@ pub async fn run() -> tg::Result<()> {
 
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
 		.map_err(|_| tg::error!("CARGO_MANIFEST_DIR is not set"))?;
-	let output = outer::checkin(Path::new(&manifest_dir)).await?;
-	let (source_artifact, manifest_subpath) = proxy::artifact_path(&output.artifact)?;
+	let (source_artifact, manifest_subpath) = source(Path::new(&manifest_dir)).await?;
 	let manifest_subpath = manifest_subpath
 		.map(|path| path.to_string_lossy().into_owned())
 		.unwrap_or_default();
@@ -118,6 +120,69 @@ pub async fn run() -> tg::Result<()> {
 	Ok(())
 }
 
+// The source a build script runs against, with the manifest directory's path within it. A crate inside the Cargo source gets the filtered workspace from `TGRUSTC_RUNNER_WORKSPACE` with its own crate grafted back in, so editing another crate's Rust code does not change its inputs. Any other crate gets only its own directory, because a package from a registry or a vendor directory cannot rely on files outside of it.
+async fn source(manifest_dir: &Path) -> tg::Result<(tg::Artifact, Option<PathBuf>)> {
+	let output = outer::checkin(manifest_dir).await?;
+	let (root, subpath) = proxy::artifact_path(&output.artifact)?;
+	let Some(subpath) = subpath else {
+		return Ok((root, None));
+	};
+	let crate_artifact = tg::Artifact::with_referent(output.artifact);
+	let Some(workspace) = outer::checkin_env_artifact("TGRUSTC_RUNNER_WORKSPACE").await? else {
+		return Ok((crate_artifact, None));
+	};
+	let source_dir = std::env::var_os("TGRUSTC_SOURCE_DIR").ok_or_else(|| {
+		tg::error!("TGRUSTC_SOURCE_DIR must be set with TGRUSTC_RUNNER_WORKSPACE")
+	})?;
+	let output = outer::checkin(Path::new(&source_dir)).await?;
+	let (source_root, _) = proxy::artifact_path(&output.artifact)?;
+	if source_root.id() != root.id() {
+		return Ok((crate_artifact, None));
+	}
+	let workspace = workspace
+		.try_unwrap_directory()
+		.map_err(|_| tg::error!("expected TGRUSTC_RUNNER_WORKSPACE to be a directory"))?;
+	let workspace = graft(workspace, &subpath, crate_artifact).await?;
+	workspace.store().await?;
+	Ok((workspace.into(), Some(subpath)))
+}
+
+// Replace the entry at `path` with `artifact`, rebuilding each directory along the path.
+async fn graft(
+	root: tg::Directory,
+	path: &Path,
+	artifact: tg::Artifact,
+) -> tg::Result<tg::Directory> {
+	// Load each directory along the path.
+	let names = path
+		.components()
+		.map(|component| component.as_os_str().to_string_lossy().into_owned())
+		.collect::<Vec<_>>();
+	let mut directories = vec![root];
+	for name in names.iter().take(names.len().saturating_sub(1)) {
+		let parent = directories.last().unwrap();
+		let child = parent
+			.get(name)
+			.await?
+			.try_unwrap_directory()
+			.map_err(|_| tg::error!(%name, "expected a directory in the workspace"))?;
+		directories.push(child);
+	}
+
+	// Rebuild each directory along the path from the bottom up.
+	let mut replacement = artifact;
+	for (directory, name) in directories.into_iter().zip(&names).rev() {
+		let mut entries = directory.entries().await?;
+		entries.insert(name.clone(), replacement);
+		replacement = tg::Directory::with_entries(entries).into();
+	}
+	let root = replacement
+		.try_unwrap_directory()
+		.map_err(|_| tg::error!("expected the grafted workspace to be a directory"))?;
+
+	Ok(root)
+}
+
 // Read the live environment so shell exports reach the sandbox.
 async fn build_env(
 	source_template: tg::Template,
@@ -132,7 +197,10 @@ async fn build_env(
 			continue;
 		}
 		// Driver re-sets these from sandbox-internal paths.
-		if name == "OUT_DIR" || name == "CARGO_MANIFEST_DIR" {
+		if matches!(
+			name.as_str(),
+			"OUT_DIR" | "CARGO_MANIFEST_DIR" | "CARGO_MANIFEST_PATH"
+		) {
 			continue;
 		}
 		if outer::is_denied_host_env(&name) {
@@ -209,6 +277,7 @@ pub fn run_driver() -> tg::Result<()> {
 		.current_dir(&manifest_dir)
 		.env("OUT_DIR", &out_dir_path)
 		.env("CARGO_MANIFEST_DIR", &manifest_dir)
+		.env("CARGO_MANIFEST_PATH", format!("{manifest_dir}/Cargo.toml"))
 		.env("TMPDIR", &tmp_dir_path)
 		.env_remove("TGRUSTC_RUNNER_DRIVER")
 		.env_remove("TGRUSTC_RUNNER_SOURCE")

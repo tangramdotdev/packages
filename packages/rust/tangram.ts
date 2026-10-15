@@ -66,6 +66,8 @@ export const metadata = {
 
 const PROFILE = "minimal" as const;
 export const VERSION = "1.99.0" as const;
+/** The nightly that `cargo.build` uses with the proxy. It is pinned so that every machine uses the same Cargo build-dir layout. */
+export const NIGHTLY = "nightly-2026-10-12" as const;
 
 export type ToolchainArg = {
 	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD" for pinned nightly. */
