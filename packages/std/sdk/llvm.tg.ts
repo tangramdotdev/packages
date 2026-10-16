@@ -22,16 +22,16 @@ export const metadata = {
 	homepage: "https://llvm.org/",
 	name: "llvm",
 	license:
-		"https://github.com/llvm/llvm-project/blob/llvmorg-23.1.2/LICENSE.TXT",
+		"https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "23.1.2",
-	tag: "llvm/23.1.2",
+	version: "23.1.3",
+	tag: "llvm/23.1.3",
 };
 
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:c98bbef08a2b4c2613cd50e9aa9ae7b69b1fe6c16b2c40373bc0ab6116fdf78a";
+		"sha256:c44186a7762ed28954be72e5ff6df9808e0779d4f1bf014ecc4e7e211d31ee34";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;

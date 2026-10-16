@@ -12,16 +12,16 @@ export const metadata = {
 	homepage: "https://llvm.org/",
 	name: "llvm",
 	license:
-		"https://github.com/llvm/llvm-project/blob/llvmorg-23.1.2/LICENSE.TXT",
+		"https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "23.1.2",
-	tag: "llvm/23.1.2",
+	version: "23.1.3",
+	tag: "llvm/23.1.3",
 };
 
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:c98bbef08a2b4c2613cd50e9aa9ae7b69b1fe6c16b2c40373bc0ab6116fdf78a";
+		"sha256:c44186a7762ed28954be72e5ff6df9808e0779d4f1bf014ecc4e7e211d31ee34";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -208,11 +208,11 @@ export async function prebuilt(arg?: PrebuiltArg) {
 
 	const checksums: Record<string, tg.Checksum> = {
 		["aarch64-linux"]:
-			"sha256:075da47cb832273717d4c7bad4b6b4848d7c154262e9ba0dcc0025426d4073f0",
+			"sha256:56d005e339c979a696ed6c244e6472e16f3b1371e48987a07e6145bda7ee0d03",
 		["x86_64-linux"]:
-			"sha256:b5ed9675149cc837c282e9b6962c276c9fa62863d5b2f91537b60848552995b7",
+			"sha256:ca9fe385a5d9e2d88132dc0e23a00e9f87f38fa75f67207b5e457d208e71d013",
 		["aarch64-darwin"]:
-			"sha256:d7c26fc6177e42842e2d1ffaad31aec057c56a924392b1a23d830abe2c5d53b1",
+			"sha256:3dcfd88aec10be204a24037bcb0dc0ad777882e9dbe8ac60e2639060d8a794b1",
 	};
 	const archAndOs = `${arch}-${os}`;
 	const checksum = checksums[archAndOs];
@@ -271,7 +271,6 @@ export async function libclang(arg?: LLVMArg) {
 	const configure = {
 		args: [
 			"-DCMAKE_BUILD_TYPE=Release",
-			"-DCMAKE_SKIP_INSTALL_RPATH=On",
 			"-DLLVM_ENABLE_PROJECTS=clang",
 			`-DLLVM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
@@ -286,13 +285,16 @@ export async function libclang(arg?: LLVMArg) {
 	const install = "ninja install-libclang install-clang-resource-headers";
 	const phases = { configure, build: buildPhase, install };
 
-	return await cmake.build({
+	const libclangArtifact = await cmake.build({
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases,
 		...std.args.optional("sdk", sdk),
 		source: tg`${sourceDir}/llvm`,
 	});
+
+	const zlibLibDir = await zlibNgArtifact.get("lib").then(tg.Directory.expect);
+	return await tg.directory(libclangArtifact, { lib: zlibLibDir });
 }
 
 /** Build LLD only, without the 2-stage bootstrap. */
