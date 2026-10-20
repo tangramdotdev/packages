@@ -441,10 +441,27 @@ export namespace wrap {
 			);
 
 			// Merge the existing interpreter with any new interpreter provided
-			const existingInterpreter = await wrap.interpreterFromManifestInterpreter(
+			let existingInterpreter = await wrap.interpreterFromManifestInterpreter(
 				existingManifest.interpreter,
 				references,
 			);
+
+			// Preserve the existing library paths, which were optimized when the wrapper was created, so that optimizing the merged interpreter does not drop libraries the executable does not itself need.
+			if (
+				existingInterpreter !== undefined &&
+				existingInterpreter.kind !== "normal" &&
+				existingInterpreter.libraryPaths !== undefined
+			) {
+				const existingLibraryPaths = await Promise.all(
+					existingInterpreter.libraryPaths.map(async (path) => ({
+						path: await tg.template(path),
+						preserve: true as const,
+					})),
+				);
+				libraryPaths = [...existingLibraryPaths, ...(libraryPaths ?? [])];
+				const { libraryPaths: _, ...rest } = existingInterpreter;
+				existingInterpreter = rest;
+			}
 			if (interpreter !== undefined && interpreter !== null) {
 				const newInterpreter = await interpreterFromArg(
 					interpreter,
@@ -2873,6 +2890,37 @@ export async function testRewrapEmbeddedExecutableRetainsNeededLibraries() {
 		.build(std.shBootstrap`${wrapper} > ${tg.output}`)
 		.then(tg.File.expect);
 	tg.assert((await output.text).includes("argv[0]"));
+
+	return true;
+}
+
+export async function testRewrapRetainsPreservedLibraryPaths() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log(
+			"skipped wrap.tg.ts#testRewrapRetainsPreservedLibraryPaths: requires Linux",
+		);
+		return null;
+	}
+
+	// Preserve a library path that the executable does not need, as a dlopen dependency would be.
+	const preserved = await tg.directory({
+		"libpreserved.so.1": tg.file("preserved"),
+	});
+	const wrapper = await wrap(await argAndEnvDump(), {
+		libraryPaths: [{ path: preserved, preserve: true }],
+	});
+	const rewrapped = await wrap(wrapper);
+	for (const [name, file] of [
+		["wrapper", wrapper],
+		["rewrapped wrapper", rewrapped],
+	] as const) {
+		const manifest = await wrap.Manifest.read(file);
+		tg.assert(manifest !== undefined);
+		tg.assert(
+			JSON.stringify(manifest.interpreter).includes(preserved.id),
+			`expected the ${name} to retain the preserved library path`,
+		);
+	}
 
 	return true;
 }
