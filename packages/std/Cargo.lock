@@ -2529,7 +2529,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=be89e4a239da478e6a3a056c543e3efba74d26f5#be89e4a239da478e6a3a056c543e3efba74d26f5"
+source = "git+https://github.com/tangramdotdev/tangram?rev=37bf9f3f8efbe9d1e97db7252075baa398e77a65#37bf9f3f8efbe9d1e97db7252075baa398e77a65"
 dependencies = [
  "async-channel",
  "aws-lc-rs",
@@ -2587,7 +2587,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=be89e4a239da478e6a3a056c543e3efba74d26f5#be89e4a239da478e6a3a056c543e3efba74d26f5"
+source = "git+https://github.com/tangramdotdev/tangram?rev=37bf9f3f8efbe9d1e97db7252075baa398e77a65#37bf9f3f8efbe9d1e97db7252075baa398e77a65"
 dependencies = [
  "serde",
  "serde_with",
@@ -2597,7 +2597,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=be89e4a239da478e6a3a056c543e3efba74d26f5#be89e4a239da478e6a3a056c543e3efba74d26f5"
+source = "git+https://github.com/tangramdotdev/tangram?rev=37bf9f3f8efbe9d1e97db7252075baa398e77a65#37bf9f3f8efbe9d1e97db7252075baa398e77a65"
 dependencies = [
  "dashmap",
  "futures",
@@ -2611,7 +2611,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=be89e4a239da478e6a3a056c543e3efba74d26f5#be89e4a239da478e6a3a056c543e3efba74d26f5"
+source = "git+https://github.com/tangramdotdev/tangram?rev=37bf9f3f8efbe9d1e97db7252075baa398e77a65#37bf9f3f8efbe9d1e97db7252075baa398e77a65"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2642,7 +2642,7 @@ dependencies = [
 [[package]]
 name = "tangram_pool"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=be89e4a239da478e6a3a056c543e3efba74d26f5#be89e4a239da478e6a3a056c543e3efba74d26f5"
+source = "git+https://github.com/tangramdotdev/tangram?rev=37bf9f3f8efbe9d1e97db7252075baa398e77a65#37bf9f3f8efbe9d1e97db7252075baa398e77a65"
 dependencies = [
  "futures",
  "tangram_futures",
@@ -2652,7 +2652,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=be89e4a239da478e6a3a056c543e3efba74d26f5#be89e4a239da478e6a3a056c543e3efba74d26f5"
+source = "git+https://github.com/tangramdotdev/tangram?rev=37bf9f3f8efbe9d1e97db7252075baa398e77a65#37bf9f3f8efbe9d1e97db7252075baa398e77a65"
 dependencies = [
  "bytes",
  "num",
@@ -2663,7 +2663,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=be89e4a239da478e6a3a056c543e3efba74d26f5#be89e4a239da478e6a3a056c543e3efba74d26f5"
+source = "git+https://github.com/tangramdotdev/tangram?rev=37bf9f3f8efbe9d1e97db7252075baa398e77a65#37bf9f3f8efbe9d1e97db7252075baa398e77a65"
 dependencies = [
  "itertools 0.15.0",
  "proc-macro2",
@@ -2674,7 +2674,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=be89e4a239da478e6a3a056c543e3efba74d26f5#be89e4a239da478e6a3a056c543e3efba74d26f5"
+source = "git+https://github.com/tangramdotdev/tangram?rev=37bf9f3f8efbe9d1e97db7252075baa398e77a65#37bf9f3f8efbe9d1e97db7252075baa398e77a65"
 dependencies = [
  "derive_more",
  "http",
@@ -2689,7 +2689,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=be89e4a239da478e6a3a056c543e3efba74d26f5#be89e4a239da478e6a3a056c543e3efba74d26f5"
+source = "git+https://github.com/tangramdotdev/tangram?rev=37bf9f3f8efbe9d1e97db7252075baa398e77a65#37bf9f3f8efbe9d1e97db7252075baa398e77a65"
 dependencies = [
  "bytes",
  "data-encoding",
@@ -2888,9 +2888,9 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tokio"
-version = "1.54.0"
+version = "1.54.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0c168a474b95bfecfe908a65d4bdffc523144b649a74c09c286afb35d53e0bc"
+checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
 dependencies = [
  "bytes",
  "libc",
