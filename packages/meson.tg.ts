@@ -140,7 +140,7 @@ export type ResolvedArg = Omit<
 > & {
 	build: string;
 	host: string;
-	phases: std.phases.Arg;
+	phases: Array<std.phases.Arg>;
 	source: tg.Directory | tg.Template;
 };
 
@@ -172,7 +172,7 @@ export async function arg(...args: tg.Args<BuildArg>): Promise<ResolvedArg> {
 		deps,
 		env: userEnv,
 		host: host_,
-		phases: userPhases,
+		phases,
 		source: source_,
 		...rest
 	} = merged;
@@ -197,7 +197,6 @@ export async function arg(...args: tg.Args<BuildArg>): Promise<ResolvedArg> {
 			})
 		: undefined;
 	const env = await std.env.arg(depsEnv ?? null, userEnv ?? null);
-	const phases = await std.phases.arg(...userPhases);
 
 	return { ...rest, build, env, host, phases, source };
 }
@@ -290,7 +289,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 			command: await std.pkgconfig.shellNormalizeCommand(),
 		},
 	};
-	const phases = await std.phases.arg(defaultPhases, userPhases);
+	const phases = await std.phases.arg(defaultPhases, ...userPhases);
 
 	// The build runs on the `build` machine.
 	return await std.phases
@@ -314,6 +313,7 @@ export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(self, spec);
 	await testBuild();
+	await testPhaseOverrides();
 	return true;
 }
 
@@ -330,6 +330,33 @@ export async function testBuild() {
 		.then(tg.File.expect)
 		.then((file) => file.text);
 	tg.assert(stdout.trim() === "hello from meson");
+	return true;
+}
+
+/** Check that phase mutations survive argument resolution and apply to the default phases. */
+export async function testPhaseOverrides() {
+	const source = tg.directory({
+		"meson.build": `project('phase-overrides')
+run_command('sh', '-c', 'test "$MESON_PHASE_TEST" = 1', check: true)
+custom_target('fail', output: 'fail', command: ['sh', '-c', 'exit 1'], build_by_default: true)
+install_data('message', install_dir: 'share')
+`,
+		message: "phase overrides preserved\n",
+	});
+	const resolved = await arg({
+		phases: {
+			configure: {
+				command: tg.Mutation.prefix("env MESON_PHASE_TEST=1", " "),
+			},
+			// Skip the deliberately failing target during compilation and installation.
+			build: tg.Mutation.unset(),
+			install: { args: ["--no-rebuild"] },
+		},
+		source,
+	});
+	const output = await build(resolved);
+	const message = await output.get("share/message").then(tg.File.expect);
+	tg.assert((await message.text) === "phase overrides preserved\n");
 	return true;
 }
 
