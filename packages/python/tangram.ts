@@ -166,16 +166,21 @@ export async function self(...args: tg.Args<Arg>) {
 
 	const output = await std.autotools.build(arg);
 
-	// The python interpreter does not itself depend on these libraries, but submodules do. As a result, they were not automatically added during compilation. Explicitly add all the required library paths to the interpreter wrapper.
-	const libraryPaths: Array<tg.Unresolved<tg.Directory>> = [
+	// The python interpreter does not itself depend on these libraries, but submodules do. As a result, they were not automatically added during compilation. Explicitly add all the required library paths to the interpreter wrapper, and preserve them so that filtering does not drop libraries the interpreter itself does not need.
+	const libraryPaths: Array<std.wrap.LibraryPath> = [];
+	for (const dir of [
 		artifacts.libffi,
 		artifacts.mpdecimal,
 		artifacts.openssl,
 		artifacts.zlib,
 		artifacts.zstd,
-	]
-		.filter((v): v is tg.Directory => v !== undefined)
-		.map((dir) => dir.get("lib").then(tg.Directory.expect));
+	]) {
+		if (dir === undefined) {
+			continue;
+		}
+		const path = await dir.get("lib").then(tg.Directory.expect);
+		libraryPaths.push({ path, preserve: true });
+	}
 
 	// Extension modules from manylinux wheels carry DT_NEEDED entries for libraries glibc has since absorbed into libc, such as libpthread.so.0. Those stubs live in the toolchain's libc directory, which the interpreter itself never references, so add it explicitly.
 	if (os === "linux") {
@@ -185,7 +190,7 @@ export async function self(...args: tg.Args<Arg>) {
 			),
 			host,
 		});
-		libraryPaths.push(libDir);
+		libraryPaths.push({ path: libDir, preserve: true });
 	}
 
 	const pythonInterpreter = await std.wrap(
