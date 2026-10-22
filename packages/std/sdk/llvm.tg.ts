@@ -570,15 +570,7 @@ export async function getLinuxSysroot(target: string): Promise<tg.Directory> {
 	};
 	const checksum = checksums[target];
 	tg.assert(checksum);
-	if (std.triple.os(std.triple.host()) === "darwin") {
-		// The Linux headers contain names that differ only in case, so use tar after builtin decompression.
-		const archive = await tg
-			.download(url, checksum, { mode: "decompress" })
-			.then(tg.File.expect);
-		return std
-			.build(std.shBootstrap`mkdir -p ${tg.output} && tar -xf ${archive} -C ${tg.output}`)
-			.then(tg.Directory.expect);
-	}
+	// Use the builtin extractor to reject case-conflicting headers on case-insensitive filesystems.
 	return await tg
 		.download(url, checksum, { mode: "extract" })
 		.then(tg.Directory.expect);
