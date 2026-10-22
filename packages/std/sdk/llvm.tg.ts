@@ -86,7 +86,17 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 			if (host === target) {
 				return toolchain;
 			}
-			const tools = ["ar", "cc", "c++", "clang", "clang++", "ld", "nm", "ranlib", "strip"];
+			const tools = [
+				"ar",
+				"cc",
+				"c++",
+				"clang",
+				"clang++",
+				"ld",
+				"nm",
+				"ranlib",
+				"strip",
+			];
 			const aliases = Object.fromEntries(
 				tools.map((name) => [`${target}-${name}`, tg.symlink(name)]),
 			);

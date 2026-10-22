@@ -389,7 +389,8 @@ async function ldProxy(arg: LdProxyArg) {
 		TANGRAM_LINKER_INJECTION_PATH: tg.Mutation.set(hostInjectionLibrary),
 		...(interpreterArgs
 			? {
-					TANGRAM_LINKER_INTERPRETER_ARGS: tg.Mutation.setIfUnset(interpreterArgs),
+					TANGRAM_LINKER_INTERPRETER_ARGS:
+						tg.Mutation.setIfUnset(interpreterArgs),
 				}
 			: {}),
 		TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
@@ -403,7 +404,9 @@ async function ldProxy(arg: LdProxyArg) {
 		TANGRAM_OBJCOPY_PATH: objcopy
 			? tg.Mutation.set(objcopy)
 			: (tg.Mutation.unset() as tg.Mutation<tg.File>),
-		TANGRAM_LINKER_EMBED_WRAPPER: tg.Mutation.setIfUnset(embedWrapper ? "true" : "false"),
+		TANGRAM_LINKER_EMBED_WRAPPER: tg.Mutation.setIfUnset(
+			embedWrapper ? "true" : "false",
+		),
 	};
 
 	// Create the linker proxy.
@@ -852,13 +855,12 @@ export async function testProxyArguments() {
 
 	// Verify the wrapper's diagnostic control, and errors for missing linker values.
 	const manifest = await std
-		.build(std.shBootstrap`${wrapper} --tg-wrapper-print-manifest > ${tg.output}`)
+		.build(
+			std.shBootstrap`${wrapper} --tg-wrapper-print-manifest > ${tg.output}`,
+		)
 		.then(tg.File.expect);
 	tg.assert(tg.encoding.json.decode(await manifest.text) !== undefined);
-	for (const flag of [
-		"--tg-linker-wrapper-args",
-		"--tg-linker-wrapper-env",
-	]) {
+	for (const flag of ["--tg-linker-wrapper-args", "--tg-linker-wrapper-env"]) {
 		const output = await std
 			.build(std.shBootstrap`
 				if ${linker} ${flag} > /dev/null 2> ${tg.output}; then exit 1; fi
@@ -866,7 +868,11 @@ export async function testProxyArguments() {
 			.then(tg.File.expect);
 		tg.assert((await output.text).includes("an attached value (=VALUE)"));
 	}
-	await check(strip, ["--tg-strip-passthrough=false", "--tangram-strip-passthrough", ...unknown], unknown);
+	await check(
+		strip,
+		["--tg-strip-passthrough=false", "--tangram-strip-passthrough", ...unknown],
+		unknown,
+	);
 	for (const component of ["linker", "strip", "install-name-tool"]) {
 		const executable =
 			component === "linker"
@@ -874,9 +880,11 @@ export async function testProxyArguments() {
 				: component === "strip"
 					? strip
 					: installNameTool;
-		const error = await std.build(std.shBootstrap`
+		const error = await std
+			.build(std.shBootstrap`
 			if ${executable} ${await interpreterArgsTemplate([`--tg-${component}-passthrough= true`, `--tangram-${component}-passthrough=false`])} > /dev/null 2> ${tg.output}; then exit 1; fi
-		`).then(tg.File.expect);
+		`)
+			.then(tg.File.expect);
 		tg.assert((await error.text).includes("expected a boolean"));
 	}
 
@@ -910,41 +918,94 @@ export async function testLinkerControls() {
 	const argument = await tg.template("hello, world=1");
 	const artifactArgument = await tg`${directory}/value`;
 	const argsPayload = tg.Value.stringify([argument, artifactArgument]);
-	const envPayload = tg.Value.stringify(await tg.Mutation.set({ EXAMPLE: "hello, world=1", ARTIFACT: artifactArgument }));
-	const build = async (cli: string[], environment: Record<string, string> = {}) => {
-		const flags = await interpreterArgsTemplate(cli.flatMap((flag) => ["-Xlinker", flag]));
-		return std.build(std.shBootstrap`
+	const envPayload = tg.Value.stringify(
+		await tg.Mutation.set({
+			EXAMPLE: "hello, world=1",
+			ARTIFACT: artifactArgument,
+		}),
+	);
+	const build = async (
+		cli: string[],
+		environment: Record<string, string> = {},
+	) => {
+		const flags = await interpreterArgsTemplate(
+			cli.flatMap((flag) => ["-Xlinker", flag]),
+		);
+		return std
+			.build(std.shBootstrap`
 			test -f ${directory}/value
 			cc -xc ${source} -o ${tg.output} ${flags}
-		`).env(toolchain, environment).then(tg.File.expect);
+		`)
+			.env(toolchain, environment)
+			.then(tg.File.expect);
 	};
-	const cli = await build([`--tg-linker-wrapper-args=${argsPayload}`, `--tg-linker-wrapper-env=${envPayload}`]);
-	const environment = await build([], { TANGRAM_LINKER_WRAPPER_ARGS: argsPayload, TANGRAM_LINKER_WRAPPER_ENV: envPayload });
+	const cli = await build([
+		`--tg-linker-wrapper-args=${argsPayload}`,
+		`--tg-linker-wrapper-env=${envPayload}`,
+	]);
+	const environment = await build([], {
+		TANGRAM_LINKER_WRAPPER_ARGS: argsPayload,
+		TANGRAM_LINKER_WRAPPER_ENV: envPayload,
+	});
 	for (const executable of [cli, environment]) {
-		const output = await std.build(std.shBootstrap`INHERITED=kept ${executable} > ${tg.output}`).then(tg.File.expect);
+		const output = await std
+			.build(std.shBootstrap`INHERITED=kept ${executable} > ${tg.output}`)
+			.then(tg.File.expect);
 		const words = (await output.text).split("\0");
-		tg.assert(words[0] === "hello, world=1" && words[1] === "kept" && words[2] === "hello, world=1");
-		tg.assert(words[3]?.endsWith(`/${directory.id}/value`) && words[4] === "artifact contents");
+		tg.assert(
+			words[0] === "hello, world=1" &&
+				words[1] === "kept" &&
+				words[2] === "hello, world=1",
+		);
+		tg.assert(
+			words[3]?.endsWith(`/${directory.id}/value`) &&
+				words[4] === "artifact contents",
+		);
 	}
-	for (const mutation of ['tg.mutation({"kind":"set","value":{}})', 'tg.mutation({"kind":"unset"})']) {
-		const executable = await build(["--tg-linker-wrapper-args=[]", `--tangram-linker-wrapper-env=${mutation}`], { TANGRAM_LINKER_WRAPPER_ARGS: argsPayload, TANGRAM_LINKER_WRAPPER_ENV: envPayload });
+	for (const mutation of [
+		'tg.mutation({"kind":"set","value":{}})',
+		'tg.mutation({"kind":"unset"})',
+	]) {
+		const executable = await build(
+			[
+				"--tg-linker-wrapper-args=[]",
+				`--tangram-linker-wrapper-env=${mutation}`,
+			],
+			{
+				TANGRAM_LINKER_WRAPPER_ARGS: argsPayload,
+				TANGRAM_LINKER_WRAPPER_ENV: envPayload,
+			},
+		);
 		const manifest = await wrap.Manifest.read(executable);
 		tg.assert(manifest?.args?.length === 0);
-		const output = await std.build(std.shBootstrap`INHERITED=kept ${executable} > ${tg.output}`).then(tg.File.expect);
-		tg.assert((await output.text) === (mutation.includes('"unset"') ? "unset\0unset\0" : "unset\0kept\0"));
+		const output = await std
+			.build(std.shBootstrap`INHERITED=kept ${executable} > ${tg.output}`)
+			.then(tg.File.expect);
+		tg.assert(
+			(await output.text) ===
+				(mutation.includes('"unset"') ? "unset\0unset\0" : "unset\0kept\0"),
+		);
 	}
-	const raw = await std.wrap(await workspace.ldProxy({}), { buildToolchain: toolchain });
+	const raw = await std.wrap(await workspace.ldProxy({}), {
+		buildToolchain: toolchain,
+	});
 	for (const control of [
 		'--tg-linker-wrapper-args=["SECRET_MARKER"]',
-		'--tg-linker-wrapper-args=[] SECRET_MARKER',
+		"--tg-linker-wrapper-args=[] SECRET_MARKER",
 		'--tg-linker-wrapper-env=tg.mutation({"kind":"SECRET_MARKER"})',
 		'--tg-linker-wrapper-env=tg.mutation({"kind":"set","value":{"SECRET_MARKER":{}}})',
 	]) {
-		const error = await std.build(std.shBootstrap`
+		const error = await std
+			.build(std.shBootstrap`
 			if TANGRAM_LINKER_COMMAND_PATH=/nonexistent ${raw} ${await interpreterArgsTemplate([control, "--tg-linker-wrapper-args=[]"])} > /dev/null 2> ${tg.output}; then exit 1; fi
-		`).then(tg.File.expect);
+		`)
+			.then(tg.File.expect);
 		const text = await error.text;
-		tg.assert(text.includes("invalid control") && !text.includes("SECRET_MARKER") && !text.includes("failed to run"));
+		tg.assert(
+			text.includes("invalid control") &&
+				!text.includes("SECRET_MARKER") &&
+				!text.includes("failed to run"),
+		);
 	}
 	return true;
 }
@@ -969,20 +1030,35 @@ int main(void) { puts("SDK controls"); }`;
 		] as const) {
 			// Mach-O embedding does not install the runtime wrapper, so test enabled controls with passthrough on macOS.
 			const passthrough = !linux && expected;
-			const result = await std.build(std.shBootstrap`
+			const result = await std
+				.build(std.shBootstrap`
 				mkdir -p ${tg.output}
 				TANGRAM_LINKER_TRACING=tgld=debug ${environment === undefined ? "" : `TANGRAM_LINKER_EMBED_WRAPPER=${environment}`} cc -xc ${source} -o ${tg.output}/program ${cli === undefined ? "" : `-Wl,--tg-linker-embed-wrapper=${cli}`} ${passthrough ? "-Wl,--tg-linker-passthrough" : ""} 2> ${tg.output}/log
-			`).env(toolchain).then(tg.Directory.expect);
-			const log = await result.get("log").then(tg.File.expect).then((file) => file.text);
+			`)
+				.env(toolchain)
+				.then(tg.Directory.expect);
+			const log = await result
+				.get("log")
+				.then(tg.File.expect)
+				.then((file) => file.text);
 			const context = `SDK default ${defaultValue}, environment ${environment}, CLI ${cli}`;
 			tg.assert(
-				log.split("\n").some((line) => line.includes("parsed the controls") && line.includes(`embed=${expected}`)),
+				log
+					.split("\n")
+					.some(
+						(line) =>
+							line.includes("parsed the controls") &&
+							line.includes(`embed=${expected}`),
+					),
 				`expected embedding ${expected} for ${context}`,
 			);
 			const output = await result.get("program").then(tg.File.expect);
 			const manifest = await wrap.Manifest.read(output);
 			tg.assert(
-				passthrough ? manifest === undefined : manifest !== undefined && (manifest.executable.kind === "address") === expected,
+				passthrough
+					? manifest === undefined
+					: manifest !== undefined &&
+							(manifest.executable.kind === "address") === expected,
 				`unexpected manifest for ${context}: ${manifest?.executable.kind}`,
 			);
 			await std.assert.stdoutIncludes(output, "SDK controls");
@@ -1010,12 +1086,15 @@ int main(void) { return ANSWER != 42; }
 		.env(toolchain, {
 			TGCC_ENABLE: "1",
 			TGCC_COMPILER: await tg`${toolchain}/bin/cc`,
-			TANGRAM_LINKER_WRAPPER_ARGS: '[tg.template(["transported through tgcc"])]',
+			TANGRAM_LINKER_WRAPPER_ARGS:
+				'[tg.template(["transported through tgcc"])]',
 		})
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "");
 	const manifest = await wrap.Manifest.read(output);
-	tg.assert(manifest?.args?.[0]?.components[0]?.value === "transported through tgcc");
+	tg.assert(
+		manifest?.args?.[0]?.components[0]?.value === "transported through tgcc",
+	);
 	return true;
 }
 
@@ -1070,7 +1149,8 @@ export async function testEmbedInput() {
 		return null;
 	}
 	const toolchain = await bootstrap.sdk();
-	await std.build(std.shBootstrap`
+	await std
+		.build(std.shBootstrap`
 		# Make each executable unique so an earlier run cannot populate its VFS authorization state.
 		cat > main.c <<EOF
 #include <stdio.h>
@@ -1081,7 +1161,8 @@ EOF
 		./program --tg-wrapper-print-manifest > manifest.json
 		grep '"kind":"address"' manifest.json
 		touch ${tg.output}
-	`).env(toolchain);
+	`)
+		.env(toolchain);
 	return true;
 }
 
@@ -1181,7 +1262,10 @@ EOF
 		(await program.dependencyObjects).map((object) => [object.id, object]),
 	);
 	const executable = tg.File.expect(
-		await wrap.executableFromManifestExecutable(manifest.executable, references),
+		await wrap.executableFromManifestExecutable(
+			manifest.executable,
+			references,
+		),
 	);
 	await std
 		.build(std.shBootstrap`
@@ -1206,11 +1290,14 @@ EOF
 /** Parallel links must not fail while the proxy replaces an unrelated shared library. */
 export async function testLinkerParallelLibraries(rounds = 20, jobs = 8) {
 	if (std.triple.os(std.triple.host()) !== "linux") {
-		console.log("skipped sdk/proxy.tg.ts#testLinkerParallelLibraries: requires Linux");
+		console.log(
+			"skipped sdk/proxy.tg.ts#testLinkerParallelLibraries: requires Linux",
+		);
 		return null;
 	}
 	const toolchain = await bootstrap.sdk();
-	await std.build(std.shBootstrap`
+	await std
+		.build(std.shBootstrap`
 		mkdir lib
 		printf 'int leaf(void) { return 42; }' > leaf.c
 		printf 'int leaf(void); int value(void) { return leaf(); }' > value.c
@@ -1227,7 +1314,8 @@ export async function testLinkerParallelLibraries(rounds = 20, jobs = 8) {
 			test "$status" -eq 0
 		done
 		touch ${tg.output}
-	`).env(toolchain);
+	`)
+		.env(toolchain);
 	return true;
 }
 
@@ -1240,7 +1328,8 @@ export async function testProxyOutputMetadata() {
 		host: bootstrap.toolchainTriple(std.triple.host()),
 	});
 	const darwin = std.triple.os(std.triple.host()) === "darwin";
-	await std.build(std.shBootstrap`
+	await std
+		.build(std.shBootstrap`
 		cat > native-linker <<'EOF'
 #!/bin/sh
 set -eu
@@ -1290,7 +1379,8 @@ EOF
 			./program
 		done
 		touch ${tg.output}
-	`).env(toolchain);
+	`)
+		.env(toolchain);
 	return true;
 }
 
@@ -1438,7 +1528,9 @@ export async function testDarwinToLinuxLdProxy(
 ) {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
-		console.log("skipped sdk/proxy.tg.ts#testDarwinToLinuxLdProxy: requires Darwin");
+		console.log(
+			"skipped sdk/proxy.tg.ts#testDarwinToLinuxLdProxy: requires Darwin",
+		);
 		return null;
 	}
 	if (!(await llvmToolchain.canExtractLinuxSysroot(target))) {
@@ -1453,7 +1545,9 @@ export async function testDarwinToLinuxLdProxy(
 export async function testLinuxToDarwinLdProxy() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
-		console.log("skipped sdk/proxy.tg.ts#testLinuxToDarwinLdProxy: requires Linux");
+		console.log(
+			"skipped sdk/proxy.tg.ts#testLinuxToDarwinLdProxy: requires Linux",
+		);
 		return null;
 	}
 	const target = "aarch64-apple-darwin";
@@ -1961,10 +2055,14 @@ export async function testStripControls() {
 			return 1;
 		}
 	`;
-	const recorder = await std.build(std.shBootstrap`
+	const recorder = await std
+		.build(std.shBootstrap`
 		TANGRAM_LINKER_PASSTHROUGH=true cc ${std.triple.os(std.triple.host()) === "linux" ? "-static" : ""} -xc ${recorderSource} -o ${tg.output}
-	`).env(toolchain).then(tg.File.expect);
-	const output = await std.build(std.shBootstrap`
+	`)
+		.env(toolchain)
+		.then(tg.File.expect);
+	const output = await std
+		.build(std.shBootstrap`
 		mkdir -p ${tg.output}
 		cc -g -xc ${source} -Wl,--tg-linker-embed-wrapper=false -o wrapped
 		chmod 751 wrapped
@@ -1983,17 +2081,59 @@ export async function testStripControls() {
 		mv log ${tg.output}/passthrough
 		mv wrapped ${tg.output}/wrapped
 		mv ./--tg-strip-passthrough ${tg.output}/flag-shaped
-	`).env(toolchain).then(tg.Directory.expect);
-	const normal = await output.get("normal").then(tg.File.expect).then((file) => file.text);
-	const normalized = normal.split("\0").map((arg) => arg.endsWith("/executable") ? "<executable>" : arg).join("\0");
-	tg.assert(normalized === [
-		"<executable>", "-S", "--", "",
-		"-S", "<executable>", "--", "",
-		"-S", "--", "<executable>", "",
-		"-S", "plain", "--", "plain", "", "",
-	].join("\0"), `unexpected strip invocations: ${JSON.stringify(normalized)}`);
-	const passthrough = await output.get("passthrough").then(tg.File.expect).then((file) => file.text);
-	tg.assert(passthrough === ["wrapped", "-S", "plain", "wrapped", "--", "--tg-strip-passthrough", "plain", "", ""].join("\0"));
+	`)
+		.env(toolchain)
+		.then(tg.Directory.expect);
+	const normal = await output
+		.get("normal")
+		.then(tg.File.expect)
+		.then((file) => file.text);
+	const normalized = normal
+		.split("\0")
+		.map((arg) => (arg.endsWith("/executable") ? "<executable>" : arg))
+		.join("\0");
+	tg.assert(
+		normalized ===
+			[
+				"<executable>",
+				"-S",
+				"--",
+				"",
+				"-S",
+				"<executable>",
+				"--",
+				"",
+				"-S",
+				"--",
+				"<executable>",
+				"",
+				"-S",
+				"plain",
+				"--",
+				"plain",
+				"",
+				"",
+			].join("\0"),
+		`unexpected strip invocations: ${JSON.stringify(normalized)}`,
+	);
+	const passthrough = await output
+		.get("passthrough")
+		.then(tg.File.expect)
+		.then((file) => file.text);
+	tg.assert(
+		passthrough ===
+			[
+				"wrapped",
+				"-S",
+				"plain",
+				"wrapped",
+				"--",
+				"--tg-strip-passthrough",
+				"plain",
+				"",
+				"",
+			].join("\0"),
+	);
 	for (const name of ["wrapped", "flag-shaped"]) {
 		const file = await output.get(name).then(tg.File.expect);
 		tg.assert((await wrap.Manifest.read(file))?.executable.kind === "path");
@@ -2183,19 +2323,34 @@ export async function testTransitiveDiscovery(target?: string) {
 	}
 	if (target === undefined) {
 		// Zero depth stops discovery, and explicit false disables missing-library rejection.
-		const limited = await std.build(std.shBootstrap`
+		const limited = await std
+			.build(std.shBootstrap`
 			cc -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output} -Wl,--tg-linker-library-search-depth=0 -Wl,--tg-linker-disallow-missing-libraries=false
-		`).env(testSDK, { TANGRAM_LINKER_DISALLOW_MISSING_LIBRARIES: "true" }).then(tg.File.expect);
+		`)
+			.env(testSDK, { TANGRAM_LINKER_DISALLOW_MISSING_LIBRARIES: "true" })
+			.then(tg.File.expect);
 		const limitedManifest = await wrap.Manifest.read(limited);
-		tg.assert(limitedManifest?.interpreter !== undefined && "libraryPaths" in limitedManifest.interpreter && limitedManifest.interpreter.libraryPaths?.length === 0);
-		const rejected = await std.build(std.shBootstrap`
+		tg.assert(
+			limitedManifest?.interpreter !== undefined &&
+				"libraryPaths" in limitedManifest.interpreter &&
+				limitedManifest.interpreter.libraryPaths?.length === 0,
+		);
+		const rejected = await std
+			.build(std.shBootstrap`
 			if cc -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o rejected -Wl,--tangram-linker-library-search-depth=0 -Wl,--tg-linker-disallow-missing-libraries > /dev/null 2> ${tg.output}; then exit 1; fi
-		`).env(testSDK).then(tg.File.expect);
-		tg.assert((await rejected.text).includes("could not find required libraries"));
+		`)
+			.env(testSDK)
+			.then(tg.File.expect);
+		tg.assert(
+			(await rejected.text).includes("could not find required libraries"),
+		);
 		// The none strategy retains input paths and bypasses missing-library verification.
-		const retained = await std.build(std.shBootstrap`
+		const retained = await std
+			.build(std.shBootstrap`
 			cc -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output} -Wl,--tg-linker-library-path-strategy=NONE -Wl,--tg-linker-library-search-depth=0 -Wl,--tg-linker-disallow-missing-libraries
-		`).env(testSDK, { TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "isolate" }).then(tg.File.expect);
+		`)
+			.env(testSDK, { TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "isolate" })
+			.then(tg.File.expect);
 		await std.assert.stdoutIncludes(retained, "Hello from bottom library!");
 	}
 
@@ -2221,7 +2376,7 @@ export async function testTransitiveDirect(
 			"void message(void);\nint main(void) { message(); return 0; }\n",
 		),
 		"message.c": tg.file(
-			'#include <stdio.h>\nconst char *greeting(void);\nvoid message(void) { puts(greeting()); }\n',
+			"#include <stdio.h>\nconst char *greeting(void);\nvoid message(void) { puts(greeting()); }\n",
 		),
 		"override.c": tg.file(
 			'const char *greeting(void) { return "hello from an explicit search path"; }\n',
