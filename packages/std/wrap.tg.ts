@@ -198,7 +198,7 @@ export namespace wrap {
 		/** Library paths to include. If the executable is wrapped, they will be merged. Use `{ path, preserve: true }` to search a path without modifying it during optimization. */
 		libraryPaths?: Array<LibraryPath> | null;
 
-		/** Which library path strategy should we use? The default is "isolate", which retains each needed library in a separate directory. */
+		/** Which library path strategy should we use? The default is "filter", which retains only the library paths that contain needed libraries. */
 		libraryPathStrategy?: LibraryPathStrategy | null;
 
 		/** Preloads to include. If the executable is wrapped, they will be merged. */
@@ -288,9 +288,9 @@ export namespace wrap {
 	 *
 	 * - "none": Do not manipulate library paths. The paths provided by the user will be retained as-is. This is the strategy used for all wrappers for non-dynamically-linked executables (static binaries, scripts).
 	 * - "unfilteredIsolate": Search each library path for library files, and separate them into individual directories. This option does not check whether libraries are marked as needed first, all found files are retained.
-	 * - "filter": Paths that do not contain libraries marked as needed by the executable are dropped.
+	 * - "filter": Paths that do not contain libraries marked as needed by the executable are dropped. This is the default strategy, which keeps library paths that point into directories the build already has.
 	 * - "resolve": After filtering, all library paths are resolved to their innermost directory. If you provided `${someArtifact}/lib`, it will be transformed to `${someArtifactLib}`, with no trailing subpath. This prevents, for example, the `"include" directory from being retained as a dependency of your wrapper.`
-	 * - "isolate": Each needed library will be placed in its own unique directory. This is the default strategy, which maximizes cache hits between wrappers.
+	 * - "isolate": Each needed library will be placed in its own unique directory, which maximizes cache hits between wrappers.
 	 * - "combine": Each needed library will be placed together in a single directory. This is the most space-efficient, but likely to cause cache misses and duplication. If one wrapper needs `libc.so` and another needs `libc.so` and `libm.so`, you'll wind up with two copies of `libc.so` in your dependencies. If not checking out or bundling your artifact, this is not a concern, but external checkouts will incur the extra cost. To share a single copy of the common dependency, consider the "isolate" strategy.
 	 */
 	export type LibraryPathStrategy =
@@ -1749,7 +1749,7 @@ async function optimizeLibraryPaths(
 		getNeededLibrariesForFile = getNeededLibraries,
 		interpreter,
 		libraryPaths: additionalLibraryPaths = [],
-		libraryPathStrategy: strategy = "isolate",
+		libraryPathStrategy: strategy = "filter",
 	} = arg;
 
 	let executable = arg.executable;
@@ -2882,7 +2882,7 @@ export async function testRewrapEmbeddedExecutableRetainsNeededLibraries() {
 		);
 		tg.assert(
 			found.some((value) => value),
-			`expected an isolated library path containing ${name}`,
+			`expected a library path containing ${name}`,
 		);
 	}
 
@@ -3562,6 +3562,7 @@ export async function testPreservedLibraryPaths() {
 			optimizedLibraryPath,
 			{ path: preservedLibraryPath, preserve: true },
 		],
+		libraryPathStrategy: "isolate",
 	});
 
 	tg.assert(optimized.libraryPaths?.length === 2);

@@ -695,11 +695,11 @@ enum LibraryPathStrategy {
 	/// Do not manipulate library paths.
 	None,
 	/// Only retain paths containing needed libraries.
+	#[default]
 	Filter,
 	/// Resolve any artifacts with subpaths to their innermost directory.
 	Resolve,
 	/// Create individual library paths for each library.
-	#[default]
 	Isolate,
 	/// Combine library paths into a single directory.
 	Combine,

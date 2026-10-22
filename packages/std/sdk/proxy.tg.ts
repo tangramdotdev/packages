@@ -2173,7 +2173,7 @@ export async function testTransitiveDiscovery(target?: string) {
 
 /** Check that directly linked libraries retain their private runtime dependencies after the build directory is gone. */
 export async function testTransitiveDirect(
-	strategy: Exclude<OptLevel, "none"> = "isolate",
+	strategy: Exclude<OptLevel, "none"> = "filter",
 ) {
 	const toolchain = await bootstrap.sdk();
 	const os = std.triple.os(std.triple.host());
