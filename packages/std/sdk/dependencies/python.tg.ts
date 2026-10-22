@@ -67,6 +67,13 @@ export default build;
 
 export async function test() {
 	return std.assert.pkg(build, {
-		binaries: [std.assert.displaysVersion("python3", metadata.version)],
+		binaries: [
+			std.assert.displaysVersion("python3", metadata.version),
+			{
+				name: "python3",
+				snapshot: "[1, 2, 3]",
+				testArgs: ["-c", "'import json; print(json.dumps([1, 2, 3]))'"],
+			},
+		],
 	});
 }
