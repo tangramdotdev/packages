@@ -576,6 +576,49 @@ export async function getLinuxSysroot(target: string): Promise<tg.Directory> {
 		.then(tg.Directory.expect);
 }
 
+/** Check whether the filesystem supports a Linux sysroot before running a cross-compilation test. */
+export async function canExtractLinuxSysroot(target: string): Promise<boolean> {
+	try {
+		await getLinuxSysroot(target);
+		return true;
+	} catch (error) {
+		// Only the case-conflict diagnostic makes this target unsupported.
+		for (
+			let cause = error;
+			cause instanceof tg.Error;
+			cause = (await cause.source)?.node
+		) {
+			if (
+				(await cause.message) ===
+				"an entry whose name differs only in case already exists, and the file system is case insensitive"
+			) {
+				return false;
+			}
+		}
+		throw error;
+	}
+}
+
+export async function testLinuxSysroot() {
+	const target = "x86_64-unknown-linux-gnu";
+	if (!(await canExtractLinuxSysroot(target))) {
+		console.log(
+			"verified that the sysroot extractor rejects case-conflicting headers",
+		);
+		return true;
+	}
+	const directory = await getLinuxSysroot(target);
+	const upper = await directory
+		.get("include/linux/netfilter/xt_TCPMSS.h")
+		.then(tg.File.expect);
+	const lower = await directory
+		.get("include/linux/netfilter/xt_tcpmss.h")
+		.then(tg.File.expect);
+	tg.assert((await upper.text).includes("struct xt_tcpmss_info"));
+	tg.assert((await lower.text).includes("struct xt_tcpmss_match_info"));
+	return true;
+}
+
 export async function test() {
 	// Build a triple for the detected host.
 	const host = std.sdk.canonicalTriple(std.triple.host());

@@ -1727,10 +1727,19 @@ export async function testDarwinToLinux() {
 		"x86_64-unknown-linux-gnu",
 		"x86_64-unknown-linux-musl",
 	];
-	await Promise.all(
-		targets.map(async (target) => await assertDarwinToLinux(target)),
+	const results = await Promise.all(
+		targets.map(async (target) => {
+			if (!(await llvm.canExtractLinuxSysroot(target))) {
+				console.log(
+					`skipped sdk.tg.ts#testDarwinToLinux: the ${target} sysroot requires a case-sensitive filesystem`,
+				);
+				return [target, null] as const;
+			}
+			await assertDarwinToLinux(target);
+			return [target, true] as const;
+		}),
 	);
-	return true;
+	return Object.fromEntries(results);
 }
 
 export async function assertDarwinToLinux(target: string) {

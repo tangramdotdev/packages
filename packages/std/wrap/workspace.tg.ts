@@ -739,19 +739,30 @@ export async function testRust() {
 		.named("workspace Rust tests");
 }
 
-export async function testCross() {
+export async function testCross(target_?: string) {
 	// Detect the host triple.
 	const host = std.triple.host();
 
-	// Determine the target triple with differing architecture from the host.
+	// Default to a target triple with a different architecture from the host.
 	const hostArch = std.triple.arch(host);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
-	const target = std.triple.create({
-		arch: targetArch,
-		vendor: "unknown",
-		os: "linux",
-		environment: "gnu",
-	});
+	const target =
+		target_ ??
+		std.triple.create({
+			arch: targetArch,
+			vendor: "unknown",
+			os: "linux",
+			environment: "gnu",
+		});
+	if (
+		std.triple.os(host) === "darwin" &&
+		!(await llvm.canExtractLinuxSysroot(target))
+	) {
+		console.log(
+			`skipped wrap/workspace.tg.ts#testCross: the ${target} sysroot requires a case-sensitive filesystem`,
+		);
+		return null;
+	}
 	const crossWorkspace = await tg.build(workspace, {
 		build: host,
 		host: target,
@@ -763,7 +774,7 @@ export async function testCross() {
 	tg.File.assert(crossWrapper);
 	const crossMetadata = await std.file.executableMetadata(crossWrapper);
 	tg.assert(crossMetadata.format === "elf");
-	tg.assert(crossMetadata.arch === targetArch);
+	tg.assert(crossMetadata.arch === std.triple.arch(target));
 	return true;
 }
 

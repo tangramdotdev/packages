@@ -1427,13 +1427,18 @@ export async function testCrossGccLdProxy() {
 	return await testTransitive(undefined, crossTarget);
 }
 
-export async function testDarwinToLinuxLdProxy() {
+export async function testDarwinToLinuxLdProxy(target = "x86_64-unknown-linux-gnu") {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
 		console.log("skipped sdk/proxy.tg.ts#testDarwinToLinuxLdProxy: requires Darwin");
 		return null;
 	}
-	const target = "x86_64-unknown-linux-gnu";
+	if (!(await llvmToolchain.canExtractLinuxSysroot(target))) {
+		console.log(
+			`skipped sdk/proxy.tg.ts#testDarwinToLinuxLdProxy: the ${target} sysroot requires a case-sensitive filesystem`,
+		);
+		return null;
+	}
 	return await testTransitive(undefined, target);
 }
 

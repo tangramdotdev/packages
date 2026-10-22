@@ -133,6 +133,7 @@ const testTiers: Record<string, Tier> = {
 	"process.tg.ts#testDollar": "sdk",
 	"sdk.tg.ts#testDefault": "sdk",
 	"sdk/gnu/toolchain.tg.ts#testCanadianCross": "sdk",
+	"sdk/llvm.tg.ts#testLinuxSysroot": "bootstrap",
 	"sdk/proxy.tg.ts#testCrossGccLdProxy": "extended",
 	"sdk/proxy.tg.ts#testDarwinToLinuxLdProxy": "extended",
 	"sdk/proxy.tg.ts#testLinuxToDarwinLdProxy": "extended",
