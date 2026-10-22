@@ -246,7 +246,8 @@ export async function test() {
 	} else if (os === "darwin") {
 		tg.assert(nativeMetadata.format === "mach-o");
 		tg.assert(
-			nativeMetadata.arches.length === 1 && nativeMetadata.arches[0] === hostArch,
+			nativeMetadata.arches.length === 1 &&
+				nativeMetadata.arches[0] === hostArch,
 		);
 	} else {
 		return tg.unreachable();
@@ -296,7 +297,8 @@ export async function testCross() {
 	} else if (os === "darwin") {
 		tg.assert(nativeMetadata.format === "mach-o");
 		tg.assert(
-			nativeMetadata.arches.length === 1 && nativeMetadata.arches[0] === targetArch,
+			nativeMetadata.arches.length === 1 &&
+				nativeMetadata.arches[0] === targetArch,
 		);
 	} else {
 		return tg.unreachable();

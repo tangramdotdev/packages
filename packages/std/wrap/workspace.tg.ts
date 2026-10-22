@@ -241,13 +241,18 @@ export async function buildDefaultWrapper() {
 
 type ToolchainArg = {
 	host?: string;
+	llvmTools?: boolean;
 	target?: string;
 };
 
 export async function rust(
 	...args: tg.Args<ToolchainArg>
 ): Promise<tg.Directory> {
-	const { host: host_, target: target_ } = await tg.Args.apply<
+	const {
+		host: host_,
+		llvmTools = false,
+		target: target_,
+	} = await tg.Args.apply<
 		ToolchainArg,
 		tg.ValueOrMaybeMutationMap<ToolchainArg>,
 		ToolchainArg
@@ -275,7 +280,9 @@ export async function rust(
 
 	// Install the full minimal profile for the host.
 	let packages = tg.directory();
-	for (const name of manifest.profiles["minimal"] ?? []) {
+	const components = [...(manifest.profiles["minimal"] ?? [])];
+	if (llvmTools) components.push("llvm-tools-preview");
+	for (const name of components) {
 		const pkg = manifest.pkg[name]?.target[host];
 		if (pkg?.available) {
 			const artifact = std.download.extractArchive({
@@ -523,7 +530,7 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 
 		echo "#!/usr/bin/env sh" > rustc.sh
 		echo 'set -eu' >> rustc.sh
-		echo 'exec ${rustc} "$@"' >> rustc.sh
+		echo 'exec ${rustc} --sysroot ${rustToolchain} "$@"' >> rustc.sh
 		chmod +x rustc.sh
 		export RUSTC=$PWD/rustc.sh
 		`;
@@ -736,19 +743,30 @@ export async function testRust() {
 		.named("workspace Rust tests");
 }
 
-export async function testCross() {
+export async function testCross(target_?: string) {
 	// Detect the host triple.
 	const host = std.triple.host();
 
-	// Determine the target triple with differing architecture from the host.
+	// Default to a target triple with a different architecture from the host.
 	const hostArch = std.triple.arch(host);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
-	const target = std.triple.create({
-		arch: targetArch,
-		vendor: "unknown",
-		os: "linux",
-		environment: "gnu",
-	});
+	const target =
+		target_ ??
+		std.triple.create({
+			arch: targetArch,
+			vendor: "unknown",
+			os: "linux",
+			environment: "gnu",
+		});
+	if (
+		std.triple.os(host) === "darwin" &&
+		!(await llvm.canExtractLinuxSysroot(target))
+	) {
+		console.log(
+			`skipped wrap/workspace.tg.ts#testCross: the ${target} sysroot requires a case-sensitive filesystem`,
+		);
+		return null;
+	}
 	const crossWorkspace = await tg.build(workspace, {
 		build: host,
 		host: target,
@@ -760,7 +778,7 @@ export async function testCross() {
 	tg.File.assert(crossWrapper);
 	const crossMetadata = await std.file.executableMetadata(crossWrapper);
 	tg.assert(crossMetadata.format === "elf");
-	tg.assert(crossMetadata.arch === targetArch);
+	tg.assert(crossMetadata.arch === std.triple.arch(target));
 	return true;
 }
 

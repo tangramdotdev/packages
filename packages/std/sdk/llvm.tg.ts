@@ -5,6 +5,7 @@ import * as gnu from "./gnu.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
 import * as utils from "../utils.tg.ts";
+import * as workspace from "../wrap/workspace.tg.ts";
 import git from "./llvm/git.tg.ts";
 import * as libc from "./libc.tg.ts";
 import cctools from "./llvm/cctools_port.tg.ts";
@@ -85,7 +86,17 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 			if (host === target) {
 				return toolchain;
 			}
-			const tools = ["ar", "cc", "c++", "clang", "clang++", "ld", "nm", "ranlib", "strip"];
+			const tools = [
+				"ar",
+				"cc",
+				"c++",
+				"clang",
+				"clang++",
+				"ld",
+				"nm",
+				"ranlib",
+				"strip",
+			];
 			const aliases = Object.fromEntries(
 				tools.map((name) => [`${target}-${name}`, tg.symlink(name)]),
 			);
@@ -94,19 +105,28 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 			const toolchain = bootstrap.toolchain(host);
 			const lld = buildLld({ host });
 			const sysroot = getLinuxSysroot(target);
-			return await tg.directory(
-				toolchain,
-				{
-					[`bin/ld`]: null,
-					[`bin/ld64.lld`]: null,
-					[`bin/ld-classic`]: null,
-				},
-				lld,
-				{ [`bin/ld`]: tg.symlink("./lld") },
-				{
-					[`${target}/sysroot`]: sysroot,
-				},
+			const tools = [
+				"ar",
+				"cc",
+				"c++",
+				"clang",
+				"clang++",
+				"ld",
+				"ld.lld",
+				"nm",
+				"ranlib",
+				"strip",
+			];
+			const aliases = Object.fromEntries(
+				tools.map((name) => [
+					`${target}-${name}`,
+					tg.symlink(name === "ld" ? "ld.lld" : name),
+				]),
 			);
+			return await tg.directory(toolchain, lld, {
+				bin: aliases,
+				[`${target}/sysroot`]: sysroot,
+			});
 		} else {
 			return tg.unimplemented(`unrecognized target OS: ${targetOs}`);
 		}
@@ -356,6 +376,35 @@ export async function buildLld(arg?: LLVMArg) {
 	} = arg ?? {};
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
+	if (std.triple.os(host) === "darwin") {
+		// Reuse the pinned Rust linker because the bootstrap CMake package requires Linux.
+		const rustHost = std.sdk.canonicalTriple(host);
+		const rust = await workspace.rust({ host: rustHost, llvmTools: true });
+		const buildToolchain = bootstrap.sdk.env(host);
+		const wrapTool = async (name: string, args: Array<string> = []) => {
+			const executable = await rust
+				.get(`lib/rustlib/${rustHost}/bin/${name}`)
+				.then(tg.File.expect);
+			return std.wrap(executable, {
+				args,
+				buildToolchain,
+				host,
+				libraryPaths: [tg`${rust}/lib`],
+			});
+		};
+		// Apple archive tools do not index ELF objects, so use the LLVM tools for Linux targets.
+		const ar = await wrapTool("llvm-ar");
+		return tg.directory({
+			bin: {
+				ar,
+				"ld.lld": tg.symlink("lld"),
+				lld: wrapTool("rust-lld", ["-flavor", "gnu"]),
+				nm: wrapTool("llvm-nm"),
+				ranlib: std.wrap(ar, { args: ["s"], buildToolchain, host }),
+				strip: wrapTool("llvm-strip"),
+			},
+		});
+	}
 
 	const sourceDir = source_ ?? source();
 
@@ -499,7 +548,13 @@ export async function wrapArgs(arg: WrapArgsArg) {
 				SDKROOT: tg.Mutation.unset(),
 			};
 			const targetSysroot = getLinuxSysroot(target);
-			clangArgs.push("-target", target, tg`--sysroot=${targetSysroot}`);
+			clangArgs.push(
+				"-target",
+				target,
+				tg`--sysroot=${targetSysroot}`,
+				"-rtlib=libgcc",
+				"-unwindlib=libgcc",
+			);
 		} else {
 			return tg.unimplemented(`unrecognized target OS: ${targetOs}`);
 		}
@@ -536,9 +591,53 @@ export async function getLinuxSysroot(target: string): Promise<tg.Directory> {
 	};
 	const checksum = checksums[target];
 	tg.assert(checksum);
+	// Use the builtin extractor to reject case-conflicting headers on case-insensitive filesystems.
 	return await tg
 		.download(url, checksum, { mode: "extract" })
 		.then(tg.Directory.expect);
+}
+
+/** Check whether the filesystem supports a Linux sysroot before running a cross-compilation test. */
+export async function canExtractLinuxSysroot(target: string): Promise<boolean> {
+	try {
+		await getLinuxSysroot(target);
+		return true;
+	} catch (error) {
+		// Only the case-conflict diagnostic makes this target unsupported.
+		for (
+			let cause = error;
+			cause instanceof tg.Error;
+			cause = (await cause.source)?.node
+		) {
+			if (
+				(await cause.message) ===
+				"an entry whose name differs only in case already exists, and the file system is case insensitive"
+			) {
+				return false;
+			}
+		}
+		throw error;
+	}
+}
+
+export async function testLinuxSysroot() {
+	const target = "x86_64-unknown-linux-gnu";
+	if (!(await canExtractLinuxSysroot(target))) {
+		console.log(
+			"verified that the sysroot extractor rejects case-conflicting headers",
+		);
+		return true;
+	}
+	const directory = await getLinuxSysroot(target);
+	const upper = await directory
+		.get("include/linux/netfilter/xt_TCPMSS.h")
+		.then(tg.File.expect);
+	const lower = await directory
+		.get("include/linux/netfilter/xt_tcpmss.h")
+		.then(tg.File.expect);
+	tg.assert((await upper.text).includes("struct xt_tcpmss_info"));
+	tg.assert((await lower.text).includes("struct xt_tcpmss_match_info"));
+	return true;
 }
 
 export async function test() {
@@ -555,6 +654,13 @@ export async function test() {
 	tg.Directory.assert(directory);
 	await directory.store();
 	console.log("toolchain dir", directory.id);
+	const env =
+		os === "darwin"
+			? {
+					MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget,
+					SDKROOT: tg`${bootstrap.macOsSdk(undefined, host)}/MacOSX.sdk`,
+				}
+			: {};
 
 	const testCSource = tg.file`
 		#include <stdio.h>
@@ -562,10 +668,12 @@ export async function test() {
 			printf("Hello, world!\\n");
 			return 0;
 		}`;
+	const linkerFlags = os === "linux" ? "-fuse-ld=lld" : "";
+	const unwindFlags = os === "linux" ? "-unwindlib=libunwind" : "";
 	const cOut = await $(std.shBootstrap`
-		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o ${tg.output}
+		set -x && clang -v -xc ${testCSource} ${linkerFlags} -o ${tg.output}
 	`)
-		.env(directory)
+		.env(directory, env)
 		.host(system)
 		.then(tg.File.expect);
 
@@ -579,13 +687,9 @@ export async function test() {
 			`expected ${expectedInterpreterName}, got ${cMetadata.interpreter}`,
 		);
 	} else if (os === "darwin") {
-		std.assert.assertJsonSnapshot(
-			cMetadata,
-			`
-			{
-				"format": "mach-o"
-			}
-		`,
+		tg.assert(cMetadata.format === "mach-o");
+		tg.assert(
+			cMetadata.arches.length === 1 && cMetadata.arches[0] === hostArch,
 		);
 	}
 
@@ -597,9 +701,9 @@ export async function test() {
 		}
 	`;
 	const cxxOut = await $(std.shBootstrap`
-		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ -fuse-ld=lld -unwindlib=libunwind -o ${tg.output}
+		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ ${linkerFlags} ${unwindFlags} -o ${tg.output}
 	`)
-		.env(directory)
+		.env(directory, env)
 		.host(system)
 		.then(tg.File.expect);
 
@@ -613,13 +717,9 @@ export async function test() {
 			`expected ${expectedInterpreterName}, got ${cxxMetadata.interpreter}`,
 		);
 	} else if (os === "darwin") {
-		std.assert.assertJsonSnapshot(
-			cxxMetadata,
-			`
-			{
-				"format": "mach-o"
-			}
-		`,
+		tg.assert(cxxMetadata.format === "mach-o");
+		tg.assert(
+			cxxMetadata.arches.length === 1 && cxxMetadata.arches[0] === hostArch,
 		);
 	}
 

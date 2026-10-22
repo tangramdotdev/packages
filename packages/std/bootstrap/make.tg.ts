@@ -71,11 +71,6 @@ export async function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
-	// const spec = {
-	// 	...std.assert.defaultSpec(metadata),
-	// 	bootstrapMode: true,
-	// };
-	// FIXME - must be args to use std.assert.pkg.
-	// return await std.assert.pkg(build, spec);
+	// The bootstrap install drops the xattrs that record wrapper dependencies, so this make may not run outside of the build that produced it. The utils build that uses it repairs the wrappers, so only check that it builds.
 	return await build();
 }
