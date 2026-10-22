@@ -176,12 +176,12 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 					target: host,
 					toolchainDir: directory,
 				});
+				const darwinCross = isCross && std.triple.os(build) === "darwin";
 				const wrapCompiler = async (
 					compiler: tg.File | tg.Symlink,
 					name: string,
 					args: tg.Args<tg.Template.Arg>,
 				) => {
-					const darwinCross = isCross && std.triple.os(build) === "darwin";
 					// Run the raw driver so frontend invocations do not reenter the wrapper.
 					const executable = darwinCross
 						? await tg.symlink({
@@ -190,11 +190,15 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 							})
 						: compiler;
 					return std.wrap(executable, {
-						args: [...args, ...(darwinCross ? [tg`--ld-path=${ldProxyArtifact}`] : [])],
+						args: [
+							...args,
+							...(darwinCross ? [tg`--ld-path=${ldProxyArtifact}`] : []),
+						],
 						buildToolchain: buildToolchainDir,
 						env,
 						host: build,
 						...(darwinCross ? { interpreter: null } : {}),
+						// On Linux, do not wrap in place.
 						merge: os === "darwin",
 					});
 				};
@@ -1311,7 +1315,9 @@ async function makeShared(arg: tg.Unresolved<MakeSharedArg>) {
 	const dylibExt = std.triple.os(targetTriple) === "darwin" ? "dylib" : "so";
 	const cmd = target ? `${target}-cc` : "cc";
 	return await std
-		.build(std.shBootstrap`set -x && mkdir -p ${tg.output}/lib && ${cmd} -v -shared -xc ${source} -o ${tg.output}/lib/${libName}.${dylibExt} ${flags} && ls -al ${tg.output}/lib`)
+		.build(
+			std.shBootstrap`set -x && mkdir -p ${tg.output}/lib && ${cmd} -v -shared -xc ${source} -o ${tg.output}/lib/${libName}.${dylibExt} ${flags} && ls -al ${tg.output}/lib`,
+		)
 		.env(
 			std.env.compose(sdk, {
 				TANGRAM_LINKER_TRACING: "tgld=trace",
@@ -1427,7 +1433,9 @@ export async function testCrossGccLdProxy() {
 	return await testTransitive(undefined, crossTarget);
 }
 
-export async function testDarwinToLinuxLdProxy(target = "x86_64-unknown-linux-gnu") {
+export async function testDarwinToLinuxLdProxy(
+	target = "x86_64-unknown-linux-gnu",
+) {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
 		console.log("skipped sdk/proxy.tg.ts#testDarwinToLinuxLdProxy: requires Darwin");
@@ -1578,7 +1586,9 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 
 	// Compile the executable.
 	const output = await std
-		.build(std.shBootstrap`${compiler} -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o ${tg.output}`)
+		.build(
+			std.shBootstrap`${compiler} -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o ${tg.output}`,
+		)
 		.env(
 			std.env.compose(testSDK, {
 				TANGRAM_LINKER_TRACING: "tgld=trace",
@@ -1592,9 +1602,12 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 	tg.assert(manifest !== undefined);
 	const interpreter = manifest.interpreter;
 	tg.assert(interpreter !== undefined);
-	const expectedInterpreterKind = os === "darwin"
-		? "dyld"
-		: std.triple.environment(targetTriple) === "musl" ? "ld-musl" : "ld-linux";
+	const expectedInterpreterKind =
+		os === "darwin"
+			? "dyld"
+			: std.triple.environment(targetTriple) === "musl"
+				? "ld-musl"
+				: "ld-linux";
 	tg.assert(
 		interpreter.kind === expectedInterpreterKind,
 		`expected ${expectedInterpreterKind}, got ${interpreter.kind}`,
@@ -2143,9 +2156,12 @@ export async function testTransitiveDiscovery(target?: string) {
 	tg.assert(manifest !== undefined);
 	const interpreter = manifest.interpreter;
 	tg.assert(interpreter !== undefined);
-	const expectedInterpreterKind = os === "darwin"
-		? "dyld"
-		: std.triple.environment(targetTriple) === "musl" ? "ld-musl" : "ld-linux";
+	const expectedInterpreterKind =
+		os === "darwin"
+			? "dyld"
+			: std.triple.environment(targetTriple) === "musl"
+				? "ld-musl"
+				: "ld-linux";
 	tg.assert(
 		interpreter.kind === expectedInterpreterKind,
 		`expected ${expectedInterpreterKind}, got ${interpreter.kind}`,

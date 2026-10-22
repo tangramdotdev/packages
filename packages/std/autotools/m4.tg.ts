@@ -61,7 +61,6 @@ export async function build(...args: tg.Args<Arg>) {
 
 export default build;
 
-
 export async function test() {
 	return std.assert.pkg(build, {
 		binaries: [std.assert.displaysVersion("m4", metadata.version)],

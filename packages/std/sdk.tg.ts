@@ -1030,10 +1030,16 @@ export namespace sdk {
 			// A separate static launcher keeps the program dependencies in its executable.
 			if (manifest?.executable.kind === "path") {
 				const references = new Map(
-					(await compiledProgram.dependencyObjects).map((object) => [object.id, object]),
+					(await compiledProgram.dependencyObjects).map((object) => [
+						object.id,
+						object,
+					]),
 				);
 				executable = tg.File.expect(
-					await std.wrap.executableFromManifestExecutable(manifest.executable, references),
+					await std.wrap.executableFromManifestExecutable(
+						manifest.executable,
+						references,
+					),
 				);
 			}
 			metadata = await std.file.executableMetadata(executable);

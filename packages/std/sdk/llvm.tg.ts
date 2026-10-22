@@ -95,21 +95,28 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 			const toolchain = bootstrap.toolchain(host);
 			const lld = buildLld({ host });
 			const sysroot = getLinuxSysroot(target);
-			const tools = ["ar", "cc", "c++", "clang", "clang++", "ld", "ld.lld", "nm", "ranlib", "strip"];
+			const tools = [
+				"ar",
+				"cc",
+				"c++",
+				"clang",
+				"clang++",
+				"ld",
+				"ld.lld",
+				"nm",
+				"ranlib",
+				"strip",
+			];
 			const aliases = Object.fromEntries(
 				tools.map((name) => [
 					`${target}-${name}`,
 					tg.symlink(name === "ld" ? "ld.lld" : name),
 				]),
 			);
-			return await tg.directory(
-				toolchain,
-				lld,
-				{
-					bin: aliases,
-					[`${target}/sysroot`]: sysroot,
-				},
-			);
+			return await tg.directory(toolchain, lld, {
+				bin: aliases,
+				[`${target}/sysroot`]: sysroot,
+			});
 		} else {
 			return tg.unimplemented(`unrecognized target OS: ${targetOs}`);
 		}
@@ -363,32 +370,30 @@ export async function buildLld(arg?: LLVMArg) {
 		// Reuse the pinned Rust linker because the bootstrap CMake package requires Linux.
 		const rustHost = std.sdk.canonicalTriple(host);
 		const rust = await workspace.rust({ host: rustHost, llvmTools: true });
-		const executable = await rust.get(`lib/rustlib/${rustHost}/bin/rust-lld`).then(tg.File.expect);
-		const linker = await std.wrap(executable, {
-			args: ["-flavor", "gnu"],
-			buildToolchain: bootstrap.sdk.env(host),
-			host,
-			libraryPaths: [tg`${rust}/lib`],
-		});
-		const bin: Record<string, tg.Unresolved<tg.File | tg.Symlink>> = {
-			"ld.lld": tg.symlink("lld"),
-			lld: linker,
-		};
-		// Apple archive tools do not index ELF objects, so use the LLVM tools for Linux targets.
-		for (const name of ["ar", "nm", "strip"]) {
-			const executable = rust.get(`lib/rustlib/${rustHost}/bin/llvm-${name}`).then(tg.File.expect);
-			bin[name] = std.wrap(executable, {
-				buildToolchain: bootstrap.sdk.env(host),
+		const buildToolchain = bootstrap.sdk.env(host);
+		const wrapTool = async (name: string, args: Array<string> = []) => {
+			const executable = await rust
+				.get(`lib/rustlib/${rustHost}/bin/${name}`)
+				.then(tg.File.expect);
+			return std.wrap(executable, {
+				args,
+				buildToolchain,
 				host,
 				libraryPaths: [tg`${rust}/lib`],
 			});
-		}
-		bin.ranlib = std.wrap(await bin.ar!, {
-			args: ["s"],
-			buildToolchain: bootstrap.sdk.env(host),
-			host,
+		};
+		// Apple archive tools do not index ELF objects, so use the LLVM tools for Linux targets.
+		const ar = await wrapTool("llvm-ar");
+		return tg.directory({
+			bin: {
+				ar,
+				"ld.lld": tg.symlink("lld"),
+				lld: wrapTool("rust-lld", ["-flavor", "gnu"]),
+				nm: wrapTool("llvm-nm"),
+				ranlib: std.wrap(ar, { args: ["s"], buildToolchain, host }),
+				strip: wrapTool("llvm-strip"),
+			},
 		});
-		return tg.directory({ bin });
 	}
 
 	const sourceDir = source_ ?? source();
@@ -533,7 +538,13 @@ export async function wrapArgs(arg: WrapArgsArg) {
 				SDKROOT: tg.Mutation.unset(),
 			};
 			const targetSysroot = getLinuxSysroot(target);
-			clangArgs.push("-target", target, tg`--sysroot=${targetSysroot}`, "-rtlib=libgcc", "-unwindlib=libgcc");
+			clangArgs.push(
+				"-target",
+				target,
+				tg`--sysroot=${targetSysroot}`,
+				"-rtlib=libgcc",
+				"-unwindlib=libgcc",
+			);
 		} else {
 			return tg.unimplemented(`unrecognized target OS: ${targetOs}`);
 		}
@@ -633,12 +644,13 @@ export async function test() {
 	tg.Directory.assert(directory);
 	await directory.store();
 	console.log("toolchain dir", directory.id);
-	const env = os === "darwin"
-		? {
-			MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget,
-			SDKROOT: tg`${bootstrap.macOsSdk(undefined, host)}/MacOSX.sdk`,
-		}
-		: {};
+	const env =
+		os === "darwin"
+			? {
+					MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget,
+					SDKROOT: tg`${bootstrap.macOsSdk(undefined, host)}/MacOSX.sdk`,
+				}
+			: {};
 
 	const testCSource = tg.file`
 		#include <stdio.h>
@@ -666,7 +678,9 @@ export async function test() {
 		);
 	} else if (os === "darwin") {
 		tg.assert(cMetadata.format === "mach-o");
-		tg.assert(cMetadata.arches.length === 1 && cMetadata.arches[0] === hostArch);
+		tg.assert(
+			cMetadata.arches.length === 1 && cMetadata.arches[0] === hostArch,
+		);
 	}
 
 	const testCXXSource = tg.file`
@@ -694,7 +708,9 @@ export async function test() {
 		);
 	} else if (os === "darwin") {
 		tg.assert(cxxMetadata.format === "mach-o");
-		tg.assert(cxxMetadata.arches.length === 1 && cxxMetadata.arches[0] === hostArch);
+		tg.assert(
+			cxxMetadata.arches.length === 1 && cxxMetadata.arches[0] === hostArch,
+		);
 	}
 
 	return directory;

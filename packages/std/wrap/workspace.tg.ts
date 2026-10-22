@@ -248,7 +248,11 @@ type ToolchainArg = {
 export async function rust(
 	...args: tg.Args<ToolchainArg>
 ): Promise<tg.Directory> {
-	const { host: host_, llvmTools = false, target: target_ } = await tg.Args.apply<
+	const {
+		host: host_,
+		llvmTools = false,
+		target: target_,
+	} = await tg.Args.apply<
 		ToolchainArg,
 		tg.ValueOrMaybeMutationMap<ToolchainArg>,
 		ToolchainArg
