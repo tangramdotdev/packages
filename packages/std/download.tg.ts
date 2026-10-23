@@ -14,6 +14,11 @@ export async function download(arg: Arg): Promise<tg.Blob | tg.Artifact> {
 	const { checksum, mode = "raw", mirrors = [], ...rest } = arg;
 	const primaryUrl = download.buildUrl(rest);
 	const urls = [primaryUrl, ...mirrors];
+	for (const url of download.sourceCacheUrls(primaryUrl)) {
+		if (!urls.includes(url)) {
+			urls.push(url);
+		}
+	}
 	let output: tg.Blob | tg.Artifact | undefined;
 	let lastError: Error | undefined;
 	for (const url of urls) {
@@ -34,6 +39,23 @@ export async function download(arg: Arg): Promise<tg.Blob | tg.Artifact> {
 export default download;
 
 export namespace download {
+	/** Source caches that keep upstream release archives byte for byte, tried after the primary URL and any explicit mirrors. */
+	export function sourceCacheUrls(url: string): Array<string> {
+		const path = url.replace(/^[a-z]+:\/\/[^/]*/, "").replace(/[?#].*$/, "");
+		const file = path.split("/").pop() ?? "";
+		const archive = file.match(
+			/^(.+?)-v?(\d[^-]*)\.(tar\.(gz|xz|bz2|zst|lz)|tgz|zip)$/,
+		);
+		if (!archive || archive[1] === undefined) {
+			return [];
+		}
+		const name = archive[1].toLowerCase();
+		return [
+			`https://sources.openwrt.org/${file}`,
+			`https://sources.buildroot.net/${name}/${file}`,
+		];
+	}
+
 	type ExtractArchiveArg = download.BuildUrlArg & {
 		/** The expected checksum of the downloaded file. Use "any" to allow network access without verifying the result. */
 		checksum: tg.Checksum;
@@ -132,16 +154,24 @@ export namespace download {
 		version: string;
 	};
 
-	const gnuHosts = ["mirrors.kernel.org", "ftpmirror.gnu.org", "ftp.gnu.org"];
+	const gnuHosts = [
+		"mirrors.kernel.org",
+		"mirrors.ocf.berkeley.edu",
+		"mirror.fcix.net",
+		"ftp.wayne.edu",
+		"ftp.halifax.rwth-aachen.de",
+		"ftpmirror.gnu.org",
+		"ftp.gnu.org",
+	];
 
-	/** Download and extract a source package hosted in the GNU FTP repository. Tries ftpmirror.gnu.org first, then falls back to ftp.gnu.org. */
+	/** Download and extract a source package hosted in the GNU FTP repository. Tries the mirrors in order and falls back to ftp.gnu.org last. */
 	export async function fromGnu(arg: FromGnuArg) {
 		const { checksum, compression = "gz", name, tar = false, version } = arg;
 		const archiveFormat = "tar" as tg.ArchiveFormat;
 		const extension = `.${archiveFormat}.${compression}`;
 		const archive = packageArchive({ extension, name, version });
 		function gnuUrl(host: string) {
-			return `http://${host}/gnu/${name}/${archive}`;
+			return `https://${host}/gnu/${name}/${archive}`;
 		}
 		const primaryHost = gnuHosts[0];
 		tg.assert(primaryHost, "Expected at least one GNU host.");
