@@ -186,7 +186,16 @@ export async function self(unresolvedArg?: tg.Unresolved<ToolchainArg>) {
 		rustInstall,
 	});
 
+	// Make LLVM's zlib dependency available to programs that load it from the sysroot.
 	const zlibArtifact = await zlib({ host });
+	const zlibName =
+		std.triple.os(host) === "darwin" ? "libz.1.dylib" : "libz.so.1";
+	rustInstall = await tg.directory(rustInstall, {
+		[`lib/${zlibName}`]: tg.symlink({
+			artifact: zlibArtifact,
+			path: `lib/${zlibName}`,
+		}),
+	});
 
 	// Wrap the Rust binaries.
 	const executables = [
@@ -204,10 +213,7 @@ export async function self(unresolvedArg?: tg.Unresolved<ToolchainArg>) {
 		// Filter dynamic libraries while retaining the Rust sysroot structure.
 		const unwrapped = rustInstall.get(executable).then(tg.File.expect);
 		const wrapped = std.wrap(unwrapped, {
-			libraryPaths: [
-				tg`${zlibArtifact}/lib`,
-				{ path: tg`${rustInstall}/lib`, preserve: true },
-			],
+			libraryPaths: [{ path: tg`${rustInstall}/lib`, preserve: true }],
 		});
 
 		artifact = tg.directory(artifact, {
@@ -315,6 +321,7 @@ export async function test() {
 	const tests = [];
 
 	tests.push(testHostToolchain());
+	tests.push(testLlvm());
 	tests.push(testCargo());
 	tests.push(testCargoProxy());
 	tests.push(testNativeBuild());
@@ -330,6 +337,23 @@ export async function testHostToolchain() {
 	console.log("RUST", await rustArtifact.store());
 	await $`rustc --version && cargo --version`.env(rustArtifact);
 	return rustArtifact;
+}
+
+import llvmTest from "./tests/llvm.c" with { type: "file" };
+
+export async function testLlvm() {
+	const host = std.triple.host();
+	const toolchain = await self({ host });
+	const output = await $`
+		cc -x c ${llvmTest} -ldl -o load-llvm
+		sysroot=$(rustc --print sysroot)
+		unset LD_LIBRARY_PATH DYLD_LIBRARY_PATH
+		./load-llvm "$sysroot"/lib/*LLVM*.so* "$sysroot"/lib/*LLVM*.dylib > ${tg.output}
+	`
+		.env(std.sdk({ host }), toolchain)
+		.then(tg.File.expect);
+	tg.assert((await output.text).trim() === "LLVM loaded");
+	return true;
 }
 
 export async function testCrossToolchain() {
