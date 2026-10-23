@@ -1,0 +1,16 @@
+[env]
+TANGRAM_CONFIG_MESSAGE = { value = "message.txt", relative = true }
+TANGRAM_CONFIG_OVERRIDE = "config"
+
+[profile.configured]
+debug-assertions = true
+inherits = "release"
+
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "missing-vendor"
+
+[target.'cfg(all())']
+linker = "missing-linker"
