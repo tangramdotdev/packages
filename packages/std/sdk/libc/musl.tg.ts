@@ -14,8 +14,11 @@ export async function source() {
 	const checksum =
 		"sha256:d585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a";
 	const base = `https://musl.libc.org/releases`;
+	const mirrors = [
+		`https://deb.debian.org/debian/pool/main/m/${name}/${name}_${version}.orig.tar.gz`,
+	];
 	return await std.download
-		.extractArchive({ base, checksum, name, version, extension })
+		.extractArchive({ base, checksum, name, version, extension, mirrors })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => bootstrap.patch(source, muslPermissionPatch));
