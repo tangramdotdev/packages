@@ -518,17 +518,21 @@ runner = ["${proxyDir}/bin/tgrustc", "runner"]
 linker = "${hostLinker}"`;
 	}
 
-	// cargo config must be file-based, not env vars.
+	// Keep Cargo's home isolated and write the generated configuration.
 	const preparePathCommands = [
 		tg`mkdir -p "${tg.output}/target"`,
 		tg`export TARGET_DIR="$(realpath "${tg.output}/target")"`,
-		tg`export CARGO_HOME="$(mktemp -d)"\necho '${cargoConfig}' > "$CARGO_HOME/config.toml"\ncd "$CARGO_HOME"`,
+		tg`export CARGO_HOME="$(mktemp -d)"`,
+		tg`cargo_config_path="$PWD/config.toml"\necho '${cargoConfig}' > "$cargo_config_path"`,
 	];
 	const preparePaths = tg.Template.join("\n", ...preparePathCommands);
 
 	const prepareSource = buildInTree
 		? tg`cp -R ${source}/. $PWD/work\nchmod -R u+w $PWD/work\nexport TGRUSTC_SOURCE_DIR="$PWD/work"`
 		: tg`export TGRUSTC_SOURCE_DIR=$(realpath ${source})`;
+
+	// Discover the project configuration from the manifest directory.
+	const enterSource = tg`cd "$TGRUSTC_SOURCE_DIR/${manifestSubdir ?? "."}"`;
 
 	const manifestPathArg = manifestSubdir
 		? `${manifestSubdir}/Cargo.toml`
@@ -560,16 +564,21 @@ linker = "${hostLinker}"`;
 	const cargoCmd = useHostRunner
 		? "cargo -Zhost-config -Ztarget-applies-to-host"
 		: "cargo";
+
+	// Give the generated configuration precedence over the project configuration.
+	const configArg = '--config "$cargo_config_path"';
+
 	// Redirect + replay (not process substitution) to avoid tee being killed
 	// before flushing on Linux.
 	const buildCommand = captureStderr
-		? tg`${cargoCmd} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
-		: tg`${cargoCmd} ${subcommand} ${cargoArgString}`;
+		? tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
+		: tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString}`;
 	const buildScript = tg.Template.join(
 		"\n",
 		preparePaths,
 		prepareSource,
 		pre ?? null,
+		enterSource,
 		buildCommand,
 	);
 
@@ -991,9 +1000,52 @@ import tests from "./tests" with { type: "directory" };
 export async function test() {
 	const tests = [];
 
+	tests.push(testConfig());
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
 	await Promise.all(tests);
+
+	return true;
+}
+
+export async function testConfig() {
+	const fixture = await tests.get("cargo-config").then(tg.Directory.expect);
+	const nested = await tg.directory({
+		".cargo": fixture.get(".cargo"),
+		project: tg.directory(fixture, {
+			".cargo/config.toml": tg.file(`
+[env]
+TANGRAM_CONFIG_MESSAGE = { value = "message.txt", relative = true }
+`),
+			"message.txt": tg.file("nested\n"),
+		}),
+	});
+	const sources = [
+		{ manifestSubdir: undefined, message: "configured", source: fixture },
+		{ manifestSubdir: "project", message: "nested", source: nested },
+	];
+
+	// Exercise the project configuration with immutable and copied sources.
+	for (const buildInTree of [false, true]) {
+		for (const { manifestSubdir, message, source } of sources) {
+			const arg = {
+				buildInTree,
+				env: { TANGRAM_CONFIG_OVERRIDE: "environment" },
+				...std.args.optional("manifestSubdir", manifestSubdir),
+				profile: "configured",
+				source,
+			};
+			const output = await build(arg);
+			const stdout = await $`
+				${output}/bin/cargo-config > ${tg.output}
+			`.then(tg.File.expect);
+			const text = await stdout.text;
+			tg.assert(
+				text.trim() === `${message} environment 128`,
+				`unexpected output: ${text}`,
+			);
+		}
+	}
 
 	return true;
 }
