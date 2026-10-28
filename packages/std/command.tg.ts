@@ -63,7 +63,7 @@ export type ShUtils = "std" | "bootstrap" | "shell" | "none";
 export type ShArg = {
 	/** Use raw `/bin/sh` rather than the std bash. Implies `pipefail: false`, and defaults `utils` to `"bootstrap"`. */
 	bootstrap?: boolean;
-	/** Start in a per-process work subdir so `$(pwd)` is not "/". Defaults to `true`. */
+	/** Start in `$TMPDIR/work`, or in a fresh temporary directory if another process created it, so `$(pwd)` is not "/". Defaults to `true`. */
 	cd?: boolean;
 	/** The `-u` shell flag. Defaults to `true`. */
 	disallowUnset?: boolean;
@@ -126,7 +126,8 @@ const shArg = async (
 	}
 	let template = await tg.template(strings, ...placeholders);
 	if (cd) {
-		template = await tg.template`cd "$(mktemp -d)"\n${template}`;
+		template =
+			await tg.template`mkdir "\${TMPDIR:-/tmp}/work" 2>/dev/null && cd "\${TMPDIR:-/tmp}/work" || cd "$(mktemp -d)"\n${template}`;
 	}
 	let env: tg.Command.Arg.Env = {};
 	if (utils === "std") {
@@ -206,5 +207,25 @@ export async function testCommandEnvArtifact() {
 	const output = await tg.run(cmd).then(tg.File.expect);
 	const actual = await output.text;
 	tg.assert(actual.length > 0, "expected non-empty compiler version output");
+	return true;
+}
+
+/** Test that the work directory is the same for every process, so builds that embed it are reproducible. */
+export async function testCommandWorkDirectory() {
+	const pwd = async (name: string) => {
+		const cmd = await tg.command(
+			await shBootstrap`: ${name}; pwd > ${tg.output}`,
+		);
+		return await tg
+			.build(cmd)
+			.then(tg.File.expect)
+			.then((file) => file.text);
+	};
+	const first = await pwd("first");
+	const second = await pwd("second");
+	tg.assert(
+		first === second,
+		`expected the same work directory but got ${first} and ${second}`,
+	);
 	return true;
 }
