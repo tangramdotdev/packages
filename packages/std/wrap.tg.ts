@@ -2902,9 +2902,19 @@ export async function testRunEmbeddedExecutableThroughDynamicLoader() {
 		return null;
 	}
 
+	// Add a destructor to verify that the loader's finalizer runs exactly once.
+	const destructor = tg.file`
+		#include <stdio.h>
+		__attribute__((destructor)) static void finish(void) {
+			puts("destructor ran");
+		}
+	`;
+
 	// Build an executable with an embedded wrapper using the glibc SDK, and bind an argument and an environment variable.
 	const executable = await std
-		.build(std.shBootstrap`cc -xc ${inspectProcessSource} -o ${tg.output}`)
+		.build(
+			std.shBootstrap`cc -xc ${inspectProcessSource} ${destructor} -o ${tg.output}`,
+		)
 		.env(std.sdk())
 		.then(tg.File.expect);
 	const wrapper = await wrap(executable, {
@@ -2934,19 +2944,36 @@ export async function testRunEmbeddedExecutableThroughDynamicLoader() {
 		...(interpreter.libraryPaths ?? []),
 	);
 
-	// Run the executable through its dynamic loader, which loads the executable before the embedded wrapper starts.
-	const output = await std
-		.build(
-			std.shBootstrap`${interpreter.executable} --library-path ${libraryPath} ${wrapper} hello > ${tg.output}`,
-		)
-		.then(tg.File.expect);
-	const text = await output.text;
-	tg.assert(
-		text.includes("argv[1]: from-manifest") &&
-			text.includes("argv[2]: hello") &&
-			text.includes("WRAPPER_TEST=bound"),
-		`expected the bound argument and environment, got: ${text}`,
-	);
+	// Run the executable through its dynamic loader and check both suppression controls.
+	for (const control of [undefined, "args", "env"]) {
+		const option = control ? `--tg-wrapper-suppress-${control}` : "";
+		const output = await std
+			.build(
+				std.shBootstrap`WRAPPER_INHERITED=incoming ${interpreter.executable} --library-path ${libraryPath} ${wrapper} ${option} hello > ${tg.output}`,
+			)
+			.then(tg.File.expect);
+		const text = await output.text;
+		const lines = text.split("\n");
+		tg.assert(
+			lines.includes("argv[1]: from-manifest") &&
+				lines.includes("WRAPPER_TEST=bound"),
+			`expected the bound argument and environment with ${option}, got: ${text}`,
+		);
+		tg.assert(
+			lines.includes("argv[2]: hello") === (control !== "args") &&
+				lines.filter((line) => line.startsWith("argv[")).length ===
+					(control === "args" ? 2 : 3),
+			`expected the argument suppression control to be honored with ${option}, got: ${text}`,
+		);
+		tg.assert(
+			lines.includes("WRAPPER_INHERITED=incoming") === (control !== "env"),
+			`expected the environment suppression control to be honored with ${option}, got: ${text}`,
+		);
+		tg.assert(
+			lines.filter((line) => line === "destructor ran").length === 1,
+			`expected the destructor to run exactly once with ${option}, got: ${text}`,
+		);
+	}
 
 	// Print the manifest through the dynamic loader.
 	const printed = await std
