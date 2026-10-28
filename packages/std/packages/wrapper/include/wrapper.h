@@ -636,7 +636,7 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 		memcpy(manifest_string, data, executable.footer.size);
 		trace("%s\n", manifest_string);
 	}
-	parse_manifest(arena, executable.manifest, options->enable_tracing, (uint8_t*)data, executable.footer.size);
+	parse_manifest(arena, executable.manifest, options->enable_tracing, executable.loaded, (uint8_t*)data, executable.footer.size);
 	
 	// Combine manifest paths with existing LD_LIBRARY_PATH/LD_PRELOAD.
 	String original_ld_library_path = lookup(&executable.manifest->env, STRING_LITERAL(LD_LIBRARY_PATH));
@@ -692,10 +692,10 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 		}
 	}
 
-	// Set TANGRAM_INJECTION_IDENTITY_PATH unless a dynamic loader has already loaded the executable.
-	if (!executable.loaded && (executable.manifest->interpreter_kind == INTERPRETER_KIND_LD_LINUX
+	// Set TANGRAM_INJECTION_IDENTITY_PATH.
+	if (executable.manifest->interpreter_kind == INTERPRETER_KIND_LD_LINUX
 	|| executable.manifest->interpreter_kind == INTERPRETER_KIND_LD_MUSL
-	|| executable.manifest->interpreter_kind == INTERPRETER_KIND_DYLD)) {
+	|| executable.manifest->interpreter_kind == INTERPRETER_KIND_DYLD) {
 		String identity_path = STRING_LITERAL("TANGRAM_INJECTION_IDENTITY_PATH");
 		insert(arena, &executable.manifest->env, identity_path, path);
 		if (options->enable_tracing) {
