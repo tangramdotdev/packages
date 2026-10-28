@@ -1,5 +1,32 @@
 import * as std from "./tangram.ts";
 
+/** Export native executables in bin, sbin, and libexec without wrappers or artifact dependencies. */
+export async function standalone(directory: tg.Directory, host: string) {
+	for (const name of ["bin", "libexec", "sbin"]) {
+		const binaries = await directory.tryGet(name);
+		if (!(binaries instanceof tg.Directory)) continue;
+		const entries: Record<string, tg.File> = {};
+		for await (const [path, entry] of binaries.walk()) {
+			const artifact =
+				entry instanceof tg.Symlink
+					? await directory.get(`${name}/${path}`)
+					: entry;
+			tg.assert(
+				!(entry instanceof tg.Symlink && artifact instanceof tg.Directory),
+				"standalone executable directories cannot contain directory symlinks",
+			);
+			if (artifact instanceof tg.File && (await artifact.executable)) {
+				entries[path] = await std.file.standalone(artifact, host);
+			}
+		}
+		directory = await tg.directory(directory, {
+			[name]: tg.directory(binaries, entries),
+		});
+	}
+
+	return directory;
+}
+
 /** Filter the contents of a directory according to a predicate. */
 export async function filter(
 	directory: tg.Unresolved<tg.Directory>,

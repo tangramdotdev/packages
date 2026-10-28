@@ -170,6 +170,9 @@ export type BuildArg = {
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
 	source?: tg.Template.Arg;
 
+	/** Export native executables in bin, sbin, and libexec using only system runtime libraries. Select static dependencies through the project's CMake options. */
+	standalone?: boolean | std.sdk.StandaloneArg;
+
 	/** Should executables be stripped? Default is true. */
 	stripExecutables?: boolean;
 
@@ -206,6 +209,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 		prefixPath = tg`${tg.output}`,
 		sdk: sdkArg,
 		source,
+		standalone = false,
 		stripExecutables = true,
 		target: target_,
 	} = await tg.Args.apply<BuildArg, MergedArg, MergedArg>({
@@ -241,7 +245,8 @@ export async function build(...args: tg.Args<BuildArg>) {
 
 	// Add C/C++ compiler environment (flags, SDK, build tools).
 	const ccEnv = await std.cc.env({
-		host,
+		build: host,
+		host: standalone ? target : host,
 		...(buildTools !== undefined ? { buildTools } : {}),
 		developmentTools,
 		extended,
@@ -254,6 +259,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 		pipe,
 		pkgConfig,
 		...(sdkArg !== undefined ? { sdk: sdkArg } : {}),
+		standalone,
 		stripExecutables,
 	});
 	envs.push(ccEnv);
@@ -336,7 +342,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 	const mergedPhases = await std.phases.arg(defaultPhases, ...userPhaseArgs);
 
 	const system = std.triple.archAndOs(host);
-	return await std.phases
+	const output = await std.phases
 		.run({
 			bootstrap: true,
 			debug,
@@ -346,6 +352,45 @@ export async function build(...args: tg.Args<BuildArg>) {
 			...(order !== undefined ? { order } : {}),
 		})
 		.then(tg.Directory.expect);
+	return standalone ? std.directory.standalone(output, target) : output;
+}
+
+export async function testStandalone(
+	builder: (arg: {
+		source: tg.Directory;
+		standalone: std.sdk.StandaloneArg;
+	}) => Promise<tg.Directory> = build,
+) {
+	if (builder === build && std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped sdk/cmake.tg.ts#testStandalone: requires Linux");
+		return null;
+	}
+	const source = await tg.directory({
+		"CMakeLists.txt": tg.file(`cmake_minimum_required(VERSION 3.28)
+project(standalone C)
+include(CheckCSourceRuns)
+check_c_source_runs("int main(void) { return 0; }" PROBE_RUNS)
+if(NOT PROBE_RUNS)
+  message(FATAL_ERROR "the configure probe must run in the sandbox")
+endif()
+add_executable(program main.c)
+install(TARGETS program)
+`),
+		"main.c": tg.file(
+			'#include <stdio.h>\nint main(void) { puts("standalone cmake"); return 0; }\n',
+		),
+	});
+	const output = await builder({
+		source,
+		standalone: { glibcVersion: "2.39" },
+	});
+	const executable = await output.get("bin/program").then(tg.File.expect);
+	const stdout = await std.$`${std.wrap(executable)} > ${tg.output}`.then(
+		tg.File.expect,
+	);
+	tg.assert((await stdout.text) === "standalone cmake\n");
+
+	return output;
 }
 
 export async function test() {

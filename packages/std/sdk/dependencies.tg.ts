@@ -300,9 +300,10 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 		buildEnv = await std.env.compose(buildEnv, artifact);
 	}
 
-	// perl - required by autoconf, automake, texinfo, help2man.
+	// Build Perl for the development tools and Python's libxcrypt dependency.
 	if (
 		config.perl ||
+		config.python ||
 		config.autoconf ||
 		config.automake ||
 		config.texinfo ||

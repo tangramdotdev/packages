@@ -199,6 +199,9 @@ export type BuildArg = {
 	/** The source to build. Can be a Directory or a template path that resolves to a directory. */
 	source?: tg.Directory | tg.Template | null;
 
+	/** Export native executables in bin, sbin, and libexec using only system runtime libraries. Select static dependencies through the project's CMake options. */
+	standalone?: boolean | std.sdk.StandaloneArg;
+
 	/** Environment to propagate to all dependencies in the subtree. */
 	subtreeEnv?: std.env.Arg;
 
@@ -328,6 +331,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 		prefixPath = tg`${tg.output}`,
 		sdk: sdkArg,
 		source,
+		standalone = false,
 		stripExecutables = true,
 		target: target_,
 	} = resolved;
@@ -340,7 +344,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 
 	// Add C/C++ compiler environment (flags, SDK, build tools).
 	const ccEnv = await std.cc.env({
-		host,
+		host: standalone ? target : host,
 		build: build_,
 		extended,
 		fortifySource: fortifySource_ ?? 2,
@@ -352,6 +356,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 		pipe,
 		pkgConfig,
 		...std.args.optional("sdk", sdkArg),
+		standalone,
 		stripExecutables,
 	});
 	envs.push(ccEnv);
@@ -426,7 +431,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 	const mergedPhases = await std.phases.arg(defaultPhases, ...userPhasesArray);
 
 	const system = std.triple.archAndOs(host);
-	return await std.phases
+	const output = await std.phases
 		.run({
 			bootstrap: true,
 			debug,
@@ -439,11 +444,13 @@ export async function build(...args: tg.Args<BuildArg>) {
 			...(processName !== undefined ? { processName } : {}),
 		})
 		.then(tg.Directory.expect);
+	return standalone ? std.directory.standalone(output, target) : output;
 }
 
 export async function test() {
 	await testDependencyXattrs();
 	await testInstallTargets();
+	await testStandalone();
 
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(self, spec);
@@ -452,6 +459,8 @@ export async function test() {
 
 	return true;
 }
+
+export const testStandalone = () => std.sdkModule.cmake.testStandalone(build);
 
 /** Check that cmake copies keep a file's dependencies, including when the source is a symlink. */
 export async function testDependencyXattrs() {

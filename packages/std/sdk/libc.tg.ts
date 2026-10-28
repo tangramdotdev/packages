@@ -65,6 +65,15 @@ export function interpreterName(host: string) {
 	}
 }
 
+/** Get the system path of the dynamic linker for a Linux target. */
+export function interpreterPath(host: string) {
+	const directory =
+		kindFromTriple(host) === "glibc" && std.triple.arch(host) === "x86_64"
+			? "/lib64"
+			: "/lib";
+	return `${directory}/${interpreterName(host)}`;
+}
+
 type LinkerFlagArg = {
 	toolchain: tg.Directory;
 	host?: string;
