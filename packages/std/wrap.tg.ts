@@ -2894,6 +2894,77 @@ export async function testRewrapEmbeddedExecutableRetainsNeededLibraries() {
 	return true;
 }
 
+export async function testRunEmbeddedExecutableThroughDynamicLoader() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log(
+			"skipped wrap.tg.ts#testRunEmbeddedExecutableThroughDynamicLoader: requires Linux",
+		);
+		return null;
+	}
+
+	// Build an executable with an embedded wrapper using the glibc SDK, and bind an argument and an environment variable.
+	const executable = await std
+		.build(std.shBootstrap`cc -xc ${inspectProcessSource} -o ${tg.output}`)
+		.env(std.sdk())
+		.then(tg.File.expect);
+	const wrapper = await wrap(executable, {
+		args: ["from-manifest"],
+		env: { WRAPPER_TEST: "bound" },
+	});
+	const manifest = await wrap.Manifest.read(wrapper);
+	tg.assert(manifest !== undefined);
+	tg.assert(
+		manifest.executable.kind === "address",
+		"expected an embedded executable",
+	);
+
+	// Get the dynamic loader and library paths from the manifest.
+	const interpreter = await wrap.interpreterFromManifestInterpreter(
+		manifest.interpreter,
+		new Map(
+			(await wrapper.dependencyObjects).map((object) => [object.id, object]),
+		),
+	);
+	tg.assert(
+		interpreter?.kind === "ld-linux",
+		"expected a glibc dynamic loader interpreter",
+	);
+	const libraryPath = await tg.Template.join(
+		":",
+		...(interpreter.libraryPaths ?? []),
+	);
+
+	// Run the executable through its dynamic loader, which loads the executable before the embedded wrapper starts.
+	const output = await std
+		.build(
+			std.shBootstrap`${interpreter.executable} --library-path ${libraryPath} ${wrapper} hello > ${tg.output}`,
+		)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text.includes("argv[1]: from-manifest") &&
+			text.includes("argv[2]: hello") &&
+			text.includes("WRAPPER_TEST=bound"),
+		`expected the bound argument and environment, got: ${text}`,
+	);
+
+	// Print the manifest through the dynamic loader.
+	const printed = await std
+		.build(
+			std.shBootstrap`${interpreter.executable} --library-path ${libraryPath} ${wrapper} --tg-wrapper-print-manifest > ${tg.output}`,
+		)
+		.then(tg.File.expect);
+	const printedManifest = tg.encoding.json.decode(
+		await printed.text,
+	) as wrap.Manifest;
+	tg.assert(
+		printedManifest.executable.kind === "address",
+		"expected the wrapper to print its manifest",
+	);
+
+	return true;
+}
+
 export async function testRewrapRetainsPreservedLibraryPaths() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
 		console.log(

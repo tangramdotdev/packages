@@ -140,6 +140,7 @@ const testTiers: Record<string, Tier> = {
 	"wrap.tg.ts#testBasicCross": "extended",
 	"wrap.tg.ts#testLdLibraryPathPreservedThroughNestedWrapping": "sdk",
 	"wrap.tg.ts#testLoadThroughEnvLdLibraryPath": "sdk",
+	"wrap.tg.ts#testRunEmbeddedExecutableThroughDynamicLoader": "sdk",
 	"wrap/injection.tg.ts#testCross": "extended",
 	"wrap/workspace.tg.ts#testCross": "extended",
 	"wrap/wrapper.tg.ts#testFull": "sdk",

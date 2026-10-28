@@ -37,15 +37,42 @@ typedef struct
 	bool print_manifest;
 } Options;
 
+#ifdef __linux__
+// The public prefix of a dynamic loader's link map, which glibc and musl share.
+typedef struct LinkMap {
+	uintptr_t	addr;	// The load address of the object.
+	char*		name;	// The path of the object.
+	Elf64_Dyn*	dynamic;	// The dynamic section of the object.
+	struct LinkMap*	next;	// The next object.
+	struct LinkMap*	prev;	// The previous object.
+} LinkMap;
+
+// The public prefix of a dynamic loader's debugger interface, which the loader stores in DT_DEBUG.
+typedef struct {
+	int		version;	// The version of the interface.
+	LinkMap*	map;		// The loaded objects.
+} Debug;
+
+// The dynamic symbol tables of a loaded object.
+typedef struct {
+	Elf64_Sym*	symtab;		// The symbol table.
+	const char*	strtab;		// The string table.
+	uint32_t*	gnu_hash;	// The GNU hash table, if any.
+	uint32_t*	hash;		// The SysV hash table, if any.
+} Symbols;
+#endif
+
 // The executable image.
 typedef struct {
 #ifdef __linux__
 	Elf64_Ehdr* 	elf_header;		// Header of the ELF file, mapped by the kernel.
 	Elf64_Phdr* 	program_headers;	// Program headers passed by the kernel.
 	uintptr_t	load_address;		// Address the image was loaded at.
+	Debug*		debug;			// The debugger interface of the dynamic loader that loaded the image, if any.
 #endif
 	Manifest* 	manifest;		// The parsed manifest.
 	Footer		footer;			// The parsed footer.
+	bool		loaded;			// Whether a dynamic loader loaded the image before the wrapper started.
 } Executable;
 
 // Linux implementation details.
@@ -85,6 +112,27 @@ TG_VISIBILITY ProgramHeaders create_program_headers (
 
 // Allocate and setup the new executable stack before jumping to the new entrypoint.
 TG_VISIBILITY void* prepare_executable_stack (Arena* arena, Stack* stack, Manifest* manifest, Options* options);
+
+// Get an upper bound on the size of the executable stack.
+TG_VISIBILITY size_t executable_stack_size (Stack* stack, Manifest* manifest);
+
+// Write the executable stack below the given address and return the new stack pointer.
+TG_VISIBILITY void* write_executable_stack (Arena* arena, Stack* stack, Manifest* manifest, void* sp);
+
+// Locate the mapped executable image and return its manifest.
+TG_VISIBILITY char* read_image (Stack* stack, Options* options, Executable* executable);
+
+// Get the debugger interface of the dynamic loader that loaded the image before the wrapper started, if any.
+TG_VISIBILITY Debug* dynamic_loader_debug (Executable* executable);
+
+// Point every definition of the C library's environment at a new environment.
+TG_VISIBILITY void set_environment (Debug* debug, char** envp);
+
+// Set a pointer variable that an object defines, if the object defines it.
+TG_VISIBILITY void set_pointer_symbol (LinkMap* map, Symbols* symbols, const char* name, void* value);
+
+// Look up a dynamic symbol in an object's symbol tables.
+TG_VISIBILITY Elf64_Sym* lookup_symbol (Symbols* symbols, const char* name);
 #endif
 
 #ifdef __APPLE__
@@ -115,17 +163,19 @@ __asm__ (
 	"_start:\n"
 #ifdef __aarch64__
 	"mov  x29, xzr\n"	// clear frame pointer
-	"mov  x0, sp\n"		// main(sp)
+	"mov  x1, x0\n"		// main(sp, finalizer)
+	"mov  x0, sp\n"
 	"bl   main\n"
 #elif defined(__x86_64__)
 	"xor  %rbp, %rbp\n"	// clear frame pointer
-	"mov  %rsp, %rdi\n"	// main(%rsp)
+	"mov  %rdx, %rsi\n"	// main(%rsp, finalizer)
+	"mov  %rsp, %rdi\n"
 	"call main\n"
 #else
 #error "unsupported architecture"
 #endif
 );
-int main (void* sp) {
+int main (void* sp, void* finalizer) {
 	Stack stack = create_stack(sp);
 #else
 int main (int argc, char** argv) {
@@ -172,6 +222,24 @@ int main (int argc, char** argv) {
 
 #ifdef __linux__
 	ABORT_IF(!executable.manifest->entrypoint, "missing entrypoint");
+
+	// Start the executable at its original entrypoint if a dynamic loader has already loaded it. Write the new stack below the current one, because the loader recorded the end of the current stack.
+	if (executable.loaded) {
+		void* entrypoint = (void*)(executable.load_address + executable.manifest->entrypoint);
+		size_t size = executable_stack_size(&stack, executable.manifest);
+		uintptr_t reserved = (uintptr_t)__builtin_alloca(size);
+		sp = write_executable_stack(&arena, &stack, executable.manifest, (void*)((reserved + size) & ~(uintptr_t)15));
+		destroy_arena(&arena);
+
+		// Point the C library at the new environment, because the C library read the environment while the dynamic loader initialized it.
+		uint64_t argc = *(uint64_t*)sp;
+		set_environment(executable.debug, (char**)sp + argc + 2);
+		if (options.enable_tracing) {
+			trace("loaded by a dynamic loader, entrypoint: 0x%lx\n", (uintptr_t)entrypoint);
+		}
+		jump_to_entrypoint(sp, entrypoint, finalizer);
+	}
+
 	// Search for the positions of AT_ENTRY, AT_BASE, AT_PHDR, AT_PHNUM
 	int nentry = -1;
 	int nbase = -1;
@@ -272,7 +340,7 @@ int main (int argc, char** argv) {
 	if (options.enable_tracing) {
 		trace("entrypoint: 0x%lx\n", (uintptr_t)entrypoint);
 	}
-	jump_to_entrypoint(sp, entrypoint);
+	jump_to_entrypoint(sp, entrypoint, finalizer);
 #else
 	ABORT("unsupported target");
 #endif
@@ -454,55 +522,9 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 	char* data = NULL;
 
 #ifdef __linux__
-	// Read the manifest from the mapped image to avoid racing replacements of the executable.
-	uintptr_t program_header_address = stack->auxv_glob[AT_PHDR];
-	ABORT_IF(!program_header_address, "missing AT_PHDR");
-	executable.elf_header = (Elf64_Ehdr*)(program_header_address - sizeof(Elf64_Ehdr));
-	executable.program_headers = (Elf64_Phdr*)program_header_address;
-	bool is_elf = (executable.elf_header->e_ident[EI_MAG0] == ELFMAG0)
-		&& (executable.elf_header->e_ident[EI_MAG1] == ELFMAG1)
-		&& (executable.elf_header->e_ident[EI_MAG2] == ELFMAG2)
-		&& (executable.elf_header->e_ident[EI_MAG3] == ELFMAG3);
-	ABORT_IF(!is_elf, "the program header table is not preceded by an elf header");
-	ABORT_IF(
-		executable.elf_header->e_phnum != stack->auxv_glob[AT_PHNUM],
-		"AT_PHNUM does not match the elf header"
-	);
-
-	executable.load_address = stack->auxv_glob[AT_ENTRY] - executable.elf_header->e_entry;
-	if (options->enable_tracing) {
-		trace("load address: %p, program headers: %p (%d)\n",
-			executable.load_address, executable.program_headers, executable.elf_header->e_phnum);
-	}
-
-	// Use the footer in the loadable segment whose file contents end last.
-	String magic = { .ptr = (uint8_t*)TANGRAM_MAGIC, .len = sizeof(executable.footer.magic) };
-	Elf64_Phdr* segment_itr = executable.program_headers;
-	Elf64_Phdr* segment_end = segment_itr + executable.elf_header->e_phnum;
-	uint64_t file_end = 0;
-	for (; segment_itr != segment_end; segment_itr++) {
-		if (segment_itr->p_type != PT_LOAD || segment_itr->p_filesz < sizeof(Footer)) {
-			continue;
-		}
-		if (data && segment_itr->p_offset + segment_itr->p_filesz <= file_end) {
-			continue;
-		}
-		char* end = (char*)(executable.load_address + segment_itr->p_vaddr + segment_itr->p_filesz);
-		Footer footer = {0};
-		memcpy((void*)&footer, (void*)(end - sizeof(Footer)), sizeof(Footer));
-		String found = { .ptr = (uint8_t*)footer.magic, .len = sizeof(footer.magic) };
-		if (!streq(found, magic)) {
-			continue;
-		}
-		ABORT_IF(footer.size > segment_itr->p_filesz - sizeof(Footer), "invalid footer");
-		executable.footer = footer;
-		data = end - sizeof(Footer) - footer.size;
-		file_end = segment_itr->p_offset + segment_itr->p_filesz;
-		if (options->enable_tracing) {
-			trace("read manifest at %p, size: %ld\n", data, footer.size);
-		}
-	}
-	ABORT_IF(!data, "failed to find the manifest");
+	data = read_image(stack, options, &executable);
+	executable.debug = dynamic_loader_debug(&executable);
+	executable.loaded = executable.debug != NULL;
 #elif defined(__APPLE__)
 	// Read the manifest from the mapped __LINKEDIT segment.
 	extern const mach_header_64 _mh_execute_header;
@@ -569,7 +591,7 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 		memcpy(manifest_string, data, executable.footer.size);
 		trace("%s\n", manifest_string);
 	}
-	parse_manifest(arena, executable.manifest, options->enable_tracing, (uint8_t*)data, executable.footer.size);
+	parse_manifest(arena, executable.manifest, options->enable_tracing, executable.loaded, (uint8_t*)data, executable.footer.size);
 	
 	// Combine manifest paths with existing LD_LIBRARY_PATH/LD_PRELOAD.
 	String original_ld_library_path = lookup(&executable.manifest->env, STRING_LITERAL(LD_LIBRARY_PATH));
@@ -588,7 +610,7 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 	}
 	// Setup the preloads/library paths.
 #ifdef __linux__
-	bool restore_env_vars = !executable.manifest->executable.ptr;
+	bool restore_env_vars = !executable.manifest->executable.ptr && !executable.loaded;
 #else
 	bool restore_env_vars = true;
 #endif
@@ -667,6 +689,171 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 }
 
 #ifdef __linux__
+TG_VISIBILITY char* read_image (Stack* stack, Options* options, Executable* executable) {
+	char* data = NULL;
+
+	// Read the manifest from the mapped image to avoid racing replacements of the executable->
+	uintptr_t program_header_address = stack->auxv_glob[AT_PHDR];
+	ABORT_IF(!program_header_address, "missing AT_PHDR");
+	executable->elf_header = (Elf64_Ehdr*)(program_header_address - sizeof(Elf64_Ehdr));
+	executable->program_headers = (Elf64_Phdr*)program_header_address;
+	bool is_elf = (executable->elf_header->e_ident[EI_MAG0] == ELFMAG0)
+		&& (executable->elf_header->e_ident[EI_MAG1] == ELFMAG1)
+		&& (executable->elf_header->e_ident[EI_MAG2] == ELFMAG2)
+		&& (executable->elf_header->e_ident[EI_MAG3] == ELFMAG3);
+	ABORT_IF(!is_elf, "the program header table is not preceded by an elf header");
+	ABORT_IF(
+		executable->elf_header->e_phnum != stack->auxv_glob[AT_PHNUM],
+		"AT_PHNUM does not match the elf header"
+	);
+
+	executable->load_address = stack->auxv_glob[AT_ENTRY] - executable->elf_header->e_entry;
+	if (options->enable_tracing) {
+		trace("load address: %p, program headers: %p (%d)\n",
+			executable->load_address, executable->program_headers, executable->elf_header->e_phnum);
+	}
+
+	// Use the footer in the loadable segment whose file contents end last.
+	String magic = { .ptr = (uint8_t*)TANGRAM_MAGIC, .len = sizeof(executable->footer.magic) };
+	Elf64_Phdr* segment_itr = executable->program_headers;
+	Elf64_Phdr* segment_end = segment_itr + executable->elf_header->e_phnum;
+	uint64_t file_end = 0;
+	for (; segment_itr != segment_end; segment_itr++) {
+		if (segment_itr->p_type != PT_LOAD || segment_itr->p_filesz < sizeof(Footer)) {
+			continue;
+		}
+		if (data && segment_itr->p_offset + segment_itr->p_filesz <= file_end) {
+			continue;
+		}
+		char* end = (char*)(executable->load_address + segment_itr->p_vaddr + segment_itr->p_filesz);
+		Footer footer = {0};
+		memcpy((void*)&footer, (void*)(end - sizeof(Footer)), sizeof(Footer));
+		String found = { .ptr = (uint8_t*)footer.magic, .len = sizeof(footer.magic) };
+		if (!streq(found, magic)) {
+			continue;
+		}
+		ABORT_IF(footer.size > segment_itr->p_filesz - sizeof(Footer), "invalid footer");
+		executable->footer = footer;
+		data = end - sizeof(Footer) - footer.size;
+		file_end = segment_itr->p_offset + segment_itr->p_filesz;
+		if (options->enable_tracing) {
+			trace("read manifest at %p, size: %ld\n", data, footer.size);
+		}
+	}
+	ABORT_IF(!data, "failed to find the manifest");
+
+	return data;
+}
+
+TG_VISIBILITY Debug* dynamic_loader_debug (Executable* executable) {
+	// A dynamic loader sets the DT_DEBUG entry to its debugger interface before it starts the executable, and the entry is still zero when the kernel starts the executable directly.
+	Elf64_Phdr* itr = executable->program_headers;
+	Elf64_Phdr* end = itr + executable->elf_header->e_phnum;
+	for (; itr != end; itr++) {
+		if (itr->p_type != PT_DYNAMIC) {
+			continue;
+		}
+		Elf64_Dyn* dyn = (Elf64_Dyn*)(executable->load_address + itr->p_vaddr);
+		for (; dyn->d_tag != DT_NULL; dyn++) {
+			if (dyn->d_tag == DT_DEBUG) {
+				return (Debug*)dyn->d_un.d_ptr;
+			}
+		}
+	}
+	return NULL;
+}
+
+TG_VISIBILITY void set_environment (Debug* debug, char** envp) {
+	for (LinkMap* map = debug->map; map; map = map->next) {
+		// Read the symbol tables. glibc relocates these entries in place, and musl does not.
+		Symbols symbols = {0};
+		for (Elf64_Dyn* dyn = map->dynamic; dyn->d_tag != DT_NULL; dyn++) {
+			uintptr_t address = dyn->d_un.d_ptr;
+			if (address < map->addr) {
+				address += map->addr;
+			}
+			switch (dyn->d_tag) {
+				case DT_SYMTAB: symbols.symtab = (Elf64_Sym*)address; break;
+				case DT_STRTAB: symbols.strtab = (const char*)address; break;
+				case DT_GNU_HASH: symbols.gnu_hash = (uint32_t*)address; break;
+				case DT_HASH: symbols.hash = (uint32_t*)address; break;
+				default: break;
+			}
+		}
+		if (!symbols.symtab || !symbols.strtab) {
+			continue;
+		}
+
+		// Set each definition, because an executable may define a copy of the variable. Pass each name directly, because the wrapper is not relocated and so cannot use tables of pointers.
+		set_pointer_symbol(map, &symbols, "__environ", envp);
+		set_pointer_symbol(map, &symbols, "environ", envp);
+	}
+}
+
+TG_VISIBILITY void set_pointer_symbol (LinkMap* map, Symbols* symbols, const char* name, void* value) {
+	Elf64_Sym* symbol = lookup_symbol(symbols, name);
+	if (symbol && symbol->st_shndx != SHN_UNDEF && ELF64_ST_TYPE(symbol->st_info) == STT_OBJECT) {
+		*(void**)(map->addr + symbol->st_value) = value;
+	}
+}
+
+static bool symbol_name_equals (const char* a, const char* b) {
+	for (; *a && *a == *b; a++, b++) {}
+	return *a == *b;
+}
+
+TG_VISIBILITY Elf64_Sym* lookup_symbol (Symbols* symbols, const char* name) {
+	// Search the GNU hash table.
+	uint32_t* gnu_hash = symbols->gnu_hash;
+	if (gnu_hash && gnu_hash[0]) {
+		uint32_t h = 5381;
+		for (const char* c = name; *c; c++) {
+			h = h * 33 + (uint8_t)*c;
+		}
+		uint32_t nbuckets = gnu_hash[0];
+		uint32_t offset = gnu_hash[1];
+		uint32_t* buckets = gnu_hash + 4 + gnu_hash[2] * (sizeof(uint64_t) / sizeof(uint32_t));
+		uint32_t* chain = buckets + nbuckets;
+		uint32_t index = buckets[h % nbuckets];
+		if (index < offset) {
+			return NULL;
+		}
+		for (;; index++) {
+			uint32_t value = chain[index - offset];
+			if ((value | 1) == (h | 1) && symbol_name_equals(symbols->strtab + symbols->symtab[index].st_name, name)) {
+				return symbols->symtab + index;
+			}
+			if (value & 1) {
+				return NULL;
+			}
+		}
+	}
+
+	// Search the SysV hash table.
+	uint32_t* hash = symbols->hash;
+	if (hash && hash[0]) {
+		uint32_t h = 0;
+		for (const char* c = name; *c; c++) {
+			h = (h << 4) + (uint8_t)*c;
+			uint32_t g = h & 0xf0000000;
+			if (g) {
+				h ^= g >> 24;
+			}
+			h &= ~g;
+		}
+		uint32_t nbuckets = hash[0];
+		uint32_t* buckets = hash + 2;
+		uint32_t* chain = buckets + nbuckets;
+		for (uint32_t index = buckets[h % nbuckets]; index; index = chain[index]) {
+			if (symbol_name_equals(symbols->strtab + symbols->symtab[index].st_name, name)) {
+				return symbols->symtab + index;
+			}
+		}
+	}
+
+	return NULL;
+}
+
 TG_VISIBILITY Interpreter create_interpreter(
 	Arena* arena,
 	const char* path,
@@ -1049,8 +1236,40 @@ TG_VISIBILITY void* prepare_executable_stack (
 		-1,
 		0
 	);
-	void* sp = bp + stack_size;
+	void* sp = write_executable_stack(arena, stack, manifest, bp + stack_size);
 
+	return sp;
+}
+
+TG_VISIBILITY size_t executable_stack_size (Stack* stack, Manifest* manifest) {
+	// Count the env strings and pointers.
+	size_t size = 0;
+	size_t count = 0;
+	for (int i = 0; i < manifest->env.capacity; i++) {
+		Node* node = manifest->env.list + i;
+		while(node) {
+			if (node->key.ptr) {
+				size += node->key.len + node->val.len + 2;
+				count++;
+			}
+			node = node->next;
+		}
+	}
+
+	// Count the arg strings and pointers.
+	size += strlen_including_nul(stack->argv[0]);
+	for (int i = 0; i < manifest->argc; i++) {
+		size += manifest->argv[i].len + 1;
+	}
+	count += manifest->argc + 1;
+
+	// Add the null bytes, the padding, the aux vector, argc, the separators, and the alignment of the top of the stack.
+	size += 16 + sizeof(uintptr_t) + stack->auxc * sizeof(Elf64_auxv_t) + (count + 3) * sizeof(uintptr_t) + 16;
+
+	return size;
+}
+
+TG_VISIBILITY void* write_executable_stack (Arena* arena, Stack* stack, Manifest* manifest, void* sp) {
 	// Push environment variables. Order doesn't matter.
 	int e = 0;
 	char** envp = ALLOC_N(arena, manifest->env.size + 1, char*);
