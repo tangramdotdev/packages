@@ -2276,7 +2276,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=f5caa898f9a502be55190031ee4dd53ecce11efa#f5caa898f9a502be55190031ee4dd53ecce11efa"
+source = "git+https://github.com/tangramdotdev/tangram?rev=7df30a69129412f960345e81b582d80e053d14e1#7df30a69129412f960345e81b582d80e053d14e1"
 dependencies = [
  "async-broadcast",
  "async-channel",
@@ -2335,7 +2335,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=f5caa898f9a502be55190031ee4dd53ecce11efa#f5caa898f9a502be55190031ee4dd53ecce11efa"
+source = "git+https://github.com/tangramdotdev/tangram?rev=7df30a69129412f960345e81b582d80e053d14e1#7df30a69129412f960345e81b582d80e053d14e1"
 dependencies = [
  "serde",
  "serde_with",
@@ -2345,7 +2345,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=f5caa898f9a502be55190031ee4dd53ecce11efa#f5caa898f9a502be55190031ee4dd53ecce11efa"
+source = "git+https://github.com/tangramdotdev/tangram?rev=7df30a69129412f960345e81b582d80e053d14e1#7df30a69129412f960345e81b582d80e053d14e1"
 dependencies = [
  "dashmap",
  "futures",
@@ -2359,7 +2359,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=f5caa898f9a502be55190031ee4dd53ecce11efa#f5caa898f9a502be55190031ee4dd53ecce11efa"
+source = "git+https://github.com/tangramdotdev/tangram?rev=7df30a69129412f960345e81b582d80e053d14e1#7df30a69129412f960345e81b582d80e053d14e1"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2390,7 +2390,7 @@ dependencies = [
 [[package]]
 name = "tangram_pool"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=f5caa898f9a502be55190031ee4dd53ecce11efa#f5caa898f9a502be55190031ee4dd53ecce11efa"
+source = "git+https://github.com/tangramdotdev/tangram?rev=7df30a69129412f960345e81b582d80e053d14e1#7df30a69129412f960345e81b582d80e053d14e1"
 dependencies = [
  "futures",
  "tangram_futures",
@@ -2400,7 +2400,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=f5caa898f9a502be55190031ee4dd53ecce11efa#f5caa898f9a502be55190031ee4dd53ecce11efa"
+source = "git+https://github.com/tangramdotdev/tangram?rev=7df30a69129412f960345e81b582d80e053d14e1#7df30a69129412f960345e81b582d80e053d14e1"
 dependencies = [
  "bytes",
  "num",
@@ -2411,7 +2411,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=f5caa898f9a502be55190031ee4dd53ecce11efa#f5caa898f9a502be55190031ee4dd53ecce11efa"
+source = "git+https://github.com/tangramdotdev/tangram?rev=7df30a69129412f960345e81b582d80e053d14e1#7df30a69129412f960345e81b582d80e053d14e1"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -2422,7 +2422,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=f5caa898f9a502be55190031ee4dd53ecce11efa#f5caa898f9a502be55190031ee4dd53ecce11efa"
+source = "git+https://github.com/tangramdotdev/tangram?rev=7df30a69129412f960345e81b582d80e053d14e1#7df30a69129412f960345e81b582d80e053d14e1"
 dependencies = [
  "derive_more",
  "http",
@@ -2437,7 +2437,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=f5caa898f9a502be55190031ee4dd53ecce11efa#f5caa898f9a502be55190031ee4dd53ecce11efa"
+source = "git+https://github.com/tangramdotdev/tangram?rev=7df30a69129412f960345e81b582d80e053d14e1#7df30a69129412f960345e81b582d80e053d14e1"
 dependencies = [
  "bytes",
  "data-encoding",
@@ -2492,7 +2492,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ecfad6c3abc80a577f2b91c1e412ee57e7a060d430b553c1b0c940974ebcd49"
 dependencies = [
  "icu_segmenter",
- "unicode-width 0.2.2",
+ "unicode-width 0.2.3",
 ]
 
 [[package]]
@@ -2804,9 +2804,9 @@ checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
 
 [[package]]
 name = "unicode-width"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
+checksum = "ca718471876992059f251e33aafc334346ada08042b7661dd1fe313a9bced557"
 
 [[package]]
 name = "unicode-xid"
@@ -3069,9 +3069,9 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xattr"
-version = "1.6.1"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
+checksum = "963d6fab92d5504b971dc8bd90ca743c2575e590bc8071ea5bc571598667ae08"
 dependencies = [
  "libc",
  "rustix",
