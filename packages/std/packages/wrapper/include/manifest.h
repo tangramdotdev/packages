@@ -40,7 +40,6 @@ typedef struct {
 	Manifest*	manifest;
 	String		store_dir;
 	bool		enable_tracing;
-	bool		skip_interpreter;
 } Cx;
 
 #define ID_VERSION 0
@@ -65,14 +64,13 @@ typedef struct  {
 } Id;
 
 // api
-TG_VISIBILITY void parse_manifest (Arena* arena, Manifest* manifest, bool enable_tracing, bool skip_interpreter, uint8_t* data, uint64_t len);
+TG_VISIBILITY void parse_manifest (Arena* arena, Manifest* manifest, bool enable_tracing, uint8_t* data, uint64_t len);
 TG_VISIBILITY void parse_manifest_from_json (Cx*, JsonValue* value);
 TG_VISIBILITY String render_ld_library_path (Arena* arena, Manifest* manifest);
 TG_VISIBILITY String render_ld_preload (Arena* arena, Manifest* manifest);
 TG_VISIBILITY void print_manifest (Manifest* manifest);
 
 // internals
-TG_VISIBILITY String store_dir (Cx* cx);
 TG_VISIBILITY void parse_manifest_interpreter (Cx* cx, JsonValue* interpeter);
 TG_VISIBILITY void parse_manifest_executable (Cx* cx, JsonValue* executable);
 TG_VISIBILITY void parse_manifest_env (Cx* cx, JsonValue* env);
@@ -131,19 +129,27 @@ TG_VISIBILITY void parse_manifest (
 	Arena*		arena,
 	Manifest*	manifest,
 	bool		enable_tracing,
-	bool		skip_interpreter,
 	uint8_t*	data,
 	uint64_t	len
 ) {
 	// Sanity check.
 	ABORT_IF(len == 0, "expected a non-zero length");
 
-	// Create the context. The store directory is found when a template first references an artifact.
+	// Find the store directory.
+	String store_dir;
+	find_store_dir(arena, &store_dir);
+	if (enable_tracing) {
+		trace("store directory:");
+		print_json_string(&store_dir);
+		trace("\n");
+	}
+
+	// Create the context.
 	Cx cx = {
 		.arena = arena,
 		.manifest = manifest,
-		.enable_tracing = enable_tracing,
-		.skip_interpreter = skip_interpreter
+		.store_dir = store_dir,
+		.enable_tracing = enable_tracing
 	};
 
 	if (cx.enable_tracing) {
@@ -253,18 +259,6 @@ TG_VISIBILITY void print_manifest (Manifest* manifest) {
 	}
 }
 
-TG_VISIBILITY String store_dir (Cx* cx) {
-	if (!cx->store_dir.ptr) {
-		find_store_dir(cx->arena, &cx->store_dir);
-		if (cx->enable_tracing) {
-			trace("store directory:");
-			print_json_string(&cx->store_dir);
-			trace("\n");
-		}
-	}
-	return cx->store_dir;
-}
-
 TG_VISIBILITY void parse_manifest_from_json (Cx* cx, JsonValue* value) {
 	// Validate.
 	ABORT_IF(value->kind != JSON_OBJECT, "expected an object");
@@ -274,12 +268,9 @@ TG_VISIBILITY void parse_manifest_from_json (Cx* cx, JsonValue* value) {
 	while(object) {
 		if (object->value && object->value->kind != JSON_NULL) {
 			if (cstreq(object->key, "interpreter")) {
-				// Skip the interpreter when a dynamic loader has already loaded the executable.
-				if (!cx->skip_interpreter) {
-					parse_manifest_interpreter(cx, object->value);
-					if (cx->enable_tracing) {
-						trace("parsed interpreter\n");
-					}
+				parse_manifest_interpreter(cx, object->value);
+				if (cx->enable_tracing) {
+					trace("parsed interpreter\n");
 				}
 			} else if (cstreq(object->key, "executable")) {
 				parse_manifest_executable(cx, object->value);
@@ -698,8 +689,7 @@ TG_VISIBILITY void render_template (Cx* cx, JsonValue* template, String* rendere
 			if (cstreq(kind->value._string, "string")) {
 				append_to_string(rendered, &value->value._string, capacity);
 			} else if (cstreq(kind->value._string, "artifact")) {
-				String dir = store_dir(cx);
-				append_to_string(rendered, &dir, capacity);
+				append_to_string(rendered, &cx->store_dir, capacity);
 				append_ch_to_string(rendered, '/', capacity);
 				append_to_string(rendered, &value->value._string, capacity);
 			} else {
@@ -804,7 +794,7 @@ TG_VISIBILITY String render_value (Cx* cx, JsonValue* value) {
 			} else if (cstreq(kind->value._string, "object")) {
 				value = json_get(object, "value");
 				ABORT_IF(!value || value->kind != JSON_STRING, "expected an ID");
-				String ss[2] = { store_dir(cx), value->value._string };
+				String ss[2] = { cx->store_dir, value->value._string };
 				String s = STRING_LITERAL("/");
 				rendered = join(cx->arena, s, ss, 2);
 				break;

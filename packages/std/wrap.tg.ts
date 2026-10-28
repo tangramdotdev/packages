@@ -2944,49 +2944,26 @@ export async function testRunEmbeddedExecutableThroughDynamicLoader() {
 		...(interpreter.libraryPaths ?? []),
 	);
 
-	// Run the executable through its dynamic loader and check both suppression controls.
-	for (const control of [undefined, "args", "env"]) {
-		const option = control ? `--tg-wrapper-suppress-${control}` : "";
-		const output = await std
-			.build(
-				std.shBootstrap`WRAPPER_INHERITED=incoming ${interpreter.executable} --library-path ${libraryPath} ${wrapper} ${option} hello > ${tg.output}`,
-			)
-			.then(tg.File.expect);
-		const text = await output.text;
-		const lines = text.split("\n");
-		tg.assert(
-			lines.includes("argv[1]: from-manifest") &&
-				lines.includes("WRAPPER_TEST=bound"),
-			`expected the bound argument and environment with ${option}, got: ${text}`,
-		);
-		tg.assert(
-			lines.includes("argv[2]: hello") === (control !== "args") &&
-				lines.filter((line) => line.startsWith("argv[")).length ===
-					(control === "args" ? 2 : 3),
-			`expected the argument suppression control to be honored with ${option}, got: ${text}`,
-		);
-		tg.assert(
-			lines.includes("WRAPPER_INHERITED=incoming") === (control !== "env"),
-			`expected the environment suppression control to be honored with ${option}, got: ${text}`,
-		);
-		tg.assert(
-			lines.filter((line) => line === "destructor ran").length === 1,
-			`expected the destructor to run exactly once with ${option}, got: ${text}`,
-		);
-	}
-
-	// Print the manifest through the dynamic loader.
-	const printed = await std
+	// Run the executable through its dynamic loader.
+	const output = await std
 		.build(
-			std.shBootstrap`${interpreter.executable} --library-path ${libraryPath} ${wrapper} --tg-wrapper-print-manifest > ${tg.output}`,
+			std.shBootstrap`${interpreter.executable} --library-path ${libraryPath} ${wrapper} hello > ${tg.output}`,
 		)
 		.then(tg.File.expect);
-	const printedManifest = tg.encoding.json.decode(
-		await printed.text,
-	) as wrap.Manifest;
+	const text = await output.text;
+	const lines = text.split("\n");
 	tg.assert(
-		printedManifest.executable.kind === "address",
-		"expected the wrapper to print its manifest",
+		lines.includes("argv[1]: from-manifest") &&
+			lines.includes("argv[2]: hello"),
+		`expected the bound and passed arguments, got: ${text}`,
+	);
+	tg.assert(
+		lines.includes("WRAPPER_TEST=bound"),
+		`expected the bound environment, got: ${text}`,
+	);
+	tg.assert(
+		lines.filter((line) => line === "destructor ran").length === 1,
+		`expected the destructor to run exactly once, got: ${text}`,
 	);
 
 	return true;

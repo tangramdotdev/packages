@@ -38,7 +38,7 @@ typedef struct
 } Options;
 
 #ifdef __linux__
-// The public prefix of a dynamic loader's link map, which glibc and musl share.
+// The public prefix of glibc's link map.
 typedef struct LinkMap {
 	uintptr_t	addr;	// The load address of the object.
 	char*		name;	// The path of the object.
@@ -47,7 +47,7 @@ typedef struct LinkMap {
 	struct LinkMap*	prev;	// The previous object.
 } LinkMap;
 
-// The public prefix of a dynamic loader's debugger interface, which the loader stores in DT_DEBUG.
+// The public prefix of glibc's debugger interface, which the dynamic loader stores in DT_DEBUG.
 typedef struct {
 	int		version;	// The version of the interface.
 	LinkMap*	map;		// The loaded objects.
@@ -118,9 +118,6 @@ TG_VISIBILITY size_t executable_stack_size (Stack* stack, Manifest* manifest);
 
 // Write the executable stack below the given address and return the new stack pointer.
 TG_VISIBILITY void* write_executable_stack (Arena* arena, Stack* stack, Manifest* manifest, void* sp);
-
-// Locate the mapped executable image and return its manifest.
-TG_VISIBILITY char* read_image (Stack* stack, Options* options, Executable* executable);
 
 // Get the debugger interface of the dynamic loader that loaded the image before the wrapper started, if any.
 TG_VISIBILITY Debug* dynamic_loader_debug (Executable* executable);
@@ -522,7 +519,55 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 	char* data = NULL;
 
 #ifdef __linux__
-	data = read_image(stack, options, &executable);
+	// Read the manifest from the mapped image to avoid racing replacements of the executable.
+	uintptr_t program_header_address = stack->auxv_glob[AT_PHDR];
+	ABORT_IF(!program_header_address, "missing AT_PHDR");
+	executable.elf_header = (Elf64_Ehdr*)(program_header_address - sizeof(Elf64_Ehdr));
+	executable.program_headers = (Elf64_Phdr*)program_header_address;
+	bool is_elf = (executable.elf_header->e_ident[EI_MAG0] == ELFMAG0)
+		&& (executable.elf_header->e_ident[EI_MAG1] == ELFMAG1)
+		&& (executable.elf_header->e_ident[EI_MAG2] == ELFMAG2)
+		&& (executable.elf_header->e_ident[EI_MAG3] == ELFMAG3);
+	ABORT_IF(!is_elf, "the program header table is not preceded by an elf header");
+	ABORT_IF(
+		executable.elf_header->e_phnum != stack->auxv_glob[AT_PHNUM],
+		"AT_PHNUM does not match the elf header"
+	);
+
+	executable.load_address = stack->auxv_glob[AT_ENTRY] - executable.elf_header->e_entry;
+	if (options->enable_tracing) {
+		trace("load address: %p, program headers: %p (%d)\n",
+			executable.load_address, executable.program_headers, executable.elf_header->e_phnum);
+	}
+
+	// Use the footer in the loadable segment whose file contents end last.
+	String magic = { .ptr = (uint8_t*)TANGRAM_MAGIC, .len = sizeof(executable.footer.magic) };
+	Elf64_Phdr* segment_itr = executable.program_headers;
+	Elf64_Phdr* segment_end = segment_itr + executable.elf_header->e_phnum;
+	uint64_t file_end = 0;
+	for (; segment_itr != segment_end; segment_itr++) {
+		if (segment_itr->p_type != PT_LOAD || segment_itr->p_filesz < sizeof(Footer)) {
+			continue;
+		}
+		if (data && segment_itr->p_offset + segment_itr->p_filesz <= file_end) {
+			continue;
+		}
+		char* end = (char*)(executable.load_address + segment_itr->p_vaddr + segment_itr->p_filesz);
+		Footer footer = {0};
+		memcpy((void*)&footer, (void*)(end - sizeof(Footer)), sizeof(Footer));
+		String found = { .ptr = (uint8_t*)footer.magic, .len = sizeof(footer.magic) };
+		if (!streq(found, magic)) {
+			continue;
+		}
+		ABORT_IF(footer.size > segment_itr->p_filesz - sizeof(Footer), "invalid footer");
+		executable.footer = footer;
+		data = end - sizeof(Footer) - footer.size;
+		file_end = segment_itr->p_offset + segment_itr->p_filesz;
+		if (options->enable_tracing) {
+			trace("read manifest at %p, size: %ld\n", data, footer.size);
+		}
+	}
+	ABORT_IF(!data, "failed to find the manifest");
 	executable.debug = dynamic_loader_debug(&executable);
 	executable.loaded = executable.debug != NULL;
 #elif defined(__APPLE__)
@@ -591,7 +636,7 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 		memcpy(manifest_string, data, executable.footer.size);
 		trace("%s\n", manifest_string);
 	}
-	parse_manifest(arena, executable.manifest, options->enable_tracing, executable.loaded, (uint8_t*)data, executable.footer.size);
+	parse_manifest(arena, executable.manifest, options->enable_tracing, (uint8_t*)data, executable.footer.size);
 	
 	// Combine manifest paths with existing LD_LIBRARY_PATH/LD_PRELOAD.
 	String original_ld_library_path = lookup(&executable.manifest->env, STRING_LITERAL(LD_LIBRARY_PATH));
@@ -647,10 +692,10 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 		}
 	}
 
-	// Set TANGRAM_INJECTION_IDENTITY_PATH.
-	if (executable.manifest->interpreter_kind == INTERPRETER_KIND_LD_LINUX
+	// Set TANGRAM_INJECTION_IDENTITY_PATH unless a dynamic loader has already loaded the executable.
+	if (!executable.loaded && (executable.manifest->interpreter_kind == INTERPRETER_KIND_LD_LINUX
 	|| executable.manifest->interpreter_kind == INTERPRETER_KIND_LD_MUSL
-	|| executable.manifest->interpreter_kind == INTERPRETER_KIND_DYLD) {
+	|| executable.manifest->interpreter_kind == INTERPRETER_KIND_DYLD)) {
 		String identity_path = STRING_LITERAL("TANGRAM_INJECTION_IDENTITY_PATH");
 		insert(arena, &executable.manifest->env, identity_path, path);
 		if (options->enable_tracing) {
@@ -689,62 +734,6 @@ TG_VISIBILITY Executable create_executable (Arena* arena, Stack* stack, Options*
 }
 
 #ifdef __linux__
-TG_VISIBILITY char* read_image (Stack* stack, Options* options, Executable* executable) {
-	char* data = NULL;
-
-	// Read the manifest from the mapped image to avoid racing replacements of the executable->
-	uintptr_t program_header_address = stack->auxv_glob[AT_PHDR];
-	ABORT_IF(!program_header_address, "missing AT_PHDR");
-	executable->elf_header = (Elf64_Ehdr*)(program_header_address - sizeof(Elf64_Ehdr));
-	executable->program_headers = (Elf64_Phdr*)program_header_address;
-	bool is_elf = (executable->elf_header->e_ident[EI_MAG0] == ELFMAG0)
-		&& (executable->elf_header->e_ident[EI_MAG1] == ELFMAG1)
-		&& (executable->elf_header->e_ident[EI_MAG2] == ELFMAG2)
-		&& (executable->elf_header->e_ident[EI_MAG3] == ELFMAG3);
-	ABORT_IF(!is_elf, "the program header table is not preceded by an elf header");
-	ABORT_IF(
-		executable->elf_header->e_phnum != stack->auxv_glob[AT_PHNUM],
-		"AT_PHNUM does not match the elf header"
-	);
-
-	executable->load_address = stack->auxv_glob[AT_ENTRY] - executable->elf_header->e_entry;
-	if (options->enable_tracing) {
-		trace("load address: %p, program headers: %p (%d)\n",
-			executable->load_address, executable->program_headers, executable->elf_header->e_phnum);
-	}
-
-	// Use the footer in the loadable segment whose file contents end last.
-	String magic = { .ptr = (uint8_t*)TANGRAM_MAGIC, .len = sizeof(executable->footer.magic) };
-	Elf64_Phdr* segment_itr = executable->program_headers;
-	Elf64_Phdr* segment_end = segment_itr + executable->elf_header->e_phnum;
-	uint64_t file_end = 0;
-	for (; segment_itr != segment_end; segment_itr++) {
-		if (segment_itr->p_type != PT_LOAD || segment_itr->p_filesz < sizeof(Footer)) {
-			continue;
-		}
-		if (data && segment_itr->p_offset + segment_itr->p_filesz <= file_end) {
-			continue;
-		}
-		char* end = (char*)(executable->load_address + segment_itr->p_vaddr + segment_itr->p_filesz);
-		Footer footer = {0};
-		memcpy((void*)&footer, (void*)(end - sizeof(Footer)), sizeof(Footer));
-		String found = { .ptr = (uint8_t*)footer.magic, .len = sizeof(footer.magic) };
-		if (!streq(found, magic)) {
-			continue;
-		}
-		ABORT_IF(footer.size > segment_itr->p_filesz - sizeof(Footer), "invalid footer");
-		executable->footer = footer;
-		data = end - sizeof(Footer) - footer.size;
-		file_end = segment_itr->p_offset + segment_itr->p_filesz;
-		if (options->enable_tracing) {
-			trace("read manifest at %p, size: %ld\n", data, footer.size);
-		}
-	}
-	ABORT_IF(!data, "failed to find the manifest");
-
-	return data;
-}
-
 TG_VISIBILITY Debug* dynamic_loader_debug (Executable* executable) {
 	// A dynamic loader sets the DT_DEBUG entry to its debugger interface before it starts the executable, and the entry is still zero when the kernel starts the executable directly.
 	Elf64_Phdr* itr = executable->program_headers;
@@ -765,7 +754,7 @@ TG_VISIBILITY Debug* dynamic_loader_debug (Executable* executable) {
 
 TG_VISIBILITY void set_environment (Debug* debug, char** envp) {
 	for (LinkMap* map = debug->map; map; map = map->next) {
-		// Read the symbol tables. glibc relocates these entries in place, and musl does not.
+		// Read the symbol tables, adding the load address to the entries that the dynamic loader leaves unrelocated, such as those of the vDSO.
 		Symbols symbols = {0};
 		for (Elf64_Dyn* dyn = map->dynamic; dyn->d_tag != DT_NULL; dyn++) {
 			uintptr_t address = dyn->d_un.d_ptr;
@@ -784,7 +773,7 @@ TG_VISIBILITY void set_environment (Debug* debug, char** envp) {
 			continue;
 		}
 
-		// Set each definition, because an executable may define a copy of the variable. Pass each name directly, because the wrapper is not relocated and so cannot use tables of pointers.
+		// Set each definition, because an executable may define a copy of the variable.
 		set_pointer_symbol(map, &symbols, "__environ", envp);
 		set_pointer_symbol(map, &symbols, "environ", envp);
 	}
