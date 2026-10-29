@@ -1181,6 +1181,20 @@ export namespace sdk {
 		);
 	}
 
+	/** Assert that glibc's getconf runs from the SDK in a sandbox. */
+	export async function assertGetconf(sdkEnv: std.env.Arg, host: string) {
+		const output = await std
+			.build(std.shBootstrap`getconf PAGE_SIZE > ${tg.output}`)
+			.env(sdkEnv)
+			.host(std.triple.archAndOs(host))
+			.then(tg.File.expect);
+		const text = (await output.text).trim();
+		tg.assert(
+			/^[1-9][0-9]*$/.test(text),
+			`getconf printed "${text}" instead of the page size`,
+		);
+	}
+
 	/** Assert the given env provides everything it should for a particuar arg. */
 	export async function assertValid(
 		toolchainDir: tg.Directory,
@@ -1602,6 +1616,9 @@ export async function testDefault() {
 	const env = await sdk();
 	const detectedHost = std.triple.host();
 	await sdk.assertValid(env, { host: detectedHost });
+	if (std.triple.os(detectedHost) === "linux") {
+		await sdk.assertGetconf(env, detectedHost);
+	}
 	return env;
 }
 
