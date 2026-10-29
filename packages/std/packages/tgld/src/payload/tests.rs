@@ -53,11 +53,8 @@ fn repeated_artifacts_merge_authorization() {
 				)],
 				resource: file.id().into(),
 			},
-			metadata: tg::authorization::Metadata {
-				algorithm: tg::authorization::Algorithm::Blake3,
-				key: "test".into(),
-			},
-			signature: vec![0; 32],
+			secret_id: 0,
+			signature: vec![0; 16],
 		};
 		authorization.push(token);
 	}
@@ -72,7 +69,7 @@ fn repeated_artifacts_merge_authorization() {
 	let parsed = args(&raw).unwrap();
 	let mut other = referent.clone();
 	let mut token = referent.options.tokens.local().unwrap().authorization[0].clone();
-	token.metadata.key = "another-signer".into();
+	token.secret_id = 1;
 	let entry = tg::authorization::tokens::Entry {
 		authorization: vec![token],
 	};
