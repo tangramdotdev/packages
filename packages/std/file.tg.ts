@@ -12,6 +12,7 @@ import {
 	type ShebangExecutableMetadata,
 	shebangExecutableMetadata,
 } from "./file/shebang.tg.ts";
+import { interpreterName, interpreterPath } from "./sdk/libc.tg.ts";
 
 export type {
 	ElfExecutableMetadata,
@@ -105,6 +106,78 @@ export async function executableTriples(
 		return undefined;
 	}
 	return arches.map((arch) => std.triple.create({ arch, os }));
+}
+
+/** Extract a native executable, validate its system libraries, and remove its artifact dependencies. */
+export async function standalone(
+	file: tg.File,
+	host: string,
+): Promise<tg.File> {
+	const manifest = await std.wrap.Manifest.read(file);
+	if (manifest !== undefined) {
+		const references = new Map(
+			(await file.dependencyObjects).map((object) => [object.id, object]),
+		);
+		const env = await std.wrap.envObjectFromManifestEnv(
+			manifest.env,
+			references,
+		);
+		tg.assert(
+			Object.keys(env).length === 0 && (manifest.args?.length ?? 0) === 0,
+			"a standalone executable cannot require wrapper arguments or environment",
+		);
+		const executable = await std.wrap.executableFromManifestExecutable(
+			manifest.executable,
+			references,
+		);
+		file = tg.File.expect(
+			executable instanceof tg.Symlink
+				? await executable.resolve()
+				: executable,
+		);
+		return standalone(file, host);
+	}
+	const metadata = await executableMetadata(file);
+	let dependencies: Array<string>;
+	if (metadata.format === "mach-o") {
+		tg.assert(std.triple.os(host) === "darwin");
+		tg.assert(metadata.arches.includes(std.triple.arch(host)));
+		dependencies = (metadata.dependencies ?? []).filter(
+			(path) =>
+				!path.startsWith("/usr/lib/") && !path.startsWith("/System/Library/"),
+		);
+	} else if (metadata.format === "elf") {
+		tg.assert(std.triple.os(host) === "linux");
+		tg.assert(metadata.arch === std.triple.arch(host));
+		tg.assert(
+			metadata.interpreter === undefined ||
+				metadata.interpreter === interpreterPath(host),
+			"the standalone executable must use the system dynamic linker",
+		);
+		const libraries = new Set([
+			interpreterName(host),
+			"libc.so",
+			"libc.so.6",
+			"libdl.so.2",
+			"libgcc_s.so.1",
+			"libm.so.6",
+			"libpthread.so.0",
+			"libresolv.so.2",
+			"librt.so.1",
+			"libstdc++.so.6",
+		]);
+		dependencies = (metadata.needed ?? []).filter(
+			(name) => !libraries.has(name),
+		);
+	} else {
+		throw new Error("the standalone output must be a native executable");
+	}
+	tg.assert(
+		dependencies.length === 0,
+		`the standalone executable requires non-system libraries: ${dependencies.join(", ")}`,
+	);
+
+	return tg.file({ contents: file.contents, executable: true });
 }
 
 export async function testBinary() {

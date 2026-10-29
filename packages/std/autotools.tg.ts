@@ -109,6 +109,9 @@ export type Arg = {
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
 	source?: tg.Directory | null;
 
+	/** Export native executables in bin, sbin, and libexec using only system runtime libraries. Select static dependencies through the package's configure arguments. */
+	standalone?: boolean | std.sdk.StandaloneArg;
+
 	/** Should executables be stripped? Default is true. */
 	stripExecutables?: boolean;
 };
@@ -166,6 +169,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		removeLibtoolArchives = true,
 		setRuntimeLibraryPath = false,
 		source,
+		standalone = false,
 		stripExecutables = true,
 	} = { ...resolved, env: depsEnv };
 	const isCross = build !== host;
@@ -190,6 +194,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		pipe,
 		pkgConfig,
 		...(effectiveSdk !== undefined ? { sdk: effectiveSdk } : {}),
+		standalone,
 		stripExecutables,
 	});
 	envs.push(ccEnv);
@@ -305,7 +310,38 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		order: order ?? null,
 		processName: processName ?? null,
 	});
-	return await result.then(tg.Directory.expect);
+	const output = await result.then(tg.Directory.expect);
+	return standalone ? std.directory.standalone(output, host) : output;
+}
+
+export async function testStandalone() {
+	const source = await tg.directory({
+		configure: tg.file({
+			contents: `#!/bin/sh
+set -eu
+prefix=
+for arg in "$@"; do
+  case "$arg" in --prefix=*) prefix="\${arg#--prefix=}" ;; esac
+done
+$CC $CPPFLAGS $CFLAGS "$(dirname "$0")/main.c" $LDFLAGS -o program
+./program
+printf 'prefix = %s\\nall:\\n\\t./program\\ninstall:\\n\\tmkdir -p $(prefix)/bin $(prefix)/share\\n\\tcp program $(prefix)/share/program\\n\\tln -s ../share/program $(prefix)/bin/program\\n' "$prefix" > Makefile
+`,
+			executable: true,
+		}),
+		"main.c": tg.file(
+			'#include <stdio.h>\nint main(void) { puts("standalone autotools"); return 0; }\n',
+		),
+	});
+	const output = await build({ source, standalone: { glibcVersion: "2.39" } });
+	const executable = await output.get("bin/program").then(tg.File.expect);
+	tg.assert((await std.wrap.Manifest.read(executable)) === undefined);
+	const stdout = await std.$`${std.wrap(executable)} > ${tg.output}`.then(
+		tg.File.expect,
+	);
+	tg.assert((await stdout.text) === "standalone autotools\n");
+
+	return output;
 }
 
 /** The result of arg() - an Arg with build, host, and source guaranteed to be resolved. */

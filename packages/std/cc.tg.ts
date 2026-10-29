@@ -158,6 +158,9 @@ export type EnvArg = FlagsArg & {
 	/** Arguments for the SDK, or `"none"` to add no toolchain, build tools, or standard utilities, in which case the caller must provide everything the build needs. Default: the default SDK for the build machine. */
 	sdk?: std.sdk.Arg;
 
+	/** Link native executables for export with system runtime libraries. Wrappers are retained until the build helper exports the installed executables. */
+	standalone?: boolean | std.sdk.StandaloneArg;
+
 	/** Any environment to merge with lower precedence than the C/C++ flags. */
 	env?: std.env.Arg;
 };
@@ -255,6 +258,7 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 		host,
 		pkgConfig = true,
 		sdk: sdkArg,
+		standalone = false,
 		// Extract flag-related args.
 		fortifySource,
 		fullRelro,
@@ -271,6 +275,21 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 	const detectedHost = std.sdk.canonicalTriple(std.triple.host());
 	const canUsePrebuiltBuildTools = build === detectedHost;
 	const envs: tg.Args<std.env.Arg> = [];
+	if (standalone) {
+		tg.assert(sdkArg !== "none", "standalone builds require an SDK");
+		const options = await std.sdk.standalone({
+			...(typeof standalone === "object" ? standalone : {}),
+			host: build,
+			target: host,
+		});
+		const flags = [
+			...options.args,
+			...options.libraryPaths.map((path) => tg`-L${path}`),
+		];
+		envs.push({
+			LDFLAGS: tg.Mutation.suffix(tg.Template.join(" ", ...flags), " "),
+		});
+	}
 
 	// Add compiler flags.
 	flags(
@@ -294,13 +313,22 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 		// carries a concrete `target`, so pin it alongside the host - otherwise the
 		// incoming target leaks through and produces an unwanted cross SDK.
 		const sdkHost = canUsePrebuiltBuildTools ? detectedHost : build;
+		const options = standalone
+			? { ...std.sdk.argObject(sdkArg), embedWrapper: false, proxyLinker: true }
+			: sdkArg;
 		const sdk =
-			sdkArg !== undefined
+			options !== undefined
 				? await tg
-						.build(std.sdk, sdkArg, { host: sdkHost, target: sdkHost })
+						.build(std.sdk, options, { host: sdkHost, target: sdkHost })
 						.named("sdk")
 				: await tg.build(std.sdk, { host: sdkHost }).named("sdk");
 		envs.push(sdk);
+		if (standalone) {
+			envs.push({
+				CC: tg.Mutation.setIfUnset(tg`${sdk}/bin/cc`),
+				CXX: tg.Mutation.setIfUnset(tg`${sdk}/bin/c++`),
+			});
+		}
 
 		const selection = selectBuildTools({
 			...(buildToolsArg !== undefined ? { buildTools: buildToolsArg } : {}),

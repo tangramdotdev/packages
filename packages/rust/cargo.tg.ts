@@ -90,6 +90,9 @@ export type Arg = CommonArg & {
 	/** A name for the build process. */
 	processName?: string;
 
+	/** Produce native executables that use system libraries without a Tangram wrapper. Requires a native build with the rustc proxy disabled. */
+	standalone?: boolean | std.sdk.StandaloneArg;
+
 	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Default: "build". */
 	subcommand?: string;
 
@@ -421,6 +424,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		proxy = false,
 		sdk: sdk_ = {},
 		source,
+		standalone = false,
 		subcommand = "build",
 		target: target_,
 		timings = false,
@@ -432,6 +436,17 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	const target = target_ ? rustTriple(target_) : rustHost;
 
 	const crossCompiling = target !== rustHost;
+
+	if (standalone && proxy) {
+		throw new Error("standalone builds do not yet support the rustc proxy");
+	}
+	const standaloneOptions = standalone
+		? await std.sdk.standalone({
+				...(typeof standalone === "object" ? standalone : {}),
+				host: rustHost,
+				target,
+			})
+		: undefined;
 
 	// Forces GCC on Linux — rustc expects libgcc_s. A cargo build always needs a
 	// toolchain, so an `sdk: "none"` argument contributes no arguments rather
@@ -446,6 +461,9 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		sdkArgs.filter((arg) => arg?.toolchain === "llvm").length > 0
 	) {
 		sdkArgs.push({ toolchain: "gnu" });
+	}
+	if (standalone) {
+		sdkArgs.push({ proxyLinker: true });
 	}
 
 	const envs: tg.Args<std.env.Arg> = [];
@@ -663,7 +681,31 @@ linker = "${hostLinker}"`;
 		envs.push(verbosityEnv);
 	}
 
-	const env = std.env.arg(...envs, env_ ?? null);
+	let env = await std.env.arg(...envs, env_ ?? null);
+	if (standaloneOptions) {
+		// Cargo's explicit target keeps these flags out of build scripts and proc macros.
+		const linker = await std.wrap(
+			await sdk.get(`bin/${compilerName}`).then(tg.File.expect),
+			{ env: { TANGRAM_LINKER_PASSTHROUGH: "true" } },
+		);
+		const flags = [
+			tg`-Clinker=${linker}`,
+			...standaloneOptions.args.map((arg) => tg`-Clink-arg=${arg}`),
+			...standaloneOptions.libraryPaths.map((path) => tg`-Lnative=${path}`),
+		];
+		const encoded = await std.env.tryGetKey({
+			env,
+			key: "CARGO_ENCODED_RUSTFLAGS",
+		});
+		const key = encoded === undefined ? "RUSTFLAGS" : "CARGO_ENCODED_RUSTFLAGS";
+		const separator = encoded === undefined ? " " : "\u001f";
+		env = await std.env.arg(env, {
+			[key]: tg.Mutation.suffix(
+				tg.Template.join(separator, ...flags),
+				separator,
+			),
+		});
+	}
 
 	let builder = std.build`${buildScript}`
 		.checksum(checksum ?? null)
@@ -685,7 +727,9 @@ linker = "${hostLinker}"`;
 		const resolved =
 			artifact instanceof tg.Symlink ? await artifact.resolve() : artifact;
 		if (resolved instanceof tg.File && (await resolved.executable)) {
-			bins[name] = resolved;
+			bins[name] = standalone
+				? await std.file.standalone(resolved, target)
+				: resolved;
 		}
 	}
 
@@ -1001,11 +1045,45 @@ export async function test() {
 	const tests = [];
 
 	tests.push(testConfig());
+	tests.push(testStandalone());
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
 	await Promise.all(tests);
 
 	return true;
+}
+
+export async function testStandalone() {
+	const fixture = await tests.get("hello-file-dep").then(tg.Directory.expect);
+	const config = await fixture.get("data/config.txt").then(tg.File.expect);
+	const outputs: Record<string, tg.Directory> = {};
+	for (const key of ["RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS"]) {
+		const source = await tg.directory(fixture, {
+			"src/main.rs": tg.file`
+				#[cfg(not(standalone_test))]
+				compile_error!("the caller's Rust flags must be preserved");
+				fn main() {
+					print!("{}", include_str!(concat!(env!("OUT_DIR"), "/config_embedded.txt")));
+				}
+			`,
+		});
+		const arg = {
+			env: { [key]: "--cfg=standalone_test" },
+			source,
+			standalone: { glibcVersion: "2.39" as const },
+		};
+		const output = await build(arg);
+		outputs[key] = output;
+		const executable = await output
+			.get("bin/hello-file-dep")
+			.then(tg.File.expect);
+		const stdout = await $`${std.wrap(executable)} > ${tg.output}`.then(
+			tg.File.expect,
+		);
+		tg.assert((await stdout.text) === (await config.text));
+	}
+
+	return tg.directory(outputs);
 }
 
 export async function testConfig() {

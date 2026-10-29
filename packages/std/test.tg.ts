@@ -1,3 +1,4 @@
+import * as autotools from "./autotools.tg.ts";
 import * as autotoolsM4 from "./autotools/m4.tg.ts";
 import * as autotoolsPerl from "./autotools/perl.tg.ts";
 import * as bootstrap from "./bootstrap.tg.ts";
@@ -67,6 +68,7 @@ const testModules: Record<
 > = {
 	"autotools/m4.tg.ts": [autotoolsM4, "sdk"],
 	"autotools/perl.tg.ts": [autotoolsPerl, "sdk"],
+	"autotools.tg.ts": [autotools, "sdk"],
 	"bootstrap/make.tg.ts": [bootstrapMake, "bootstrap"],
 	"bootstrap/musl.tg.ts": [bootstrapMusl, "bootstrap"],
 	"bootstrap/sdk.tg.ts": [bootstrapSdk, "bootstrap"],

@@ -4,6 +4,7 @@ import * as bootstrap from "./bootstrap.tg.ts";
 import binutils from "./sdk/gnu/binutils.tg.ts";
 import * as gnu from "./sdk/gnu.tg.ts";
 import * as libc from "./sdk/libc.tg.ts";
+import type { GlibcVersion } from "./sdk/libc/glibc.tg.ts";
 import * as llvm from "./sdk/llvm.tg.ts";
 import mold from "./sdk/mold.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
@@ -182,6 +183,50 @@ const swVers = () => {
 export namespace sdk {
 	/** The minimum macOS version that produced binaries should support. */
 	export const macOsDeploymentTarget = "14.0";
+
+	export type StandaloneArg = {
+		/** The glibc version to link against on GNU/Linux. Defaults to the SDK's libc. */
+		glibcVersion?: GlibcVersion;
+	};
+
+	/** Get target linker options for an executable that uses system libraries without a Tangram wrapper. */
+	export async function standalone(
+		arg: StandaloneArg & { host?: string; target?: string } = {},
+	) {
+		const host = canonicalTriple(arg.host ?? std.triple.host());
+		const target = canonicalTriple(arg.target ?? host);
+		tg.assert(
+			host === target && host === canonicalTriple(std.triple.host()),
+			"standalone builds currently require a native host",
+		);
+		const args: Array<tg.Template> = [];
+		const libraryPaths: Array<tg.Directory> = [];
+		if (std.triple.os(target) === "linux") {
+			args.push(await tg`-Wl,--dynamic-linker,${libc.interpreterPath(target)}`);
+			if (std.triple.environment(target) !== "musl" && arg.glibcVersion) {
+				// Build the deployment sysroot with its own native build tools.
+				const env = std.dependencies.buildTools({
+					host,
+					pkgConfig: false,
+					python: true,
+				});
+				const sysroot = await libc
+					.libc({
+						build: host,
+						env,
+						host: std.triple.create(target, {
+							environmentVersion: arg.glibcVersion,
+						}),
+					})
+					.then((directory) => directory.get(std.triple.stripVersions(target)))
+					.then(tg.Directory.expect);
+				args.push(await tg`--sysroot=${sysroot}`);
+				libraryPaths.push(await sysroot.get("lib").then(tg.Directory.expect));
+			}
+		}
+
+		return { args, libraryPaths };
+	}
 
 	/**
 	 * The `sdk` field of a builder argument.

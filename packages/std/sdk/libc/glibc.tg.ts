@@ -1,7 +1,7 @@
 import * as std from "../../tangram.ts";
 
 // Define supported versions.
-type GlibcVersion =
+export type GlibcVersion =
 	| "2.37"
 	| "2.38"
 	| "2.39"
