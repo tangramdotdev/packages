@@ -54,10 +54,10 @@ fn repeated_artifacts_merge_authorization() {
 				resource: file.id().into(),
 			},
 			metadata: tg::authorization::Metadata {
-				algorithm: tg::authorization::Algorithm::Ed25519,
+				algorithm: tg::authorization::Algorithm::Blake3,
 				key: "test".into(),
 			},
-			signature: vec![0; 64],
+			signature: vec![0; 32],
 		};
 		authorization.push(token);
 	}
