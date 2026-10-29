@@ -1037,6 +1037,7 @@ export async function test() {
 
 	tests.push(testConfig());
 	tests.push(testStandalone());
+	tests.push(testStandaloneBuildScript());
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
 	await Promise.all(tests);
@@ -1087,6 +1088,38 @@ export async function testStandalone() {
 	}
 
 	return tg.directory(outputs);
+}
+
+export async function testStandaloneBuildScript() {
+	// A standalone build script spawns the compiler through fork and exec, as the cc crate does, and unwinds a caught panic.
+	const source = tg.directory({
+		"Cargo.toml": tg.file`
+			[package]
+			name = "standalone-build-script"
+			version = "0.1.0"
+			edition = "2021"
+		`,
+		"Cargo.lock": tg.file`
+			version = 4
+
+			[[package]]
+			name = "standalone-build-script"
+			version = "0.1.0"
+		`,
+		"build.rs": tg.file`
+			use std::{os::unix::process::CommandExt as _, process::{Command, Stdio}};
+			fn main() {
+				let mut command = Command::new("cc");
+				command.arg("--version").stdout(Stdio::null());
+				unsafe { command.pre_exec(|| Ok(())) };
+				assert!(command.status().unwrap().success());
+				assert!(std::panic::catch_unwind(|| panic!("caught")).is_err());
+			}
+		`,
+		"src/main.rs": tg.file`fn main() {}`,
+	});
+	await build({ source, standalone: { glibcVersion: "2.39" } });
+	return true;
 }
 
 export async function testConfig() {
