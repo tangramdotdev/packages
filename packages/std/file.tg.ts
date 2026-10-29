@@ -126,6 +126,37 @@ export async function standalone(
 			Object.keys(env).length === 0 && (manifest.args?.length ?? 0) === 0,
 			"a standalone executable cannot require wrapper arguments or environment",
 		);
+		const interpreter = await std.wrap.interpreterFromManifestInterpreter(
+			manifest.interpreter,
+			references,
+		);
+		if (interpreter !== undefined) {
+			tg.assert(
+				interpreter.kind !== "normal" &&
+					(!("args" in interpreter) || (interpreter.args?.length ?? 0) === 0),
+				"a standalone executable cannot require a custom interpreter or interpreter arguments",
+			);
+
+			// Allow Tangram's injection library for the build-time wrapper.
+			for (const preload of interpreter.preloads ?? []) {
+				const file = tg.File.expect(
+					preload instanceof tg.Symlink ? await preload.resolve() : preload,
+				);
+				const metadata = await executableMetadata(file);
+				const name =
+					metadata.format === "elf"
+						? metadata.soname
+						: metadata.format === "mach-o"
+							? metadata.installName
+							: undefined;
+				const match = name?.match(/^tangram-injection-(.+)\.(?:so|dylib)$/);
+				tg.assert(
+					match?.[1] !== undefined &&
+						std.sdk.canonicalTriple(match[1]) === std.sdk.canonicalTriple(host),
+					"a standalone executable cannot require a custom preload",
+				);
+			}
+		}
 		const executable = await std.wrap.executableFromManifestExecutable(
 			manifest.executable,
 			references,
@@ -178,6 +209,72 @@ export async function standalone(
 	);
 
 	return tg.file({ contents: file.contents, executable: true });
+}
+
+export async function testStandalone() {
+	const buildToolchain = await bootstrap.sdk();
+	const host = bootstrap.toolchainTriple(std.triple.host());
+	const os = std.triple.os(host);
+	const source = await tg.directory({
+		"main.c": tg.file(
+			'#include <stdio.h>\nint main(void) { puts("standalone"); return 0; }\n',
+		),
+		"preload.c": tg.file("int custom_preload(void) { return 0; }\n"),
+	});
+	const output = await std
+		.build(std.shBootstrap`
+			mkdir -p ${tg.output}
+			cc ${source}/main.c -o ${tg.output}/program
+			cc -shared -fPIC ${source}/preload.c -o ${tg.output}/preload
+		`)
+		.env(buildToolchain, { TANGRAM_LINKER_PASSTHROUGH: true })
+		.then(tg.Directory.expect);
+	const program = await output.get("program").then(tg.File.expect);
+	const preload = await output.get("preload").then(tg.File.expect);
+	const wrapped = await std.wrap(program, { buildToolchain, host });
+	const exported = await standalone(wrapped, host);
+	const stdout = await std
+		.build(
+			std.shBootstrap`${std.wrap(exported, { buildToolchain, host })} > ${tg.output}`,
+		)
+		.env(buildToolchain)
+		.then(tg.File.expect);
+	tg.assert((await stdout.text) === "standalone\n");
+
+	const cases: Array<[std.wrap.ArgObject, string]> = [
+		[{ args: ["required"] }, "wrapper arguments or environment"],
+		[{ env: { REQUIRED: "true" } }, "wrapper arguments or environment"],
+		[{ preloads: [preload] }, "a custom preload"],
+		[
+			{ interpreter: { kind: "normal", executable: program } },
+			"a custom interpreter or interpreter arguments",
+		],
+	];
+	if (os === "linux") {
+		const interpreter = await std.wrap.interpreterFromManifestInterpreter(
+			(await std.wrap.Manifest.read(wrapped))?.interpreter,
+			new Map(
+				(await wrapped.dependencyObjects).map((object) => [object.id, object]),
+			),
+		);
+		tg.assert(interpreter?.kind === "ld-musl");
+		cases.push([
+			{ interpreter: { ...interpreter, args: ["--list"] } },
+			"a custom interpreter or interpreter arguments",
+		]);
+	}
+	for (const [arg, message] of cases) {
+		const wrapped = await std.wrap(program, { buildToolchain, host }, arg);
+		let error: unknown;
+		try {
+			await standalone(wrapped, host);
+		} catch (caught) {
+			error = caught;
+		}
+		tg.assert(error instanceof Error && error.message.includes(message));
+	}
+
+	return true;
 }
 
 export async function testBinary() {

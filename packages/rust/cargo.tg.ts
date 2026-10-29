@@ -463,7 +463,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		sdkArgs.push({ toolchain: "gnu" });
 	}
 	if (standalone) {
-		sdkArgs.push({ proxyLinker: true });
+		sdkArgs.push({ embedWrapper: false, proxyLinker: true });
 	}
 
 	const envs: tg.Args<std.env.Arg> = [];
@@ -683,27 +683,18 @@ linker = "${hostLinker}"`;
 
 	let env = await std.env.arg(...envs, env_ ?? null);
 	if (standaloneOptions) {
-		// Cargo's explicit target keeps these flags out of build scripts and proc macros.
+		// Keep Cargo's Rust flags and wrap build-time executables until export.
 		const linker = await std.wrap(
 			await sdk.get(`bin/${compilerName}`).then(tg.File.expect),
-			{ env: { TANGRAM_LINKER_PASSTHROUGH: "true" } },
+			{
+				args: [
+					...standaloneOptions.args,
+					...standaloneOptions.libraryPaths.map((path) => tg`-L${path}`),
+				],
+			},
 		);
-		const flags = [
-			tg`-Clinker=${linker}`,
-			...standaloneOptions.args.map((arg) => tg`-Clink-arg=${arg}`),
-			...standaloneOptions.libraryPaths.map((path) => tg`-Lnative=${path}`),
-		];
-		const encoded = await std.env.tryGetKey({
-			env,
-			key: "CARGO_ENCODED_RUSTFLAGS",
-		});
-		const key = encoded === undefined ? "RUSTFLAGS" : "CARGO_ENCODED_RUSTFLAGS";
-		const separator = encoded === undefined ? " " : "\u001f";
 		env = await std.env.arg(env, {
-			[key]: tg.Mutation.suffix(
-				tg.Template.join(separator, ...flags),
-				separator,
-			),
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: linker,
 		});
 	}
 
@@ -1057,8 +1048,20 @@ export async function testStandalone() {
 	const fixture = await tests.get("hello-file-dep").then(tg.Directory.expect);
 	const config = await fixture.get("data/config.txt").then(tg.File.expect);
 	const outputs: Record<string, tg.Directory> = {};
-	for (const key of ["RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS"]) {
+	for (const key of [
+		"RUSTFLAGS",
+		"CARGO_ENCODED_RUSTFLAGS",
+		"build",
+		`target.${rustTriple(std.triple.host())}`,
+		"target.'cfg(all())'",
+	]) {
+		const fromEnv = key === "RUSTFLAGS" || key === "CARGO_ENCODED_RUSTFLAGS";
 		const source = await tg.directory(fixture, {
+			".cargo/config.toml": tg.file(
+				fromEnv
+					? '[build]\nrustflags = ["--cfg=ignored_config"]\n'
+					: `[${key}]\nrustflags = ["--cfg=standalone_test"]\n`,
+			),
 			"src/main.rs": tg.file`
 				#[cfg(not(standalone_test))]
 				compile_error!("the caller's Rust flags must be preserved");
@@ -1068,7 +1071,7 @@ export async function testStandalone() {
 			`,
 		});
 		const arg = {
-			env: { [key]: "--cfg=standalone_test" },
+			env: fromEnv ? { [key]: "--cfg=standalone_test" } : {},
 			source,
 			standalone: { glibcVersion: "2.39" as const },
 		};

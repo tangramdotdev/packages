@@ -86,6 +86,7 @@ export async function macOsInjection(arg: MacOsInjectionArg) {
 
 	// Define common options.
 	const additionalArgs = [
+		`-Wl,-install_name,tangram-injection-${host}.dylib`,
 		"-Wno-nonnull",
 		"-Wno-nullability-completeness",
 		`--target=${std.sdk.canonicalTriple(host)}`,
