@@ -145,7 +145,7 @@ export async function canadianCross(arg?: CanadianCrossArg) {
 	});
 
 	// Build a fully native GCC toolchain.
-	const nativeGcc = tg
+	const nativeGcc = await tg
 		.build(gcc.build, {
 			sdk: "none",
 			build: host,
@@ -158,9 +158,34 @@ export async function canadianCross(arg?: CanadianCrossArg) {
 			targetBinutils: nativeBinutils,
 			variant: "stage2_full",
 		})
-		.named("native gcc");
+		.named("native gcc")
+		.then(tg.Directory.expect);
 
-	return nativeGcc;
+	// Wrap the C library's programs, which request the system dynamic linker, with this toolchain so that they run in a sandbox.
+	const libcBin = await sysroot.tryGet(`${target}/bin`);
+	if (!(libcBin instanceof tg.Directory)) {
+		return nativeGcc;
+	}
+	const buildToolchain = await std.env.compose(nativeGcc);
+	const libraryPaths = [tg`${nativeGcc}/lib`];
+	const programs: Record<string, tg.Unresolved<tg.File>> = {};
+	for (const name of Object.keys(await libcBin.entries)) {
+		const file = await nativeGcc.tryGet(`bin/${name}`);
+		if (!(file instanceof tg.File) || !(await file.executable)) {
+			continue;
+		}
+		const metadata = await std.file.tryExecutableMetadata(file);
+		if (metadata?.format !== "elf" || metadata.interpreter === undefined) {
+			continue;
+		}
+		programs[`bin/${name}`] = std.wrap(file, {
+			buildToolchain,
+			host,
+			libraryPaths,
+		});
+	}
+
+	return tg.directory(nativeGcc, programs);
 }
 
 export async function buildToHostCrossToolchain(
