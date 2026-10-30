@@ -15,6 +15,8 @@ mod payload;
 
 type Hasher = fnv::FnvBuildHasher;
 
+const LIBC: &str = "libc.so.6";
+
 fn main() {
 	if let Err(e) = main_inner() {
 		common::error::print_error(e);
@@ -91,6 +93,9 @@ struct Options {
 	/// Any additional arguments to pass to the interpreter.
 	interpreter_args: Option<String>,
 
+	/// The library directory that contains the interpreter's C library.
+	interpreter_library_path: Option<String>,
+
 	/// The interpreter used by the output executable.
 	interpreter_path: Option<String>,
 
@@ -121,6 +126,8 @@ fn read_options_with_args(
 		lookup("TANGRAM_LINKER_INTERPRETER_PATH").and_then(|value| value.into_string().ok());
 	let interpreter_args =
 		lookup("TANGRAM_LINKER_INTERPRETER_ARGS").and_then(|value| value.into_string().ok());
+	let interpreter_library_path = lookup("TANGRAM_LINKER_INTERPRETER_LIBRARY_PATH")
+		.and_then(|value| value.into_string().ok());
 	let injection_path =
 		lookup("TANGRAM_LINKER_INJECTION_PATH").and_then(|value| value.into_string().ok());
 	let mut controls = controls::Settings::from_env(lookup)?;
@@ -216,6 +223,7 @@ fn read_options_with_args(
 		controls,
 		injection_path,
 		interpreter_args,
+		interpreter_library_path,
 		interpreter_path,
 		library_paths,
 		output_path,
@@ -290,6 +298,16 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		)
 		.collect_vec();
 	deduplicate_library_paths(&mut library_paths);
+
+	// Search the glibc libraries beside the default glibc interpreter first when the library paths provide a different C library.
+	if matches!(
+		interpreter,
+		InterpreterRequirement::Default(InterpreterFlavor::Gnu)
+	) && let Some(path) = &options.interpreter_library_path
+		&& let Some(directory) = interpreter_glibc_directory(path, &library_paths).await?
+	{
+		library_paths.insert(0, directory);
+	}
 
 	tracing::debug!(?library_paths, "Library paths");
 
@@ -440,6 +458,92 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	}
 
 	Ok(())
+}
+
+/// Collect the glibc libraries beside the interpreter when the library paths provide a different C library, because glibc's loader and libraries must come from the same build.
+async fn interpreter_glibc_directory(
+	interpreter_library_path: &str,
+	library_paths: &[DirectoryWithSubpath],
+) -> tg::Result<Option<DirectoryWithSubpath>> {
+	// Find the C library that the library paths provide.
+	let mut located = None;
+	for library_path in library_paths {
+		if let Some(libc) = try_get_library(library_path, LIBC).await? {
+			located = Some((library_path, libc));
+			break;
+		}
+	}
+	let Some((located_directory, located_libc)) = located else {
+		return Ok(None);
+	};
+
+	// Compare it with the C library beside the interpreter.
+	let Some(interpreter_directory) = checkin_library_path(interpreter_library_path).await? else {
+		return Ok(None);
+	};
+	let Some(interpreter_libc) = try_get_library(&interpreter_directory, LIBC).await? else {
+		return Ok(None);
+	};
+	if located_libc.id() == interpreter_libc.id() {
+		return Ok(None);
+	}
+
+	// Select the interpreter's copies of the glibc libraries that the other directory provides.
+	let names = located_directory
+		.resolve()
+		.await?
+		.entries()
+		.await?
+		.into_keys()
+		.filter(|name| name.contains(".so"))
+		.collect_vec();
+	let mut libraries = BTreeMap::new();
+	for name in names {
+		let Some(library) = try_get_library(&interpreter_directory, &name).await? else {
+			continue;
+		};
+		if defines_glibc_version(&library.bytes().await?) {
+			libraries.insert(name, tg::Artifact::from(library));
+		}
+	}
+	let directory = tg::Directory::with_entries(libraries);
+	let directory = DirectoryWithSubpath {
+		directory,
+		subpath: None,
+	};
+
+	Ok(Some(directory))
+}
+
+async fn try_get_library(
+	directory: &DirectoryWithSubpath,
+	name: &str,
+) -> tg::Result<Option<tg::File>> {
+	let path = directory
+		.subpath
+		.as_deref()
+		.unwrap_or(std::path::Path::new(""))
+		.join(name);
+	let artifact = directory.directory.try_get(path).await?;
+	let file = artifact.and_then(|artifact| artifact.try_unwrap_file().ok());
+	Ok(file)
+}
+
+/// Determine whether an ELF shared library defines a glibc symbol version.
+fn defines_glibc_version(bytes: &[u8]) -> bool {
+	let Ok(goblin::Object::Elf(elf)) = goblin::Object::parse(bytes) else {
+		return false;
+	};
+	let Some(verdef) = &elf.verdef else {
+		return false;
+	};
+	verdef.iter().any(|definition| {
+		definition.iter().any(|auxiliary| {
+			elf.dynstrtab
+				.get_at(auxiliary.vda_name)
+				.is_some_and(|name| name.starts_with("GLIBC_"))
+		})
+	})
 }
 
 fn deduplicate_library_paths(library_paths: &mut Vec<DirectoryWithSubpath>) {

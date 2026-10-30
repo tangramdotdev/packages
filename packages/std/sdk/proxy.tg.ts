@@ -72,6 +72,7 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		flavor,
 		ld,
 		ldso,
+		libDir,
 		strip,
 	} = await std.sdk.toolchainComponents({
 		env: buildToolchain,
@@ -106,7 +107,9 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 					: os === "darwin" && std.triple.os(build) === "linux"
 						? await tg`${directory}/bin/${host}-ld.gold`
 						: ld),
-			...(ldso !== undefined ? { interpreter: ldso } : {}),
+			...(ldso !== undefined
+				? { interpreter: ldso, interpreterLibraryPath: libDir }
+				: {}),
 			host,
 		});
 		if (isLlvm) {
@@ -319,6 +322,7 @@ type LdProxyArg = {
 	embedWrapper?: boolean;
 	interpreter?: tg.File;
 	interpreterArgs?: Array<tg.Template.Arg>;
+	interpreterLibraryPath?: tg.Directory;
 	linker: tg.File | tg.Symlink | tg.Template;
 	mandatoryLibraryPaths?: Array<tg.Directory>;
 	host?: string;
@@ -391,6 +395,13 @@ async function ldProxy(arg: LdProxyArg) {
 			? {
 					TANGRAM_LINKER_INTERPRETER_ARGS:
 						tg.Mutation.setIfUnset(interpreterArgs),
+				}
+			: {}),
+		...(arg.interpreterLibraryPath
+			? {
+					TANGRAM_LINKER_INTERPRETER_LIBRARY_PATH: tg.Mutation.setIfUnset(
+						arg.interpreterLibraryPath,
+					),
 				}
 			: {}),
 		TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
