@@ -6,8 +6,8 @@ export const metadata = {
 	license: "Apache-2.0, MIT",
 	name: "cargo-nextest",
 	repository: "https://github.com/nextest-rs/nextest",
-	version: "0.9.143",
-	tag: "cargo-nextest/0.9.143",
+	version: "0.9.150",
+	tag: "cargo-nextest/0.9.150",
 	provides: {
 		binaries: ["cargo-nextest"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:4ad5dbe9e266fd7303c39413c5610c4ca03f3c1b70f8d59c81266a4452e59361";
+		"sha256:52daf837e45bf08815f1fa92202adb28d835c04b3e8f1fc9a2d1b47e2b6537c6";
 	const owner = "nextest-rs";
 	const repo = "nextest";
 	const tag = `${name}-${version}`;
