@@ -627,6 +627,9 @@ linker = "${hostLinker}"`;
 			CARGO_HTTP_CAINFO: certFile,
 		};
 		envs.push(networkEnv);
+	} else {
+		// Keep nested Cargo invocations, such as those in build scripts, from retrying the network.
+		envs.push({ CARGO_NET_OFFLINE: "true" });
 	}
 
 	if (crossCompiling) {
@@ -1036,6 +1039,7 @@ export async function test() {
 	const tests = [];
 
 	tests.push(testConfig());
+	tests.push(testNestedCargoOffline());
 	tests.push(testStandalone());
 	tests.push(testStandaloneBuildScript());
 	tests.push(testUnproxiedWorkspace());
@@ -1119,6 +1123,48 @@ export async function testStandaloneBuildScript() {
 		"src/main.rs": tg.file`fn main() {}`,
 	});
 	await build({ source, standalone: { glibcVersion: "2.39" } });
+	return true;
+}
+
+export async function testNestedCargoOffline() {
+	// A build script runs Cargo, as shadow-rs does, and the nested invocation fails promptly without network access instead of retrying the network.
+	const source = tg.directory({
+		"Cargo.toml": tg.file`
+			[package]
+			name = "nested-cargo-offline"
+			version = "0.1.0"
+			edition = "2021"
+
+			[dependencies]
+			itoa = "1"
+		`,
+		"Cargo.lock": tg.file`
+			version = 4
+
+			[[package]]
+			name = "itoa"
+			version = "1.0.14"
+			source = "registry+https://github.com/rust-lang/crates.io-index"
+			checksum = "d75a2a4b1b190afb6f5425f10f6a8f959d2ea0b9c2b1d79553551850539e4674"
+
+			[[package]]
+			name = "nested-cargo-offline"
+			version = "0.1.0"
+			dependencies = [
+			 "itoa",
+			]
+		`,
+		"build.rs": tg.file`
+			use std::{process::Command, time::{Duration, Instant}};
+			fn main() {
+				let start = Instant::now();
+				Command::new(std::env::var("CARGO").unwrap()).arg("tree").output().unwrap();
+				assert!(start.elapsed() < Duration::from_secs(5), "the nested cargo invocation retried the network");
+			}
+		`,
+		"src/main.rs": tg.file`fn main() {}`,
+	});
+	await build({ source });
 	return true;
 }
 
