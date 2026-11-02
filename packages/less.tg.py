@@ -1,18 +1,30 @@
 # /// script
-# [tool.tangram.imports.ncurses]
+# [tool.tangram.dependencies.ncurses]
 # specifier = "ncurses"
 # attributes = { source = "./ncurses.tg.ts" }
-# [tool.tangram.imports.pcre2]
+# [tool.tangram.dependencies.pcre2]
 # specifier = "pcre2"
 # attributes = { source = "./pcre2.tg.ts" }
-# [tool.tangram.imports.std]
+# [tool.tangram.dependencies.std_assert]
 # specifier = "std"
-# attributes = { source = "./std" }
+# attributes = { source = "./std", get = "assert.tg.ts" }
+# [tool.tangram.dependencies.std_autotools]
+# specifier = "std"
+# attributes = { source = "./std", get = "autotools.tg.ts" }
+# [tool.tangram.dependencies.std_directory]
+# specifier = "std"
+# attributes = { source = "./std", get = "directory.tg.ts" }
+# [tool.tangram.dependencies.std_download]
+# specifier = "std"
+# attributes = { source = "./std", get = "download.tg.ts" }
 # ///
 
 import ncurses
 import pcre2
-import std
+import std_assert
+import std_autotools
+import std_directory
+import std_download
 
 metadata = {
     "homepage": "https://www.greenwoodsoftware.com/less/",
@@ -29,40 +41,39 @@ metadata = {
 
 async def source() -> tg.Directory:
     checksum = "sha256:d1008fb78dcae1323ddab664bcb352a61f022b1b131bd8018548e021d975ec7a"
-    archive = await std.download.extractArchive(
+    archive = await std_download.download.build(
         {
             "base": "https://www.greenwoodsoftware.com/less",
             "checksum": checksum,
             "extension": ".tar.gz",
+            "mode": "extract",
             "name": metadata["name"],
             "version": metadata["version"],
         }
     )
-    return tg.Directory.expect(await std.directory.unwrap(tg.Directory.expect(archive)))
+    return await std_directory.unwrap.build(tg.Directory.expect(archive))
 
 
-async def deps() -> dict[str, tg.Value.Type]:
-    return {
-        "ncurses": await tg.command(ncurses.build),
-        "pcre2": await tg.command(pcre2.build),
-    }
+deps = {
+    "ncurses": ncurses.build,
+    "pcre2": pcre2.build,
+}
 
 
 async def build(*args: tg.Value.Type) -> tg.Directory:
     arg = {
         "source": await source(),
-        # A Python function is not a Tangram value, so pass the deps function as a command.
-        "deps": await tg.command(deps),
+        "deps": deps,
         "phases": {
             "configure": {"args": ["--with-regex=pcre2"]},
         },
     }
-    return tg.Directory.expect(await std.autotools.build(arg, *args))
+    return await std_autotools.build.build(arg, *args)
 
 
 default = build
 
 
-async def test() -> tg.Value.Type:
-    spec = await std.assert_.defaultSpec(metadata)
-    return await std.assert_.pkg(await tg.command(build), spec)
+async def test() -> bool:
+    spec = await std_assert.defaultSpec.build(metadata)
+    return await std_assert.pkg.build(await tg.command(build), spec)
