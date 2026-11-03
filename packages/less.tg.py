@@ -55,8 +55,8 @@ async def source() -> tg.Directory:
 
 
 deps = {
-    "ncurses": ncurses.build,
-    "pcre2": pcre2.build,
+    "ncurses": {"build": ncurses.build, "kind": "runtime"},
+    "pcre2": {"build": pcre2.build, "kind": "runtime"},
 }
 
 
