@@ -37,26 +37,31 @@ export function source() {
 	});
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		perl: { build: perl.build, kind: "buildtime" },
 		zlib: zlib.build,
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 		},
 		...args,
 	);
 
 	// Get the perl artifact for wrapping scripts later.
-	const { perl: perlArtifact } = await std.deps.artifacts(deps, arg);
+	const { perl: perlArtifact } = await std.deps.artifacts(await deps(), arg);
 	tg.assert(perlArtifact !== undefined);
 
 	let autoconf = await std.autotools.build(arg);

@@ -30,16 +30,23 @@ export function source() {
 	});
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		zlib: zlib.build,
 	});
 }
 
-export type Arg = cargo.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
 
-export function build(...args: tg.Args<Arg>) {
-	return cargo.build({ deps, source: source() }, ...args);
+export type Arg = cargo.Arg & std.deps.Arg<typeof dependencyDeclarations>;
+
+export async function build(...args: tg.Args<Arg>) {
+	return cargo.build(
+		{ deps: await tg.command(deps), source: source() },
+		...args,
+	);
 }
 
 export default build;

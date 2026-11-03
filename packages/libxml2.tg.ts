@@ -31,7 +31,7 @@ export async function source() {
 		.then(std.directory.unwrap);
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		ncurses: ncurses.build,
 		python: { build: python.self, kind: "buildtime" },
@@ -41,13 +41,18 @@ export function deps() {
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 			setRuntimeLibraryPath: true,
 			phases: {
 				configure: {
@@ -64,7 +69,10 @@ export async function build(...args: tg.Args<Arg>) {
 	);
 
 	// Get the python artifact for CPATH setup.
-	const { python: pythonArtifact } = await std.deps.artifacts(deps, arg);
+	const { python: pythonArtifact } = await std.deps.artifacts(
+		await deps(),
+		arg,
+	);
 	tg.assert(pythonArtifact !== undefined);
 	const env = std.env.arg(arg.env ?? null, {
 		CPATH: tg.Mutation.suffix(

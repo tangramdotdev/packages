@@ -4,13 +4,17 @@ import * as perl from "perl" with { source: "./perl" };
 import * as std from "std" with { source: "./std" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		autoconf: { build: autoconf.build, kind: "full" },
 		help2man: { build: help2man.build, kind: "buildtime" },
 		perl: { build: perl.build, kind: "full" },
 		zlib: zlib.build,
 	});
+}
+
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
 }
 
 export const metadata = {
@@ -40,19 +44,23 @@ export function source() {
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 		},
 		...args,
 	);
 
 	const { autoconf: autoconfArtifact, perl: perlArtifact } =
-		await std.deps.artifacts(deps, { build: arg.build, host: arg.host });
+		await std.deps.artifacts(await deps(), {
+			build: arg.build,
+			host: arg.host,
+		});
 	tg.assert(perlArtifact !== undefined);
 	tg.assert(autoconfArtifact !== undefined);
 

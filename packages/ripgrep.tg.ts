@@ -29,17 +29,26 @@ export async function source() {
 	});
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		pcre2: pcre2.build,
 	});
 }
 
-export type Arg = cargo.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
+export type Arg = cargo.Arg & std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
 	return cargo.build(
-		{ deps, source: source(), features: ["pcre2"], proxy: true },
+		{
+			deps: await tg.command(deps),
+			features: ["pcre2"],
+			proxy: true,
+			source: source(),
+		},
 		...args,
 	);
 }

@@ -48,7 +48,7 @@ export async function source() {
 		.then(std.directory.unwrap);
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		bzip2: bzip2.build,
 		libarchive: libarchive.build,
@@ -58,13 +58,18 @@ export function deps() {
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 			env: {
 				CFLAGS: tg.Mutation.suffix("-Wno-format-nonliteral", " "),
 			},
@@ -89,7 +94,7 @@ export async function build(...args: tg.Args<Arg>) {
 	);
 
 	// The linker needs rpath-link to find the transitive .so deps referenced by libarchive.so and by the internal libelf.so and libdw.so during the build.
-	const artifacts = await std.deps.artifacts(deps, arg);
+	const artifacts = await std.deps.artifacts(await deps(), arg);
 	const libDirs = Object.values(artifacts)
 		.filter((artifact): artifact is tg.Directory => artifact !== undefined)
 		.map((artifact) => tg`${artifact}/lib`);

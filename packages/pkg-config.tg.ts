@@ -25,21 +25,25 @@ export async function source() {
 		.then(std.directory.unwrap);
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		zlib: zlib.build,
 	});
 }
 
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
 export type Arg = std.autotools.Arg &
-	std.deps.Arg<typeof deps> & {
+	std.deps.Arg<typeof dependencyDeclarations> & {
 		proxy?: boolean;
 	};
 
 export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
-			deps,
+			deps: await tg.command(deps),
 			source: source(),
 			env: {
 				CFLAGS: tg.Mutation.prefix("-Wno-int-conversion -std=gnu17", " "),

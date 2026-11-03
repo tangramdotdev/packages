@@ -40,14 +40,18 @@ export async function source() {
 		.then(std.directory.unwrap);
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		python: { build: python.self, kind: "buildtime" },
 	});
 }
 
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
 export type Arg = std.autotools.Arg &
-	std.deps.Arg<typeof deps> & {
+	std.deps.Arg<typeof dependencyDeclarations> & {
 		/* Instead of producing an install directory, the output will be the in-tree build directory. Used for cross-compilation. */
 		skipInstall?: boolean;
 	};
@@ -103,7 +107,7 @@ export async function build(...args: tg.Args<Arg>) {
 		{
 			build: build_,
 			buildInTree: !skipInstall,
-			deps,
+			deps: await tg.command(deps),
 			host,
 			phases,
 			source: sourceDir,

@@ -1,4 +1,5 @@
 import * as std from "./tangram.ts";
+import * as python from "./packages_test.tg.py";
 
 function assertPhase(
 	phase: std.phases.Phase | undefined,
@@ -88,13 +89,129 @@ export async function fullDepBuild(...args: tg.Args<std.args.BasePackageArg>) {
 // Deps: distinct packages with shared builder pattern, plus kind testing.
 const mockDeps = std.deps({
 	pkgA: pkgABuild,
-	pkgB: pkgBBuild,
+	pkgB: { build: pkgBBuild },
 	runtimeDep: fullDepBuild,
 	buildtimeDep: { build: fullDepBuild, kind: "buildtime" },
 	fullDep: { build: fullDepBuild, kind: "full" },
 });
 
 type MockDepsArg = std.args.BasePackageArg & std.deps.Arg<typeof mockDeps>;
+
+// Check that each dependency retains its own argument type.
+type AcceptMockDeps<T extends std.deps.Arg<typeof mockDeps>> = T;
+// @ts-expect-error The option belongs to pkgB, not pkgA.
+type WrongPackageOption = AcceptMockDeps<{
+	dependencies: { pkgA: { pkgBOption: string } };
+}>;
+// @ts-expect-error The package option requires a string.
+type WrongOptionType = AcceptMockDeps<{
+	dependencies: { pkgB: { pkgBOption: number } };
+}>;
+
+export async function mockConfig() {
+	return std.deps.toConfig(mockDeps);
+}
+
+export async function unbuiltDependency(): Promise<tg.Directory> {
+	throw new Error("the dependency executed while constructing a config");
+}
+
+async function testConfigConstruction() {
+	const command = (await tg.Command.javascript(unbuiltDependency, [])).node;
+	const declarations = std.deps({
+		fromCommand: command,
+		fromFunction: unbuiltDependency,
+		withMetadata: {
+			build: command,
+			flag: "with",
+			kind: "full",
+			when: { cross: false },
+		},
+	});
+	tg.assert(declarations.fromFunction === unbuiltDependency);
+	const config = await std.deps.toConfig(declarations);
+	tg.assert(config.fromFunction.build instanceof tg.Command);
+	tg.assert(config.fromFunction.kind === "runtime");
+	tg.assert(
+		!("flag" in config.fromFunction) && !("when" in config.fromFunction),
+	);
+	tg.assert(config.fromCommand.build === command);
+	tg.assert(config.withMetadata.build === command);
+	tg.assert(config.withMetadata.kind === "full");
+	tg.assert(config.withMetadata.flag === "with");
+	tg.assert(config.withMetadata.when === declarations.withMetadata.when);
+}
+
+async function testConfigRoundTrip() {
+	const config = await std.deps.resolveConfig(await tg.command(mockConfig));
+	tg.assert(config !== undefined);
+	tg.assert(config.pkgA.build instanceof tg.Command);
+	const artifacts = await std.deps.artifacts(config, {
+		build: linux,
+		dependencies: { pkgA: { pkgAOption: "after serialization" }, pkgB: false },
+		host: linux,
+		subtreeSdk: "none",
+	});
+	tg.assert(artifacts.pkgA !== undefined && artifacts.pkgB === undefined);
+	tg.assert(
+		(await readFileText(artifacts.pkgA, "lib/pkgAOption")) ===
+			"after serialization",
+	);
+}
+
+async function testPythonConfig() {
+	const config = await python.deps.build();
+	const artifacts = await std.deps.artifacts(config, {
+		build: linux,
+		dependencies: { python: { message: "from Python" } },
+		host: linux,
+		subtreeSdk: "none",
+	});
+	tg.assert(artifacts.python !== undefined);
+	tg.assert(await readFileText(artifacts.python, "message") === "from Python");
+}
+
+export async function dependencyContext(arg: std.args.BasePackageArg) {
+	return tg.directory({ "lib/context.json": tg.file(JSON.stringify(arg)) });
+}
+
+async function testSubtreeArguments() {
+	const config = await std.deps.toConfig({
+		inherited: dependencyContext,
+		overridden: dependencyContext,
+	});
+	const artifacts = await std.deps.artifacts(config, {
+		build: linux,
+		dependencies: {
+			overridden: {
+				sdk: { proxyCompiler: false },
+				subtreeEnv: { SHARED: "override" },
+			},
+		},
+		env: { LOCAL_ONLY: "local" },
+		host: linux,
+		sdk: { proxyCompiler: true },
+		subtreeEnv: Promise.resolve({ SHARED: "shared" }),
+		subtreeSdk: "none",
+	});
+	tg.assert(
+		artifacts.inherited !== undefined && artifacts.overridden !== undefined,
+	);
+	const inherited = JSON.parse(
+		await readFileText(artifacts.inherited, "lib/context.json"),
+	);
+	const overridden = JSON.parse(
+		await readFileText(artifacts.overridden, "lib/context.json"),
+	);
+	tg.assert(inherited.sdk === "none" && inherited.subtreeSdk === "none");
+	tg.assert(
+		inherited.subtreeEnv.SHARED === "shared" && inherited.env === undefined,
+	);
+	tg.assert(
+		overridden.sdk.proxyCompiler === false && overridden.subtreeSdk === "none",
+	);
+	tg.assert(overridden.subtreeEnv.SHARED === "override");
+}
 
 // Deps carrying conditions, for testing which dependencies are included by default.
 const conditionalDeps = std.deps({
@@ -143,7 +260,10 @@ export async function parentBuild(
 	const libFiles: Record<string, tg.Unresolved<tg.File>> = {};
 	if (resolved.parentOption)
 		libFiles.parentOption = tg.file(resolved.parentOption);
-	const artifacts = await std.deps.artifacts(leafDeps, resolved);
+	const artifacts = await std.deps.artifacts(
+		std.deps.toConfig(leafDeps),
+		resolved,
+	);
 	const leafDir = artifacts.leaf;
 	if (leafDir) {
 		// Read pkgAOption from leaf (which uses pkgABuild).
@@ -184,7 +304,10 @@ async function testOptionsPassToArtifacts() {
 			},
 		},
 	);
-	const artifacts = await std.deps.artifacts(mockDeps, resolved);
+	const artifacts = await std.deps.artifacts(
+		std.deps.toConfig(mockDeps),
+		resolved,
+	);
 
 	// PkgA receives its package-specific option and builder options.
 	const pkgA = artifacts.pkgA;
@@ -246,7 +369,10 @@ async function testTransitiveDependencyArgs() {
 			},
 		},
 	);
-	const artifacts = await std.deps.artifacts(transitiveDeps, resolved);
+	const artifacts = await std.deps.artifacts(
+		std.deps.toConfig(transitiveDeps),
+		resolved,
+	);
 	const parentDir = artifacts.parent;
 	tg.assert(parentDir !== undefined);
 
@@ -265,7 +391,10 @@ async function testKindSubdirectoryFiltering() {
 		build: "x86_64-unknown-linux-gnu",
 		host: "aarch64-unknown-linux-gnu",
 	});
-	const artifacts = await std.deps.artifacts(mockDeps, resolved);
+	const artifacts = await std.deps.artifacts(
+		std.deps.toConfig(mockDeps),
+		resolved,
+	);
 
 	// Runtime keeps lib and include, not bin.
 	const runtime = artifacts.runtimeDep;
@@ -297,7 +426,10 @@ async function testBuildtimeKindSetsBuildAsHost() {
 		build: "x86_64-unknown-linux-gnu",
 		host: "aarch64-unknown-linux-gnu",
 	});
-	const artifacts = await std.deps.artifacts(mockDeps, resolved);
+	const artifacts = await std.deps.artifacts(
+		std.deps.toConfig(mockDeps),
+		resolved,
+	);
 
 	const buildtime = artifacts.buildtimeDep;
 	tg.assert(buildtime !== undefined);
@@ -321,7 +453,10 @@ export async function testDepsEnv() {
 		host: "x86_64-unknown-linux-gnu",
 		dependencies: { pkgA: { pkgAOption: "test-env" } },
 	});
-	const env = await std.deps.env(mockDeps, resolved);
+	const env = await std.deps.env(
+		std.deps.toConfig(mockDeps),
+		resolved,
+	);
 	tg.assert(env !== undefined, "deps.env returns env object");
 	tg.assert(typeof env === "object", "env is an object");
 }
@@ -332,7 +467,10 @@ async function testBooleanFlags() {
 		host: "x86_64-unknown-linux-gnu",
 		dependencies: { runtimeDep: false },
 	});
-	const artifacts1 = await std.deps.artifacts(mockDeps, resolved1);
+	const artifacts1 = await std.deps.artifacts(
+		std.deps.toConfig(mockDeps),
+		resolved1,
+	);
 	tg.assert(artifacts1.runtimeDep === undefined, "false disables dep");
 	tg.assert(artifacts1.buildtimeDep !== undefined, "other deps still build");
 
@@ -341,7 +479,10 @@ async function testBooleanFlags() {
 		host: "x86_64-unknown-linux-gnu",
 		dependencies: { runtimeDep: true },
 	});
-	const artifacts2 = await std.deps.artifacts(mockDeps, resolved2);
+	const artifacts2 = await std.deps.artifacts(
+		std.deps.toConfig(mockDeps),
+		resolved2,
+	);
 	tg.assert(artifacts2.runtimeDep !== undefined, "true builds with defaults");
 
 	// true then false: later false overrides earlier true.
@@ -422,7 +563,10 @@ async function testWhenExcludesDependency() {
 	const onDarwin = await std.packages.applyArgs<ConditionalDepsArg>({
 		host: darwin,
 	});
-	const darwinArtifacts = await std.deps.artifacts(conditionalDeps, onDarwin);
+	const darwinArtifacts = await std.deps.artifacts(
+		std.deps.toConfig(conditionalDeps),
+		onDarwin,
+	);
 	tg.assert(
 		darwinArtifacts.linuxOnly === undefined,
 		"a linux only dependency should not build for a darwin host",
@@ -436,7 +580,10 @@ async function testWhenExcludesDependency() {
 	const onLinux = await std.packages.applyArgs<ConditionalDepsArg>({
 		host: linux,
 	});
-	const linuxArtifacts = await std.deps.artifacts(conditionalDeps, onLinux);
+	const linuxArtifacts = await std.deps.artifacts(
+		std.deps.toConfig(conditionalDeps),
+		onLinux,
+	);
 	tg.assert(
 		linuxArtifacts.linuxOnly !== undefined,
 		"a linux only dependency should build for a linux host",
@@ -448,7 +595,10 @@ async function testCrossCondition() {
 		build: linux,
 		host: linux,
 	});
-	const nativeArtifacts = await std.deps.artifacts(conditionalDeps, native);
+	const nativeArtifacts = await std.deps.artifacts(
+		std.deps.toConfig(conditionalDeps),
+		native,
+	);
 	tg.assert(
 		nativeArtifacts.nativeOnly !== undefined,
 		"a native only dependency should build when the build matches the host",
@@ -458,7 +608,10 @@ async function testCrossCondition() {
 		build: linux,
 		host: darwin,
 	});
-	const crossArtifacts = await std.deps.artifacts(conditionalDeps, cross);
+	const crossArtifacts = await std.deps.artifacts(
+		std.deps.toConfig(conditionalDeps),
+		cross,
+	);
 	tg.assert(
 		crossArtifacts.nativeOnly === undefined,
 		"a native only dependency should not build for a cross build",
@@ -471,7 +624,10 @@ async function testExplicitArgOverridesWhen() {
 		host: darwin,
 		dependencies: { linuxOnly: true },
 	});
-	const forcedArtifacts = await std.deps.artifacts(conditionalDeps, forced);
+	const forcedArtifacts = await std.deps.artifacts(
+		std.deps.toConfig(conditionalDeps),
+		forced,
+	);
 	tg.assert(
 		forcedArtifacts.linuxOnly !== undefined,
 		"an explicit true should override the condition",
@@ -483,7 +639,7 @@ async function testExplicitArgOverridesWhen() {
 		dependencies: { linuxOnly: {} },
 	});
 	const withOptionsArtifacts = await std.deps.artifacts(
-		conditionalDeps,
+		std.deps.toConfig(conditionalDeps),
 		withOptions,
 	);
 	tg.assert(
@@ -496,7 +652,10 @@ async function testExplicitArgOverridesWhen() {
 		host: linux,
 		dependencies: { linuxOnly: false },
 	});
-	const disabledArtifacts = await std.deps.artifacts(conditionalDeps, disabled);
+	const disabledArtifacts = await std.deps.artifacts(
+		std.deps.toConfig(conditionalDeps),
+		disabled,
+	);
 	tg.assert(
 		disabledArtifacts.linuxOnly === undefined,
 		"an explicit false should override the condition",
@@ -508,11 +667,19 @@ async function testEnabledPredicate() {
 		host: darwin,
 	});
 	tg.assert(
-		!(await std.deps.enabled(conditionalDeps, onDarwin, "linuxOnly")),
+		!(await std.deps.enabled(
+			std.deps.toConfig(conditionalDeps),
+			onDarwin,
+			"linuxOnly",
+		)),
 		"the condition should exclude the dependency",
 	);
 	tg.assert(
-		await std.deps.enabled(conditionalDeps, onDarwin, "always"),
+		await std.deps.enabled(
+			std.deps.toConfig(conditionalDeps),
+			onDarwin,
+			"always",
+		),
 		"a dependency without a condition should be enabled",
 	);
 
@@ -521,7 +688,11 @@ async function testEnabledPredicate() {
 		dependencies: { linuxOnly: true },
 	});
 	tg.assert(
-		await std.deps.enabled(conditionalDeps, forced, "linuxOnly"),
+		await std.deps.enabled(
+			std.deps.toConfig(conditionalDeps),
+			forced,
+			"linuxOnly",
+		),
 		"an explicit true should enable the dependency",
 	);
 }
@@ -530,7 +701,10 @@ async function testConfigureArgsShorthands() {
 	const enabled = await std.packages.applyArgs<FlaggedDepsArg>({
 		host: linux,
 	});
-	const args = await std.deps.configureArgs(flaggedDeps, enabled);
+	const args = await std.deps.configureArgs(
+		std.deps.toConfig(flaggedDeps),
+		enabled,
+	);
 	tg.assert(args.includes("--with-lz4"), `expected --with-lz4 in ${args}`);
 	tg.assert(args.includes("--enable-nls"), `expected --enable-nls in ${args}`);
 
@@ -538,7 +712,10 @@ async function testConfigureArgsShorthands() {
 		host: linux,
 		dependencies: { lz4: false, nls: false },
 	});
-	const disabledArgs = await std.deps.configureArgs(flaggedDeps, disabled);
+	const disabledArgs = await std.deps.configureArgs(
+		std.deps.toConfig(flaggedDeps),
+		disabled,
+	);
 	tg.assert(
 		disabledArgs.includes("--without-lz4"),
 		`expected --without-lz4 in ${disabledArgs}`,
@@ -553,7 +730,10 @@ async function testConfigureArgsExplicitForms() {
 	const enabled = await std.packages.applyArgs<FlaggedDepsArg>({
 		host: linux,
 	});
-	const args = await std.deps.configureArgs(flaggedDeps, enabled);
+	const args = await std.deps.configureArgs(
+		std.deps.toConfig(flaggedDeps),
+		enabled,
+	);
 
 	// An explicit name replaces the dependency key.
 	tg.assert(
@@ -577,7 +757,10 @@ async function testConfigureArgsExplicitForms() {
 		host: linux,
 		dependencies: { positiveOnly: false, literal: false },
 	});
-	const disabledArgs = await std.deps.configureArgs(flaggedDeps, disabled);
+	const disabledArgs = await std.deps.configureArgs(
+		std.deps.toConfig(flaggedDeps),
+		disabled,
+	);
 
 	// An empty disabled list suppresses the negative form.
 	tg.assert(
@@ -595,7 +778,10 @@ async function testConfigureArgsRespectWhen() {
 	const onDarwin = await std.packages.applyArgs<FlaggedDepsArg>({
 		host: darwin,
 	});
-	const args = await std.deps.configureArgs(flaggedDeps, onDarwin);
+	const args = await std.deps.configureArgs(
+		std.deps.toConfig(flaggedDeps),
+		onDarwin,
+	);
 	tg.assert(
 		args.includes("--without-linuxFlag"),
 		`a condition should drive the flag, got ${args}`,
@@ -606,7 +792,10 @@ async function testConfigureArgsRespectWhen() {
 		host: darwin,
 		dependencies: { linuxFlag: true },
 	});
-	const forcedArgs = await std.deps.configureArgs(flaggedDeps, forced);
+	const forcedArgs = await std.deps.configureArgs(
+		std.deps.toConfig(flaggedDeps),
+		forced,
+	);
 	tg.assert(
 		forcedArgs.includes("--with-linuxFlag"),
 		`an explicit request should flip the flag, got ${forcedArgs}`,
@@ -616,7 +805,10 @@ async function testConfigureArgsRespectWhen() {
 async function testConfigureArgsIgnoreUndeclaredFlags() {
 	// This is the blast radius guarantee for the packages that have not opted in.
 	const resolved = await std.packages.applyArgs<MockDepsArg>({ host: linux });
-	const args = await std.deps.configureArgs(mockDeps, resolved);
+	const args = await std.deps.configureArgs(
+		std.deps.toConfig(mockDeps),
+		resolved,
+	);
 	tg.assert(
 		args.length === 0,
 		`a config without flags should contribute no arguments, got ${args}`,
@@ -644,7 +836,7 @@ async function testDepsContextNormalizesNulls() {
 	tg.assert(!("subtreeSdk" in ctx), "a null subtreeSdk is dropped");
 
 	// A resolved builder argument may be passed directly.
-	const artifacts = await std.deps.artifacts(mockDeps, {
+	const artifacts = await std.deps.artifacts(std.deps.toConfig(mockDeps), {
 		build: linux,
 		dependencies: null,
 		env: null,
@@ -693,7 +885,10 @@ async function testDependencyArtifactOverride() {
 		host: linux,
 		dependencies: { fullDep: prebuilt },
 	});
-	const artifacts = await std.deps.artifacts(mockDeps, resolved);
+	const artifacts = await std.deps.artifacts(
+		std.deps.toConfig(mockDeps),
+		resolved,
+	);
 	const fullDep = artifacts.fullDep;
 	tg.assert(fullDep !== undefined, "the injected artifact should be used");
 	const tool = await fullDep
@@ -716,7 +911,10 @@ async function testDependencyArtifactOverrideFiltersByKind() {
 		host: linux,
 		dependencies: { buildtimeDep: prebuilt },
 	});
-	const artifacts = await std.deps.artifacts(mockDeps, resolved);
+	const artifacts = await std.deps.artifacts(
+		std.deps.toConfig(mockDeps),
+		resolved,
+	);
 	const buildtimeDep = artifacts.buildtimeDep;
 	tg.assert(buildtimeDep !== undefined, "the injected artifact should be used");
 	tg.assert(
@@ -922,6 +1120,10 @@ async function testPhaseMerge() {
 
 export async function test() {
 	await Promise.all([
+		testConfigConstruction(),
+		testConfigRoundTrip(),
+		testPythonConfig(),
+		testSubtreeArguments(),
 		testOptionsPassToArtifacts(),
 		testBaseFieldsPreserved(),
 		testTransitiveDependencyArgs(),

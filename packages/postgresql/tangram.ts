@@ -74,7 +74,7 @@ export async function source() {
 	return await std.patch(output, patches);
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		flex: { build: flex.build, kind: "buildtime" },
 		icu: icu.build,
@@ -87,13 +87,18 @@ export function deps() {
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 		},
 		...args,
 	);
@@ -101,7 +106,7 @@ export async function build(...args: tg.Args<Arg>) {
 	const os = std.triple.os(arg.host);
 
 	// Get individual artifacts for cross-compilation library paths.
-	const artifacts = await std.deps.artifacts(deps, {
+	const artifacts = await std.deps.artifacts(await deps(), {
 		build: arg.build,
 		host: arg.host,
 		...std.args.optional("sdk", arg.sdk),

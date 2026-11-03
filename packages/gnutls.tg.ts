@@ -28,7 +28,7 @@ export async function source() {
 		.then(std.directory.unwrap);
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		gmp: gmp.build,
 		nettle: nettle.build,
@@ -37,13 +37,18 @@ export function deps() {
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
 
-export function build(...args: tg.Args<Arg>) {
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
+
+export async function build(...args: tg.Args<Arg>) {
 	return std.autotools.build(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 			env: {
 				CFLAGS: tg.Mutation.prefix(
 					"-Wno-implicit-int -Wno-deprecated-non-prototype",

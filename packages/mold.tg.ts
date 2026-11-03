@@ -31,7 +31,7 @@ export function source() {
 	});
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		zstd: {
 			build: zstd.build,
@@ -41,13 +41,17 @@ export function deps() {
 	});
 }
 
-export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
+export type Arg = cmake.Arg & std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
 	const resolved = await cmake.arg(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 			phases: {
 				configure: {
 					args: ["-DCMAKE_BUILD_TYPE=Release"],

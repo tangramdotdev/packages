@@ -64,7 +64,7 @@ export async function source(
 		.then(std.directory.unwrap);
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		bzip2: bzip2.build,
 		libffi: libffi.build,
@@ -79,8 +79,12 @@ export function deps() {
 	});
 }
 
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
 export type Arg = std.autotools.Arg &
-	std.deps.Arg<typeof deps> & {
+	std.deps.Arg<typeof dependencyDeclarations> & {
 		/** Optional set of requirements, either as a requirements.txt file or as a string passed to pip install.
 		 *
 		 * Hashes are required!
@@ -126,7 +130,7 @@ export async function self(...args: tg.Args<Arg>) {
 	const enableOptimizations = enableOptimizations_ ?? false;
 
 	// Get individual artifacts for libraryPaths wrapping.
-	const artifacts = await std.deps.artifacts(deps, {
+	const artifacts = await std.deps.artifacts(await deps(), {
 		build,
 		host,
 		...std.args.optional("sdk", customOptions.sdk),
@@ -152,7 +156,7 @@ export async function self(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: await source(versionKey),
-			deps,
+			deps: await tg.command(deps),
 			opt: "3",
 			setRuntimeLibraryPath: true,
 			phases: {

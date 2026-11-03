@@ -30,19 +30,23 @@ export async function source() {
 		.then(std.directory.unwrap);
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		ogg: ogg.build,
 	});
 }
 
-export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
 
-export function build(...args: tg.Args<Arg>) {
+export type Arg = cmake.Arg & std.deps.Arg<typeof dependencyDeclarations>;
+
+export async function build(...args: tg.Args<Arg>) {
 	return cmake.build(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 		},
 		...args,
 	);

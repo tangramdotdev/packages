@@ -41,7 +41,7 @@ async function source() {
 		.then((d) => std.patch(d, patches));
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		libiconv: {
 			build: libiconv.build,
@@ -55,13 +55,18 @@ export function deps() {
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 			buildInTree: true,
 			developmentTools: true,
 			// NOTE - this define is included in libxml/encoding.h but not expanding.

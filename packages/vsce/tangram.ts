@@ -48,7 +48,7 @@ export async function build(...args: tg.Args<Arg>) {
 
 	return node.build(
 		{
-			env,
+			...std.args.optional("env", env),
 			host,
 			source: source_ ?? source(),
 			packageLock,

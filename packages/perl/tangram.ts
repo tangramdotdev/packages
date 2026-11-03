@@ -31,14 +31,19 @@ export async function source() {
 		.then((source) => std.patch(source, patches));
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		libffi: libffi.build,
 		zlib: zlib.build,
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
 	const host =
@@ -80,7 +85,7 @@ export async function build(...args: tg.Args<Arg>) {
 
 	const arg = await std.autotools.arg(
 		{
-			deps,
+			deps: await tg.command(deps),
 			source: source(),
 			buildInTree: true,
 			prefixArg: "-Dprefix=",

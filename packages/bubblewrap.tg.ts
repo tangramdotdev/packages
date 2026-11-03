@@ -29,10 +29,14 @@ export function source() {
 		.then(std.directory.unwrap);
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		libcap: libcap.build,
 	});
+}
+
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
 }
 
 export type Arg = meson.BuildArg;
@@ -42,7 +46,7 @@ export async function build(...args: tg.Args<Arg>) {
 	const resolved = await meson.arg(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 			phases: {
 				configure: {
 					args: ["-Dman=disabled", "-Dselinux=disabled", "-Dtests=false"],

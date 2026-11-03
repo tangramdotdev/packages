@@ -4,12 +4,16 @@ import * as std from "std" with { source: "./std" };
 import * as texinfo from "texinfo" with { source: "./texinfo.tg.ts" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		autoconf: autoconf.build,
 		perl: { build: perl.build, kind: "buildtime" },
 		zlib: zlib.build,
 	});
+}
+
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
 }
 
 export const metadata = {
@@ -36,7 +40,8 @@ export function source() {
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
 	// Get build triple first for texinfo (buildtime only).
@@ -54,14 +59,14 @@ export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 			// texinfo returns an env file, not a directory, so add it manually.
 			env: texinfo.build({ build: build_, host: build_ }),
 		},
 		...args,
 	);
 
-	const { perl: perlArtifact } = await std.deps.artifacts(deps, {
+	const { perl: perlArtifact } = await std.deps.artifacts(await deps(), {
 		build: arg.build,
 		host: arg.host,
 	});

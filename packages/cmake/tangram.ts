@@ -44,7 +44,7 @@ export async function source() {
 		.then((source) => std.patch(source, patches));
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		curl: curl.build,
 		libiconv: {
@@ -60,19 +60,28 @@ export function deps() {
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
 
 /** Build `cmake`. */
 export async function self(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
-		{ source: source(), deps, setRuntimeLibraryPath: true },
+		{
+			deps: await tg.command(deps),
+			setRuntimeLibraryPath: true,
+			source: source(),
+		},
 		...args,
 	);
 	const { build: build_, host, source: sourceDir } = arg;
 	const os = std.triple.os(host);
 
 	// Get individual artifacts for env and libraryPaths wrapping.
-	const artifacts = await std.deps.artifacts(deps, {
+	const artifacts = await std.deps.artifacts(await deps(), {
 		build: build_,
 		host,
 		...std.args.optional("sdk", arg.sdk),

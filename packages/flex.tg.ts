@@ -31,16 +31,24 @@ export function source() {
 	});
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		help2man: { build: help2man.build, kind: "buildtime" },
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
-	const arg = await std.autotools.arg({ source: source(), deps }, ...args);
+	const arg = await std.autotools.arg(
+		{ deps: await tg.command(deps), source: source() },
+		...args,
+	);
 	// texinfo.build returns a file, not a directory, so add it to env directly.
 	const texinfoEnv = texinfo.build({
 		build: arg.build,

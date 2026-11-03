@@ -68,7 +68,7 @@ export function source() {
 	return std.patch(source, progrelocFix);
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		acl: {
 			build: acl.build,
@@ -90,13 +90,18 @@ export function deps() {
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
 
 export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 		},
 		...args,
 	);
@@ -152,7 +157,7 @@ export async function build(...args: tg.Args<Arg>) {
 	// transitive library paths (libiconv, libacl, libattr) to its wrapper.
 	if (os === "linux") {
 		const { acl: aclArtifact, attr: attrArtifact } = await std.deps.artifacts(
-			deps,
+			await deps(),
 			{
 				build: arg.build,
 				host: arg.host,

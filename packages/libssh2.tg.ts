@@ -32,17 +32,25 @@ export async function source() {
 	});
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		openssl: openssl.build,
 		zlib: zlib.build,
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
 
-export function build(...args: tg.Args<Arg>) {
-	return std.autotools.build({ source: source(), deps }, ...args);
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
+
+export async function build(...args: tg.Args<Arg>) {
+	return std.autotools.build(
+		{ deps: await tg.command(deps), source: source() },
+		...args,
+	);
 }
 
 export default build;

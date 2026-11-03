@@ -154,12 +154,11 @@ export type ResolvedArg = Omit<Arg, "deps" | "env"> & {
 };
 
 /** Resolve nodejs args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
-export async function arg(...args: tg.Args<any>): Promise<ResolvedArg> {
-	// biome-ignore lint/suspicious/noExplicitAny: Arg contains non-Value types (deps).
+export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 	const collect = await tg.Args.apply<
-		any,
-		tg.ValueOrMaybeMutationMap<any>,
-		any
+		Arg,
+		tg.ValueOrMaybeMutationMap<Arg>,
+		Arg
 	>({
 		args,
 		map: async (arg) => arg,
@@ -192,10 +191,10 @@ export async function arg(...args: tg.Args<any>): Promise<ResolvedArg> {
 		? await std.deps.env(depsConfig, {
 				build,
 				host,
-				sdk: rest.sdk,
-				env: userEnv,
-				subtreeEnv: rest.subtreeEnv,
-				subtreeSdk: rest.subtreeSdk,
+				...std.args.optional("sdk", rest.sdk),
+				...std.args.optional("env", userEnv),
+				...std.args.optional("subtreeEnv", rest.subtreeEnv),
+				...std.args.optional("subtreeSdk", rest.subtreeSdk),
 			})
 		: undefined;
 
@@ -211,8 +210,7 @@ export async function arg(...args: tg.Args<any>): Promise<ResolvedArg> {
 	};
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: Args are contravariant, requiring type erasure here.
-export async function build(...args: tg.Args<any>) {
+export async function build(...args: tg.Args<Arg>) {
 	const resolved = await arg(...args);
 	const {
 		build,

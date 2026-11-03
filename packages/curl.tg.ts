@@ -36,7 +36,7 @@ export function source() {
 	});
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		libiconv: {
 			build: libiconv.build,
@@ -50,12 +50,17 @@ export function deps() {
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
 
-export function build(...args: tg.Args<Arg>) {
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
+
+export async function build(...args: tg.Args<Arg>) {
 	return std.autotools.build(
 		{
-			deps,
+			deps: await tg.command(deps),
 			source: source(),
 			phases: {
 				configure: {

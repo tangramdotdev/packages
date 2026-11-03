@@ -52,7 +52,7 @@ export async function build(...args: tg.Args<Arg>) {
 	const features: Array<string> = [];
 	// Only include openssl deps if nativeTls is enabled.
 	const deps = nativeTls
-		? std.deps({
+		? await std.deps.toConfig({
 				openssl: {
 					build: openssl,
 					kind: "runtime",

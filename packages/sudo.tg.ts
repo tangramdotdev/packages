@@ -31,15 +31,19 @@ export async function source(): Promise<tg.Directory> {
 	});
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		coreutils: { build: coreutils.build, kind: "buildtime" },
 		tzdb: { build: tzdb.build, kind: "full" },
 	});
 }
 
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
+
 export type Arg = std.autotools.Arg &
-	std.deps.Arg<typeof deps> & {
+	std.deps.Arg<typeof dependencyDeclarations> & {
 		keepPath?: boolean;
 	};
 
@@ -59,7 +63,7 @@ export async function build(...args: tg.Args<Arg>) {
 	const host = customOptions.host ?? std.triple.host();
 
 	const { tzdb: tzdbArtifact, coreutils: coreutilsArtifact } =
-		await std.deps.artifacts(deps, { build: build_, host });
+		await std.deps.artifacts(await deps(), { build: build_, host });
 	tg.assert(tzdbArtifact !== undefined);
 	tg.assert(coreutilsArtifact !== undefined);
 
@@ -104,7 +108,7 @@ export async function build(...args: tg.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 			phases,
 		},
 		...args,

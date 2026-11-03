@@ -51,7 +51,7 @@ export async function source() {
 	return source;
 }
 
-export function deps() {
+function dependencyDeclarations() {
 	return std.deps({
 		acl: {
 			build: acl.build,
@@ -76,13 +76,18 @@ export function deps() {
 	});
 }
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export async function deps() {
+	return std.deps.toConfig(dependencyDeclarations());
+}
 
-export function build(...args: tg.Args<Arg>) {
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof dependencyDeclarations>;
+
+export async function build(...args: tg.Args<Arg>) {
 	return std.autotools.build(
 		{
 			source: source(),
-			deps,
+			deps: await tg.command(deps),
 			env: { FORCE_UNSAFE_CONFIGURE: true },
 		},
 		...args,
