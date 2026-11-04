@@ -1,4 +1,5 @@
 import * as std from "./tangram.ts";
+import * as python from "./packages_test.tg.py";
 
 function assertPhase(
 	phase: std.phases.Phase | undefined,
@@ -86,43 +87,200 @@ export async function fullDepBuild(...args: tg.Args<std.args.BasePackageArg>) {
 }
 
 // Deps: distinct packages with shared builder pattern, plus kind testing.
-const mockDeps = std.deps({
-	pkgA: pkgABuild,
-	pkgB: pkgBBuild,
-	runtimeDep: fullDepBuild,
-	buildtimeDep: { build: fullDepBuild, kind: "buildtime" },
-	fullDep: { build: fullDepBuild, kind: "full" },
-});
+export function mockDeps() {
+	return std.deps({
+		pkgA: pkgABuild,
+		pkgB: { build: pkgBBuild },
+		runtimeDep: fullDepBuild,
+		buildtimeDep: { build: fullDepBuild, kind: "buildtime" },
+		fullDep: { build: fullDepBuild, kind: "full" },
+	});
+}
 
 type MockDepsArg = std.args.BasePackageArg & std.deps.Arg<typeof mockDeps>;
 
+// Check that each dependency retains its own argument type.
+type AcceptMockDeps<T extends std.deps.Arg<typeof mockDeps>> = T;
+// @ts-expect-error The option belongs to pkgB, not pkgA.
+type WrongPackageOption = AcceptMockDeps<{
+	dependencies: { pkgA: { pkgBOption: string } };
+}>;
+// @ts-expect-error The package option requires a string.
+type WrongOptionType = AcceptMockDeps<{
+	dependencies: { pkgB: { pkgBOption: number } };
+}>;
+
+// Check that a dependency's command is an opaque handle with no additional fields.
+type AssertNever<T extends never> = T;
+type OpaqueBuild = AssertNever<
+	Exclude<
+		keyof Awaited<ReturnType<typeof mockDeps>>["pkgA"]["build"],
+		keyof tg.Command
+	>
+>;
+
+// Check that a resolved build function retains its package-specific argument type. The function is not exported, because the inferred type of a resolved command cannot be serialized.
+async function commandDeps() {
+	const pkgA = await tg.resolve(pkgABuild);
+	return std.deps({
+		command: pkgA,
+		commandWithMetadata: { build: pkgA, kind: "full" },
+	});
+}
+
+type CommandDepsArg = std.args.BasePackageArg &
+	std.deps.Arg<typeof commandDeps>;
+type AcceptCommandDeps<T extends std.deps.Arg<typeof commandDeps>> = T;
+type CommandOption = AcceptCommandDeps<{
+	dependencies: {
+		command: { pkgAOption: string };
+		commandWithMetadata: { pkgAOption: string };
+	};
+}>;
+// @ts-expect-error The option belongs to pkgB, not pkgA.
+type WrongCommandOption = AcceptCommandDeps<{
+	dependencies: { command: { pkgBOption: string } };
+}>;
+// @ts-expect-error The package option requires a string.
+type WrongCommandOptionType = AcceptCommandDeps<{
+	dependencies: { commandWithMetadata: { pkgAOption: number } };
+}>;
+
+// Check that a dependency retains an argument type that does not satisfy the base argument, which is true of the autotools argument.
+async function autotoolsDeps() {
+	return std.deps({
+		fromCommand: await tg.resolve(std.autotools.build),
+		fromFunction: std.autotools.build,
+	});
+}
+
+type AcceptAutotoolsDeps<T extends std.deps.Arg<typeof autotoolsDeps>> = T;
+type AutotoolsOption = AcceptAutotoolsDeps<{
+	dependencies: {
+		fromCommand: { buildInTree: boolean };
+		fromFunction: { buildInTree: boolean };
+	};
+}>;
+// @ts-expect-error The option requires a boolean.
+type WrongAutotoolsCommandOption = AcceptAutotoolsDeps<{
+	dependencies: { fromCommand: { buildInTree: string } };
+}>;
+// @ts-expect-error The option requires a boolean.
+type WrongAutotoolsFunctionOption = AcceptAutotoolsDeps<{
+	dependencies: { fromFunction: { buildInTree: string } };
+}>;
+
+async function testCommandInputArguments() {
+	const resolved = await std.packages.applyArgs<CommandDepsArg>({
+		dependencies: {
+			command: { pkgAOption: "from a command" },
+			commandWithMetadata: { pkgAOption: "from a spec" },
+		},
+		host: linux,
+	});
+	const artifacts = await std.deps.artifacts(commandDeps(), resolved);
+	tg.assert(
+		artifacts.command !== undefined &&
+			artifacts.commandWithMetadata !== undefined,
+	);
+	tg.assert(
+		(await readFileText(artifacts.command, "lib/pkgAOption")) ===
+			"from a command",
+	);
+	tg.assert(
+		(await readFileText(artifacts.commandWithMetadata, "lib/pkgAOption")) ===
+			"from a spec",
+	);
+}
+
+export async function unbuiltDependency(): Promise<tg.Directory> {
+	throw new Error("the dependency executed while constructing a config");
+}
+
+async function testConfigConstruction() {
+	const command = await tg.command(unbuiltDependency);
+	const when = { cross: false };
+	const config = await std.deps({
+		fromCommand: command,
+		fromFunction: unbuiltDependency,
+		withMetadata: { build: command, flag: "with", kind: "full", when },
+	});
+	tg.assert(tg.Value.is(config), "a config should be a value");
+	tg.assert(config.fromFunction.build instanceof tg.Command);
+	tg.assert(config.fromFunction.kind === "runtime");
+	tg.assert(
+		!("flag" in config.fromFunction) && !("when" in config.fromFunction),
+		"the unset optional fields should be omitted",
+	);
+	tg.assert(config.fromCommand.build === command);
+	tg.assert(config.withMetadata.build === command);
+	tg.assert(config.withMetadata.kind === "full");
+	tg.assert(config.withMetadata.flag === "with");
+	tg.assert(config.withMetadata.when === when);
+}
+
+async function testConfigRoundTrip() {
+	const config = await std.deps.resolveConfig(mockDeps);
+	tg.assert(config !== undefined);
+	tg.assert(config.pkgA?.build instanceof tg.Command);
+	const artifacts = await std.deps.artifacts(config, {
+		build: linux,
+		dependencies: { pkgA: { pkgAOption: "after serialization" }, pkgB: false },
+		host: linux,
+		subtreeSdk: "none",
+	});
+	tg.assert(artifacts.pkgA !== undefined && artifacts.pkgB === undefined);
+	tg.assert(
+		(await readFileText(artifacts.pkgA, "lib/pkgAOption")) ===
+			"after serialization",
+	);
+}
+
+async function testPythonConfig() {
+	const config = await python.deps.build();
+	const artifacts = await std.deps.artifacts(config, {
+		build: linux,
+		dependencies: { python: { message: "from Python" } },
+		host: linux,
+		subtreeSdk: "none",
+	});
+	tg.assert(artifacts.python !== undefined);
+	tg.assert(
+		(await readFileText(artifacts.python, "message")) === "from Python",
+	);
+}
+
 // Deps carrying conditions, for testing which dependencies are included by default.
-const conditionalDeps = std.deps({
-	always: fullDepBuild,
-	linuxOnly: { build: fullDepBuild, when: { hostOs: "linux" } },
-	nativeOnly: { build: fullDepBuild, when: { not: { cross: true } } },
-});
+export function conditionalDeps() {
+	return std.deps({
+		always: fullDepBuild,
+		linuxOnly: { build: fullDepBuild, when: { hostOs: "linux" } },
+		nativeOnly: { build: fullDepBuild, when: { not: { cross: true } } },
+	});
+}
 
 type ConditionalDepsArg = std.args.BasePackageArg &
 	std.deps.Arg<typeof conditionalDeps>;
 
 // Deps carrying configure flags, exercising every supported flag shape.
-const flaggedDeps = std.deps({
-	lz4: { build: fullDepBuild, flag: "with" },
-	nls: { build: fullDepBuild, flag: "enable" },
-	renamed: { build: fullDepBuild, flag: { with: "other-name" } },
-	positiveOnly: { build: fullDepBuild, flag: { with: "icu", disabled: [] } },
-	literal: {
-		build: fullDepBuild,
-		flag: { enabled: ["--with-a", "--with-b"], disabled: ["--without-a"] },
-	},
-	unflagged: fullDepBuild,
-	linuxFlag: {
-		build: fullDepBuild,
-		flag: "with",
-		when: { hostOs: "linux" },
-	},
-});
+export function flaggedDeps() {
+	return std.deps({
+		lz4: { build: fullDepBuild, flag: "with" },
+		nls: { build: fullDepBuild, flag: "enable" },
+		renamed: { build: fullDepBuild, flag: { with: "other-name" } },
+		positiveOnly: { build: fullDepBuild, flag: { with: "icu", disabled: [] } },
+		literal: {
+			build: fullDepBuild,
+			flag: { enabled: ["--with-a", "--with-b"], disabled: ["--without-a"] },
+		},
+		unflagged: fullDepBuild,
+		linuxFlag: {
+			build: fullDepBuild,
+			flag: "with",
+			when: { hostOs: "linux" },
+		},
+	});
+}
 
 type FlaggedDepsArg = std.args.BasePackageArg &
 	std.deps.Arg<typeof flaggedDeps>;
@@ -131,7 +289,9 @@ const darwin = "aarch64-apple-darwin";
 const linux = "x86_64-unknown-linux-gnu";
 
 // Parent/leaf for transitive dependency testing.
-const leafDeps = std.deps({ leaf: pkgABuild });
+export function leafDeps() {
+	return std.deps({ leaf: pkgABuild });
+}
 
 export type ParentArg = std.args.BasePackageArg &
 	std.deps.Arg<typeof leafDeps> & { parentOption?: string };
@@ -155,7 +315,9 @@ export async function parentBuild(
 	return tg.directory({ lib: tg.directory(libFiles) });
 }
 
-const transitiveDeps = std.deps({ parent: parentBuild });
+export function transitiveDeps() {
+	return std.deps({ parent: parentBuild });
+}
 
 type TransitiveArg = std.args.BasePackageArg &
 	std.deps.Arg<typeof transitiveDeps>;
@@ -922,6 +1084,10 @@ async function testPhaseMerge() {
 
 export async function test() {
 	await Promise.all([
+		testConfigConstruction(),
+		testConfigRoundTrip(),
+		testPythonConfig(),
+		testCommandInputArguments(),
 		testOptionsPassToArtifacts(),
 		testBaseFieldsPreserved(),
 		testTransitiveDependencyArgs(),
