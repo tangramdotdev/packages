@@ -130,18 +130,19 @@ export type RunArg = CommonArg & {
 	targetDir?: true | string;
 };
 
-/** The result of runArg() - a RunArg with build and host guaranteed to be resolved. */
-export type ResolvedRunArg = Omit<RunArg, "build" | "host"> & {
+/** The resolved args for creating a command, with `targetDir` resolved as `hostTargetDir`. */
+export type ResolvedRunArg = Omit<RunArg, "build" | "host" | "targetDir"> & {
 	build: string;
 	host: string;
+	hostTargetDir?: true | string;
 };
 
-/** Resolve run args to a mutable arg object. Returns a RunArg with build and host guaranteed to be resolved. */
+/** Resolve run args to a mutable arg object with the build and host machines and the host target directory. */
 export async function runArg(
 	...args: tg.Args<RunArg>
 ): Promise<ResolvedRunArg> {
-	const { targetDir, ...rest } = await mergeArgs(...args);
-	return { ...rest, ...(targetDir ? { targetDir } : {}) };
+	const { hostTargetDir, ...rest } = await mergeArgs(...args);
+	return { ...rest, ...(hostTargetDir ? { hostTargetDir } : {}) };
 }
 
 /** The fields of both `Arg` and `RunArg`, which `build` merges before it selects a mode from `targetDir`. */
@@ -166,7 +167,7 @@ async function mergeArgs(...args: tg.Args<MergedArg>) {
 		},
 	});
 
-	const { build: build_, host: host_, ...rest } = collect;
+	const { build: build_, host: host_, targetDir: hostTargetDir, ...rest } = collect;
 
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
@@ -174,6 +175,7 @@ async function mergeArgs(...args: tg.Args<MergedArg>) {
 	return {
 		build,
 		host,
+		hostTargetDir,
 		...rest,
 	};
 }
@@ -182,7 +184,7 @@ async function mergeArgs(...args: tg.Args<MergedArg>) {
 function requireSource(
 	merged: Awaited<ReturnType<typeof mergeArgs>>,
 ): ResolvedArg {
-	const { source, targetDir: _, ...rest } = merged;
+	const { source, hostTargetDir: _, ...rest } = merged;
 	tg.assert(source !== undefined, "source must be defined");
 	return { source, ...rest };
 }
@@ -223,6 +225,7 @@ async function runCommand(resolved: ResolvedRunArg): Promise<tg.Command> {
 		disableDefaultFeatures = false,
 		features = [],
 		host,
+		hostTargetDir,
 		manifestSubdir,
 		parallelJobs,
 		passthrough = true,
@@ -230,7 +233,6 @@ async function runCommand(resolved: ResolvedRunArg): Promise<tg.Command> {
 		proxy = true,
 		source,
 		target: target_,
-		targetDir,
 		useCargoVendor = false,
 	} = resolved;
 	const rustHost = rustTriple(host);
@@ -285,8 +287,8 @@ VENDORCFG`;
 	];
 
 	// Use the environment rather than `--target-dir` because the trailing arguments can select a subcommand that rejects the flag.
-	if (typeof targetDir === "string") {
-		const quoted = targetDir.replaceAll("'", "'\\''");
+	if (typeof hostTargetDir === "string") {
+		const quoted = hostTargetDir.replaceAll("'", "'\\''");
 		exports.push(`export CARGO_TARGET_DIR='${quoted}'`);
 	}
 
@@ -418,9 +420,9 @@ export async function build(
 	...args: tg.Args<MergedArg>
 ): Promise<tg.Command | tg.Directory> {
 	const merged = await mergeArgs(...args);
-	const { targetDir } = merged;
-	if (targetDir === true || typeof targetDir === "string") {
-		return runCommand({ ...merged, targetDir });
+	const { hostTargetDir } = merged;
+	if (hostTargetDir === true || typeof hostTargetDir === "string") {
+		return runCommand({ ...merged, hostTargetDir });
 	}
 	const resolved = requireSource(merged);
 	const depsEnv = await resolveDepsEnv(resolved);
