@@ -561,7 +561,7 @@ linker = "${hostLinker}"`;
 	// Keep Cargo's target directory and home in the temporary workspace and write the generated configuration.
 	const preparePathCommands = [
 		tg`mkdir -p "$PWD/target" "${tg.output}/bin"`,
-		tg`export TARGET_DIR="$(realpath "$PWD/target")"`,
+		tg`SCRATCH_TARGET_DIR="$(realpath "$PWD/target")"`,
 		tg`export CARGO_HOME="$(mktemp -d)"`,
 		tg`cargo_config_path="$PWD/config.toml"\necho '${cargoConfig}' > "$cargo_config_path"`,
 	];
@@ -579,7 +579,7 @@ linker = "${hostLinker}"`;
 		: `"Cargo.toml"`;
 	const cargoArgs = [
 		`${profileFlag} ${profile}`,
-		`--target-dir "$TARGET_DIR"`,
+		`--target-dir "$SCRATCH_TARGET_DIR"`,
 		`--manifest-path "$TGRUSTC_SOURCE_DIR/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
 		"--target $RUST_TARGET",
@@ -617,7 +617,7 @@ linker = "${hostLinker}"`;
 	// Copy the executables with their dependency metadata before the temporary target directory is discarded.
 	const profileDir = profile === "dev" ? "debug" : profile;
 	const install = tg`
-		for executable in "$TARGET_DIR/${target}/${profileDir}"/*; do
+		for executable in "$SCRATCH_TARGET_DIR/${target}/${profileDir}"/*; do
 			if [ -f "$executable" ] && [ -x "$executable" ]; then
 				cp -aL "$executable" "${tg.output}/bin/"
 			fi
@@ -632,7 +632,7 @@ linker = "${hostLinker}"`;
 		buildCommand,
 		install,
 		timings
-			? tg`if [ -d "$TARGET_DIR/cargo-timings" ]; then cp -R "$TARGET_DIR/cargo-timings" "${tg.output}/cargo-timings"; fi`
+			? tg`if [ -d "$SCRATCH_TARGET_DIR/cargo-timings" ]; then cp -R "$SCRATCH_TARGET_DIR/cargo-timings" "${tg.output}/cargo-timings"; fi`
 			: null,
 	);
 
