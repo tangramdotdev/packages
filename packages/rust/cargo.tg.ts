@@ -34,7 +34,7 @@ type CommonArg = {
 	/** Additional script to run prior to the build. */
 	pre?: tg.Template.Arg;
 
-	/** Whether to use the tangram_rustc proxy. Default: false for a sandboxed build, and true for a hybrid build, including `cargo.run`. Set this to false on a hybrid build to compile every crate with the host's toolchain. */
+	/** Whether to use the tangram_rustc proxy. Defaults to false for sandboxed builds and true when Cargo runs on the host, including `cargo.run`. When Cargo runs on the host, disabling the proxy compiles every crate with the host's toolchain. */
 	proxy?: boolean;
 
 	/** SDK configuration to use during the build. */
@@ -118,7 +118,7 @@ export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 	return requireSource(await mergeArgs(...args));
 }
 
-/** The args for a hybrid build, which runs Cargo on the host and compiles dependencies through Tangram by default. */
+/** The args for running Cargo on the host, with dependencies compiled through Tangram by default. */
 export type RunArg = CommonArg & {
 	/** Cargo.lock file for vendoring (alternative to providing full source). */
 	cargoLock?: tg.File;
@@ -208,13 +208,13 @@ async function resolveDepsEnv(
 	});
 }
 
-/** Create the command for a hybrid build. Uses the host's default target directory and enables the rustc proxy unless overridden. */
+/** Create a command to run Cargo on the host. The command uses the host's default target directory and enables the rustc proxy unless overridden. */
 export async function run(...args: tg.Args<RunArg>): Promise<tg.Command> {
-	return hybrid(await runArg(...args));
+	return runCommand(await runArg(...args));
 }
 
-/** Create the command for a hybrid build, which `tg run -b` runs on the host with the trailing arguments passed to Cargo. */
-async function hybrid(resolved: ResolvedRunArg): Promise<tg.Command> {
+/** Create a command for `tg run -b`, which runs Cargo on the host and forwards trailing arguments. */
+async function runCommand(resolved: ResolvedRunArg): Promise<tg.Command> {
 	const depsEnv = await resolveDepsEnv(resolved);
 
 	const {
@@ -409,7 +409,7 @@ ${execLine}
 	});
 }
 
-/** Build with cargo. By default, this runs a sandboxed build and returns its output. Setting `targetDir` to `true` or a path returns a command for a hybrid build. Use `run` when the result must be typed as a command. */
+/** Build with cargo. By default, this runs a sandboxed build and returns its output. Setting `targetDir` to `true` or a path returns a command to run Cargo on the host. Use `run` when the result must be typed as a command. */
 export function build(...args: tg.Args<Arg>): Promise<tg.Directory>;
 export function build(
 	...args: tg.Args<MergedArg>
@@ -420,7 +420,7 @@ export async function build(
 	const merged = await mergeArgs(...args);
 	const { targetDir } = merged;
 	if (targetDir === true || typeof targetDir === "string") {
-		return hybrid({ ...merged, targetDir });
+		return runCommand({ ...merged, targetDir });
 	}
 	const resolved = requireSource(merged);
 	const depsEnv = await resolveDepsEnv(resolved);
