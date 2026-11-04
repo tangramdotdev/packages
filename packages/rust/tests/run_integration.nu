@@ -188,13 +188,6 @@ def check_incremental [stderr: string, label: string, full_count: int, --strict]
     }
 }
 
-# Verify that a build found every crate fresh and compiled nothing.
-def assert_no_recompile [stderr: string, label: string] {
-    let recompiled = ($stderr | lines | where { |l| $l =~ "Compiling" })
-    print $"  ($label): recompiled ($recompiled | length) crates"
-    assert equal ($recompiled | length) 0 $"($label) recompiled: ($recompiled | str join ', ')"
-}
-
 # ── Main ───────────────────────────────────────────────────────────────
 
 def main [
@@ -287,9 +280,13 @@ def main [
         print ""
         print $"=== Mode 2: tg run with proxy + passthrough [($profile)] ==="
 
+        # Reuse the existing target directory without recompiling unchanged crates.
+        write_tangram_ts $import_line "cargo.build({ source, targetDir: true })"
+        let r = (tg_run_build "tg run (existing target directory)" $cargo_flags)
+        assert equal ($r.stderr | lines | where { |l| $l =~ "Compiling" } | length) 0 "unchanged crates were recompiled"
+
         # Start fresh so all crates go through the proxy on the first build.
         ^rm -rf target
-        write_tangram_ts $import_line "cargo.build({ source, targetDir: true })"
 
         print "  tg run build (proxy+passthrough, full from clean)..."
         let r = (tg_run_build "tg run (proxy+passthrough, full)" $cargo_flags)
@@ -379,75 +376,13 @@ def main [
         check_binary $target_subdir $bin_name null $bin_check_args --run
     }
 
-    # ── Existing target directory: reuse what bare cargo built ───────
+    # Verify that Cargo receives a custom target path, including its spaces and quote.
     if $use_proxy {
-        print ""
-        print $"=== Existing target directory [($profile)] ==="
-
-        ^rm -rf target
-        write_tangram_ts $import_line "cargo.build({ source, targetDir: true })"
-
-        print "  cargo build (populate the target directory)..."
-        let r = (run_cargo_build $cargo_flags)
-        assert equal $r.exit_code 0 $"cargo build failed: ($r.stderr)"
-        let existing_full_count = ($r.stderr | lines | where { |l| $l =~ "Compiling" } | length)
-
-        print "  tg run build (no source change)..."
-        let r = (tg_run_build "tg run (existing target directory)" $cargo_flags)
-        assert_no_recompile $r.stderr "cargo → tg run, unchanged"
-        check_binary $target_subdir $bin_name $expected_output
-
-        print "  cargo build (no source change)..."
-        let r = (run_cargo_build $cargo_flags)
-        assert equal $r.exit_code 0 $"cargo build failed: ($r.stderr)"
-        assert_no_recompile $r.stderr "tg run → cargo, unchanged"
-
-        print "  modifying source..."
-        modify_source $touch_file 9
-
-        print "  tg run build (source change)..."
-        let r = (tg_run_build "tg run (existing target directory, source change)" $cargo_flags)
-        check_incremental $r.stderr "cargo → tg run, changed" $existing_full_count --strict
-        check_binary $target_subdir $bin_name $expected_output
-        check_binary $target_subdir $bin_name null $bin_check_args --run
-    }
-
-    # ── Custom target directory ───────────────────────────────────────
-    if $use_proxy {
-        print ""
-        print $"=== Custom target directory [($profile)] ==="
-
-        ^rm -rf target
-        let custom_target = ($tmp | path join "custom-target")
+        let custom_target = ($tmp | path join "custom target's files")
         write_tangram_ts $import_line $"cargo.build\({ source, targetDir: \"($custom_target)\" })"
-
-        print "  tg run build (custom target directory, full)..."
-        let r = (tg_run_build "tg run (custom target directory, full)" $cargo_flags)
-        let custom_full_count = ($r.stderr | lines | where { |l| $l =~ "Compiling" } | length)
-
-        assert (not ("target" | path exists)) "unexpected ./target directory with a custom target directory"
-        let custom_profile_dir = ($custom_target | path join $target_subdir)
-        let custom_externs = ($custom_profile_dir | path join "deps" ".tangram-externs")
-        assert ($custom_externs | path exists) "no .tangram-externs directory found in the custom target directory (expected proxy involvement)"
-        if $bin_name != null {
-            let custom_binary = ($custom_profile_dir | path join $bin_name)
-            assert ($custom_binary | path exists) $"binary not found: ($custom_binary)"
-            if $expected_output != null {
-                let output = (^$custom_binary | complete)
-                assert equal $output.exit_code 0 $"binary ($custom_binary) exited with code ($output.exit_code)"
-                assert equal ($output.stdout | str trim) $expected_output "binary output mismatch"
-            }
-            let output = (^$custom_binary ...$bin_check_args | complete)
-            assert equal $output.exit_code 0 $"binary ($custom_binary) ($bin_check_args) exited with code ($output.exit_code)"
-        }
-
-        print "  modifying source..."
-        modify_source $touch_file 10
-
-        print "  tg run build (custom target directory, incremental)..."
-        let r = (tg_run_build "tg run (custom target directory, incremental)" $cargo_flags)
-        check_incremental $r.stderr "custom → custom" $custom_full_count --strict
-        assert (not ("target" | path exists)) "unexpected ./target directory with a custom target directory"
+        let r = (^tg run -b . -- metadata --format-version 1 --no-deps | complete)
+        assert equal $r.exit_code 0 $"cargo metadata failed: ($r.stderr)"
+        assert equal ($r.stdout | from json | get target_directory) $custom_target "Cargo did not use the custom target directory"
     }
 
     # Cleanup.

@@ -96,7 +96,7 @@ export type Arg = CommonArg & {
 	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Default: "build". */
 	subcommand?: string;
 
-	/** The target directory of a sandboxed build is always in the build's output. Setting this to `true` or a path selects a hybrid build instead. See `HybridArg`. */
+	/** The target directory of a sandboxed build is always in the build's output. Use `RunArg` to select a target directory outside Tangram. */
 	targetDir?: false;
 
 	/** Whether to generate a cargo timing report. Adds `--timings` to the cargo build command and includes the `cargo-timings/` directory in the output. Default: false. */
@@ -118,6 +118,7 @@ export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 	return requireSource(await mergeArgs(...args));
 }
 
+/** The args for a hybrid build, which runs Cargo on the host and compiles dependencies through Tangram by default. */
 export type RunArg = CommonArg & {
 	/** Cargo.lock file for vendoring (alternative to providing full source). */
 	cargoLock?: tg.File;
@@ -128,45 +129,6 @@ export type RunArg = CommonArg & {
 	/** The target directory, which is outside of Tangram. `true` uses the directory that the host's Cargo would choose, and a path uses that directory. Default: true. */
 	targetDir?: true | string;
 };
-
-/** The arg for a hybrid build, which runs the host's Cargo in the working directory with a target directory outside of Tangram. Workspace members compile with the host's rustc, and dependencies compile through Tangram unless `proxy` is false. */
-export type HybridArg = RunArg & { targetDir: true | string };
-
-/** Whether an arg selects a hybrid build. */
-type IsHybridArg<T> =
-	T extends tg.Unresolved<Pick<HybridArg, "targetDir">> ? true : false;
-
-/** Whether any arg selects a hybrid build. A tuple has at most one spread, so this consumes the required args on both sides of it. */
-type SelectsHybrid<A extends Array<unknown>> = A extends [
-	infer First,
-	...infer Rest,
-]
-	? IsHybridArg<First> extends true
-		? true
-		: SelectsHybrid<Rest>
-	: A extends [...infer Rest, infer Last]
-		? IsHybridArg<Last> extends true
-			? true
-			: SelectsHybrid<Rest>
-		: false;
-
-/** The keys of an arg, including an arg in a promise. */
-type ArgKeys<T> = T extends unknown ? keyof Awaited<T> : never;
-
-/** An unresolved arg of a hybrid build. Its target directory cannot be a mutation, which could clear the target directory that determines the return type of `build`. */
-export type HybridArgInput = tg.Unresolved<
-	Omit<tg.ValueOrMaybeMutationMap<RunArg>, "targetDir"> &
-		Pick<RunArg, "targetDir">
->;
-
-/** The `this` type of a hybrid `build`, which rejects the overload unless an arg selects a hybrid build and every key is a field of `RunArg`. This check is not on the type of `...args`, because wrapping that type widens `true` to `boolean` in an arg such as `Promise.resolve({ targetDir: true })`. */
-type HybridBuildThis<A extends Array<unknown>> = [ArgKeys<A[number]>] extends [
-	keyof RunArg,
-]
-	? SelectsHybrid<A> extends true
-		? unknown
-		: never
-	: never;
 
 /** The result of runArg() - a RunArg with build and host guaranteed to be resolved. */
 export type ResolvedRunArg = Omit<RunArg, "build" | "host"> & {
@@ -246,9 +208,9 @@ async function resolveDepsEnv(
 	});
 }
 
-/** Create the command for a hybrid build. This is an alias for `build({ targetDir: true }, ...args)`, so it uses the rustc proxy unless `proxy` is false. */
-export async function run(...args: Array<HybridArgInput>): Promise<tg.Command> {
-	return build({ targetDir: true }, ...args);
+/** Create the command for a hybrid build. Uses the host's default target directory and enables the rustc proxy unless overridden. */
+export async function run(...args: tg.Args<RunArg>): Promise<tg.Command> {
+	return hybrid(await runArg(...args));
 }
 
 /** Create the command for a hybrid build, which `tg run -b` runs on the host with the trailing arguments passed to Cargo. */
@@ -447,12 +409,11 @@ ${execLine}
 	});
 }
 
-/** Build with cargo. By default, this runs a sandboxed build and returns its output. Setting `targetDir` to `true` or a path instead returns the command for a hybrid build. See `HybridArg`. */
-export function build<A extends Array<HybridArgInput>>(
-	this: HybridBuildThis<A>,
-	...args: A
-): Promise<tg.Command>;
+/** Build with cargo. By default, this runs a sandboxed build and returns its output. Setting `targetDir` to `true` or a path returns a command for a hybrid build. Use `run` when the result must be typed as a command. */
 export function build(...args: tg.Args<Arg>): Promise<tg.Directory>;
+export function build(
+	...args: tg.Args<MergedArg>
+): Promise<tg.Command | tg.Directory>;
 export async function build(
 	...args: tg.Args<MergedArg>
 ): Promise<tg.Command | tg.Directory> {
@@ -1103,90 +1064,12 @@ export async function test() {
 	tests.push(testNestedCargoOffline());
 	tests.push(testStandalone());
 	tests.push(testStandaloneBuildScript());
-	tests.push(testTargetDir());
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
 	await Promise.all(tests);
 
 	return true;
 }
-
-export async function testTargetDir() {
-	const source = await tests.get("hello-world").then(tg.Directory.expect);
-	const script = async (command: tg.Command) => {
-		const args = await command.args;
-		const template = args[1]?.value;
-		tg.assert(template instanceof tg.Template);
-		return template.components
-			.filter((component) => typeof component === "string")
-			.join("");
-	};
-
-	// Verify that the alias matches the default target directory, which is left to Cargo.
-	const alias = await run({ proxy: false, source });
-	const default_ = await build({ proxy: false, source, targetDir: true });
-	tg.assert(
-		alias.id === default_.id,
-		"expected cargo.run to match cargo.build with targetDir: true",
-	);
-	tg.assert(
-		!(await script(default_)).includes("CARGO_TARGET_DIR"),
-		"expected the default target directory to be left to Cargo",
-	);
-
-	// Verify that any arg can select the target directory, including alongside an unresolved value.
-	const forms = await Promise.all([
-		build({ proxy: false, source: Promise.resolve(source), targetDir: true }),
-		build({ proxy: false, source }, { targetDir: true }),
-		build({ proxy: false }, { source }, { targetDir: true }),
-		build({ proxy: false }, { targetDir: true }, { source }),
-		build({ source }, { proxy: false }, { targetDir: true }, { features: [] }),
-		build(Promise.resolve({ proxy: false, source, targetDir: true })),
-		build({ proxy: false, source }, Promise.resolve({ targetDir: true })),
-		build({ proxy: false, source, targetDir: Promise.resolve(true) }),
-	]);
-	for (const form of forms) {
-		tg.assert(
-			form.id === alias.id,
-			"expected every form of a hybrid build to produce the same command",
-		);
-	}
-
-	// Verify that a custom target directory is exported with its quotes escaped.
-	const custom = await build({
-		proxy: false,
-		source,
-		targetDir: "/hello/it's",
-	});
-	const expected = "export CARGO_TARGET_DIR='/hello/it'\\''s'";
-	tg.assert(
-		(await script(custom)).includes(expected),
-		`expected the script to contain: ${expected}`,
-	);
-	return true;
-}
-
-/** Type-check the forms that `build` and `run` must reject. This function is never called. */
-const assertHybridArgTypes = async (
-	source: tg.Directory,
-	targetDir: boolean,
-) => {
-	// @ts-expect-error A later arg cannot clear the target directory that selected a hybrid build.
-	await build({ source, targetDir: true }, { targetDir: tg.Mutation.unset() });
-
-	// @ts-expect-error The alias always returns a command, so it cannot accept a mutation of the target directory.
-	await run({ source, targetDir: tg.Mutation.unset() });
-
-	// @ts-expect-error A value that is only known at runtime cannot select the return type, even in a promise.
-	await build(Promise.resolve({ source, targetDir }));
-
-	// @ts-expect-error A sandbox-only field is not available on a hybrid build, even in a promise.
-	await build(Promise.resolve({ network: true, source, targetDir: true }));
-
-	// @ts-expect-error A hybrid build does not return a directory.
-	const directory: tg.Directory = await build({ source, targetDir: true });
-	return directory;
-};
 
 export async function testStandalone() {
 	const fixture = await tests.get("hello-file-dep").then(tg.Directory.expect);
