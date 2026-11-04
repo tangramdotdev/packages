@@ -34,7 +34,7 @@ type CommonArg = {
 	/** Additional script to run prior to the build. */
 	pre?: tg.Template.Arg;
 
-	/** Whether to use the tangram_rustc proxy. */
+	/** Whether to use the tangram_rustc proxy. Defaults to false for sandboxed builds and true when Cargo runs on the host, including `cargo.run`. When Cargo runs on the host, disabling the proxy compiles every crate with the host's toolchain. */
 	proxy?: boolean;
 
 	/** SDK configuration to use during the build. */
@@ -96,6 +96,9 @@ export type Arg = CommonArg & {
 	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Default: "build". */
 	subcommand?: string;
 
+	/** Use a temporary target directory and copy the executables into the output. Use `RunArg` to select a target directory outside Tangram. */
+	scratchTargetDir?: false;
+
 	/** Whether to generate a cargo timing report. Adds `--timings` to the cargo build command and includes the `cargo-timings/` directory in the output. Default: false. */
 	timings?: boolean;
 
@@ -112,59 +115,45 @@ export type ResolvedArg = Omit<Arg, "build" | "host" | "source"> & {
 
 /** Resolve cargo args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
 export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
-	const collect = await tg.Args.apply<
-		Arg,
-		tg.ValueOrMaybeMutationMap<Arg>,
-		Arg
-	>({
-		args,
-		map: async (arg) => arg,
-		reduce: {
-			env: (a, b) => std.env.arg(a ?? null, b ?? null),
-			features: "append",
-			sdk: (a, b) => std.sdk.mergeArg(a, b),
-			subtreeEnv: (a, b) => std.env.arg(a ?? null, b ?? null),
-			subtreeSdk: (a, b) => std.sdk.mergeArg(a, b),
-		},
-	});
-
-	const { build: build_, host: host_, source, ...rest } = collect;
-
-	tg.assert(source !== undefined, "source must be defined");
-
-	const host = host_ ?? std.triple.host();
-	const build = build_ ?? host;
-
-	return {
-		build,
-		host,
-		source,
-		...rest,
-	};
+	return requireSource(await mergeArgs(...args));
 }
 
+/** The args for running Cargo on the host, with dependencies compiled through Tangram by default. */
 export type RunArg = CommonArg & {
 	/** Cargo.lock file for vendoring (alternative to providing full source). */
 	cargoLock?: tg.File;
 
 	/** When proxy is true, whether workspace members should be compiled directly via passthrough. Default: true. */
 	passthrough?: boolean;
+
+	/** The target directory, which is outside of Tangram. `true` uses the directory that the host's Cargo would choose, and a path uses that directory. Default: true. */
+	targetDir?: true | string;
 };
 
-/** The result of runArg() - a RunArg with build and host guaranteed to be resolved. */
+/** The resolved args for creating a command, with the build and host machines resolved. */
 export type ResolvedRunArg = Omit<RunArg, "build" | "host"> & {
 	build: string;
 	host: string;
 };
 
-/** Resolve run args to a mutable arg object. Returns a RunArg with build and host guaranteed to be resolved. */
+/** Resolve run args to a mutable arg object with the build and host machines and the host target directory. */
 export async function runArg(
 	...args: tg.Args<RunArg>
 ): Promise<ResolvedRunArg> {
+	const { targetDir, ...rest } = await mergeArgs(...args);
+	return { ...rest, ...(targetDir ? { targetDir } : {}) };
+}
+
+/** The fields of both `Arg` and `RunArg`, which `build` merges before it selects a mode from `targetDir`. */
+type MergedArg = Arg &
+	Omit<RunArg, "targetDir"> & { targetDir?: boolean | string };
+
+/** Merge cargo args and resolve the build and host machines. */
+async function mergeArgs(...args: tg.Args<MergedArg>) {
 	const collect = await tg.Args.apply<
-		RunArg,
-		tg.ValueOrMaybeMutationMap<RunArg>,
-		RunArg
+		MergedArg,
+		tg.ValueOrMaybeMutationMap<MergedArg>,
+		MergedArg
 	>({
 		args,
 		map: async (arg) => arg,
@@ -189,6 +178,15 @@ export async function runArg(
 	};
 }
 
+/** Narrow merged args to the args of a sandboxed build, which requires a source. */
+function requireSource(
+	merged: Awaited<ReturnType<typeof mergeArgs>>,
+): ResolvedArg {
+	const { source, targetDir: _, ...rest } = merged;
+	tg.assert(source !== undefined, "source must be defined");
+	return { source, ...rest };
+}
+
 /** Resolve deps configuration to env, merging with any existing env arg. */
 async function resolveDepsEnv(
 	resolved: CommonArg & { build: string; host: string },
@@ -210,8 +208,13 @@ async function resolveDepsEnv(
 	});
 }
 
+/** Create a command to run Cargo on the host. The command uses the host's default target directory and enables the rustc proxy unless overridden. */
 export async function run(...args: tg.Args<RunArg>): Promise<tg.Command> {
-	const resolved = await runArg(...args);
+	return runCommand(await runArg(...args));
+}
+
+/** Create a command for `tg run -b`, which runs Cargo on the host and forwards trailing arguments. */
+async function runCommand(resolved: ResolvedRunArg): Promise<tg.Command> {
 	const depsEnv = await resolveDepsEnv(resolved);
 
 	const {
@@ -224,9 +227,10 @@ export async function run(...args: tg.Args<RunArg>): Promise<tg.Command> {
 		parallelJobs,
 		passthrough = true,
 		pre,
-		proxy = false,
+		proxy = true,
 		source,
 		target: target_,
+		targetDir,
 		useCargoVendor = false,
 	} = resolved;
 	const rustHost = rustTriple(host);
@@ -279,6 +283,12 @@ VENDORCFG`;
 		`export RUST_TARGET="${target}"`,
 		`export CARGO_REGISTRIES_CRATES_IO_PROTOCOL="sparse"`,
 	];
+
+	// Use the environment rather than `--target-dir` because the trailing arguments can select a subcommand that rejects the flag.
+	if (typeof targetDir === "string") {
+		const quoted = targetDir.replaceAll("'", "'\\''");
+		exports.push(`export CARGO_TARGET_DIR='${quoted}'`);
+	}
 
 	if (crossCompiling) {
 		exports.push(`export CARGO_BUILD_TARGET="${target}"`);
@@ -399,8 +409,22 @@ ${execLine}
 	});
 }
 
-export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
-	const resolved = await arg(...args);
+/** Build with cargo. By default, this runs a sandboxed build and returns its output. Setting `targetDir` to `true` or a path returns a command to run Cargo on the host. Use `run` when the result must be typed as a command. */
+export function build(
+	...args: tg.Args<Arg & { targetDir?: false }>
+): Promise<tg.Directory>;
+export function build(
+	...args: tg.Args<MergedArg>
+): Promise<tg.Command | tg.Directory>;
+export async function build(
+	...args: tg.Args<MergedArg>
+): Promise<tg.Command | tg.Directory> {
+	const merged = await mergeArgs(...args);
+	const { targetDir } = merged;
+	if (targetDir === true || typeof targetDir === "string") {
+		return runCommand({ ...merged, targetDir });
+	}
+	const resolved = requireSource(merged);
 	const depsEnv = await resolveDepsEnv(resolved);
 
 	const {
@@ -536,10 +560,10 @@ runner = ["${proxyDir}/bin/tgrustc", "runner"]
 linker = "${hostLinker}"`;
 	}
 
-	// Keep Cargo's home isolated and write the generated configuration.
+	// Keep Cargo's target directory and home in the temporary workspace and write the generated configuration.
 	const preparePathCommands = [
-		tg`mkdir -p "${tg.output}/target"`,
-		tg`export TARGET_DIR="$(realpath "${tg.output}/target")"`,
+		tg`mkdir -p "$PWD/target" "${tg.output}/bin"`,
+		tg`SCRATCH_TARGET_DIR="$(realpath "$PWD/target")"`,
 		tg`export CARGO_HOME="$(mktemp -d)"`,
 		tg`cargo_config_path="$PWD/config.toml"\necho '${cargoConfig}' > "$cargo_config_path"`,
 	];
@@ -557,7 +581,7 @@ linker = "${hostLinker}"`;
 		: `"Cargo.toml"`;
 	const cargoArgs = [
 		`${profileFlag} ${profile}`,
-		tg`--target-dir "${tg.output}/target"`,
+		`--target-dir "$SCRATCH_TARGET_DIR"`,
 		`--manifest-path "$TGRUSTC_SOURCE_DIR/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
 		"--target $RUST_TARGET",
@@ -591,6 +615,16 @@ linker = "${hostLinker}"`;
 	const buildCommand = captureStderr
 		? tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
 		: tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString}`;
+
+	// Copy the executables with their dependency metadata before the temporary target directory is discarded.
+	const profileDir = profile === "dev" ? "debug" : profile;
+	const install = tg`
+		for executable in "$SCRATCH_TARGET_DIR/${target}/${profileDir}"/*; do
+			if [ -f "$executable" ] && [ -x "$executable" ]; then
+				cp -aL "$executable" "${tg.output}/bin/"
+			fi
+		done
+	`;
 	const buildScript = tg.Template.join(
 		"\n",
 		preparePaths,
@@ -598,6 +632,10 @@ linker = "${hostLinker}"`;
 		pre ?? null,
 		enterSource,
 		buildCommand,
+		install,
+		timings
+			? tg`if [ -d "$SCRATCH_TARGET_DIR/cargo-timings" ]; then cp -R "$SCRATCH_TARGET_DIR/cargo-timings" "${tg.output}/cargo-timings"; fi`
+			: null,
 	);
 
 	// Use the SDK's `gcc` to enable Tangram linking on non-cross builds.
@@ -710,14 +748,10 @@ linker = "${hostLinker}"`;
 	}
 	const artifact = await builder.then(tg.Directory.expect);
 
-	// Cargo maps "dev" → "debug"; other profiles use their name.
-	const profileDir = profile === "dev" ? "debug" : profile;
-	const releaseDir = await artifact
-		.get(`target/${target}/${profileDir}`)
-		.then(tg.Directory.expect);
+	const installedBins = await artifact.get("bin").then(tg.Directory.expect);
 
 	const bins: Record<string, tg.Artifact> = {};
-	for await (const [name, artifact] of releaseDir) {
+	for await (const [name, artifact] of installedBins) {
 		const resolved =
 			artifact instanceof tg.Symlink ? await artifact.resolve() : artifact;
 		if (resolved instanceof tg.File && (await resolved.executable)) {
@@ -746,7 +780,7 @@ linker = "${hostLinker}"`;
 
 	if (timings) {
 		const timingsDir = await artifact
-			.tryGet("target/cargo-timings")
+			.tryGet("cargo-timings")
 			.then((a) => (a instanceof tg.Directory ? a : undefined));
 		if (timingsDir) {
 			result["cargo-timings"] = timingsDir;
@@ -1211,15 +1245,19 @@ TANGRAM_CONFIG_MESSAGE = { value = "message.txt", relative = true }
 }
 
 export async function testUnproxiedWorkspace() {
-	const helloWorkspace = build({
+	const helloWorkspace = await build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
+		captureStderr: true,
 		env: {
 			TANGRAM_LINKER_TRACING: "tgld=trace",
 		},
 		pre: "set -x",
 		proxy: false,
+		timings: true,
 		verbose: true,
 	});
+	tg.File.assert(await helloWorkspace.get("cargo-stderr.log"));
+	tg.Directory.assert(await helloWorkspace.get("cargo-timings"));
 
 	const helloOutput = await $`
 		${helloWorkspace}/bin/cli >> ${tg.output}
