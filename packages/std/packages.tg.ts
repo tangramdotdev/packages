@@ -15,22 +15,15 @@ export type BuildFn<T extends MinimalPackageArg> = (
 	...args: tg.Args<T>
 ) => PromiseLike<tg.Directory>;
 
-/**
- * A tg.Command that builds a package, with phantom type parameter preserving the arg type.
- * Since tg.Command is tg.Object which is tg.Value, this can be included in Arg types.
- */
-export type BuildCommand<T extends MinimalPackageArg = MinimalPackageArg> =
-	tg.Command & { readonly __packageArg?: T };
-
-/** Evaluate the build function or command with a single arg. Works with both functions and BuildCommands. */
+/** Evaluate a build function or command with a single package argument. */
 export async function buildCommandOutput<T extends MinimalPackageArg>(
-	cmd: BuildFn<T> | BuildCommand<T>,
+	cmd: BuildFn<T> | tg.Command,
 	arg: T,
 ): Promise<tg.Directory> {
 	if (typeof cmd === "function") {
 		return await (cmd as (...args: Array<T>) => PromiseLike<tg.Directory>)(arg);
 	}
-	return tg.Directory.expect(await (cmd as tg.Command).build(arg));
+	return tg.Directory.expect(await cmd.build(arg));
 }
 
 /** After application, the resulting type always has concrete values for build, host, and sdk. */
@@ -214,29 +207,24 @@ export async function applyArgs<T extends PackageArg>(
 	} as ResolvedPackageArg<T>;
 }
 
-/**
- * Create a deps Config from build functions.
- * Accepts either plain build functions or full specs with kind option.
- * Functions are stored directly and resolved lazily at build time via buildCommandOutput().
- * The type system treats them as BuildCommand for tg.Value compatibility.
- */
-export function deps<T extends deps.Input>(input: T): deps.Output<T> {
-	const result: Record<string, deps.Spec> = {};
-	for (const [key, spec] of Object.entries(input)) {
-		if (typeof spec === "function") {
-			// Store function directly - buildCommandOutput handles both functions and commands.
-			result[key] = spec as unknown as BuildCommand;
-		} else {
-			// Full spec with options. The optional fields are omitted when unset, because an explicit `undefined` is not a tg.Value.
-			result[key] = {
-				build: spec.build as unknown as BuildCommand,
-				kind: spec.kind ?? "runtime",
-				...(spec.flag !== undefined ? { flag: spec.flag } : {}),
-				...(spec.when !== undefined ? { when: spec.when } : {}),
-			};
-		}
+/** Create a deps config from build functions or commands. Each function becomes a command, so the config is a value that can cross a command boundary. */
+export async function deps<T extends deps.Input>(
+	input: T,
+): Promise<deps.Output<T>> {
+	const config: deps.Config = {};
+	for (const [key, inputSpec] of Object.entries(input)) {
+		const spec =
+			typeof inputSpec === "function" || inputSpec instanceof tg.Command
+				? { build: inputSpec }
+				: inputSpec;
+		config[key] = {
+			build: (await tg.resolve(spec.build)) as tg.Command,
+			kind: spec.kind ?? "runtime",
+			...std.args.optional("flag", spec.flag),
+			...std.args.optional("when", spec.when),
+		};
 	}
-	return result as deps.Output<T>;
+	return config as deps.Output<T>;
 }
 
 export namespace deps {
@@ -281,29 +269,16 @@ export namespace deps {
 	/** How a dependency maps onto configure arguments. */
 	export type Flag = FlagShorthand | FlagSpec;
 
-	/** Full specification for a single dependency using BuildCommand. */
-	export type FullSpec = {
-		// biome-ignore lint/suspicious/noExplicitAny: Package commands are contravariant, requiring type erasure here.
-		build: BuildCommand<any>;
+	/** The specification for a single dependency. The command is an opaque handle, and its argument type records what the dependency accepts. */
+	// biome-ignore lint/suspicious/noExplicitAny: Package commands are contravariant, requiring type erasure here.
+	export type Spec<A extends tg.Value = any> = {
+		build: tg.Command<Array<A>>;
 		/** The configure arguments this dependency contributes when it is enabled or disabled. */
 		flag?: Flag;
 		kind: Kind;
 		/** The condition that decides whether this dependency is included by default. An explicit entry in the caller's `dependencies` overrides it. */
 		when?: Condition;
 	};
-
-	/** Specification for a single dependency - either a BuildCommand (defaults to runtime) or full spec. */
-	// biome-ignore lint/suspicious/noExplicitAny: Package commands are contravariant, requiring type erasure here.
-	export type Spec = BuildCommand<any> | FullSpec;
-
-	/** Normalize a Spec to a FullSpec. */
-	export function normalizeSpec(spec: Spec): FullSpec {
-		// A FullSpec has a 'kind' property; a plain BuildCommand does not.
-		if ("kind" in spec) {
-			return spec as FullSpec;
-		}
-		return { build: spec as BuildCommand, kind: "runtime" };
-	}
 
 	/** A mapping of dependency names to their specifications. */
 	export type Config = {
@@ -314,21 +289,17 @@ export namespace deps {
 	export type ConfigArg = Config | tg.Command<[], Config>;
 
 	/** Type constraint for deps.Arg type parameter. */
-	export type ConfigLike = Config | (() => Config);
+	export type ConfigLike =
+		| tg.MaybePromise<Config>
+		| (() => tg.MaybePromise<Config>);
 
-	/** Extract the underlying Config from a ConfigLike (unwraps function types). */
-	export type ExtractConfig<T extends ConfigLike> = T extends () => infer R
-		? R
-		: T;
+	/** Extract the underlying Config from a ConfigLike, unwrapping functions and promises. */
+	export type ExtractConfig<T extends ConfigLike> = Awaited<
+		T extends () => infer R ? R : T
+	>;
 
-	/** Extract the package arg type from a Spec (either plain BuildCommand or FullSpec). */
-	type ArgFromSpec<T extends Spec> = T extends FullSpec
-		? T["build"] extends BuildCommand<infer A>
-			? A
-			: never
-		: T extends BuildCommand<infer A>
-			? A
-			: never;
+	/** Extract the package arg type from a Spec. */
+	type ArgFromSpec<T extends Spec> = ArgFromBuild<T["build"]>;
 
 	/** Generate a dependencies type from a Config. */
 	export type ArgsFrom<T extends Config> = {
@@ -342,7 +313,7 @@ export namespace deps {
 
 	/** Extract the dependencies Arg type from a deps Config. */
 	export type Arg<T extends ConfigLike> = {
-		dependencies?: ArgsFrom<ExtractConfig<T> & Config>;
+		dependencies?: ArgsFrom<ExtractConfig<T>>;
 	};
 
 	/** Context required for deps resolution. */
@@ -451,7 +422,7 @@ export namespace deps {
 				result[key] = true;
 				continue;
 			}
-			const { when } = normalizeSpec(spec);
+			const { when } = spec;
 			result[key] = when === undefined ? true : evaluateCondition(when, ctx);
 		}
 		return result;
@@ -488,7 +459,7 @@ export namespace deps {
 	): Array<string> {
 		const args: Array<string> = [];
 		for (const [key, spec] of Object.entries(config)) {
-			const { flag } = normalizeSpec(spec);
+			const { flag } = spec;
 			if (flag === undefined) {
 				continue;
 			}
@@ -571,8 +542,7 @@ export namespace deps {
 		const enabled = enabledMap(config, ctx);
 		const artifactMap: Record<string, tg.Directory | undefined> = {};
 
-		for (const [key, spec_] of Object.entries(config)) {
-			const spec = normalizeSpec(spec_);
+		for (const [key, spec] of Object.entries(config)) {
 			const arg = dependencies[key];
 
 			// Skip the dependencies the caller disabled and those excluded by their condition.
@@ -647,11 +617,12 @@ export namespace deps {
 		return artifactMap as ArtifactsFrom<T>;
 	}
 
-	/** Input spec for a single dependency - either a build function or full spec with options. */
+	/** Input spec for a single dependency - a build function, a command, or a full spec with options. */
 	export type InputSpec<T extends MinimalPackageArg = MinimalPackageArg> =
 		| BuildFn<T>
+		| tg.Command
 		| {
-				build: BuildFn<T>;
+				build: BuildFn<T> | tg.Command;
 				/** The configure arguments this dependency contributes when it is enabled or disabled. */
 				flag?: Flag;
 				kind?: Kind;
@@ -665,18 +636,35 @@ export namespace deps {
 		[key: string]: InputSpec<any>;
 	};
 
-	/** Extract the package arg type directly from an InputSpec. */
-	type ExtractArgFromInput<T> =
+	/** Remove the top-level mutations that the arguments of a resolved build function allow. */
+	type WithoutMutations<T> = {
+		[K in keyof T]: Exclude<T[K], tg.Mutation<any>>;
+	};
+
+	/** Normalize the argument type of a command to a package argument. A command without a package argument type falls back to the base argument. */
+	type ArgFromCommand<T> = [T] extends [MinimalPackageArg]
+		? T
+		: [WithoutMutations<T>] extends [MinimalPackageArg]
+			? WithoutMutations<T>
+			: BasePackageArg;
+
+	/** Extract the package arg type from a build function or command. */
+	type ArgFromBuild<T> =
 		T extends BuildFn<infer A>
 			? A
-			: T extends { build: BuildFn<infer A> }
-				? A
+			: T extends tg.Command<infer A>
+				? ArgFromCommand<A[number]>
 				: never;
 
-	/** Output type for deps() - maps each key to the appropriate Spec preserving arg types. */
+	/** Extract the package arg type directly from an InputSpec. */
+	type ExtractArgFromInput<T> = T extends BuildFn<any> | tg.Command
+		? ArgFromBuild<T>
+		: T extends { build: infer B }
+			? ArgFromBuild<B>
+			: never;
+
+	/** Output type for deps() - maps each key to a Spec preserving its arg type. */
 	export type Output<T extends Input> = {
-		[K in keyof T]: T[K] extends { kind: Kind }
-			? FullSpec & { build: BuildCommand<ExtractArgFromInput<T[K]>> }
-			: BuildCommand<ExtractArgFromInput<T[K]>>;
+		[K in keyof T]: Spec<Extract<ExtractArgFromInput<T[K]>, tg.Value>>;
 	};
 }

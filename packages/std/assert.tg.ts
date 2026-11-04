@@ -92,7 +92,7 @@ export type Metadata = {
 
 /** Assert a package contains the specified contents in the conventional locations.  As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
 export async function pkg<T extends std.packages.MinimalPackageArg>(
-	buildCmd: std.packages.BuildFn<T> | std.packages.BuildCommand<T>,
+	buildCmd: std.packages.BuildFn<T> | tg.Command,
 	defaultSpec: PackageSpec,
 	...buildVariants: Array<[T, PackageSpec]>
 ) {
