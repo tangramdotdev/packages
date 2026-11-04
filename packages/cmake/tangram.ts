@@ -11,7 +11,7 @@ import * as zstd from "zstd" with { source: "../zstd.tg.ts" };
 import patches from "./patches" with { type: "directory" };
 
 import * as ninja from "./ninja.tg.ts";
-export * as ninja from "./ninja.tg.ts";
+export { ninja };
 
 export const metadata = {
 	homepage: "https://cmake.org/",

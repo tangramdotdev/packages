@@ -1,43 +1,56 @@
-export * as args from "./args.tg.ts";
-export * as assert from "./assert.tg.ts";
-export * as autotools from "./autotools.tg.ts";
-export * as cc from "./cc.tg.ts";
+// Keep these statements in this order, because std's modules import each other and they evaluate in the order of these module requests.
+import * as args from "./args.tg.ts";
+import * as assert from "./assert.tg.ts";
+import * as autotools from "./autotools.tg.ts";
+import * as cc from "./cc.tg.ts";
 export { build } from "./process.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
 export { command, sh, shBootstrap } from "./command.tg.ts";
-export * as dependencies from "./sdk/dependencies.tg.ts";
+import * as dependencies from "./sdk/dependencies.tg.ts";
 export { deps } from "./packages.tg.ts";
 export { image } from "./image.tg.ts";
-export * as directory from "./directory.tg.ts";
+import * as directory from "./directory.tg.ts";
 export { download } from "./download.tg.ts";
 export { env } from "./env.tg.ts";
-export * as file from "./file.tg.ts";
+import * as file from "./file.tg.ts";
 export { patch } from "./patch.tg.ts";
-export * as packages from "./packages.tg.ts";
-export * as phases from "./phases.tg.ts";
-export * as pkgconfig from "./pkgconfig.tg.ts";
+import * as packages from "./packages.tg.ts";
+import * as phases from "./phases.tg.ts";
+import * as pkgconfig from "./pkgconfig.tg.ts";
 export { $, run, spawn } from "./process.tg.ts";
 export { sdk } from "./sdk.tg.ts";
-export * as sdkModule from "./sdk.tg.ts";
-export * as triple from "./triple.tg.ts";
-export * as utils from "./utils.tg.ts";
+import * as triple from "./triple.tg.ts";
+import * as utils from "./utils.tg.ts";
 export { wrap } from "./wrap.tg.ts";
 export { stripProxy } from "./sdk/proxy.tg.ts";
-export * as bootstrap from "./bootstrap.tg.ts";
+import * as bootstrap from "./bootstrap.tg.ts";
 export { test } from "./test.tg.ts";
 
-import * as bootstrap from "./bootstrap.tg.ts";
 import * as coreutils from "./utils/coreutils.tg.ts";
-import * as dependencies from "./sdk/dependencies.tg.ts";
 import * as gettext from "./autotools/gettext.tg.ts";
 import * as glibc from "./sdk/libc/glibc.tg.ts";
 import * as injection from "./wrap/injection.tg.ts";
 import * as pkgconf from "./autotools/pkgconf.tg.ts";
 import * as sdk from "./sdk.tg.ts";
-import * as triple from "./triple.tg.ts";
-import * as utils from "./utils.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
 import { env as stdEnv } from "./env.tg.ts";
+
+export {
+	args,
+	assert,
+	autotools,
+	bootstrap,
+	cc,
+	dependencies,
+	directory,
+	file,
+	packages,
+	phases,
+	pkgconfig,
+	sdk as sdkModule,
+	triple,
+	utils,
+};
 
 export const metadata = {
 	name: "std",

@@ -2,13 +2,14 @@ import * as std from "std" with { source: "../std" };
 import { $ } from "std" with { source: "../std" };
 import zlib from "zlib-ng" with { source: "../zlib-ng.tg.ts" };
 
-export * as benchmark from "./benchmark.tg.ts";
+import * as benchmark from "./benchmark.tg.ts";
+export { benchmark };
 
 import * as build_ from "./build.tg.ts";
-export * as build from "./build.tg.ts";
+export { build_ as build };
 
 import * as proxy_ from "./proxy.tg.ts";
-export * as proxy from "./proxy.tg.ts";
+export { proxy_ as proxy };
 
 export {
 	runProcMacroDeps,
@@ -53,7 +54,7 @@ export {
 } from "./proxy.tg.ts";
 
 import * as cargo_ from "./cargo.tg.ts";
-export * as cargo from "./cargo.tg.ts";
+export { cargo_ as cargo };
 
 export const metadata = {
 	homepage: "https://www.rust-lang.org",
