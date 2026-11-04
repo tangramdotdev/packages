@@ -10,7 +10,7 @@
 #   nu run_integration.nu --bin cli --expected-output "Hello from a workspace!"
 #   nu run_integration.nu --release                                     # Test release builds (no incremental compilation).
 
-use std assert
+use std/assert
 
 # ── Assertion helpers ──────────────────────────────────────────────────
 
@@ -58,13 +58,13 @@ def assert_target_structure [profile: string] {
 }
 
 def assert_no_externs [profile: string] {
-    let externs = (glob $"target/($profile)/deps/*.externs")
-    assert equal ($externs | length) 0 "unexpected .externs files found in deps/ (proxy was not expected)"
+    let externs = $"target/($profile)/deps/.tangram-externs"
+    assert (not ($externs | path exists)) "unexpected .tangram-externs directory found in deps/ (proxy was not expected)"
 }
 
 def assert_proxy_artifacts [profile: string] {
-    let externs = (glob $"target/($profile)/deps/*.externs")
-    assert (($externs | length) > 0) "no .externs files found in deps/ (expected proxy involvement)"
+    let externs = $"target/($profile)/deps/.tangram-externs"
+    assert ($externs | path exists) "no .tangram-externs directory found in deps/ (expected proxy involvement)"
 }
 
 # tg run mode: run_proxy produces writable copies (not symlinks) so cargo
@@ -143,30 +143,20 @@ def modify_source [file: string, n: int] {
     open $file | $in + $"\n// modified ($n)\n" | save -f $file
 }
 
-# Write tangram.ts with the given proxy and passthrough settings.
-def write_tangram_ts [import_line: string, proxy: bool, passthrough: bool] {
-    if not $proxy {
-        [$import_line
-            ""
-            "export default async () => {"
-            "	return cargo.run();"
-            "};"
-        ] | str join "\n" | save -f tangram.ts
+# Write tangram.ts with a default export that returns the given expression.
+def write_tangram_ts [import_line: string, expression: string] {
+    let source_line = if ($expression | str contains "source") {
+        'import source from "." with { type: "directory" };'
     } else {
-        let source_line = 'import source from "." with { type: "directory" };'
-        let opts = if not $passthrough {
-            "{ proxy: true, passthrough: false, source }"
-        } else {
-            "{ proxy: true, source }"
-        }
-        [$import_line
-            $source_line
-            ""
-            "export default async () => {"
-            $"	return cargo.run\(($opts));"
-            "};"
-        ] | str join "\n" | save -f tangram.ts
+        ""
     }
+    [$import_line
+        $source_line
+        ""
+        "export default async () => {"
+        $"	return ($expression);"
+        "};"
+    ] | str join "\n" | save -f tangram.ts
 }
 
 # Find a .rs source file to modify (first lib.rs or main.rs found).
@@ -196,6 +186,13 @@ def check_incremental [stderr: string, label: string, full_count: int, --strict]
             print $"  (ansi yellow)warning(ansi reset): full rebuild detected - ($count)/($full_count) crates"
         }
     }
+}
+
+# Verify that a build found every crate fresh and compiled nothing.
+def assert_no_recompile [stderr: string, label: string] {
+    let recompiled = ($stderr | lines | where { |l| $l =~ "Compiling" })
+    print $"  ($label): recompiled ($recompiled | length) crates"
+    assert equal ($recompiled | length) 0 $"($label) recompiled: ($recompiled | str join ', ')"
 }
 
 # ── Main ───────────────────────────────────────────────────────────────
@@ -234,11 +231,11 @@ def main [
     }
 
     # Generate tangram.ts for tg run.
-    let import_line = $'import { cargo } from "rust" with { local: "($rust_pkg)" };'
+    let import_line = $'import { cargo } from "rust" with { source: "($rust_pkg)" };'
 
     # ── Mode 1: tg run without proxy ──────────────────────────────────
     print $"=== Mode 1: tg run without proxy [($profile)] ==="
-    write_tangram_ts $import_line false true
+    write_tangram_ts $import_line "cargo.run({ proxy: false })"
 
     print "  cargo build (full)..."
     let r = (run_cargo_build $cargo_flags)
@@ -292,7 +289,7 @@ def main [
 
         # Start fresh so all crates go through the proxy on the first build.
         ^rm -rf target
-        write_tangram_ts $import_line true true
+        write_tangram_ts $import_line "cargo.build({ source, targetDir: true })"
 
         print "  tg run build (proxy+passthrough, full from clean)..."
         let r = (tg_run_build "tg run (proxy+passthrough, full)" $cargo_flags)
@@ -342,7 +339,7 @@ def main [
         print $"=== Mode 3: tg run with proxy, passthrough=false [($profile)] ==="
 
         ^rm -rf target
-        write_tangram_ts $import_line true false
+        write_tangram_ts $import_line "cargo.run({ proxy: true, passthrough: false, source })"
 
         print "  tg run build (proxy, no passthrough, full from clean)..."
         let r = (tg_run_build "tg run (proxy, no passthrough, full)" $cargo_flags)
@@ -380,6 +377,77 @@ def main [
         check_incremental $r.stderr "cargo → proxy(nopt)" $nopt_full_count
 
         check_binary $target_subdir $bin_name null $bin_check_args --run
+    }
+
+    # ── Existing target directory: reuse what bare cargo built ───────
+    if $use_proxy {
+        print ""
+        print $"=== Existing target directory [($profile)] ==="
+
+        ^rm -rf target
+        write_tangram_ts $import_line "cargo.build({ source, targetDir: true })"
+
+        print "  cargo build (populate the target directory)..."
+        let r = (run_cargo_build $cargo_flags)
+        assert equal $r.exit_code 0 $"cargo build failed: ($r.stderr)"
+        let existing_full_count = ($r.stderr | lines | where { |l| $l =~ "Compiling" } | length)
+
+        print "  tg run build (no source change)..."
+        let r = (tg_run_build "tg run (existing target directory)" $cargo_flags)
+        assert_no_recompile $r.stderr "cargo → tg run, unchanged"
+        check_binary $target_subdir $bin_name $expected_output
+
+        print "  cargo build (no source change)..."
+        let r = (run_cargo_build $cargo_flags)
+        assert equal $r.exit_code 0 $"cargo build failed: ($r.stderr)"
+        assert_no_recompile $r.stderr "tg run → cargo, unchanged"
+
+        print "  modifying source..."
+        modify_source $touch_file 9
+
+        print "  tg run build (source change)..."
+        let r = (tg_run_build "tg run (existing target directory, source change)" $cargo_flags)
+        check_incremental $r.stderr "cargo → tg run, changed" $existing_full_count --strict
+        check_binary $target_subdir $bin_name $expected_output
+        check_binary $target_subdir $bin_name null $bin_check_args --run
+    }
+
+    # ── Custom target directory ───────────────────────────────────────
+    if $use_proxy {
+        print ""
+        print $"=== Custom target directory [($profile)] ==="
+
+        ^rm -rf target
+        let custom_target = ($tmp | path join "custom-target")
+        write_tangram_ts $import_line $"cargo.build\({ source, targetDir: \"($custom_target)\" })"
+
+        print "  tg run build (custom target directory, full)..."
+        let r = (tg_run_build "tg run (custom target directory, full)" $cargo_flags)
+        let custom_full_count = ($r.stderr | lines | where { |l| $l =~ "Compiling" } | length)
+
+        assert (not ("target" | path exists)) "unexpected ./target directory with a custom target directory"
+        let custom_profile_dir = ($custom_target | path join $target_subdir)
+        let custom_externs = ($custom_profile_dir | path join "deps" ".tangram-externs")
+        assert ($custom_externs | path exists) "no .tangram-externs directory found in the custom target directory (expected proxy involvement)"
+        if $bin_name != null {
+            let custom_binary = ($custom_profile_dir | path join $bin_name)
+            assert ($custom_binary | path exists) $"binary not found: ($custom_binary)"
+            if $expected_output != null {
+                let output = (^$custom_binary | complete)
+                assert equal $output.exit_code 0 $"binary ($custom_binary) exited with code ($output.exit_code)"
+                assert equal ($output.stdout | str trim) $expected_output "binary output mismatch"
+            }
+            let output = (^$custom_binary ...$bin_check_args | complete)
+            assert equal $output.exit_code 0 $"binary ($custom_binary) ($bin_check_args) exited with code ($output.exit_code)"
+        }
+
+        print "  modifying source..."
+        modify_source $touch_file 10
+
+        print "  tg run build (custom target directory, incremental)..."
+        let r = (tg_run_build "tg run (custom target directory, incremental)" $cargo_flags)
+        check_incremental $r.stderr "custom → custom" $custom_full_count --strict
+        assert (not ("target" | path exists)) "unexpected ./target directory with a custom target directory"
     }
 
     # Cleanup.
