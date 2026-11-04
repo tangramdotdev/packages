@@ -96,7 +96,7 @@ export type Arg = CommonArg & {
 	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Default: "build". */
 	subcommand?: string;
 
-	/** The target directory of a sandboxed build is always in the build's output. Use `RunArg` to select a target directory outside Tangram. */
+	/** Use a temporary target directory and copy the executables into the output. Use `RunArg` to select a target directory outside Tangram. */
 	targetDir?: false;
 
 	/** Whether to generate a cargo timing report. Adds `--timings` to the cargo build command and includes the `cargo-timings/` directory in the output. Default: false. */
@@ -558,10 +558,10 @@ runner = ["${proxyDir}/bin/tgrustc", "runner"]
 linker = "${hostLinker}"`;
 	}
 
-	// Keep Cargo's home isolated and write the generated configuration.
+	// Keep Cargo's target directory and home in the temporary workspace and write the generated configuration.
 	const preparePathCommands = [
-		tg`mkdir -p "${tg.output}/target"`,
-		tg`export TARGET_DIR="$(realpath "${tg.output}/target")"`,
+		tg`mkdir -p "$PWD/target" "${tg.output}/bin"`,
+		tg`export TARGET_DIR="$(realpath "$PWD/target")"`,
 		tg`export CARGO_HOME="$(mktemp -d)"`,
 		tg`cargo_config_path="$PWD/config.toml"\necho '${cargoConfig}' > "$cargo_config_path"`,
 	];
@@ -579,7 +579,7 @@ linker = "${hostLinker}"`;
 		: `"Cargo.toml"`;
 	const cargoArgs = [
 		`${profileFlag} ${profile}`,
-		tg`--target-dir "${tg.output}/target"`,
+		`--target-dir "$TARGET_DIR"`,
 		`--manifest-path "$TGRUSTC_SOURCE_DIR/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
 		"--target $RUST_TARGET",
@@ -613,6 +613,16 @@ linker = "${hostLinker}"`;
 	const buildCommand = captureStderr
 		? tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
 		: tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString}`;
+
+	// Copy the executables with their dependency metadata before the temporary target directory is discarded.
+	const profileDir = profile === "dev" ? "debug" : profile;
+	const install = tg`
+		for executable in "$TARGET_DIR/${target}/${profileDir}"/*; do
+			if [ -f "$executable" ] && [ -x "$executable" ]; then
+				cp -aL "$executable" "${tg.output}/bin/"
+			fi
+		done
+	`;
 	const buildScript = tg.Template.join(
 		"\n",
 		preparePaths,
@@ -620,6 +630,10 @@ linker = "${hostLinker}"`;
 		pre ?? null,
 		enterSource,
 		buildCommand,
+		install,
+		timings
+			? tg`if [ -d "$TARGET_DIR/cargo-timings" ]; then cp -R "$TARGET_DIR/cargo-timings" "${tg.output}/cargo-timings"; fi`
+			: null,
 	);
 
 	// Use the SDK's `gcc` to enable Tangram linking on non-cross builds.
@@ -732,14 +746,10 @@ linker = "${hostLinker}"`;
 	}
 	const artifact = await builder.then(tg.Directory.expect);
 
-	// Cargo maps "dev" → "debug"; other profiles use their name.
-	const profileDir = profile === "dev" ? "debug" : profile;
-	const releaseDir = await artifact
-		.get(`target/${target}/${profileDir}`)
-		.then(tg.Directory.expect);
+	const installedBins = await artifact.get("bin").then(tg.Directory.expect);
 
 	const bins: Record<string, tg.Artifact> = {};
-	for await (const [name, artifact] of releaseDir) {
+	for await (const [name, artifact] of installedBins) {
 		const resolved =
 			artifact instanceof tg.Symlink ? await artifact.resolve() : artifact;
 		if (resolved instanceof tg.File && (await resolved.executable)) {
@@ -768,7 +778,7 @@ linker = "${hostLinker}"`;
 
 	if (timings) {
 		const timingsDir = await artifact
-			.tryGet("target/cargo-timings")
+			.tryGet("cargo-timings")
 			.then((a) => (a instanceof tg.Directory ? a : undefined));
 		if (timingsDir) {
 			result["cargo-timings"] = timingsDir;
@@ -1233,15 +1243,19 @@ TANGRAM_CONFIG_MESSAGE = { value = "message.txt", relative = true }
 }
 
 export async function testUnproxiedWorkspace() {
-	const helloWorkspace = build({
+	const helloWorkspace = await build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
+		captureStderr: true,
 		env: {
 			TANGRAM_LINKER_TRACING: "tgld=trace",
 		},
 		pre: "set -x",
 		proxy: false,
+		timings: true,
 		verbose: true,
 	});
+	tg.File.assert(await helloWorkspace.get("cargo-stderr.log"));
+	tg.Directory.assert(await helloWorkspace.get("cargo-timings"));
 
 	const helloOutput = await $`
 		${helloWorkspace}/bin/cli >> ${tg.output}
