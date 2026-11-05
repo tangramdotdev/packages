@@ -1,6 +1,6 @@
 const metadata = {
 	name: "ca-certificates",
-	version: "2026-09-25",
+	version: "2026-11-05",
 };
 
 export type Arg = {
@@ -10,7 +10,7 @@ export type Arg = {
 export function caCertificates(arg?: Arg) {
 	const { version } = metadata;
 	const checksum =
-		"sha256:a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505";
+		"sha256:427c064216761a1e72a8b30f0d954d08cb6e4435a82091fb865afd20c8497285";
 	const url = "https://curl.se/ca";
 	const source =
 		arg?.source ?? tg.download(`${url}/cacert-${version}.pem`, checksum);

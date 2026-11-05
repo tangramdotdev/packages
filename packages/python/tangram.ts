@@ -27,10 +27,15 @@ export const versions = {
 		checksum:
 			"sha256:c2215904f02b175596dc49351585104f4bc20341e1c47378b26a2c274360ce73",
 	},
+	"3.15": {
+		version: "3.15.2",
+		checksum:
+			"sha256:8b5536d280142ecf6cdfe15d12a21ba1c65e300bbf7b28a8d0cdb849575797de",
+	},
 } as const;
 
 /** The default Python version. */
-export const defaultVersion = "3.14" as const;
+export const defaultVersion = "3.15" as const;
 
 /** Package metadata for python (uses default version). */
 export const metadata = {
@@ -38,8 +43,8 @@ export const metadata = {
 	name: "python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.14.8",
-	tag: `python/3.14.8`,
+	version: "3.15.2",
+	tag: `python/3.15.2`,
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
