@@ -19,6 +19,8 @@
 # attributes = { source = "./std", get = "download.tg.ts" }
 # ///
 
+from __future__ import annotations
+
 import ncurses
 import pcre2
 import std_assert
@@ -26,7 +28,7 @@ import std_autotools
 import std_directory
 import std_download
 
-metadata = {
+metadata: std_assert.Metadata = {
     "homepage": "https://www.greenwoodsoftware.com/less/",
     "license": "GPL-3.0-or-later OR BSD-2-Clause",
     "name": "less",
