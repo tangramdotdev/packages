@@ -33,6 +33,7 @@ pub async fn wrapper(
 			ignore: false,
 			lock: None,
 			root: true,
+			watch: Some(false),
 			..tg::checkin::Options::default()
 		},
 		path: path.to_owned(),
@@ -126,6 +127,7 @@ pub async fn wrapper(
 			locked: false,
 			lock: Some(tg::checkin::Lock::Attr),
 			root: true,
+			watch: Some(false),
 			..tg::checkin::Options::default()
 		},
 		path: local_executable_path,
@@ -236,6 +238,7 @@ async fn checkin_file(path: &Path) -> tg::Result<tg::File> {
 			locked: false,
 			lock: None,
 			root: true,
+			watch: Some(false),
 			..tg::checkin::Options::default()
 		},
 		path: path.to_owned(),

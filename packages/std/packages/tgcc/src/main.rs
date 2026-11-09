@@ -506,6 +506,7 @@ async fn create_remapping_table(
 				locked: false,
 				lock: None,
 				root: true,
+				watch: Some(false),
 				..Default::default()
 			},
 			path: path.clone(),
