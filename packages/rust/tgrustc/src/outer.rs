@@ -773,6 +773,7 @@ pub(crate) async fn checkin(path: &Path) -> tg::Result<tg::checkin::Output> {
 			deterministic: true,
 			ignore: true,
 			root: true,
+			watch: Some(false),
 			..Default::default()
 		},
 		path: std::path::absolute(path)

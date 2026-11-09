@@ -275,6 +275,7 @@ impl Manifest {
 		let output = tg::checkin(tg::checkin::Arg {
 			options: tg::checkin::Options {
 				root: true,
+				watch: Some(false),
 				..tg::checkin::Options::default()
 			},
 			path: temp.path().to_owned(),

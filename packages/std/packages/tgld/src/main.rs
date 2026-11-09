@@ -329,6 +329,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				locked: false,
 				lock: None,
 				root: true,
+				watch: Some(false),
 				..tg::checkin::Options::default()
 			},
 			path: output_path,

@@ -88,6 +88,7 @@ pub async fn checkin_path(path: impl AsRef<Path>) -> tg::Result<tg::checkin::Out
 			lock: None,
 			locked: true,
 			root: true,
+			watch: Some(false),
 			..Default::default()
 		},
 		path: std::path::absolute(path)
