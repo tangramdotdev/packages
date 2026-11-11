@@ -114,15 +114,24 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		),
 	});
 
+	const sourceDir = source_ ?? source(version);
+
 	const buildOnce = async (gconvDir?: tg.Directory) => {
 		const gconvArgs = gconvDir !== undefined ? [tg`gconvdir=${gconvDir}`] : [];
-		const phases = {
-			configure,
-			...(gconvDir !== undefined ? { build: { args: gconvArgs } } : {}),
-			install: {
-				args: [tg`DESTDIR="${tg.output}/${host}"`, ...gconvArgs],
-			},
-		};
+		const phases =
+			gconvDir !== undefined
+				? {
+						configure,
+						build: { args: gconvArgs },
+						install: {
+							args: [tg`DESTDIR="${tg.output}/${host}"`, ...gconvArgs],
+						},
+					}
+				: {
+						configure,
+						build: { args: ["lib"] },
+						install: tg`LC_ALL=C make -r -j$(nproc) -C ${sourceDir}/iconvdata objdir=$PWD subdir=iconvdata ..=../ inst_includedir=$PWD install-others DESTDIR="${tg.output}/${host}"`,
+					};
 		return await std.autotools.build({
 			build,
 			host,
@@ -135,14 +144,14 @@ export async function build(arg: tg.Unresolved<Arg>) {
 			phases,
 			prefixPath: "/",
 			...std.args.optional("sdk", sdk),
-			source: source_ ?? source(version),
+			source: sourceDir,
 		});
 	};
 
 	// glibc compiles its gconv module path in from `gconvdir`, defaulting to the
 	// absolute `/lib/gconv`, which never exists in a sandbox. The path can only
-	// name the modules once they are addressable, so pass 1 produces them and pass
-	// 2 compiles in where they landed.
+	// name the modules once they are addressable, so pass 1 builds and installs
+	// only the modules and pass 2 compiles in where they landed.
 	const pass1 = await buildOnce();
 	const gconvModules = await pass1
 		.get(`${host}/lib/gconv`)

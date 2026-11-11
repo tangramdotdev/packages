@@ -137,7 +137,7 @@ export async function build(...args: tg.Args<Arg>) {
 					"--disable-shared",
 					"--disable-threads",
 					"--disable-werror",
-					"--enable-languages=c,c++",
+					"--enable-languages=c",
 					"--with-newlib",
 					"--without-headers",
 				];
