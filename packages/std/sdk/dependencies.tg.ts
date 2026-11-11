@@ -217,87 +217,92 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 	// This list collects artifacts to return. It does not include the build toolchain or standard utils.
 	const retEnvs: tg.Args<std.env.Arg> = [];
 
-	// A running modified build env including pieces we build along the way.
-	let buildEnv = await std.env.arg(buildToolchain);
+	// The build toolchain env. Each tool below receives this env composed with only the tools that its build uses, so independent tools build concurrently.
+	const toolchainEnv = await std.env.arg(buildToolchain);
 
 	// Track built artifacts that may be needed as dependencies for later tools
-	let m4Artifact: tg.Directory | undefined;
-	let perlArtifact: tg.Directory | undefined;
+	let pkgConfigArtifact: Promise<tg.Directory> | undefined;
+	let m4Artifact: Promise<tg.Directory> | undefined;
+	let bisonArtifact: Promise<tg.Directory> | undefined;
+	let libiconvArtifact: Promise<tg.Directory> | undefined;
+	let gettextArtifact: Promise<tg.Directory> | undefined;
+	let flexArtifact: Promise<tg.Directory> | undefined;
+	let perlArtifact: Promise<tg.Directory> | undefined;
+	let libxcryptArtifact: Promise<tg.Directory> | undefined;
+	let pythonArtifact: PromiseLike<tg.Directory> | undefined;
 	let grepArtifact: tg.Directory | undefined;
 	let autoconfArtifact: tg.Directory | undefined;
 
 	// Get bash for tools that need it.
 	const bashExe = await std.env
-		.which({ env: buildEnv, name: "bash" })
+		.which({ env: toolchainEnv, name: "bash" })
 		.then(tg.File.expect);
 
 	// pkg-config
 	if (config.pkgConfig) {
-		const artifact = await pkgConfig({
+		pkgConfigArtifact = pkgConfig({
 			bashExe,
 			host,
 			sdk: "none",
-			env: buildEnv,
+			env: toolchainEnv,
 		});
-		retEnvs.push(artifact);
-		buildEnv = await std.env.compose(buildEnv, artifact);
+		retEnvs.push(pkgConfigArtifact);
 	}
 
 	// m4 - required by bison, flex, autoconf.
 	if (config.m4 || config.bison || config.flex || config.autoconf) {
-		m4Artifact = await m4({
+		m4Artifact = m4({
 			host,
 			sdk: "none",
-			env: buildEnv,
+			env: toolchainEnv,
 		});
 		if (config.m4) {
 			retEnvs.push(m4Artifact);
 		}
-		buildEnv = await std.env.compose(buildEnv, m4Artifact);
 	}
 
 	// bison - uses m4.
 	if (config.bison) {
-		const artifact = await bison({
+		bisonArtifact = bison({
 			host,
 			sdk: "none",
-			env: buildEnv,
+			env: std.env.compose(toolchainEnv, m4Artifact ?? null),
 		});
-		retEnvs.push(artifact);
-		buildEnv = await std.env.compose(buildEnv, artifact);
+		retEnvs.push(bisonArtifact);
 	}
 
 	// libiconv - Darwin only, needed for gettext.
 	if (os === "darwin" && config.gettext) {
-		const artifact = await libiconv({
+		libiconvArtifact = libiconv({
 			host,
 			sdk: "none",
-			env: buildEnv,
+			env: toolchainEnv,
 		});
-		retEnvs.push(artifact);
-		buildEnv = await std.env.compose(buildEnv, artifact);
+		retEnvs.push(libiconvArtifact);
 	}
 
 	// gettext - i18n support for autotools packages.
 	if (config.gettext) {
-		const artifact = await gettext({
+		gettextArtifact = gettext({
 			host,
 			sdk: "none",
-			env: buildEnv,
+			env: std.env.compose(toolchainEnv, libiconvArtifact ?? null),
 		});
-		retEnvs.push(artifact);
-		buildEnv = await std.env.compose(buildEnv, artifact);
+		retEnvs.push(gettextArtifact);
 	}
 
-	// flex - uses m4.
+	// flex - uses m4 and bison.
 	if (config.flex) {
-		const artifact = await flex({
+		flexArtifact = flex({
 			host,
 			sdk: "none",
-			env: buildEnv,
+			env: std.env.compose(
+				toolchainEnv,
+				m4Artifact ?? null,
+				bisonArtifact ?? null,
+			),
 		});
-		retEnvs.push(artifact);
-		buildEnv = await std.env.compose(buildEnv, artifact);
+		retEnvs.push(flexArtifact);
 	}
 
 	// Build Perl for the development tools and Python's libxcrypt dependency.
@@ -309,35 +314,41 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 		config.texinfo ||
 		config.help2man
 	) {
-		perlArtifact = await perl({
+		perlArtifact = perl({
 			host,
 			sdk: "none",
-			env: buildEnv,
+			env: toolchainEnv,
 		});
 		if (config.perl) {
 			retEnvs.push(perlArtifact);
 		}
-		buildEnv = await std.env.compose(buildEnv, perlArtifact);
 	}
 
-	// python - requires libxcrypt.
+	// python - requires libxcrypt, which requires perl.
 	if (config.python) {
-		const libxcryptArtifact = await libxcrypt({
+		libxcryptArtifact = libxcrypt({
 			host,
 			sdk: "none",
-			env: buildEnv,
+			env: std.env.compose(
+				toolchainEnv,
+				pkgConfigArtifact ?? null,
+				perlArtifact ?? null,
+			),
 		});
-		buildEnv = await std.env.compose(buildEnv, libxcryptArtifact);
 
-		const artifact = await tg
+		pythonArtifact = tg
 			.build(python, {
 				host,
 				sdk: "none",
-				env: buildEnv,
+				env: std.env.compose(
+					toolchainEnv,
+					pkgConfigArtifact ?? null,
+					libxcryptArtifact,
+				),
 			})
-			.named("python");
-		retEnvs.push(artifact);
-		buildEnv = await std.env.compose(buildEnv, artifact);
+			.named("python")
+			.then(tg.Directory.expect);
+		retEnvs.push(pythonArtifact);
 	}
 
 	// Development tools - these require perl and m4 to already be built.
@@ -349,6 +360,20 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 		config.automake;
 
 	if (needsDevTools) {
+		// The development tools receive every tool built above.
+		let buildEnv = await std.env.compose(
+			toolchainEnv,
+			pkgConfigArtifact ?? null,
+			m4Artifact ?? null,
+			bisonArtifact ?? null,
+			libiconvArtifact ?? null,
+			gettextArtifact ?? null,
+			flexArtifact ?? null,
+			perlArtifact ?? null,
+			libxcryptArtifact ?? null,
+			pythonArtifact ?? null,
+		);
+
 		// grep and sed are needed by libtool and autoconf.
 		grepArtifact = await grep({
 			host,
