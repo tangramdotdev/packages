@@ -982,12 +982,14 @@ function hasRootModule(dirPath: string): boolean {
 	if (!fs.statSync(dirPath, { throwIfNoEntry: false })?.isDirectory()) {
 		return false;
 	}
-	return fs.readdirSync(dirPath, { withFileTypes: true }).some(
-		(entry) =>
-			entry.isFile() &&
-			entry.name !== "tangram.lock" &&
-			/^tangram\.[^.]+$/.test(entry.name),
-	);
+	return fs
+		.readdirSync(dirPath, { withFileTypes: true })
+		.some(
+			(entry) =>
+				entry.isFile() &&
+				entry.name !== "tangram.lock" &&
+				/^tangram\.[^.]+$/.test(entry.name),
+		);
 }
 
 /** Returns the package path, or null if the package does not exist. */
