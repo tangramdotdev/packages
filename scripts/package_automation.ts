@@ -175,17 +175,18 @@ function resolvePackages(filter: PackageFilter): string[] {
 		const entries = fs.readdirSync(packagesPath(), { withFileTypes: true });
 
 		for (const entry of entries) {
-			// Handle directory packages (with tangram.ts inside)
+			// Handle directory packages, which contain a root module.
 			if (entry.isDirectory()) {
 				if (blacklist.has(entry.name)) continue;
 				const fullPath = path.join(packagesPath(), entry.name);
-				if (fs.existsSync(path.join(fullPath, "tangram.ts"))) {
+				if (hasRootModule(fullPath)) {
 					packages.push(entry.name);
 				}
 			}
-			// Handle single-file packages (.tg.ts files)
-			else if (entry.isFile() && entry.name.endsWith(".tg.ts")) {
-				const packageName = entry.name.replace(/\.tg\.ts$/, "");
+			// Handle single-file packages, which are named <package>.tg.<extension>.
+			else if (entry.isFile()) {
+				const packageName = singleFilePackageName(entry.name);
+				if (packageName === null) continue;
 				if (blacklist.has(packageName)) continue;
 				packages.push(packageName);
 			}
@@ -971,18 +972,43 @@ function packagesPath() {
 	return path.join(path.dirname(import.meta.dir), "packages");
 }
 
-/** Returns the package path, or null if the package does not exist */
-export function getPackagePath(name: string): string | null {
-	const pkgPath = packagesPath();
-	// Check for single-file package
-	const filePath = path.join(pkgPath, `${name}.tg.ts`);
-	if (fs.existsSync(filePath)) {
-		return filePath;
+/** Recognize the package naming convention, leaving language support to Tangram. */
+function singleFilePackageName(fileName: string): string | null {
+	return fileName.match(/^(.+)\.tg\.[^.]+$/)?.[1] ?? null;
+}
+
+/** Returns whether the directory contains a root module. */
+function hasRootModule(dirPath: string): boolean {
+	if (!fs.statSync(dirPath, { throwIfNoEntry: false })?.isDirectory()) {
+		return false;
 	}
-	// Check for directory package
-	const dirPath = path.join(pkgPath, name);
-	if (fs.existsSync(path.join(dirPath, "tangram.ts"))) {
-		return dirPath;
+	return fs
+		.readdirSync(dirPath, { withFileTypes: true })
+		.some(
+			(entry) =>
+				entry.isFile() &&
+				entry.name !== "tangram.lock" &&
+				/^tangram\.[^.]+$/.test(entry.name),
+		);
+}
+
+/** Returns the package path, or null if the package does not exist. */
+export function getPackagePath(name: string): string | null {
+	const pkgPath = path.join(packagesPath(), name);
+	const parentPath = path.dirname(pkgPath);
+	if (!fs.statSync(parentPath, { throwIfNoEntry: false })?.isDirectory()) {
+		return null;
+	}
+	const packageName = path.basename(pkgPath);
+	// Check for a single-file package.
+	for (const entry of fs.readdirSync(parentPath, { withFileTypes: true })) {
+		if (entry.isFile() && singleFilePackageName(entry.name) === packageName) {
+			return path.join(parentPath, entry.name);
+		}
+	}
+	// Check for a directory package.
+	if (hasRootModule(pkgPath)) {
+		return pkgPath;
 	}
 	return null;
 }
