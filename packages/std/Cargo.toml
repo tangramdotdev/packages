@@ -74,3 +74,6 @@ codegen-units = 1
 lto = true
 panic = "abort"
 strip = true
+
+[profile.release.package.tangram_client]
+codegen-units = 16

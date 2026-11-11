@@ -86,6 +86,7 @@ export async function prefetchSources(host: string) {
 			sdk.gnu.gcc.source(false),
 			sdk.kernelHeaders.source(),
 			glibc.source(),
+			workspace.mimallocSource(),
 		);
 	} else if (os === "darwin") {
 		sources.push(utils.fileCmds.source(), utils.libiconv.source());
