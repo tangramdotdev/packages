@@ -56,7 +56,7 @@ export type Arg = Omit<std.autotools.Arg, "deps" | "source"> & {
 
 export type Variant =
 	| "stage1_bootstrap" // C only, no libraries. Will produce an output directory with two folders, ${tg.output}/prefix with the installed compiler and ${tg.output}/build with the build artifacts.
-	| "stage1_limited" // Produce a complete native `host === target` GCC toolchain with only C and C++ enabled and many features disabled.
+	| "stage1_limited" // Produce a cross-compiler with only C and C++ enabled and many features disabled.
 	| "stage2_full"; // Everything enabled.
 
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
@@ -150,11 +150,15 @@ export async function build(...args: tg.Args<Arg>) {
 				return [
 					"--disable-libatomic",
 					"--disable-libgomp",
+					"--disable-libitm",
+					"--disable-libsanitizer",
 					"--disable-libssp",
+					"--disable-libstdcxx-pch",
 					"--disable-libvtv",
 					"--enable-default-pie",
 					"--enable-default-ssp",
 					"--enable-initfini-array",
+					"--enable-languages=c,c++",
 					`LDFLAGS_FOR_TARGET=-L$PWD/${target}/libgcc`,
 					`--with-gxx-include-dir=$\{TANGRAM_OUTPUT\}/${target}/include/c++/${metadata.version}`,
 				];
