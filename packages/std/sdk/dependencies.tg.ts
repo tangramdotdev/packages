@@ -9,7 +9,6 @@ import isl from "./dependencies/isl.tg.ts";
 import m4 from "../autotools/m4.tg.ts";
 import mpc from "./dependencies/mpc.tg.ts";
 import mpfr from "./dependencies/mpfr.tg.ts";
-import libxcrypt from "./dependencies/libxcrypt.tg.ts";
 import perl from "../autotools/perl.tg.ts";
 import python from "./dependencies/python.tg.ts";
 import zlib from "./dependencies/zlib.tg.ts";
@@ -228,7 +227,6 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 	let gettextArtifact: Promise<tg.Directory> | undefined;
 	let flexArtifact: Promise<tg.Directory> | undefined;
 	let perlArtifact: Promise<tg.Directory> | undefined;
-	let libxcryptArtifact: Promise<tg.Directory> | undefined;
 	let pythonArtifact: PromiseLike<tg.Directory> | undefined;
 	let grepArtifact: tg.Directory | undefined;
 	let autoconfArtifact: tg.Directory | undefined;
@@ -305,10 +303,9 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 		retEnvs.push(flexArtifact);
 	}
 
-	// Build Perl for the development tools and Python's libxcrypt dependency.
+	// Build Perl when it is requested or when autoconf, automake, texinfo, or help2man requires it.
 	if (
 		config.perl ||
-		config.python ||
 		config.autoconf ||
 		config.automake ||
 		config.texinfo ||
@@ -324,27 +321,13 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 		}
 	}
 
-	// python - requires libxcrypt, which requires perl.
+	// python - uses pkg-config.
 	if (config.python) {
-		libxcryptArtifact = libxcrypt({
-			host,
-			sdk: "none",
-			env: std.env.compose(
-				toolchainEnv,
-				pkgConfigArtifact ?? null,
-				perlArtifact ?? null,
-			),
-		});
-
 		pythonArtifact = tg
 			.build(python, {
 				host,
 				sdk: "none",
-				env: std.env.compose(
-					toolchainEnv,
-					pkgConfigArtifact ?? null,
-					libxcryptArtifact,
-				),
+				env: std.env.compose(toolchainEnv, pkgConfigArtifact ?? null),
 			})
 			.named("python")
 			.then(tg.Directory.expect);
@@ -370,7 +353,6 @@ export async function buildTools(...args: tg.Args<BuildToolsArg>) {
 			gettextArtifact ?? null,
 			flexArtifact ?? null,
 			perlArtifact ?? null,
-			libxcryptArtifact ?? null,
 			pythonArtifact ?? null,
 		);
 
