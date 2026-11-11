@@ -62,25 +62,21 @@ export async function env(...args: tg.Args<Arg>) {
 		host,
 		sdk: "none" as const,
 	};
-	const shellArtifact = await tg.build(bash.build, commonArg).named("bash");
-
-	let utils = [shellArtifact];
-	utils = utils.concat(
-		await Promise.all([
-			tg.build(bzip2, commonArg).named("bzip2"),
-			tg.build(coreutils, commonArg).named("coreutils"),
-			tg.build(diffutils, commonArg).named("diffutils"),
-			tg.build(findutils, commonArg).named("findutils"),
-			tg.build(gawk, commonArg).named("gawk"),
-			tg.build(grep, commonArg).named("grep"),
-			tg.build(gzip, commonArg).named("gzip"),
-			tg.build(make, commonArg).named("make"),
-			tg.build(patch, commonArg).named("patch"),
-			tg.build(sed, commonArg).named("sed"),
-			tg.build(tar, commonArg).named("tar"),
-			tg.build(xz, commonArg).named("xz"),
-		]),
-	);
+	const utils = await Promise.all([
+		tg.build(bash.build, commonArg).named("bash"),
+		tg.build(bzip2, commonArg).named("bzip2"),
+		tg.build(coreutils, commonArg).named("coreutils"),
+		tg.build(diffutils, commonArg).named("diffutils"),
+		tg.build(findutils, commonArg).named("findutils"),
+		tg.build(gawk, commonArg).named("gawk"),
+		tg.build(grep, commonArg).named("grep"),
+		tg.build(gzip, commonArg).named("gzip"),
+		tg.build(make, commonArg).named("make"),
+		tg.build(patch, commonArg).named("patch"),
+		tg.build(sed, commonArg).named("sed"),
+		tg.build(tar, commonArg).named("tar"),
+		tg.build(xz, commonArg).named("xz"),
+	]);
 	return await std.env.compose(...utils);
 }
 
