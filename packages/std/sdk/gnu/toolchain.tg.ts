@@ -141,11 +141,13 @@ export async function canadianCross(arg?: CanadianCrossArg) {
 		host,
 	});
 
+	// Combine the libraries that each linked output needs into one directory, so that the native toolchain references those libraries rather than the cross toolchain.
 	const stage1HostSdk = std.env.arg(
 		buildToHostCross,
 		crossProxyEnv,
 		bootstrapUtils,
 		bootstrapBuildTools,
+		{ TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "combine" },
 		env_ ?? null,
 	);
 
@@ -176,14 +178,46 @@ export async function canadianCross(arg?: CanadianCrossArg) {
 		.named("native gcc")
 		.then(tg.Directory.expect);
 
+	// Add this toolchain's library directory to the library paths of the programs that the cross toolchain linked, so that the libraries they load at runtime resolve against this toolchain.
+	const buildToolchain = await std.env.compose(nativeGcc);
+	const libDir = await nativeGcc.get("lib").then(tg.Directory.expect);
+	const programs: Record<string, tg.Unresolved<tg.File>> = {};
+	for (const name of ["bin", `${target}/bin`, "libexec"]) {
+		const directory = await nativeGcc.tryGet(name);
+		if (!(directory instanceof tg.Directory)) {
+			continue;
+		}
+		for await (const [path, file] of directory.walk()) {
+			if (!(file instanceof tg.File) || !(await file.executable)) {
+				continue;
+			}
+			const metadata = await std.file.tryExecutableMetadata(file);
+			if (
+				metadata?.format !== "elf" ||
+				metadata.interpreter !== undefined ||
+				metadata.soname !== undefined
+			) {
+				continue;
+			}
+			programs[`${name}/${path}`] = std.wrap.Manifest.tryRead(file).then(
+				(manifest) =>
+					manifest === undefined
+						? file
+						: std.wrap(file, {
+								buildToolchain,
+								host,
+								libraryPaths: [{ path: libDir, preserve: true }],
+							}),
+			);
+		}
+	}
+
 	// Wrap the C library's programs, which request the system dynamic linker, with this toolchain so that they run in a sandbox.
 	const libcBin = await sysroot.tryGet(`${target}/bin`);
 	if (!(libcBin instanceof tg.Directory)) {
-		return nativeGcc;
+		return tg.directory(nativeGcc, programs);
 	}
-	const buildToolchain = await std.env.compose(nativeGcc);
 	const libraryPaths = [tg`${nativeGcc}/lib`];
-	const programs: Record<string, tg.Unresolved<tg.File>> = {};
 	for (const name of Object.keys(await libcBin.entries)) {
 		const file = await nativeGcc.tryGet(`bin/${name}`);
 		if (!(file instanceof tg.File) || !(await file.executable)) {
