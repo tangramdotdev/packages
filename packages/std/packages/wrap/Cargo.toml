@@ -15,11 +15,13 @@ clap = { workspace = true }
 num = { workspace = true }
 paste = { workspace = true }
 rustix = { workspace = true }
-tempfile = { workspace = true }
 tracing = { workspace = true }
 zerocopy = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[target.'cfg(all(target_os = "linux", target_endian = "little", target_pointer_width = "64"))'.dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

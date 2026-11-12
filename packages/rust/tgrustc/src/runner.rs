@@ -41,9 +41,8 @@ pub async fn run() -> tg::Result<()> {
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
 		.map_err(|_| tg::error!("CARGO_MANIFEST_DIR is not set"))?;
 	let (source_artifact, manifest_subpath) = source(Path::new(&manifest_dir)).await?;
-	let manifest_subpath = manifest_subpath
-		.map(|path| path.to_string_lossy().into_owned())
-		.unwrap_or_default();
+	let manifest_subpath =
+		manifest_subpath.map_or_default(|path| path.to_string_lossy().into_owned());
 	let source_template =
 		tg::Template::with_components([tg::template::Component::Artifact(source_artifact)]);
 

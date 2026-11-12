@@ -37,7 +37,6 @@ fnv = "1"
 futures = "0.3"
 goblin = "0.9"
 itertools = "0.14"
-libc = "0.2"
 num = "0.4"
 paste = "1"
 regex = "1"
@@ -45,9 +44,9 @@ rustix = { version = "1", features = ["all-apis"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 shlex = "2"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "1a7bbf362953df5185b4dad06cf27cbc4684bd05" }
-tangram_either = { git = "https://github.com/tangramdotdev/tangram", rev = "1a7bbf362953df5185b4dad06cf27cbc4684bd05" }
-tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "1a7bbf362953df5185b4dad06cf27cbc4684bd05" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "edfc342dcd5a53cb405db39fa01939688d046d70" }
+tangram_either = { git = "https://github.com/tangramdotdev/tangram", rev = "edfc342dcd5a53cb405db39fa01939688d046d70" }
+tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "edfc342dcd5a53cb405db39fa01939688d046d70" }
 tempfile = "3"
 tokio = { version = "1", default-features = false, features = [
   "rt",
@@ -64,10 +63,6 @@ zerocopy = { version = "0.8", features = ["derive"] }
 common = { path = "packages/common" }
 proxy = { path = "packages/proxy" }
 wrap = { path = "packages/wrap" }
-tgcc = { path = "packages/tgcc" }
-tginstallnametool = { path = "packages/tginstallnametool" }
-tgld = { path = "packages/tgld" }
-tgstrip = { path = "packages/tgstrip" }
 
 [profile.release]
 codegen-units = 1

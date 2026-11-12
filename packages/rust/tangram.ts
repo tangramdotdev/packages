@@ -65,7 +65,7 @@ export const metadata = {
 };
 
 const PROFILE = "minimal" as const;
-export const VERSION = "1.99.1" as const;
+export const VERSION = "1.100.0" as const;
 /** The nightly that `cargo.build` uses with the proxy. It is pinned so that every machine uses the same Cargo build-dir layout. */
 export const NIGHTLY = "nightly-2026-10-12" as const;
 
@@ -101,7 +101,7 @@ export async function self(unresolvedArg?: tg.Unresolved<ToolchainArg>) {
 	if (channel === "stable" || channel === undefined) {
 		manifestUrl = `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`;
 		manifestChecksum =
-			"sha256:fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463";
+			"sha256:3051e859570f64a8c5acb9d09e87425db52c7d97287c67e8f6d57d7d34ef9258";
 	} else if (channel === "nightly") {
 		manifestUrl = "https://static.rust-lang.org/dist/channel-rust-nightly.toml";
 		manifestChecksum = "sha256:any";
