@@ -502,7 +502,11 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	let cargo = tg``;
 	if (hostOs === "linux") {
 		tg.assert(ldso);
-		interpreter = tg`${ldso} --library-path ${libDir}`;
+		const allocator = await mimalloc({
+			env: std.env.compose(buildToolchain),
+			host: system,
+		});
+		interpreter = tg`${ldso} --library-path ${libDir} --preload ${allocator}`;
 		rustc = tg`${interpreter} ${rustToolchain}/bin/rustc`;
 		cargo = tg`${interpreter} ${rustToolchain}/bin/cargo`;
 	} else if (hostOs === "darwin") {
@@ -635,6 +639,38 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 
 	// Combine and return.
 	return tg.directory(crates, wrapper);
+}
+
+export function mimallocSource() {
+	return std.download.fromGithub({
+		checksum:
+			"sha256:c5ec406ac34006c751200e7e778f88e2a9070819e3f1d4ebbde4f4554ecf0d0b",
+		owner: "microsoft",
+		repo: "mimalloc",
+		source: "tag",
+		tag: "v2.3.2",
+	});
+}
+
+type MimallocArg = {
+	env: tg.Unresolved<std.env.Arg>;
+	host: string;
+};
+
+/** Build mimalloc as a shared library to preload into the musl Rust toolchain, whose allocator serializes the threads that compile codegen units in parallel. */
+async function mimalloc(arg: MimallocArg): Promise<tg.File> {
+	const source = await mimallocSource();
+	return await std.phases
+		.run({
+			bootstrap: true,
+			env: arg.env,
+			phases: {
+				build: tg`cc -O2 -DNDEBUG -DMI_MALLOC_OVERRIDE -fPIC -ftls-model=initial-exec -shared -I${source}/include ${source}/src/static.c -o ${tg.output}`,
+			},
+			host: arg.host,
+			processName: "compile mimalloc",
+		})
+		.then(tg.File.expect);
 }
 
 /* Ensure the passed triples are what we expect, musl on linux and standard for macOS. */

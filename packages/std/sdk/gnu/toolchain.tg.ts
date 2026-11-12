@@ -90,25 +90,39 @@ export async function canadianCross(arg?: CanadianCrossArg) {
 	const build = bootstrap.toolchainTriple(host);
 	const bootstrapToolchain = bootstrap.sdk(host);
 
-	// Set up build environment tools.
+	// Set up build environment tools. The stages before the C library use only pkg-config, m4, and perl, so they receive only those and do not wait for the remaining build tools.
 	const bootstrapUtils = await tg
 		.build(std.utils.env, {
 			env: bootstrapToolchain,
 		})
 		.named("bootstrap utils");
-	const bootstrapBuildTools = await tg
+	const bootstrapBuildToolchain = std.env.arg(
+		bootstrap.toolchainSdk(build),
+		bootstrapUtils,
+	);
+	const bootstrapBuildTools = tg
 		.build(dependencies.buildTools, {
 			host: build,
-			buildToolchain: std.env.arg(
-				bootstrap.toolchainSdk(build),
-				bootstrapUtils,
-			),
+			buildToolchain: bootstrapBuildToolchain,
 			preset: "toolchain",
 		})
 		.named("bootstrap build tools");
+	const bootstrapInitialBuildTools = tg
+		.build(dependencies.buildTools, {
+			host: build,
+			buildToolchain: bootstrapBuildToolchain,
+			m4: true,
+			perl: true,
+		})
+		.named("bootstrap initial build tools");
 	const bootstrapBuildEnv = std.env.arg(
 		bootstrapUtils,
 		bootstrapBuildTools,
+		env_ ?? null,
+	);
+	const bootstrapInitialBuildEnv = std.env.arg(
+		bootstrapUtils,
+		bootstrapInitialBuildTools,
 		env_ ?? null,
 	);
 
@@ -117,6 +131,7 @@ export async function canadianCross(arg?: CanadianCrossArg) {
 		await buildToHostCrossToolchain({
 			host,
 			env: bootstrapBuildEnv,
+			initialEnv: bootstrapInitialBuildEnv,
 		});
 
 	// Proxy the cross toolchain.
@@ -189,9 +204,9 @@ export async function canadianCross(arg?: CanadianCrossArg) {
 }
 
 export async function buildToHostCrossToolchain(
-	arg?: tg.Unresolved<CanadianCrossArg>,
+	arg?: Pick<CrossToolchainArg, "env" | "host" | "initialEnv">,
 ) {
-	const { host: host_, env } = arg ? await tg.resolve(arg) : {};
+	const { host: host_, env, initialEnv } = arg ?? {};
 	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 	const build = bootstrap.toolchainTriple(host);
 	const buildToolchain = bootstrap.toolchainSdk(build);
@@ -201,6 +216,7 @@ export async function buildToHostCrossToolchain(
 		build,
 		buildToolchain,
 		...std.args.optional("env", env),
+		...std.args.optional("initialEnv", initialEnv),
 		host: build,
 		target: host,
 		variant: "stage1_limited",
@@ -210,26 +226,28 @@ export async function buildToHostCrossToolchain(
 export type CrossToolchainArg = {
 	build?: string;
 	/** The compiler for the build triple. Separated from the other env to allow dropping this compiler partway through the build. */
-	buildToolchain?: std.env.Arg;
+	buildToolchain?: tg.Unresolved<std.env.Arg>;
 	/** Additional utilities. */
-	env?: std.env.Arg;
+	env?: tg.Unresolved<std.env.Arg>;
 	host?: string;
+	/** Additional utilities for the stages before the C library: the host libraries, the target binutils, the Linux headers, and the initial compiler. Defaults to `env`. It is resolved separately from `env`, so these stages do not wait for `env`. */
+	initialEnv?: tg.Unresolved<std.env.Arg>;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	target: string;
 	variant?: gcc.Variant;
 };
 
-export async function crossToolchain(arg: tg.Unresolved<CrossToolchainArg>) {
+export async function crossToolchain(arg: CrossToolchainArg) {
+	const { env: env_, initialEnv: initialEnv_ = env_, ...rest } = arg;
 	const {
 		buildToolchain,
 		build: build_,
-		env: env_,
 		host: host_,
 		sdk,
 		target: target_,
 		variant = "stage2_full",
-	} = await tg.resolve(arg);
+	} = await tg.resolve(rest);
 
 	const host = host_ ?? std.triple.host();
 	const buildTriple = build_ ?? host;
@@ -239,7 +257,10 @@ export async function crossToolchain(arg: tg.Unresolved<CrossToolchainArg>) {
 	const hostLibraries = await tg
 		.build(dependencies.hostLibraries, {
 			host,
-			buildToolchain: std.env.compose(buildToolchain ?? null, env_ ?? null),
+			buildToolchain: std.env.compose(
+				buildToolchain ?? null,
+				initialEnv_ ?? null,
+			),
 			preset: "gcc",
 		})
 		.named("host libraries");
@@ -252,7 +273,11 @@ export async function crossToolchain(arg: tg.Unresolved<CrossToolchainArg>) {
 	const targetBinutils = binutils({
 		sdk: "none",
 		build: buildTriple,
-		env: buildEnv,
+		env: std.env.compose(
+			initialEnv_ ?? null,
+			buildToolchain ?? null,
+			hostLibraries,
+		),
 		host,
 		target,
 	});
@@ -268,6 +293,11 @@ export async function crossToolchain(arg: tg.Unresolved<CrossToolchainArg>) {
 		...std.args.optional("buildToolchain", buildToolchain),
 		env: binutilsEnv,
 		host: target,
+		initialEnv: std.env.compose(
+			initialEnv_ ?? null,
+			targetBinutils,
+			hostLibraries,
+		),
 		...(sdk !== undefined ? { sdk } : {}),
 		targetBinutils,
 	});
@@ -296,28 +326,30 @@ export async function crossToolchain(arg: tg.Unresolved<CrossToolchainArg>) {
 export type BuildSysrootArg = {
 	build?: string;
 	// This is kept separate from the remaining env to avoid passing it in to the libc build.
-	buildToolchain?: std.env.Arg;
-	env?: std.env.Arg;
+	buildToolchain?: tg.Unresolved<std.env.Arg>;
+	env?: tg.Unresolved<std.env.Arg>;
 	host?: string;
+	/** Additional utilities for the Linux headers and the initial compiler. Defaults to `env`. It is resolved separately from `env`, so these stages do not wait for `env`. */
+	initialEnv?: tg.Unresolved<std.env.Arg>;
 	sdk?: std.sdk.Arg;
-	targetBinutils?: tg.Directory;
+	targetBinutils?: tg.Unresolved<tg.Directory>;
 };
 
-export async function buildSysroot(arg: tg.Unresolved<BuildSysrootArg>) {
+export async function buildSysroot(arg: BuildSysrootArg) {
+	const { env, initialEnv = env, ...rest } = arg;
 	const {
 		build: build_,
 		buildToolchain,
 		targetBinutils: targetBinutils_,
-		env,
 		host: host_,
 		sdk,
-	} = arg ? await tg.resolve(arg) : {};
+	} = await tg.resolve(rest);
 
 	const host = host_ ?? std.triple.host();
 	const buildTriple = build_ ?? host;
 	const target = host;
 
-	const buildEnv = std.env.compose(env ?? null, buildToolchain ?? null);
+	const buildEnv = std.env.compose(initialEnv ?? null, buildToolchain ?? null);
 	const targetBinutils =
 		targetBinutils_ ??
 		(await binutils({

@@ -73,7 +73,9 @@ export async function build(arg?: tg.Unresolved<Arg>) {
 
 	const configure = {
 		args: [
+			"--config-cache",
 			"--disable-dependency-tracking",
+			"--disable-static",
 			"--enable-fast-install",
 			"--enable-relocatable",
 			"--with-included-glib",

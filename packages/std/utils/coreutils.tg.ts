@@ -66,10 +66,6 @@ export async function build(...args: tg.Args<Arg>) {
 
 	const dependencies: tg.Args<std.env.Arg> = [];
 
-	if (usePrerequisites) {
-		dependencies.push(prerequisites(build));
-	}
-
 	let attrArtifact;
 	if (os === "linux") {
 		attrArtifact = attr({
@@ -106,6 +102,9 @@ export async function build(...args: tg.Args<Arg>) {
 	}
 	if (env_ !== undefined && env_ !== null) {
 		env.push(env_);
+	}
+	if (usePrerequisites) {
+		env.push(prerequisites(build));
 	}
 	if (os === "darwin" && appleXattrCmds) {
 		env.push(appleXattrCmds);
