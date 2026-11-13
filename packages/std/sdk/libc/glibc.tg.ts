@@ -2,6 +2,8 @@ import * as std from "../../tangram.ts";
 
 // Define supported versions.
 export type GlibcVersion =
+	| "2.35"
+	| "2.36"
 	| "2.37"
 	| "2.38"
 	| "2.39"
@@ -11,6 +13,8 @@ export type GlibcVersion =
 	| "2.43"
 	| "2.44";
 export const AllGlibcVersions = [
+	"2.35",
+	"2.36",
 	"2.37",
 	"2.38",
 	"2.39",
@@ -70,6 +74,15 @@ export async function build(arg: tg.Unresolved<Arg>) {
 	if (version === "2.38") {
 		// libcrypt is now disabled by default, with a note that applications should prepare to migrate to new libcrypt providers like libxcrypt. GCC still expects libcrypt, so we opt-in. This may change in future iterations.
 		additionalFlags.push("--enable-crypt");
+	}
+
+	// The SDK's libstdc++ requires glibc 2.38 symbols, so older versions build without C++, which links glibc's test helpers as C programs.
+	if (
+		version === "2.35" ||
+		version === "2.36" ||
+		version === "2.37"
+	) {
+		additionalFlags.push("libc_cv_cxx_link_ok=no");
 	}
 
 	if (
@@ -251,6 +264,14 @@ function splitVersionFromHost(host: string): {
 }
 
 const checksums: Map<GlibcVersion, tg.Checksum> = new Map([
+	[
+		"2.35",
+		"sha256:5123732f6b67ccd319305efd399971d58592122bcc2a6518a1bd2510dd0cf52e",
+	],
+	[
+		"2.36",
+		"sha256:1c959fea240906226062cb4b1e7ebce71a9f0e3c0836c09e7e3423d434fcfe75",
+	],
 	[
 		"2.37",
 		"sha256:2257eff111a1815d74f46856daaf40b019c1e553156c69d48ba0cbfc1bb91a43",
