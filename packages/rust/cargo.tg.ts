@@ -714,6 +714,14 @@ linker = "${hostLinker}"`;
 		}
 	}
 
+	// Link Linux artifacts with the SDK's linker rather than the Rust toolchain's self-contained lld, whose executables need a system dynamic linker.
+	if (os === "linux") {
+		const linkerEnv = {
+			RUSTFLAGS: tg.Mutation.suffix("-C linker-features=-lld", " "),
+		};
+		envs.push(linkerEnv);
+	}
+
 	if (verbose) {
 		const verbosityEnv = {
 			RUSTFLAGS: tg.Mutation.suffix("-v", " "),
