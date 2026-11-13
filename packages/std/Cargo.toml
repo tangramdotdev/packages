@@ -18,8 +18,11 @@ homepage = "https://www.tangram.dev"
 license = "MIT"
 publish = false
 repository = "https://github.com/tangramdotdev/packages"
-rust-version = "1.99"
+rust-version = "1.100"
 version = "0.0.0"
+
+[workspace.lints.cargo]
+unused_dependencies = "deny"
 
 [workspace.lints.clippy]
 missing_errors_doc = "allow"
@@ -44,9 +47,9 @@ rustix = { version = "1", features = ["all-apis"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 shlex = "2"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "edfc342dcd5a53cb405db39fa01939688d046d70" }
-tangram_either = { git = "https://github.com/tangramdotdev/tangram", rev = "edfc342dcd5a53cb405db39fa01939688d046d70" }
-tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "edfc342dcd5a53cb405db39fa01939688d046d70" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "0a05cf0a5e0131a6c66e34d43ab2c9a228bc077a" }
+tangram_either = { git = "https://github.com/tangramdotdev/tangram", rev = "0a05cf0a5e0131a6c66e34d43ab2c9a228bc077a" }
+tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "0a05cf0a5e0131a6c66e34d43ab2c9a228bc077a" }
 tempfile = "3"
 tokio = { version = "1", default-features = false, features = [
   "rt",

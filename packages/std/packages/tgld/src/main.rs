@@ -643,7 +643,7 @@ fn library_directory_from_referent(
 		.try_unwrap_directory()
 		.map_err(|_| tg::error!("expected a containing library directory"))?;
 	let path = path.ok_or_else(|| tg::error!("expected a library subpath"))?;
-	let parent = path.parent().filter(|path| !path.as_os_str().is_empty());
+	let parent = path.parent().filter(|path| !path.is_empty());
 	let subpath = parent.map(std::path::Path::to_owned);
 	Ok(Some(DirectoryWithSubpath { directory, subpath }))
 }

@@ -22,7 +22,7 @@ pub fn artifact_path(
 		(referent.node.clone(), None)
 	};
 	let artifact = tg::Artifact::with_referent(referent.clone().map(|_| id));
-	Ok((artifact, path.filter(|path| !path.as_os_str().is_empty())))
+	Ok((artifact, path.filter(|path| !path.is_empty())))
 }
 
 /// Build a template from checkin's authorized root and optional subpath.

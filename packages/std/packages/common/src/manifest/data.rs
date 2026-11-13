@@ -202,11 +202,7 @@ impl super::Manifest {
 	pub(super) fn to_data(&self) -> Data {
 		self.clone()
 			.try_map(
-				|template| {
-					Ok::<_, std::convert::Infallible>(
-						template.to_data().without_location_and_tokens(),
-					)
-				},
+				|template| Ok::<_, !>(template.to_data().without_location_and_tokens()),
 				|mutation| Ok(mutation.to_data().without_location_and_tokens()),
 			)
 			.unwrap()
