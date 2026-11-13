@@ -76,6 +76,14 @@ export async function build(arg: tg.Unresolved<Arg>) {
 		additionalFlags.push("--enable-crypt");
 	}
 
+	// The SDK's libstdc++ requires glibc 2.38 symbols, so older versions build without C++, which links glibc's test helpers as C programs.
+	if (
+		version === "2.35" ||
+		version === "2.36" ||
+		version === "2.37"
+	) {
+		additionalFlags.push("libc_cv_cxx_link_ok=no");
+	}
 
 	if (
 		version === "2.38" ||
