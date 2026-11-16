@@ -714,6 +714,23 @@ linker = "${hostLinker}"`;
 		}
 	}
 
+	// Link Linux artifacts, including build scripts, with the SDK's linker rather than the Rust toolchain's self-contained lld.
+	if (os === "linux") {
+		const linkerFeatures = "-C linker-features=-lld";
+		if (proxy && proxyDir !== undefined) {
+			const linkerEnv = {
+				RUSTFLAGS: tg.Mutation.suffix(linkerFeatures, " "),
+			};
+			envs.push(linkerEnv);
+		} else {
+			const wrapper = tg.file(`#!/bin/sh\nexec "$@" ${linkerFeatures}\n`, {
+				executable: true,
+			});
+			const linkerEnv = { RUSTC_WRAPPER: wrapper };
+			envs.push(linkerEnv);
+		}
+	}
+
 	if (verbose) {
 		const verbosityEnv = {
 			RUSTFLAGS: tg.Mutation.suffix("-v", " "),
