@@ -245,6 +245,7 @@ async fn build_env(
 		}
 	}
 	rewrite_dir_env(&mut env, "OUT_DIR").await?;
+	rewrite_out_dir_references(&mut env);
 	// Cargo populates these with paths embedding the outer cargo-sandbox's
 	// source artifact id, which varies per `cargo.build`. Re-anchor on the
 	// per-crate source artifact so they depend only on this crate's source.
@@ -513,6 +514,61 @@ async fn rewrite_dir_env(env: &mut tg::value::Map, key: &str) -> tg::Result<()> 
 	let template = tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
 	env.insert(key.to_owned(), tg::Value::Template(template));
 	Ok(())
+}
+
+// Replace cargo's `OUT_DIR` path inside the other variables with the checked-in directory, so that a path that a build script exports with `cargo:rustc-env` resolves in the sandbox.
+fn rewrite_out_dir_references(env: &mut tg::value::Map) {
+	let Ok(out_dir) = std::env::var("OUT_DIR") else {
+		return;
+	};
+	let Some(tg::Value::Template(out_dir_template)) = env.get("OUT_DIR").cloned() else {
+		return;
+	};
+	for (name, value) in env.iter_mut() {
+		if name == "OUT_DIR" {
+			continue;
+		}
+		let components = match value {
+			tg::Value::String(string) => vec![tg::template::Component::String(string.clone())],
+			tg::Value::Template(template) => template.components.clone(),
+			_ => continue,
+		};
+		let mut rewritten = Vec::with_capacity(components.len());
+		let mut changed = false;
+		for component in components {
+			let tg::template::Component::String(string) = component else {
+				rewritten.push(component);
+				continue;
+			};
+			let mut rest = string.as_str();
+			let mut literal = String::new();
+			while let Some(index) = rest.find(&out_dir) {
+				let after = &rest[index + out_dir.len()..];
+				literal.push_str(&rest[..index]);
+				// Leave a longer path that merely starts with the `OUT_DIR` path.
+				if after.chars().next().is_some_and(|c| c != '/' && c != ':') {
+					literal.push_str(&out_dir);
+					rest = after;
+					continue;
+				}
+				if !literal.is_empty() {
+					rewritten.push(tg::template::Component::String(std::mem::take(
+						&mut literal,
+					)));
+				}
+				rewritten.extend(out_dir_template.components.iter().cloned());
+				changed = true;
+				rest = after;
+			}
+			literal.push_str(rest);
+			if !literal.is_empty() {
+				rewritten.push(tg::template::Component::String(literal));
+			}
+		}
+		if changed {
+			*value = tg::Value::Template(tg::Template::with_components(rewritten));
+		}
+	}
 }
 
 async fn build_spawn_args(

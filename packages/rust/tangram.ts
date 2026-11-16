@@ -23,6 +23,7 @@ export {
 	testAliasedExtern,
 	testCcRs,
 	testCodegen,
+	testCodegenEnv,
 	testExternalTsImport,
 	testHello,
 	testMissingExternsFallback,
