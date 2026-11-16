@@ -189,7 +189,7 @@ export namespace sdk {
 		glibcVersion?: GlibcVersion;
 	};
 
-	/** Get target linker options for an executable that uses system libraries without a Tangram wrapper. */
+	/** Get the target compiler and linker options for an executable that uses system libraries without a Tangram wrapper. `compileArgs` select the headers of the deployment libc, and `args` and `libraryPaths` link against it. */
 	export async function standalone(
 		arg: StandaloneArg & { host?: string; target?: string } = {},
 	) {
@@ -200,6 +200,7 @@ export namespace sdk {
 			"standalone builds currently require a native host",
 		);
 		const args: Array<tg.Template> = [];
+		const compileArgs: Array<tg.Template> = [];
 		const libraryPaths: Array<tg.Directory> = [];
 		if (std.triple.os(target) === "linux") {
 			args.push(await tg`-Wl,--dynamic-linker,${libc.interpreterPath(target)}`);
@@ -210,8 +211,9 @@ export namespace sdk {
 					pkgConfig: false,
 					python: true,
 				});
+				// Include the Linux headers, so that code compiled against the deployment libc finds every system header in the sysroot.
 				const sysroot = await libc
-					.libc({
+					.constructSysroot({
 						build: host,
 						env,
 						host: std.triple.create(target, {
@@ -221,11 +223,12 @@ export namespace sdk {
 					.then((directory) => directory.get(std.triple.stripVersions(target)))
 					.then(tg.Directory.expect);
 				args.push(await tg`--sysroot=${sysroot}`);
+				compileArgs.push(await tg`--sysroot=${sysroot}`);
 				libraryPaths.push(await sysroot.get("lib").then(tg.Directory.expect));
 			}
 		}
 
-		return { args, libraryPaths };
+		return { args, compileArgs, libraryPaths };
 	}
 
 	/**

@@ -106,6 +106,6 @@ export async function constructSysroot(unresolvedArg: tg.Unresolved<LibCArg>) {
 		.get("include")
 		.then(tg.Directory.expect);
 	return tg.directory(cLibrary, {
-		[`${host}/include`]: tg.directory(cLibInclude, hostLinuxInclude),
+		[`${strippedHost}/include`]: tg.directory(cLibInclude, hostLinuxInclude),
 	});
 }

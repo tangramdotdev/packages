@@ -734,8 +734,15 @@ linker = "${hostLinker}"`;
 				],
 			},
 		);
+		// Compile C and C++ against the deployment libc's headers, as the cc crate and build scripts that run a compiler read these flags.
+		const compileFlags = tg.Template.join(
+			" ",
+			...standaloneOptions.compileArgs,
+		);
 		env = await std.env.arg(env, {
 			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: linker,
+			CFLAGS: tg.Mutation.suffix(compileFlags, " "),
+			CXXFLAGS: tg.Mutation.suffix(compileFlags, " "),
 		});
 	}
 
