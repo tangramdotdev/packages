@@ -286,7 +286,10 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 			...options.args,
 			...options.libraryPaths.map((path) => tg`-L${path}`),
 		];
+		const compileFlags = tg.Template.join(" ", ...options.compileArgs);
 		envs.push({
+			CFLAGS: tg.Mutation.suffix(compileFlags, " "),
+			CXXFLAGS: tg.Mutation.suffix(compileFlags, " "),
 			LDFLAGS: tg.Mutation.suffix(tg.Template.join(" ", ...flags), " "),
 		});
 	}
