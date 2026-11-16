@@ -714,8 +714,12 @@ linker = "${hostLinker}"`;
 		}
 	}
 
-	// Link Linux artifacts, including build scripts, with the SDK's linker rather than the Rust toolchain's self-contained lld.
-	if (os === "linux") {
+	// Link Linux artifacts, including build scripts, with the SDK's linker rather than the Rust toolchain's self-contained lld. Only x86_64 Linux defaults to lld, and rustc accepts the flag without unstable options only for that target.
+	if (
+		os === "linux" &&
+		std.triple.arch(rustHost) === "x86_64" &&
+		std.triple.arch(target) === "x86_64"
+	) {
 		const linkerFeatures = "-C linker-features=-lld";
 		if (proxy && proxyDir !== undefined) {
 			const linkerEnv = {
