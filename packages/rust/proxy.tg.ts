@@ -130,6 +130,24 @@ export async function testCodegen() {
 	return result;
 }
 
+/** A crate whose build script exports a path inside OUT_DIR with `cargo:rustc-env`, as mime_guess does. */
+export async function testCodegenEnv() {
+	const source = await tests.get("hello-codegen-env").then(tg.Directory.expect);
+
+	const result = await cargo.build({ source, proxy: true });
+	console.log("testCodegenEnv result", result.id);
+
+	const out = await $`hello-codegen-env | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(
+		text.trim() === "generated at build time",
+		`unexpected output: ${text}`,
+	);
+	return result;
+}
+
 /** Phase-5: hello-workspace with proxy + passthrough. Workspace members compile via passthrough on host rustc; vendored deps go through tangram sandbox processes. */
 export async function testWorkspaceMode2() {
 	const wrapper = await proxy();
@@ -1178,6 +1196,7 @@ export async function test() {
 		testProbe(),
 		testWorkspace(),
 		testCodegen(),
+		testCodegenEnv(),
 		testProcMacroDeps(),
 		testWorkspaceMode2(),
 		testHello(),
