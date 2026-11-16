@@ -714,7 +714,7 @@ linker = "${hostLinker}"`;
 		}
 	}
 
-	// Link Linux artifacts, including build scripts, with the SDK's linker rather than the Rust toolchain's self-contained lld, whose executables need a system dynamic linker. Cargo does not apply RUSTFLAGS to build scripts when it builds with --target, so a rustc wrapper adds the flag to every invocation, except under the rustc proxy, which is already the wrapper.
+	// Link Linux artifacts, including build scripts, with the SDK's linker rather than the Rust toolchain's self-contained lld.
 	if (os === "linux") {
 		const linkerFeatures = "-C linker-features=-lld";
 		if (proxy && proxyDir !== undefined) {
