@@ -7,6 +7,9 @@ use std::{
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
+#[cfg(test)]
+mod tests;
+
 // Sandbox mount point for referenced artifacts; rustc bakes paths of the form
 // `/opt/tangram/store/<id>/...` into emitted `.d` depfiles.
 const SANDBOX_STORE_DIR: &str = "/opt/tangram/store";
@@ -245,7 +248,9 @@ async fn build_env(
 		}
 	}
 	rewrite_dir_env(&mut env, "OUT_DIR").await?;
-	rewrite_out_dir_references(&mut env);
+	if let Ok(out_dir) = std::env::var("OUT_DIR") {
+		rewrite_out_dir_references(&mut env, &out_dir);
+	}
 	// Cargo populates these with paths embedding the outer cargo-sandbox's
 	// source artifact id, which varies per `cargo.build`. Re-anchor on the
 	// per-crate source artifact so they depend only on this crate's source.
@@ -517,10 +522,7 @@ async fn rewrite_dir_env(env: &mut tg::value::Map, key: &str) -> tg::Result<()> 
 }
 
 // Replace cargo's `OUT_DIR` path inside the other variables with the checked-in directory, so that a path that a build script exports with `cargo:rustc-env` resolves in the sandbox.
-fn rewrite_out_dir_references(env: &mut tg::value::Map) {
-	let Ok(out_dir) = std::env::var("OUT_DIR") else {
-		return;
-	};
+fn rewrite_out_dir_references(env: &mut tg::value::Map, out_dir: &str) {
 	let Some(tg::Value::Template(out_dir_template)) = env.get("OUT_DIR").cloned() else {
 		return;
 	};
@@ -535,34 +537,33 @@ fn rewrite_out_dir_references(env: &mut tg::value::Map) {
 		};
 		let mut rewritten = Vec::with_capacity(components.len());
 		let mut changed = false;
-		for component in components {
+		for (component_index, component) in components.into_iter().enumerate() {
 			let tg::template::Component::String(string) = component else {
 				rewritten.push(component);
 				continue;
 			};
-			let mut rest = string.as_str();
-			let mut literal = String::new();
-			while let Some(index) = rest.find(&out_dir) {
-				let after = &rest[index + out_dir.len()..];
-				literal.push_str(&rest[..index]);
-				// Leave a longer path that merely starts with the `OUT_DIR` path.
-				if after.chars().next().is_some_and(|c| c != '/' && c != ':') {
-					literal.push_str(&out_dir);
-					rest = after;
+			let mut end = 0;
+			for (index, _) in string.match_indices(out_dir) {
+				// Match the original path boundaries, including across artifact components.
+				let before = string[..index].chars().next_back();
+				let starts_path = before.map_or(component_index == 0, |c| {
+					c.is_whitespace() || matches!(c, ':' | '=' | '"' | '\'')
+				});
+				let after = &string[index + out_dir.len()..];
+				if !starts_path || after.chars().next().is_some_and(|c| c != '/' && c != ':') {
 					continue;
 				}
-				if !literal.is_empty() {
-					rewritten.push(tg::template::Component::String(std::mem::take(
-						&mut literal,
-					)));
+				if end < index {
+					rewritten.push(tg::template::Component::String(
+						string[end..index].to_owned(),
+					));
 				}
 				rewritten.extend(out_dir_template.components.iter().cloned());
 				changed = true;
-				rest = after;
+				end = index + out_dir.len();
 			}
-			literal.push_str(rest);
-			if !literal.is_empty() {
-				rewritten.push(tg::template::Component::String(literal));
+			if end < string.len() {
+				rewritten.push(tg::template::Component::String(string[end..].to_owned()));
 			}
 		}
 		if changed {
