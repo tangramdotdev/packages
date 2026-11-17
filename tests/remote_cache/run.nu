@@ -15,11 +15,11 @@
 # `--local-remote` rehearses the whole publish-then-check workflow against a throwaway remote on
 # this machine, so that nothing is written to a shared deployment.
 #
-#   nu scripts/remote_cache_experiment.nu
-#   nu scripts/remote_cache_experiment.nu --publish
-#   nu scripts/remote_cache_experiment.nu --local-remote
-#   nu scripts/remote_cache_experiment.nu --remote-url http://localhost:8091
-#   nu scripts/remote_cache_experiment.nu --cleanup
+#   nu tests/remote_cache/run.nu
+#   nu tests/remote_cache/run.nu --publish
+#   nu tests/remote_cache/run.nu --local-remote
+#   nu tests/remote_cache/run.nu --remote-url http://localhost:8091
+#   nu tests/remote_cache/run.nu --cleanup
 
 const ROOT = "/tmp/tangram-cache-experiment"
 const FRESH = $"($ROOT)/fresh"
@@ -28,8 +28,8 @@ const REMOTE = $"($ROOT)/remote"
 const REMOTE_CONFIG = $"($ROOT)/remote.json"
 const LOCAL_REMOTE_NAME = "experiment"
 const PACKAGES = ["std" "jq" "ripgrep"]
-const REPOSITORY = (path self | path dirname | path dirname)
-const PACKAGE = (path self | path dirname | path join "remote_cache_experiment")
+const REPOSITORY = (path self | path dirname | path dirname | path dirname)
+const PACKAGE = (path self | path dirname | path join "demo")
 
 # Prove the tools are on PATH, came from a tangram artifact rather than the host, and actually work.
 # The artifact check matters because a host install of rg or jq would otherwise satisfy this.
