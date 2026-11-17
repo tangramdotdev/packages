@@ -3,7 +3,7 @@ import ripgrep from "ripgrep";
 import * as std from "std";
 
 export const metadata = {
-	name: "demo",
+	name: "remote-cache-experiment",
 	version: "0.0.0",
 };
 
