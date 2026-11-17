@@ -12,7 +12,7 @@ mod tests;
 
 // Sandbox mount point for referenced artifacts; rustc bakes paths of the form
 // `/opt/tangram/store/<id>/...` into emitted `.d` depfiles.
-const SANDBOX_STORE_DIR: &str = "/opt/tangram/store";
+pub(crate) const SANDBOX_STORE_DIR: &str = "/opt/tangram/store";
 
 // The phases of one wrapper invocation. `prepare` is the check-ins and the arg
 // and env rewriting before the spawn; `materialize` is the checkout and sidecar
@@ -117,7 +117,16 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		.map_err(|_| tg::error!("the driver artifact must be a file"))?
 		.into();
 
-	let (env, toolchain_artifact) = build_env(&args.rustc, &source_artifact).await?;
+	let (mut env, toolchain_artifact) = build_env(&args.rustc, &source_artifact).await?;
+
+	// Link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
+	if args
+		.crate_name
+		.as_deref()
+		.is_some_and(|name| name.starts_with("build_script_"))
+	{
+		env.remove("TANGRAM_LINKER_PASSTHROUGH");
+	}
 
 	// Per-dir BFS roots: cross-compiles route proc-macro and library externs
 	// through different dirs, each with its own sidecar set.
