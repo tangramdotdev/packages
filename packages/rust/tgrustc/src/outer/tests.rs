@@ -1,4 +1,4 @@
-use {super::rewrite_out_dir_references, tangram_client::prelude::*};
+use {super::rewrite_out_dir_references, std::collections::BTreeMap, tangram_client::prelude::*};
 
 #[test]
 fn out_dir_references_respect_path_boundaries() {
@@ -28,7 +28,7 @@ fn out_dir_references_respect_path_boundaries() {
 			"/backup/tmp/build/out/file.rs:/checked-in-out/file.rs",
 		),
 	] {
-		let artifact = tg::Directory::with_entries(Default::default()).into();
+		let artifact = tg::Directory::with_entries(BTreeMap::new()).into();
 		let template = tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
 		let mut env = tg::value::Map::from([
 			("GENERATED_PATH".to_owned(), raw.to_owned().into()),
@@ -41,7 +41,7 @@ fn out_dir_references_respect_path_boundaries() {
 
 #[test]
 fn out_dir_references_preserve_existing_artifacts() {
-	let artifact = tg::Directory::with_entries(Default::default()).into();
+	let artifact = tg::Directory::with_entries(BTreeMap::new()).into();
 	let template = tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
 	let value = tg::Template::builder()
 		.components(template.components.clone())
