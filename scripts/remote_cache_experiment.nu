@@ -146,7 +146,9 @@ def main [
         } else if ($c.process | str contains "name=download") {
             let id = ($c.process | split row '?' | first)
             let command = (^tangram -c $CONFIG process get $id | from json | get command)
-            not (^tangram -c $CONFIG get $command | str contains "apple-codesign")
+            # The record carries the command inline, or its ID when the command is stored.
+            let command = if ($command | describe) == "string" { ^tangram -c $CONFIG get $command } else { $command | to json --raw }
+            not ($command | str contains "apple-codesign")
         } else {
             true
         }
@@ -277,6 +279,9 @@ def cleanup [] {
     # be removed.
     ^bash -c $"chmod -R u+w ($ROOT) 2>/dev/null || true" | ignore
     rm -rf $ROOT
+    # Remove the demo's lockfile, which pins the tags an earlier run resolved. A cold client has no
+    # lockfile, and one from a different remote names objects this remote does not have.
+    rm -f ($PACKAGE | path join "tangram.lock")
     # Remove only the remote this script added, so an unrelated `default` survives untouched.
     # `complete` captures stderr as well, since this is expected to fail when it was never added.
     do -i { ^tangram remote delete $LOCAL_REMOTE_NAME } | complete | ignore
