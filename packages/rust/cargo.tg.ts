@@ -492,6 +492,13 @@ export async function build(
 
 	const envs: tg.Args<std.env.Arg> = [];
 
+	// Add a native SDK for build scripts and proc macros when cross-compiling, because a cross SDK provides only the target's prefixed tools.
+	if (crossCompiling) {
+		const nativeSdk = await tg.build(std.sdk, ...sdkArgs, {
+			target: rustHost,
+		});
+		envs.push(nativeSdk);
+	}
 	const sdk = await tg.build(std.sdk, ...sdkArgs);
 	envs.push(sdk);
 	// `host.runner` requires `-Zhost-config`, a nightly-only cargo flag.
@@ -685,6 +692,33 @@ linker = "${hostLinker}"`;
 		envs.push(crossEnv);
 	}
 
+	// Link Linux targets other than x86_64 through a script that drops the `-fuse-ld=lld` with which rustc selects its self-contained lld, because that lld cannot run in the sandbox and stable rustc rejects the flag that turns it off on these targets.
+	const targetLinkerName = crossCompiling ? `${target}-cc` : compilerName;
+	const filterLld =
+		std.triple.os(target) === "linux" && std.triple.arch(target) !== "x86_64";
+	const lldFilter = lldFilterScript("TANGRAM_CARGO_TARGET_LINKER");
+	if (filterLld) {
+		const lldFilterEnv = {
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: lldFilter,
+			TANGRAM_CARGO_TARGET_LINKER: targetLinkerName,
+		};
+		envs.push(lldFilterEnv);
+	}
+
+	// Link build scripts and proc macros the same way when cross-compiling from a Linux machine other than x86_64, because Cargo links them with the build machine's linker.
+	if (
+		crossCompiling &&
+		os === "linux" &&
+		std.triple.arch(rustHost) !== "x86_64"
+	) {
+		const hostLldFilterEnv = {
+			[`CARGO_TARGET_${tripleToEnvVar(rustHost, true)}_LINKER`]:
+				lldFilterScript("TANGRAM_CARGO_HOST_LINKER"),
+			TANGRAM_CARGO_HOST_LINKER: compilerName,
+		};
+		envs.push(hostLldFilterEnv);
+	}
+
 	if (proxy && proxyDir !== undefined) {
 		const sandboxToolchain = rustArtifact;
 		const sandboxSdk = sdk;
@@ -714,22 +748,28 @@ linker = "${hostLinker}"`;
 		}
 	}
 
-	// Link Linux artifacts, including build scripts, with the SDK's linker rather than the Rust toolchain's self-contained lld. Only x86_64 Linux defaults to lld, and rustc accepts the flag without unstable options only for that target.
-	if (
-		os === "linux" &&
-		std.triple.arch(rustHost) === "x86_64" &&
-		std.triple.arch(target) === "x86_64"
-	) {
+	// Link x86_64 Linux artifacts, including build scripts, with the SDK's linker rather than the Rust toolchain's self-contained lld. Stable rustc accepts the flag that turns lld off only for x86_64 Linux, so a cross build passes it only to the invocations for that architecture, which are the ones that name the target when it is the target and the ones that do not when it is the build machine. The linker script above covers the other Linux targets.
+	const hostIsX8664 = std.triple.arch(rustHost) === "x86_64";
+	const targetIsX8664Linux =
+		std.triple.arch(target) === "x86_64" && std.triple.os(target) === "linux";
+	if (os === "linux" && (hostIsX8664 || targetIsX8664Linux)) {
 		const linkerFeatures = "-C linker-features=-lld";
 		if (proxy && proxyDir !== undefined) {
-			const linkerEnv = {
-				RUSTFLAGS: tg.Mutation.suffix(linkerFeatures, " "),
-			};
-			envs.push(linkerEnv);
+			if (hostIsX8664 && targetIsX8664Linux) {
+				const linkerEnv = {
+					RUSTFLAGS: tg.Mutation.suffix(linkerFeatures, " "),
+				};
+				envs.push(linkerEnv);
+			}
 		} else {
-			const wrapper = tg.file(`#!/bin/sh\nexec "$@" ${linkerFeatures}\n`, {
-				executable: true,
-			});
+			const namesTarget = `case " $* " in *" --target ${target} "*)`;
+			let script = `#!/bin/sh\nexec "$@" ${linkerFeatures}\n`;
+			if (!targetIsX8664Linux) {
+				script = `#!/bin/sh\n${namesTarget} exec "$@" ;; esac\nexec "$@" ${linkerFeatures}\n`;
+			} else if (!hostIsX8664) {
+				script = `#!/bin/sh\n${namesTarget} exec "$@" ${linkerFeatures} ;; esac\nexec "$@"\n`;
+			}
+			const wrapper = tg.file(script, { executable: true });
 			const linkerEnv = { RUSTC_WRAPPER: wrapper };
 			envs.push(linkerEnv);
 		}
@@ -745,25 +785,48 @@ linker = "${hostLinker}"`;
 
 	let env = await std.env.arg(...envs, env_ ?? null);
 	if (standaloneOptions) {
-		// Keep Cargo's Rust flags and wrap build-time executables until export.
+		// Find the target's GCC runtime libraries in a cross SDK, because the wrapped compiler cannot find them relative to its own path.
+		const runtimeLibraryPaths: Array<tg.Directory> = [];
+		if (crossCompiling) {
+			const entry = await sdk.tryGet(target);
+			const targetDirectory =
+				entry instanceof tg.Symlink ? await entry.resolve() : entry;
+			if (targetDirectory instanceof tg.Directory) {
+				for (const name of ["lib64", "lib"]) {
+					const directory = await targetDirectory.tryGet(name);
+					if (directory instanceof tg.Directory) {
+						runtimeLibraryPaths.push(directory);
+					}
+				}
+			}
+		}
+		// Keep Cargo's Rust flags and wrap build-time executables until export. A cross build links with the SDK's compiler for the target, and searches the deployment libc before the SDK's runtime libraries.
 		const linker = await std.wrap(
-			await sdk.get(`bin/${compilerName}`).then(tg.File.expect),
+			await sdk.get(`bin/${targetLinkerName}`).then(tg.File.expect),
 			{
 				args: [
 					...standaloneOptions.args,
 					...standaloneOptions.libraryPaths.map((path) => tg`-L${path}`),
+					...runtimeLibraryPaths.map((path) => tg`-L${path}`),
 				],
 			},
 		);
-		// Compile C and C++ against the deployment libc's headers, as the cc crate and build scripts that run a compiler read these flags.
+		// Compile C and C++ against the deployment libc's headers, as the cc crate and build scripts that run a compiler read these flags. A cross build sets only the target's flags, so that C compiled for the build machine keeps its own headers.
 		const compileFlags = tg.Template.join(
 			" ",
 			...standaloneOptions.compileArgs,
 		);
+		const flagSuffix = crossCompiling ? `_${tripleToEnvVar(target)}` : "";
+		const linkerEnv = filterLld
+			? {
+					[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: lldFilter,
+					TANGRAM_CARGO_TARGET_LINKER: linker,
+				}
+			: { [`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: linker };
 		env = await std.env.arg(env, {
-			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: linker,
-			CFLAGS: tg.Mutation.suffix(compileFlags, " "),
-			CXXFLAGS: tg.Mutation.suffix(compileFlags, " "),
+			...linkerEnv,
+			[`CFLAGS${flagSuffix}`]: tg.Mutation.suffix(compileFlags, " "),
+			[`CXXFLAGS${flagSuffix}`]: tg.Mutation.suffix(compileFlags, " "),
 		});
 	}
 
@@ -1086,6 +1149,14 @@ async function readToolchainChannel(
 	return toml.toolchain?.channel;
 }
 
+/** Create a linker script that drops the `-fuse-ld=lld` argument and runs the linker named by the environment variable. */
+function lldFilterScript(variable: string) {
+	return tg.file(
+		`#!/bin/sh\nfor arg do\n\tshift\n\t[ "$arg" = -fuse-ld=lld ] || set -- "$@" "$arg"\ndone\nexec "$${variable}" "$@"\n`,
+		{ executable: true },
+	);
+}
+
 function tripleToEnvVar(triple: string, upcase?: boolean) {
 	const allCaps = upcase ?? false;
 	let result = triple.replace(/-/g, "_");
@@ -1104,6 +1175,7 @@ export async function test() {
 	tests.push(testNestedCargoOffline());
 	tests.push(testStandalone());
 	tests.push(testStandaloneBuildScript());
+	tests.push(testStandaloneCross());
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
 	await Promise.all(tests);
@@ -1186,6 +1258,72 @@ export async function testStandaloneBuildScript() {
 	});
 	await build({ source, standalone: { glibcVersion: "2.39" } });
 	return true;
+}
+
+export async function testStandaloneCross() {
+	// A cross build compiles C for the target against the deployment glibc's headers in a build script, and links the build script for the build machine.
+	const host = std.sdk.canonicalTriple(std.triple.host());
+	if (std.triple.os(host) !== "linux") {
+		console.log("skipped cargo.tg.ts#testStandaloneCross: requires Linux");
+		return true;
+	}
+	const arch = std.triple.arch(host) === "x86_64" ? "aarch64" : "x86_64";
+	const target = `${arch}-unknown-linux-gnu`;
+	const source = tg.directory({
+		"Cargo.toml": tg.file`
+			[package]
+			name = "standalone-cross"
+			version = "0.1.0"
+			edition = "2021"
+		`,
+		"Cargo.lock": tg.file`
+			version = 4
+
+			[[package]]
+			name = "standalone-cross"
+			version = "0.1.0"
+		`,
+		"answer.c": tg.file`
+			#include <stdlib.h>
+			int answer(void) { return (int)strtol("42", NULL, 10); }
+		`,
+		"build.rs": tg.file`
+			use std::{env, process::Command};
+			fn main() {
+				let target = env::var("TARGET").unwrap().replace('-', "_");
+				let out = env::var("OUT_DIR").unwrap();
+				let cc = env::var(format!("CC_{target}")).unwrap();
+				let ar = env::var(format!("AR_{target}")).unwrap();
+				let flags = env::var(format!("CFLAGS_{target}")).unwrap();
+				assert!(!env::var("CFLAGS").unwrap_or_default().contains("--sysroot"));
+				let script = format!("{cc} {flags} -c answer.c -o {out}/answer.o && {ar} rcs {out}/libanswer.a {out}/answer.o");
+				assert!(Command::new("sh").arg("-c").arg(script).status().unwrap().success());
+				println!("cargo:rustc-link-search=native={out}");
+				println!("cargo:rustc-link-lib=static=answer");
+			}
+		`,
+		"src/main.rs": tg.file`
+			unsafe extern "C" {
+				fn answer() -> i32;
+			}
+			fn main() {
+				println!("{}", unsafe { answer() });
+			}
+		`,
+	});
+	const output = await build({
+		host,
+		source,
+		standalone: { glibcVersion: "2.35" },
+		target,
+	});
+	const executable = await output
+		.get("bin/standalone-cross")
+		.then(tg.File.expect);
+	const metadata = await std.file.executableMetadata(executable);
+	tg.assert(metadata.format === "elf" && metadata.arch === arch);
+
+	return output;
 }
 
 export async function testNestedCargoOffline() {

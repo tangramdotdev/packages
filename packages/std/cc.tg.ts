@@ -316,9 +316,11 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 		// carries a concrete `target`, so pin it alongside the host - otherwise the
 		// incoming target leaks through and produces an unwanted cross SDK.
 		const sdkHost = canUsePrebuiltBuildTools ? detectedHost : build;
-		const options = standalone
+		// A standalone build links its outputs without the embedded wrapper, which is the native SDK's job unless a cross SDK produces the outputs.
+		const standaloneSdkArg = standalone
 			? { ...std.sdk.argObject(sdkArg), embedWrapper: false, proxyLinker: true }
-			: sdkArg;
+			: undefined;
+		const options = isCross ? sdkArg : (standaloneSdkArg ?? sdkArg);
 		const sdk =
 			options !== undefined
 				? await tg
@@ -326,7 +328,7 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 						.named("sdk")
 				: await tg.build(std.sdk, { host: sdkHost }).named("sdk");
 		envs.push(sdk);
-		if (standalone) {
+		if (standalone && !isCross) {
 			envs.push({
 				CC: tg.Mutation.setIfUnset(tg`${sdk}/bin/cc`),
 				CXX: tg.Mutation.setIfUnset(tg`${sdk}/bin/c++`),
@@ -362,13 +364,21 @@ export async function env(arg: EnvArg): Promise<std.env.Arg> {
 		// Add a cross SDK if necessary.
 		if (isCross) {
 			// SDK runs on `build`, produces code for `host`.
+			const crossSdkArg = standaloneSdkArg ?? sdkArg;
 			const crossSdk = await tg
-				.build(std.sdk, ...(sdkArg !== undefined ? [sdkArg] : []), {
+				.build(std.sdk, ...(crossSdkArg !== undefined ? [crossSdkArg] : []), {
 					host: build,
 					target: host,
 				})
 				.named("cross sdk");
 			envs.push(crossSdk);
+			if (standalone) {
+				const prefix = `${std.sdk.canonicalTriple(host)}-`;
+				envs.push({
+					CC: tg.Mutation.setIfUnset(tg`${crossSdk}/bin/${prefix}cc`),
+					CXX: tg.Mutation.setIfUnset(tg`${crossSdk}/bin/${prefix}c++`),
+				});
+			}
 		}
 	}
 
