@@ -696,16 +696,27 @@ linker = "${hostLinker}"`;
 	const targetLinkerName = crossCompiling ? `${target}-cc` : compilerName;
 	const filterLld =
 		std.triple.os(target) === "linux" && std.triple.arch(target) !== "x86_64";
-	const lldFilter = tg.file(
-		`#!/bin/sh\nfor arg do\n\tshift\n\t[ "$arg" = -fuse-ld=lld ] || set -- "$@" "$arg"\ndone\nexec "$TANGRAM_CARGO_TARGET_LINKER" "$@"\n`,
-		{ executable: true },
-	);
+	const lldFilter = lldFilterScript("TANGRAM_CARGO_TARGET_LINKER");
 	if (filterLld) {
 		const lldFilterEnv = {
 			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: lldFilter,
 			TANGRAM_CARGO_TARGET_LINKER: targetLinkerName,
 		};
 		envs.push(lldFilterEnv);
+	}
+
+	// Link build scripts and proc macros the same way when cross-compiling from a Linux machine other than x86_64, because Cargo links them with the build machine's linker.
+	if (
+		crossCompiling &&
+		os === "linux" &&
+		std.triple.arch(rustHost) !== "x86_64"
+	) {
+		const hostLldFilterEnv = {
+			[`CARGO_TARGET_${tripleToEnvVar(rustHost, true)}_LINKER`]:
+				lldFilterScript("TANGRAM_CARGO_HOST_LINKER"),
+			TANGRAM_CARGO_HOST_LINKER: compilerName,
+		};
+		envs.push(hostLldFilterEnv);
 	}
 
 	if (proxy && proxyDir !== undefined) {
@@ -1136,6 +1147,14 @@ async function readToolchainChannel(
 		toolchain?: { channel?: string };
 	};
 	return toml.toolchain?.channel;
+}
+
+/** Create a linker script that drops the `-fuse-ld=lld` argument and runs the linker named by the environment variable. */
+function lldFilterScript(variable: string) {
+	return tg.file(
+		`#!/bin/sh\nfor arg do\n\tshift\n\t[ "$arg" = -fuse-ld=lld ] || set -- "$@" "$arg"\ndone\nexec "$${variable}" "$@"\n`,
+		{ executable: true },
+	);
 }
 
 function tripleToEnvVar(triple: string, upcase?: boolean) {
