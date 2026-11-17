@@ -692,6 +692,22 @@ linker = "${hostLinker}"`;
 		envs.push(crossEnv);
 	}
 
+	// Link Linux targets other than x86_64 through a script that drops the `-fuse-ld=lld` with which rustc selects its self-contained lld, because that lld cannot run in the sandbox and stable rustc rejects the flag that turns it off on these targets.
+	const targetLinkerName = crossCompiling ? `${target}-cc` : compilerName;
+	const filterLld =
+		std.triple.os(target) === "linux" && std.triple.arch(target) !== "x86_64";
+	const lldFilter = tg.file(
+		`#!/bin/sh\nfor arg do\n\tshift\n\t[ "$arg" = -fuse-ld=lld ] || set -- "$@" "$arg"\ndone\nexec "$TANGRAM_CARGO_TARGET_LINKER" "$@"\n`,
+		{ executable: true },
+	);
+	if (filterLld) {
+		const lldFilterEnv = {
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: lldFilter,
+			TANGRAM_CARGO_TARGET_LINKER: targetLinkerName,
+		};
+		envs.push(lldFilterEnv);
+	}
+
 	if (proxy && proxyDir !== undefined) {
 		const sandboxToolchain = rustArtifact;
 		const sandboxSdk = sdk;
@@ -753,14 +769,29 @@ linker = "${hostLinker}"`;
 
 	let env = await std.env.arg(...envs, env_ ?? null);
 	if (standaloneOptions) {
-		// Keep Cargo's Rust flags and wrap build-time executables until export. A cross build links with the SDK's compiler for the target.
-		const linkerName = crossCompiling ? `${target}-cc` : compilerName;
+		// Find the target's GCC runtime libraries in a cross SDK, because the wrapped compiler cannot find them relative to its own path.
+		const runtimeLibraryPaths: Array<tg.Directory> = [];
+		if (crossCompiling) {
+			const entry = await sdk.tryGet(target);
+			const targetDirectory =
+				entry instanceof tg.Symlink ? await entry.resolve() : entry;
+			if (targetDirectory instanceof tg.Directory) {
+				for (const name of ["lib64", "lib"]) {
+					const directory = await targetDirectory.tryGet(name);
+					if (directory instanceof tg.Directory) {
+						runtimeLibraryPaths.push(directory);
+					}
+				}
+			}
+		}
+		// Keep Cargo's Rust flags and wrap build-time executables until export. A cross build links with the SDK's compiler for the target, and searches the deployment libc before the SDK's runtime libraries.
 		const linker = await std.wrap(
-			await sdk.get(`bin/${linkerName}`).then(tg.File.expect),
+			await sdk.get(`bin/${targetLinkerName}`).then(tg.File.expect),
 			{
 				args: [
 					...standaloneOptions.args,
 					...standaloneOptions.libraryPaths.map((path) => tg`-L${path}`),
+					...runtimeLibraryPaths.map((path) => tg`-L${path}`),
 				],
 			},
 		);
@@ -770,8 +801,14 @@ linker = "${hostLinker}"`;
 			...standaloneOptions.compileArgs,
 		);
 		const flagSuffix = crossCompiling ? `_${tripleToEnvVar(target)}` : "";
+		const linkerEnv = filterLld
+			? {
+					[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: lldFilter,
+					TANGRAM_CARGO_TARGET_LINKER: linker,
+				}
+			: { [`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: linker };
 		env = await std.env.arg(env, {
-			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: linker,
+			...linkerEnv,
 			[`CFLAGS${flagSuffix}`]: tg.Mutation.suffix(compileFlags, " "),
 			[`CXXFLAGS${flagSuffix}`]: tg.Mutation.suffix(compileFlags, " "),
 		});
