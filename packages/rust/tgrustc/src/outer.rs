@@ -472,6 +472,8 @@ pub(crate) fn is_denied_host_env(key: &str) -> bool {
 		| "TANGRAM_TOKEN" | "TANGRAM_TRACING" | "TANGRAM_URL"
 		// Jobserver fds — tangram does not propagate them.
 		| "CARGO_MAKEFLAGS" | "MAKEFLAGS"
+		// Cargo's job limit — it does not affect a single compilation, and a build script in its own sandbox uses that sandbox's CPUs.
+		| "CARGO_BUILD_JOBS" | "NUM_JOBS"
 		// Host-side cargo / rustup state — host paths absent in the sandbox.
 		| "CARGO_HOME" | "CARGO_TARGET_DIR"
 		| "RUSTUP_HOME" | "RUSTUP_TOOLCHAIN"
