@@ -492,6 +492,13 @@ export async function build(
 
 	const envs: tg.Args<std.env.Arg> = [];
 
+	// Add a native SDK for build scripts and proc macros when cross-compiling, because a cross SDK provides only the target's prefixed tools.
+	if (crossCompiling) {
+		const nativeSdk = await tg.build(std.sdk, ...sdkArgs, {
+			target: rustHost,
+		});
+		envs.push(nativeSdk);
+	}
 	const sdk = await tg.build(std.sdk, ...sdkArgs);
 	envs.push(sdk);
 	// `host.runner` requires `-Zhost-config`, a nightly-only cargo flag.
