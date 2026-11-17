@@ -737,22 +737,27 @@ linker = "${hostLinker}"`;
 		}
 	}
 
-	// Link Linux artifacts, including build scripts, with the SDK's linker rather than the Rust toolchain's self-contained lld. Only x86_64 Linux defaults to lld, and rustc accepts the flag without unstable options only for that target, so a cross build passes it only to the invocations for the build machine, which do not name the target.
-	if (os === "linux" && std.triple.arch(rustHost) === "x86_64") {
+	// Link x86_64 Linux artifacts, including build scripts, with the SDK's linker rather than the Rust toolchain's self-contained lld. Stable rustc accepts the flag that turns lld off only for x86_64 Linux, so a cross build passes it only to the invocations for that architecture, which are the ones that name the target when it is the target and the ones that do not when it is the build machine. The linker script above covers the other Linux targets.
+	const hostIsX8664 = std.triple.arch(rustHost) === "x86_64";
+	const targetIsX8664Linux =
+		std.triple.arch(target) === "x86_64" && std.triple.os(target) === "linux";
+	if (os === "linux" && (hostIsX8664 || targetIsX8664Linux)) {
 		const linkerFeatures = "-C linker-features=-lld";
-		const targetIsX8664Linux =
-			std.triple.arch(target) === "x86_64" && std.triple.os(target) === "linux";
 		if (proxy && proxyDir !== undefined) {
-			if (targetIsX8664Linux) {
+			if (hostIsX8664 && targetIsX8664Linux) {
 				const linkerEnv = {
 					RUSTFLAGS: tg.Mutation.suffix(linkerFeatures, " "),
 				};
 				envs.push(linkerEnv);
 			}
 		} else {
-			const script = targetIsX8664Linux
-				? `#!/bin/sh\nexec "$@" ${linkerFeatures}\n`
-				: `#!/bin/sh\ncase " $* " in *" --target ${target} "*) exec "$@" ;; esac\nexec "$@" ${linkerFeatures}\n`;
+			const namesTarget = `case " $* " in *" --target ${target} "*)`;
+			let script = `#!/bin/sh\nexec "$@" ${linkerFeatures}\n`;
+			if (!targetIsX8664Linux) {
+				script = `#!/bin/sh\n${namesTarget} exec "$@" ;; esac\nexec "$@" ${linkerFeatures}\n`;
+			} else if (!hostIsX8664) {
+				script = `#!/bin/sh\n${namesTarget} exec "$@" ${linkerFeatures} ;; esac\nexec "$@"\n`;
+			}
 			const wrapper = tg.file(script, { executable: true });
 			const linkerEnv = { RUSTC_WRAPPER: wrapper };
 			envs.push(linkerEnv);
@@ -1151,6 +1156,7 @@ export async function test() {
 	tests.push(testNestedCargoOffline());
 	tests.push(testStandalone());
 	tests.push(testStandaloneBuildScript());
+	tests.push(testStandaloneCross());
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
 	await Promise.all(tests);

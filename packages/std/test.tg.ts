@@ -128,6 +128,7 @@ const testModules: Record<
 
 /** Tests whose dependencies require a different tier from their module default. */
 const testTiers: Record<string, Tier> = {
+	"autotools.tg.ts#testStandaloneCross": "extended",
 	"command.tg.ts#testCommandArgs": "bootstrap",
 	"image.tg.ts#testWrappedEntrypointWithEnv": "sdk",
 	"packages_test.tg.ts#testDepsEnv": "sdk",
