@@ -228,6 +228,10 @@ export namespace sdk {
 					.then(tg.Directory.expect);
 				args.push(await tg`--sysroot=${sysroot}`);
 				compileArgs.push(await tg`--sysroot=${sysroot}`);
+				// Search the deployment headers before a cross compiler's tool directory, which holds the SDK's libc headers and which GCC searches regardless of the sysroot.
+				if (host !== target) {
+					compileArgs.push(await tg`-isystem ${sysroot}/include`);
+				}
 				libraryPaths.push(await sysroot.get("lib").then(tg.Directory.expect));
 			}
 		}
