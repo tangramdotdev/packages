@@ -12,15 +12,23 @@
 # it. Nothing is pushed recursively: the release action pushes one tag per export, so the client
 # gets the output of each package and never the graph that produced it.
 #
+# `--local-remote` rehearses the whole publish-then-check workflow against a throwaway remote on
+# this machine, so that nothing is written to a shared deployment.
+#
 #   nu scripts/remote_cache_experiment.nu
 #   nu scripts/remote_cache_experiment.nu --publish
+#   nu scripts/remote_cache_experiment.nu --local-remote
 #   nu scripts/remote_cache_experiment.nu --remote-url http://localhost:8091
 #   nu scripts/remote_cache_experiment.nu --cleanup
 
 const ROOT = "/tmp/tangram-cache-experiment"
 const FRESH = $"($ROOT)/fresh"
 const CONFIG = $"($ROOT)/config.json"
+const REMOTE = $"($ROOT)/remote"
+const REMOTE_CONFIG = $"($ROOT)/remote.json"
+const LOCAL_REMOTE_NAME = "experiment"
 const PACKAGES = ["std" "jq" "ripgrep"]
+const REPOSITORY = (path self | path dirname | path dirname)
 const PACKAGE = (path self | path dirname | path join "remote_cache_experiment")
 
 # Prove the tools are on PATH, came from a tangram artifact rather than the host, and actually work.
@@ -37,7 +45,9 @@ echo '{\"a\":[1,2,3]}' | jq -e '.a[1] == 2' > /dev/null
 echo FUNCTIONAL-OK"
 
 def main [
-    --cleanup # Remove the fresh server and exit.
+    --cleanup # Remove the experiment's servers and exit.
+    --local-remote # Publish to and pull from a throwaway remote on this machine.
+    --local-remote-port: int = 8091 # The port the throwaway remote listens on.
     --publish # Publish and release std, jq, and ripgrep from the primary server first.
     --publish-remote: string = "default" # The primary server's name for the remote to publish to.
     --remote-url: string = "https://tangram.cloud" # The remote the cold client pulls from.
@@ -45,11 +55,14 @@ def main [
     cleanup
     if $cleanup { return }
 
-    # Publish the source closure and release the build outputs, one tag per export. `--eager` pushes
-    # the object bytes, which the cold client has no other way to obtain; it is orthogonal to
-    # recursion, which stays off so the build graphs beneath each output are never pushed.
-    if $publish {
-        ^bun run auto -pr --eager $"--remote=($publish_remote)" ...$PACKAGES
+    # A throwaway remote starts empty, so it is always published to. The primary gets its own named
+    # remote for it, so that an existing `default` is never disturbed.
+    let remote_url = if $local_remote { $"http://localhost:($local_remote_port)" } else { $remote_url }
+    let publish_remote = if $local_remote { $LOCAL_REMOTE_NAME } else { $publish_remote }
+    let publish = $publish or $local_remote
+    if $local_remote {
+        start_local_remote $remote_url
+        ^tangram remote put $LOCAL_REMOTE_NAME $remote_url
     }
 
     # The fresh server gets its own config, so that neither the user's remotes nor their token leak
@@ -66,9 +79,29 @@ def main [
     # every package as a cache miss.
     let health = (do -i { ^curl -sS -m 15 -o /dev/null $"($remote_url)/health" } | complete)
     if $health.exit_code != 0 {
-        print $"(ansi red_bold)FAIL(ansi reset) the cold client cannot reach ($remote_url)."
-        print $health.stderr
-        exit 1
+        fail $"the cold client cannot reach ($remote_url)." [$health.stderr]
+    }
+
+    # Publish the source closure and release the build outputs, one tag per export. `--eager` pushes
+    # the object bytes, which the cold client has no other way to obtain; it is orthogonal to
+    # recursion, which stays off so the build graphs beneath each output are never pushed.
+    if $publish {
+        let problems = (publish_problems $publish_remote $remote_url $local_remote)
+        if ($problems | is-not-empty) {
+            fail "the primary server is not set up to publish to the remote the cold client pulls from." $problems
+        }
+        try {
+            ^bun run auto -pr --eager $"--remote=($publish_remote)" ...$PACKAGES
+        } catch {
+            fail "the publish and release failed on the primary server."
+        }
+
+        # Tie the check to this publish. The demo resolves the latest version on the remote, so a
+        # newer or different publish there would be measured in place of the one just made.
+        let stale = ($PACKAGES | each { |package| unpublished $package } | compact)
+        if ($stale | is-not-empty) {
+            fail $"($remote_url) does not serve what the primary server just published." $stale
+        }
     }
 
     # Require a release for this platform before taking the census. A remote that was only ever
@@ -77,24 +110,26 @@ def main [
     let platform = (host_platform)
     let missing = ($PACKAGES | each { |package| missing_release $package $platform } | compact)
     if ($missing | is-not-empty) {
-        print $"(ansi red_bold)FAIL(ansi reset) ($remote_url) lacks a ($platform) release of a package, so the census would only measure that."
-        for m in $missing { print $"  ($m)" }
-        print $"Publish from an ($platform) machine, for example with --publish, and run this again."
-        exit 1
+        fail $"($remote_url) lacks an ($platform) release of a package, so the census would only measure that." [
+            ...$missing
+            $"Publish from an ($platform) machine, for example with --publish, and run this again."
+        ]
     }
 
     # Evaluate the demo on the fresh server. Its own root process is not cached anywhere, so it runs;
     # every child it reaches should resolve from the remote instead of executing.
     let process = (^tangram -c $CONFIG build --detach $PACKAGE | str trim)
-    # Capture the wait result rather than discarding it. A failed evaluation still leaves a process
-    # record behind, so the child census below would otherwise be taken over a partial run and report
-    # a clean sweep for a build that never finished.
-    let evaluation = (do -i { ^tangram -c $CONFIG wait $process } | complete)
-    if $evaluation.exit_code != 0 {
+    ^tangram -c $CONFIG wait $process | complete | ignore
+    # Read the outcome from the process record rather than from the wait, which succeeds for a
+    # process that failed. A failed evaluation still leaves a record behind, so the child census
+    # below would otherwise be taken over a partial run and report a clean sweep for a build that
+    # never finished.
+    let record = (^tangram -c $CONFIG process get $process | from json)
+    let evaluated = ($record.error? == null) and (($record.exit? | default 0) == 0)
+    if not $evaluated {
         print $"(ansi red_bold)FAIL(ansi reset) the evaluation of the demo failed on the cold client."
-        print $evaluation.stderr
     }
-    let children = (^tangram -c $CONFIG process get $process | from json | get children)
+    let children = ($record.children? | default [])
     let executed = ($children | where { |c| ($c.cached? | default false) == false })
 
     # Wrapping is expected to happen on the client: composing a different env, or adding a variable
@@ -124,29 +159,86 @@ def main [
         ^tangram -c $CONFIG run -b $PACKAGE -- sh -c $CHECK
     } | complete)
     print $result.stdout
-    if $evaluation.exit_code == 0 and $result.exit_code == 0 and ($result.stdout | str contains "FUNCTIONAL-OK") and ($unexpected | is-empty) {
+    if $evaluated and $result.exit_code == 0 and ($result.stdout | str contains "FUNCTIONAL-OK") and ($unexpected | is-empty) {
         print $"(ansi green_bold)PASS(ansi reset) the cold client wrapped locally and built nothing."
     } else {
-        print $"(ansi red_bold)FAIL(ansi reset) exit ($result.exit_code)"
-        print $result.stderr
-        exit 1
+        fail $"exit ($result.exit_code)" [$result.stderr]
     }
+}
+
+# Print the failure with its details and exit.
+def fail [message: string, details: list<string> = []] {
+    print $"(ansi red_bold)FAIL(ansi reset) ($message)"
+    for d in $details { print $"  ($d)" }
+    exit 1
+}
+
+# Start the throwaway remote and wait until it answers. It gets its own config, so that the user's
+# config does not apply to it.
+def start_local_remote [url: string] {
+    mkdir $REMOTE
+    { directory: $REMOTE, remotes: {} } | to json | save --force $REMOTE_CONFIG
+    ^bash -c $"tangram -c ($REMOTE_CONFIG) serve -u ($url) > ($ROOT)/remote.log 2>&1 &"
+    for _ in 1..50 {
+        if (do -i { ^curl -sS -m 2 -o /dev/null $"($url)/health" } | complete).exit_code == 0 { return }
+        sleep 200ms
+    }
+    fail $"the throwaway remote did not start at ($url)." [$"See ($ROOT)/remote.log."]
+}
+
+# List what stops the primary server from publishing to the remote the cold client pulls from. A
+# throwaway remote has no authentication, so there is no login to check.
+def publish_problems [name: string, url: string, local_remote: bool] {
+    let remote = (do -i { ^tangram remote get $name } | complete)
+    if $remote.exit_code != 0 {
+        return [$"The primary server has no remote named `($name)`. Add it to the `remotes` key of its config."]
+    }
+    let configured = ($remote.stdout | from json | get url | str trim --right --char "/")
+    if $configured != ($url | str trim --right --char "/") {
+        return [$"The primary server's remote `($name)` is ($configured), but the cold client pulls from ($url)."]
+    }
+    if $local_remote { return [] }
+    if (do -i { ^tangram whoami $"--remote=($name)" } | complete).exit_code != 0 {
+        return [$"The primary server is not logged in to `($name)`. Run `tangram login --remote=($name)`."]
+    }
+    []
+}
+
+# Describe how the remote differs from what the primary server published for the package, or return
+# null if the remote serves the same package tag and no later version.
+def unpublished [package: string] {
+    let file = ($REPOSITORY | path join "packages" $"($package).tg.ts")
+    let path = if ($file | path exists) { $file } else { $REPOSITORY | path join "packages" $package }
+    let metadata = (^tangram build $"($path)#metadata" | from json)
+    let tag = $metadata.tag
+    let primary = (do -i { ^tangram tag get --local $tag } | complete)
+    if $primary.exit_code != 0 {
+        return $"($tag): the primary server has no such tag."
+    }
+    let remote = (do -i { ^tangram -c $CONFIG tag get --remote $tag } | complete)
+    if $remote.exit_code != 0 {
+        return $"($tag): the remote has no such tag."
+    }
+    let primary = ($primary.stdout | from json | get target.id)
+    let remote = ($remote.stdout | from json | get target.id)
+    if $primary != $remote {
+        return $"($tag): the remote targets ($remote), but the primary server published ($primary)."
+    }
+    let latest = (latest_version $package)
+    if $latest != $metadata.version {
+        return $"($tag): the remote's latest version is ($latest), which is what the demo would resolve."
+    }
+    null
 }
 
 # Describe what the remote lacks for the package on the platform, or return null if the latest
 # version has a release there. The demo imports each package by its bare name, which resolves to
 # the latest version, so that is the version whose release must exist.
 def missing_release [package: string, platform: string] {
-    let listed = (do -i { ^tangram -c $CONFIG list --remote --all $package } | complete)
-    let versions = if $listed.exit_code == 0 {
-        $listed.stdout | from json | where { |e| $e.node.node | str starts-with "tag_" } | get specifier | path basename | sort --natural
-    } else {
-        []
-    }
-    if ($versions | is-empty) {
+    let version = (latest_version $package)
+    if $version == null {
         return $"($package): no version is published."
     }
-    let version = ($versions | last)
     let builds = $"($package)/builds/($version)/default"
     let found = (do -i { ^tangram -c $CONFIG tag get --remote $"($builds)/($platform)" } | complete)
     if $found.exit_code == 0 {
@@ -162,6 +254,14 @@ def missing_release [package: string, platform: string] {
     $"($package)/($version): no ($platform) release. Released platforms: ($have)."
 }
 
+# The latest version of the package on the remote, or null if none is published.
+def latest_version [package: string] {
+    let listed = (do -i { ^tangram -c $CONFIG list --remote --all $package } | complete)
+    if $listed.exit_code != 0 { return null }
+    let versions = ($listed.stdout | from json | where { |e| $e.node.node | str starts-with "tag_" } | get specifier | path basename | sort --natural)
+    if ($versions | is-empty) { null } else { $versions | last }
+}
+
 # The platform segment of a release tag, in the form the automation writes it.
 def host_platform [] {
     let os = if $nu.os-info.name == "macos" { "darwin" } else { $nu.os-info.name }
@@ -169,12 +269,15 @@ def host_platform [] {
 }
 
 def cleanup [] {
-    # Match on the directory, so the auto-started fresh server is caught. The pattern is scoped to
-    # this script's temp directory.
+    # Match on the directory, so the auto-started fresh server is caught along with the throwaway
+    # remote. The pattern is scoped to this script's temp directory.
     ^bash -c $"pkill -f '($ROOT)' 2>/dev/null || true" | ignore
     sleep 500ms
     # A server checks its artifacts out read only, so the tree has to be made writable before it can
     # be removed.
     ^bash -c $"chmod -R u+w ($ROOT) 2>/dev/null || true" | ignore
     rm -rf $ROOT
+    # Remove only the remote this script added, so an unrelated `default` survives untouched.
+    # `complete` captures stderr as well, since this is expected to fail when it was never added.
+    do -i { ^tangram remote delete $LOCAL_REMOTE_NAME } | complete | ignore
 }
