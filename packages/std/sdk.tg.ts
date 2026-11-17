@@ -196,8 +196,12 @@ export namespace sdk {
 		const host = canonicalTriple(arg.host ?? std.triple.host());
 		const target = canonicalTriple(arg.target ?? host);
 		tg.assert(
-			host === target && host === canonicalTriple(std.triple.host()),
-			"standalone builds currently require a native host",
+			host === canonicalTriple(std.triple.host()),
+			"standalone builds must run on their host",
+		);
+		tg.assert(
+			host === target || std.triple.os(target) === "linux",
+			"standalone cross-compilation requires a Linux target",
 		);
 		const args: Array<tg.Template> = [];
 		const compileArgs: Array<tg.Template> = [];

@@ -344,6 +344,44 @@ printf 'prefix = %s\\nall:\\n\\t./program\\ninstall:\\n\\tmkdir -p $(prefix)/bin
 	return output;
 }
 
+export async function testStandaloneCross() {
+	const build_ = std.sdk.canonicalTriple(std.triple.host());
+	if (std.triple.os(build_) !== "linux") {
+		console.log("skipped autotools.tg.ts#testStandaloneCross: requires Linux");
+		return true;
+	}
+	const arch = std.triple.arch(build_) === "x86_64" ? "aarch64" : "x86_64";
+	const host = `${arch}-unknown-linux-gnu`;
+	const source = await tg.directory({
+		configure: tg.file({
+			contents: `#!/bin/sh
+set -eu
+prefix=
+for arg in "$@"; do
+  case "$arg" in --prefix=*) prefix="\${arg#--prefix=}" ;; esac
+done
+$CC $CPPFLAGS $CFLAGS "$(dirname "$0")/main.c" $LDFLAGS -o program
+printf 'prefix = %s\\nall:\\ninstall:\\n\\tmkdir -p $(prefix)/bin\\n\\tcp program $(prefix)/bin/program\\n' "$prefix" > Makefile
+`,
+			executable: true,
+		}),
+		"main.c": tg.file(
+			'#include <stdio.h>\n#include <stdlib.h>\nint main(int argc, char **argv) { puts("standalone autotools"); return argc > 1 ? (int)strtol(argv[1], NULL, 10) : 0; }\n',
+		),
+	});
+	const output = await build({
+		build: build_,
+		host,
+		source,
+		standalone: { glibcVersion: "2.35" },
+	});
+	const executable = await output.get("bin/program").then(tg.File.expect);
+	const metadata = await std.file.executableMetadata(executable);
+	tg.assert(metadata.format === "elf" && metadata.arch === arch);
+
+	return output;
+}
+
 /** The result of arg() - an Arg with build, host, and source guaranteed to be resolved. */
 export type ResolvedArg = Omit<Arg, "build" | "host" | "phases" | "source"> & {
 	build: string;
