@@ -10,11 +10,15 @@ export type RunArg = {
 	/** Run the script under the bootstrap shell and utils rather than the std ones. */
 	bootstrap?: boolean;
 	checksum?: tg.Checksum | null;
+	/** The CPU bounds for the sandbox, in hardware threads. A number is a maximum. */
+	cpu?: number | tg.Sandbox.Cpu | null;
 	/** Trace the script and write per-phase logs to `.tangram_logs` in the output. */
 	debug?: boolean;
 	env?: std.env.Arg | null;
 	/** The host to run on. */
 	host?: string | null;
+	/** The memory bounds for the sandbox, in bytes. A number is a maximum. */
+	memory?: number | tg.Sandbox.Resource | null;
 	network?: boolean;
 	/** The phases to run, and the order to run them in. Phases absent from the order are skipped. */
 	order?: Array<string> | null;
@@ -27,9 +31,11 @@ export type RunArg = {
 type MergedRunArg = {
 	bootstrap?: boolean;
 	checksum?: tg.Checksum | null;
+	cpu?: number | tg.Sandbox.Cpu | null;
 	debug?: boolean;
 	env?: Array<std.env.Arg> | null;
 	host?: string | null;
+	memory?: number | tg.Sandbox.Resource | null;
 	network?: boolean;
 	order?: Array<string> | null;
 	phases?: Phases;
@@ -96,10 +102,12 @@ export async function run(...args: tg.Args<RunArg>) {
 	const {
 		bootstrap = false,
 		checksum,
+		cpu,
 		network = false,
 		debug,
 		env: envs,
 		host,
+		memory,
 		order: order_,
 		phases,
 		processName,
@@ -193,6 +201,15 @@ export async function run(...args: tg.Args<RunArg>) {
 	}
 	if (network) {
 		builder = builder.network(network);
+	}
+	if (
+		(cpu !== undefined && cpu !== null) ||
+		(memory !== undefined && memory !== null)
+	) {
+		builder = builder.sandbox({
+			...std.args.optional("cpu", cpu),
+			...std.args.optional("memory", memory),
+		});
 	}
 	return await builder;
 }
