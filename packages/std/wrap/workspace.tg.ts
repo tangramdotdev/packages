@@ -623,10 +623,12 @@ export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	const crates = await std.phases
 		.run({
 			bootstrap: true,
+			cpu: { min: 4 },
 			env: std.env.compose(...env),
 			phases,
 			host: system,
 			checksum: "sha256:any",
+			memory: { min: 4 * 1024 ** 3 },
 			network: true,
 			processName: "workspace cargo build",
 		})
