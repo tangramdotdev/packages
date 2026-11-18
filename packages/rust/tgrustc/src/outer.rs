@@ -119,11 +119,12 @@ pub async fn run(args: Args) -> tg::Result<()> {
 
 	let (mut env, toolchain_artifact) = build_env(&args.rustc, &source_artifact).await?;
 
-	// Link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
-	if args
-		.crate_name
-		.as_deref()
-		.is_some_and(|name| name.starts_with("build_script_"))
+	// When the runner is in use, link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
+	if std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_some()
+		&& args
+			.crate_name
+			.as_deref()
+			.is_some_and(|name| name.starts_with("build_script_"))
 	{
 		env.remove("TANGRAM_LINKER_PASSTHROUGH");
 	}
@@ -472,7 +473,7 @@ pub(crate) fn is_denied_host_env(key: &str) -> bool {
 		| "TANGRAM_TOKEN" | "TANGRAM_TRACING" | "TANGRAM_URL"
 		// Jobserver fds — tangram does not propagate them.
 		| "CARGO_MAKEFLAGS" | "MAKEFLAGS"
-		// Cargo's job limit — it does not affect a single compilation, and a build script in its own sandbox uses that sandbox's CPUs.
+		// Cargo's job limit — it does not affect a single compilation, and the runner's driver sets `NUM_JOBS` for a build script from its own sandbox's CPUs.
 		| "CARGO_BUILD_JOBS" | "NUM_JOBS"
 		// Host-side cargo / rustup state — host paths absent in the sandbox.
 		| "CARGO_HOME" | "CARGO_TARGET_DIR"
