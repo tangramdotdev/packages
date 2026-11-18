@@ -286,9 +286,13 @@ pub fn run_driver() -> tg::Result<()> {
 		.ok_or_else(|| tg::error!("expected build script binary path as argument"))?;
 	let extra_args: Vec<String> = std::env::args().skip(2).collect();
 
+	// Give the build script the job limit that Cargo would, from this sandbox's CPUs. The outer process removes Cargo's own value so that it does not vary the cache key, and some build scripts, such as those that use the `cmake` crate, build serially without one.
+	let jobs = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+
 	let output = std::process::Command::new(&script_binary)
 		.args(&extra_args)
 		.current_dir(&manifest_dir)
+		.env("NUM_JOBS", jobs.to_string())
 		.env("OUT_DIR", &out_dir_path)
 		.env("CARGO_MANIFEST_DIR", &manifest_dir)
 		.env("CARGO_MANIFEST_PATH", format!("{manifest_dir}/Cargo.toml"))
