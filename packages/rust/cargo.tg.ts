@@ -66,7 +66,7 @@ export type Arg = CommonArg & {
 	/** By default, cargo builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
 	buildInTree?: boolean;
 
-	/** Capture cargo stderr to a file in the output. Useful for inspection in tests. Default: false. */
+	/** Capture cargo stderr to a file in the output, followed by the stderr that Cargo captured from each build script. Useful for inspection in tests. Default: false. */
 	captureStderr?: boolean;
 
 	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
@@ -501,9 +501,6 @@ export async function build(
 	}
 	const sdk = await tg.build(std.sdk, ...sdkArgs);
 	envs.push(sdk);
-	// `host.runner` requires `-Zhost-config`, a nightly-only cargo flag.
-	// Without nightly we still proxy rustc invocations but build scripts run
-	// on the host (no sandbox, no cache).
 	const channel = channel_ ?? (proxy ? NIGHTLY : "stable");
 	const rustArtifact = await self({
 		host: rustHost,
@@ -541,16 +538,11 @@ directory = "${vendoredDir}"`;
 	const proxyDir = proxy ? proxy_.proxy() : undefined;
 
 	// Wire `host.runner` to the tgrustc runner subcommand so cargo invokes it
-	// for every build script. Nightly required: `target-applies-to-host = false`
-	// + `-Zhost-config` together let `host.linker`/`host.runner` apply to the
-	// build-script crate (a host artefact distinct from `--target`).
+	// for every build script. `target-applies-to-host = false` + the unstable
+	// `host-config` option together let `host.linker`/`host.runner` apply to
+	// the build-script crate (a host artefact distinct from `--target`).
 	const isNightly = channel === "nightly" || channel.startsWith("nightly-");
-	const useHostRunner = proxy && proxyDir !== undefined && isNightly;
-	if (proxy && !isNightly) {
-		console.log(
-			`cargo.build warning: proxy enabled with channel="${channel}"; build-script sandboxing requires nightly (host.runner needs -Zhost-config). Build scripts will run unsandboxed on the host.`,
-		);
-	}
+	const useHostRunner = proxy && proxyDir !== undefined;
 	if (useHostRunner && proxyDir !== undefined) {
 		const hostLinker = os === "darwin" ? "clang" : "gcc";
 		// Bare keys must appear before any `[section]` (TOML rule); prepend
@@ -558,13 +550,27 @@ directory = "${vendoredDir}"`;
 		// it falls under the trailing `[source.vendored-sources]` table and
 		// cargo silently warns "unused config key" — leaving the [host]
 		// runner unreachable.
+		// Enable the unstable options in the configuration as well as on the command line, so that a Cargo invocation that a subcommand starts, such as the one that nextest runs, enables them when it reads this configuration.
 		cargoConfig = await tg`target-applies-to-host = false
 
 ${cargoConfig}
 
 [host]
 runner = ["${proxyDir}/bin/tgrustc", "runner"]
-linker = "${hostLinker}"`;
+linker = "${hostLinker}"
+
+[unstable]
+host-config = true
+target-applies-to-host = true`;
+		// Compile build scripts outside the project through the proxy, so that they are linked to run in the runner's sandbox.
+		envs.push({ TGRUSTC_PROXY_BUILD_SCRIPTS: "1" });
+		// A stable Cargo accepts unstable options only with `RUSTC_BOOTSTRAP` set. Tell the proxy and the runner to remove it from the compilations and build scripts that they run directly, so that only Cargo sees it.
+		if (!isNightly) {
+			envs.push({
+				RUSTC_BOOTSTRAP: "1",
+				TGRUSTC_REMOVE_RUSTC_BOOTSTRAP: "1",
+			});
+		}
 	}
 
 	// Keep Cargo's target directory and home in the temporary workspace and write the generated configuration.
@@ -609,7 +615,7 @@ linker = "${hostLinker}"`;
 	const cargoArgString = tg.Template.join(" ", ...cargoArgs);
 	// `-Zhost-config` + `-Ztarget-applies-to-host` are required to make
 	// `[host]` config sections apply to build-script crates; both are
-	// nightly-only, so emit them only when host.runner is wired.
+	// unstable, so emit them only when host.runner is wired.
 	const cargoCmd = useHostRunner
 		? "cargo -Zhost-config -Ztarget-applies-to-host"
 		: "cargo";
@@ -639,6 +645,10 @@ linker = "${hostLinker}"`;
 		pre ?? null,
 		enterSource,
 		buildCommand,
+		// Append the stderr that Cargo captured from each build script, which holds the runner's statistics.
+		captureStderr
+			? tg`find "$SCRATCH_TARGET_DIR" -type f -name stderr -exec cat {} + >> "${tg.output}/cargo-stderr.log"`
+			: null,
 		install,
 		timings
 			? tg`if [ -d "$SCRATCH_TARGET_DIR/cargo-timings" ]; then cp -R "$SCRATCH_TARGET_DIR/cargo-timings" "${tg.output}/cargo-timings"; fi`

@@ -9,15 +9,17 @@ use tangram_client::prelude::*;
 // `TGRUSTC_PASSTHROUGH_PROJECT_DIR` is set (the `run_integration` Mode 2
 // contract). Build scripts must passthrough because the SDK's wrapping linker
 // emits std.wrap-style binaries that cannot locate the artifacts directory
-// outside a tangram-managed tree. Workspace-member compiles (source inside
-// the project dir) and probe invocations (no source file) also passthrough;
-// vendored deps go through the sandbox.
+// outside a tangram-managed tree, unless `TGRUSTC_PROXY_BUILD_SCRIPTS` is set
+// because the runner runs them in a sandbox. Workspace-member compiles (source
+// inside the project dir) and probe invocations (no source file) also
+// passthrough; vendored deps go through the sandbox.
 pub fn applies(args: &Args) -> tg::Result<bool> {
 	let Ok(project_dir) = std::env::var("TGRUSTC_PASSTHROUGH_PROJECT_DIR") else {
 		return Ok(false);
 	};
 	if let Some(crate_name) = args.crate_name.as_deref()
 		&& crate_name.starts_with("build_script_")
+		&& std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_none()
 	{
 		return Ok(true);
 	}
@@ -44,6 +46,14 @@ pub fn exec(args: &Args) -> tg::Result<()> {
 	if let Some(out_dir) = &args.out_dir {
 		command.arg("--out-dir").arg(out_dir);
 	}
+	remove_rustc_bootstrap(&mut command);
 	let err = command.exec();
 	Err(tg::error!("failed to exec rustc for passthrough: {err}"))
+}
+
+// Remove `RUSTC_BOOTSTRAP` from a command that runs directly when the build set it only so that Cargo accepts unstable options, so that the compilation or build script sees the toolchain's own channel.
+pub fn remove_rustc_bootstrap(command: &mut std::process::Command) {
+	if std::env::var_os("TGRUSTC_REMOVE_RUSTC_BOOTSTRAP").is_some() {
+		command.env_remove("RUSTC_BOOTSTRAP");
+	}
 }

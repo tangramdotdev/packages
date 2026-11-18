@@ -1,5 +1,6 @@
 use crate::outer;
 use std::{
+	os::unix::process::CommandExt as _,
 	path::{Path, PathBuf},
 	time::Instant,
 };
@@ -21,6 +22,15 @@ pub async fn run() -> tg::Result<()> {
 	let extra_args: Vec<String> = std::env::args().skip(3).collect();
 
 	let crate_name = std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "unknown".into());
+
+	// Run the build script directly if it cannot run in a sandbox.
+	if passthrough(&crate_name) {
+		let mut command = std::process::Command::new(&script_binary);
+		command.args(&extra_args);
+		crate::passthrough::remove_rustc_bootstrap(&mut command);
+		let error = command.exec();
+		return Err(tg::error!("failed to exec the build script: {error}"));
+	}
 
 	let output = outer::checkin(Path::new(&script_binary)).await?;
 	let mut script_artifact = tg::Artifact::with_referent(output.artifact)
@@ -205,7 +215,12 @@ async fn build_env(
 		if outer::is_denied_host_env(&name) {
 			continue;
 		}
-		let value = proxy::environment_value(&name, &raw, outer::template_from_path).await?;
+		// Check in a path that a dependency's build script exported from outside of the store, such as an include directory in its `OUT_DIR`.
+		let value = if is_exported_path(&name, &raw) {
+			tg::Value::Template(outer::template_from_path(&raw).await?)
+		} else {
+			proxy::environment_value(&name, &raw, outer::template_from_path).await?
+		};
 		env.insert(name, value);
 	}
 
@@ -271,9 +286,13 @@ pub fn run_driver() -> tg::Result<()> {
 		.ok_or_else(|| tg::error!("expected build script binary path as argument"))?;
 	let extra_args: Vec<String> = std::env::args().skip(2).collect();
 
+	// Give the build script the job limit that Cargo would, from this sandbox's CPUs. The outer process removes Cargo's own value so that it does not vary the cache key, and some build scripts, such as those that use the `cmake` crate, build serially without one.
+	let jobs = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+
 	let output = std::process::Command::new(&script_binary)
 		.args(&extra_args)
 		.current_dir(&manifest_dir)
+		.env("NUM_JOBS", jobs.to_string())
 		.env("OUT_DIR", &out_dir_path)
 		.env("CARGO_MANIFEST_DIR", &manifest_dir)
 		.env("CARGO_MANIFEST_PATH", format!("{manifest_dir}/Cargo.toml"))
@@ -303,6 +322,32 @@ pub fn run_driver() -> tg::Result<()> {
 		std::process::exit(output.status.code().unwrap_or(1));
 	}
 	Ok(())
+}
+
+// Whether a build script runs directly: its package is named in `TGRUSTC_RUNNER_PASSTHROUGH`, for a build script that writes outside of `OUT_DIR`, or it belongs to the passthrough project and the build links without Tangram wrappers, because the project's build scripts are then compiled directly and have no wrapper to run them in a sandbox.
+fn passthrough(crate_name: &str) -> bool {
+	let named = std::env::var("TGRUSTC_RUNNER_PASSTHROUGH")
+		.is_ok_and(|names| names.split(',').any(|name| name == crate_name));
+	if named {
+		return true;
+	}
+	if std::env::var_os("TANGRAM_LINKER_PASSTHROUGH").is_none() {
+		return false;
+	}
+	let Some(project_dir) = std::env::var_os("TGRUSTC_PASSTHROUGH_PROJECT_DIR") else {
+		return false;
+	};
+	std::env::var_os("CARGO_MANIFEST_DIR")
+		.is_some_and(|manifest_dir| Path::new(&manifest_dir).starts_with(&project_dir))
+}
+
+// Whether a variable holds a path that a dependency's build script exported from outside of the store. Cargo passes a dependency's `cargo::metadata` values in `DEP_` variables.
+fn is_exported_path(name: &str, raw: &str) -> bool {
+	let path = Path::new(raw);
+	name.starts_with("DEP_")
+		&& path.is_absolute()
+		&& !path.starts_with(outer::SANDBOX_STORE_DIR)
+		&& path.exists()
 }
 
 fn toolchain_subpath(toolchain: &tg::Artifact, suffix: &str) -> tg::Value {
