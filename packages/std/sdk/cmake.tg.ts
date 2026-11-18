@@ -107,6 +107,9 @@ export type BuildArg = {
 	/** Granular control over the individual build tools. A `preset` given here replaces the preset implied by `pkgConfig`, `extended`, and `developmentTools`, and the individual tool flags then override that preset. */
 	buildTools?: std.dependencies.BuildToolsOverrides;
 
+	/** The CPU bounds for the build's sandbox, in hardware threads. A number is a maximum, and `{ min }` reserves that many threads without capping the build. Default: the runner's default. */
+	cpu?: number | tg.Sandbox.Cpu;
+
 	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at ${tg.output}/.tangram_logs. Default: false */
 	debug?: boolean;
 
@@ -133,6 +136,9 @@ export type BuildArg = {
 
 	/** The computer this build should get compiled on. */
 	host?: string;
+
+	/** The memory bounds for the build's sandbox, in bytes. A number is a maximum, and `{ min }` reserves that much memory without capping the build. Default: the runner's default. */
+	memory?: number | tg.Sandbox.Resource;
 
 	/** The value to pass to `-march` in the default CFLAGS. Default: undefined. */
 	march?: string;
@@ -188,6 +194,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 	const {
 		buildDir = "build",
 		buildTools,
+		cpu,
 		debug = false,
 		developmentTools = false,
 		env: userEnv,
@@ -198,6 +205,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 		hardeningCFlags = true,
 		host: host_,
 		march,
+		memory,
 		mtune = "generic",
 		normalizePkgConfigPrefix = true,
 		opt = "2",
@@ -349,6 +357,8 @@ export async function build(...args: tg.Args<BuildArg>) {
 			phases: mergedPhases,
 			env,
 			host: system,
+			...std.args.optional("cpu", cpu),
+			...std.args.optional("memory", memory),
 			...(order !== undefined ? { order } : {}),
 		})
 		.then(tg.Directory.expect);

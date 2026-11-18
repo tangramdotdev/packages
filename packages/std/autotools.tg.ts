@@ -19,6 +19,9 @@ export type Arg = {
 	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
 	checksum?: tg.Checksum | null;
 
+	/** The CPU bounds for the build's sandbox, in hardware threads. A number is a maximum, and `{ min }` reserves that many threads without capping the build. Default: the runner's default. */
+	cpu?: number | tg.Sandbox.Cpu | null;
+
 	/** Debug mode will enable additional log output, allow failures in subprocesses, and include a folder of logs at ${tg.output}/.tangram_logs. Default: false */
 	debug?: boolean;
 
@@ -57,6 +60,9 @@ export type Arg = {
 
 	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
 	mtune?: string | null;
+
+	/** The memory bounds for the build's sandbox, in bytes. A number is a maximum, and `{ min }` reserves that much memory without capping the build. Default: the runner's default. */
+	memory?: number | tg.Sandbox.Resource | null;
 
 	/** A name for the build process. */
 	processName?: string | null;
@@ -142,6 +148,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		buildInTree = false,
 		buildTools,
 		checksum,
+		cpu,
 		debug = false,
 		defaultCrossArgs = true,
 		defaultCrossEnv = true,
@@ -154,6 +161,7 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		hardeningCFlags = true,
 		host,
 		march,
+		memory,
 		mtune = "generic",
 		processName,
 		network = false,
@@ -306,6 +314,8 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		env,
 		host: system,
 		checksum: checksum ?? null,
+		cpu: cpu ?? null,
+		memory: memory ?? null,
 		network,
 		order: order ?? null,
 		processName: processName ?? null,
