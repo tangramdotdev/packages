@@ -1237,12 +1237,12 @@ export async function testStableLinkerPassthrough() {
 	return result;
 }
 
-/** Stable: the `RUSTC_BOOTSTRAP` that lets Cargo accept unstable options does not reach a compilation or a build script that runs directly. The fixture asserts this while it builds. */
+/** Stable: the `RUSTC_BOOTSTRAP` that lets Cargo accept unstable options does not reach a compilation or a build script that runs directly. The fixture asserts this while it builds. The crate compiles directly because it belongs to the passthrough project, and its build script runs directly because the runner is told to pass it through by name. Linking without Tangram wrappers would also run the build script directly, but on Linux such a build script cannot run in the build's sandbox, which has no dynamic linker at the default path. */
 export async function testStableBootstrapEnv() {
 	const result = await cargo.build({
 		source: tests.get("stable-bootstrap-env").then(tg.Directory.expect),
 		channel: "stable",
-		env: { TANGRAM_LINKER_PASSTHROUGH: "1" },
+		env: { TGRUSTC_RUNNER_PASSTHROUGH: "stable-bootstrap-env" },
 		pre: tg`export TGRUSTC_PASSTHROUGH_PROJECT_DIR="$TGRUSTC_SOURCE_DIR"`,
 		proxy: true,
 	});
