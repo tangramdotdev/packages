@@ -232,7 +232,9 @@ export async function build(...args: tg.Args<Arg>) {
 
 	let result = await std.autotools.build({
 		build,
+		cpu: { min: 4 },
 		host,
+		memory: { min: 4 * 1024 ** 3 },
 		...autotoolsRest,
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,

@@ -966,11 +966,11 @@ export async function testCcRs() {
 	tg.assert(text.trim() === "10 + 32 = 42", `unexpected output: ${text}`);
 }
 
-/** Runner: build scripts execute inside a tangram sandbox via `host.runner`.
- *  Asserts cache stability — modifying main.rs (not the build script or its
- *  inputs) must keep the runner_complete entry for cc-rs a cache hit. */
+/** Runner: build scripts execute inside a tangram sandbox via `host.runner`. Asserts cache stability: modifying another workspace member's Rust code must keep the runner process for the `lib` build script a cache hit, because a build script's inputs are the filtered workspace with only its own crate in full. */
 export async function testRunnerBuildScript() {
-	const source = await tests.get("hello-cc-rs").then(tg.Directory.expect);
+	const source = await tests
+		.get("workspace-runner-cache")
+		.then(tg.Directory.expect);
 
 	const firstResult = await buildWithStats({ source });
 	const firstRunnerStats = await parseStats(firstResult, "runner_complete");
@@ -978,18 +978,19 @@ export async function testRunnerBuildScript() {
 		"runner first build stats",
 		firstRunnerStats?.map((s) => `${s.crate_name}: cached=${s.cached}`),
 	);
-
-	const firstOutput = await $`hello-cc-rs | tee ${tg.output}`
-		.env(firstResult)
-		.then(tg.File.expect);
-	tg.assert((await firstOutput.text).trim() === "10 + 32 = 42");
+	tg.assert(
+		firstRunnerStats?.some((s) => s.crate_name === "lib"),
+		"expected the first build to run the lib build script through the runner",
+	);
 
 	const originalMain = await source
-		.get("src/main.rs")
+		.get("packages/app/src/main.rs")
 		.then(tg.File.expect)
 		.then((f: tg.File) => f.text);
 	const modifiedSource = tg.directory(source, {
-		"src/main.rs": tg.file(`${originalMain}\n// runner cache test\n`),
+		"packages/app/src/main.rs": tg.file(
+			`${originalMain}\n// runner cache test\n`,
+		),
 	});
 
 	const secondResult = await buildWithStats({ source: modifiedSource });
@@ -998,20 +999,21 @@ export async function testRunnerBuildScript() {
 		"runner second build stats",
 		secondRunnerStats?.map((s) => `${s.crate_name}: cached=${s.cached}`),
 	);
-
-	if (secondRunnerStats) {
-		for (const stat of secondRunnerStats) {
-			tg.assert(
-				stat.cached,
-				`Build script runner for ${stat.crate_name} should be a cache hit, but was a miss.`,
-			);
-		}
+	tg.assert(
+		secondRunnerStats?.some((s) => s.crate_name === "lib"),
+		"expected the second build to run the lib build script through the runner",
+	);
+	for (const stat of secondRunnerStats ?? []) {
+		tg.assert(
+			stat.cached,
+			`Build script runner for ${stat.crate_name} should be a cache hit, but was a miss.`,
+		);
 	}
 
-	const secondOutput = await $`hello-cc-rs | tee ${tg.output}`
+	const output = await $`app | tee ${tg.output}`
 		.env(secondResult)
 		.then(tg.File.expect);
-	tg.assert((await secondOutput.text).trim() === "10 + 32 = 42");
+	tg.assert((await output.text).includes("Built at:"));
 }
 
 /** Regression: NODE_PATH must reach build scripts unmangled. */
@@ -1191,6 +1193,65 @@ export async function testRunnerCacheHitWorkspace() {
 	});
 }
 
+/** Stable: build scripts run through the runner on the stable toolchain, which requires Cargo to accept the unstable host configuration. */
+export async function testStableRunner() {
+	const result = await cargo.build({
+		source: tests.get("hello-cc-rs").then(tg.Directory.expect),
+		captureStderr: true,
+		channel: "stable",
+		proxy: true,
+	});
+	console.log("testStableRunner result", result.id);
+	const runnerStats = await parseStats(result, "runner_complete");
+	tg.assert(
+		runnerStats?.some((s) => s.crate_name === "hello-cc-rs"),
+		"expected the hello-cc-rs build script to run through the runner",
+	);
+
+	const out = await $`hello-cc-rs | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(text.trim() === "10 + 32 = 42", `unexpected output: ${text}`);
+	return result;
+}
+
+/** Stable: in a passthrough project that links without Tangram wrappers, the build scripts of vendored dependencies are still compiled through the proxy and run in the runner's sandbox. */
+export async function testStableLinkerPassthrough() {
+	const result = await cargo.build({
+		source: tests.get("hello-proc-macro-deps").then(tg.Directory.expect),
+		captureStderr: true,
+		channel: "stable",
+		env: { TANGRAM_LINKER_PASSTHROUGH: "1" },
+		pre: tg`export TGRUSTC_PASSTHROUGH_PROJECT_DIR="$TGRUSTC_SOURCE_DIR"`,
+		proxy: true,
+	});
+	console.log("testStableLinkerPassthrough result", result.id);
+	const runnerStats = await parseStats(result, "runner_complete");
+	tg.assert(
+		runnerStats?.some((s) => s.crate_name === "proc-macro2"),
+		"expected the proc-macro2 build script to run through the runner",
+	);
+
+	await result.get("bin/app").then(tg.File.expect);
+	return result;
+}
+
+/** Stable: the `RUSTC_BOOTSTRAP` that lets Cargo accept unstable options does not reach a compilation or a build script that runs directly. The fixture asserts this while it builds. The crate compiles directly because it belongs to the passthrough project, and its build script runs directly because the runner is told to pass it through by name. Linking without Tangram wrappers would also run the build script directly, but on Linux such a build script cannot run in the build's sandbox, which has no dynamic linker at the default path. */
+export async function testStableBootstrapEnv() {
+	const result = await cargo.build({
+		source: tests.get("stable-bootstrap-env").then(tg.Directory.expect),
+		channel: "stable",
+		env: { TGRUSTC_RUNNER_PASSTHROUGH: "stable-bootstrap-env" },
+		pre: tg`export TGRUSTC_PASSTHROUGH_PROJECT_DIR="$TGRUSTC_SOURCE_DIR"`,
+		proxy: true,
+	});
+	console.log("testStableBootstrapEnv result", result.id);
+
+	await result.get("bin/stable-bootstrap-env").then(tg.File.expect);
+	return result;
+}
+
 export async function test() {
 	await Promise.all([
 		testProbe(),
@@ -1216,6 +1277,9 @@ export async function test() {
 		testRunnerPathExec(),
 		testRunnerWorkspaceRootAccess(),
 		testRunnerCacheHitWorkspace(),
+		testStableRunner(),
+		testStableLinkerPassthrough(),
+		testStableBootstrapEnv(),
 		testCacheHitVendoredDeps(),
 		testCacheHitSharedDepsAcrossProjects(),
 		testMultiVersionCacheHit(),

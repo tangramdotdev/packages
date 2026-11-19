@@ -1,4 +1,3 @@
-import * as perl from "perl" with { source: "./perl" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
@@ -85,20 +84,11 @@ export async function build(...args: tg.Args<Arg>) {
 		env: std.env.arg(packageEnv, arg.env ?? null),
 	});
 
-	// Wrap the `c_rehash` perl script.
-	const perlArtifact = await perl.build({
-		build: arg.build,
-		host: arg.host,
-		...std.args.optional("sdk", arg.sdk),
-	});
-	const perlInterpreter = await tg.symlink({
-		artifact: perlArtifact,
-		path: "bin/perl",
-	});
-	const origCRehash = output.get("bin/c_rehash").then(tg.File.expect);
+	// Replace the `c_rehash` perl script with the `rehash` command of the `openssl` executable, which is its C implementation and runs wherever the package does.
+	const openssl = output.get("bin/openssl").then(tg.File.expect);
 
 	return tg.directory(output, {
-		["bin/c_rehash"]: std.wrap(origCRehash, { interpreter: perlInterpreter }),
+		["bin/c_rehash"]: std.wrap(openssl, { args: ["rehash"], host: arg.host }),
 		["share/pkgconfig"]: tg.symlink("../lib/pkgconfig"),
 	});
 }
@@ -109,7 +99,7 @@ export async function test() {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.binaries(metadata.provides.binaries, {
-			c_rehash: { testArgs: ["-h"], snapshot: "Usage: c_rehash" },
+			c_rehash: { testArgs: ["-h"], snapshot: "Usage: rehash" },
 		}),
 	};
 	return await std.assert.pkg(build, spec);
