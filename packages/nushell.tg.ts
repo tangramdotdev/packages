@@ -3,6 +3,7 @@ import { cargo } from "rust" with { source: "./rust" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.nushell.sh/",
 	license: "MIT",
 	name: "nushell",

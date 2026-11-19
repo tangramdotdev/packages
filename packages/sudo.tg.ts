@@ -3,6 +3,7 @@ import * as coreutils from "coreutils" with { source: "./coreutils.tg.ts" };
 import * as tzdb from "tzdb" with { source: "./tzdb.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.sudo.ws/",
 	license: "https://github.com/sudo-project/sudo/blob/main/LICENSE.md",
 	name: "sudo",

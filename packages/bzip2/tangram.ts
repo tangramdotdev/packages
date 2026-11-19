@@ -4,6 +4,7 @@ import * as std from "std" with { source: "../std" };
 import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with { type: "file" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://sourceware.org/bzip2/",
 	license:
 		"https://sourceware.org/git/?p=bzip2.git;a=blob;f=LICENSE;hb=6a8690fc8d26c815e798c588f796eabe9d684cf0",

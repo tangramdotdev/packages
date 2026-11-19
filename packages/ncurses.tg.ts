@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://invisible-island.net/ncurses/",
 	license: "https://invisible-island.net/ncurses/ncurses-license.html",
 	name: "ncurses",

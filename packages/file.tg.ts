@@ -5,6 +5,7 @@ import * as xz from "xz" with { source: "./xz.tg.ts" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.darwinsys.com/file/",
 	license: "https://github.com/file/file/blob/FILE5_48/COPYING",
 	name: "file",

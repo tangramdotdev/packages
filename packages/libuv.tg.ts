@@ -2,6 +2,7 @@ import * as cmake from "cmake" with { source: "./cmake" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://libuv.org/",
 	license: "MIT",
 	name: "libuv",

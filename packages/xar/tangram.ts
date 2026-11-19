@@ -6,6 +6,10 @@ import * as xz from "xz" with { source: "../xz.tg.ts" };
 import * as zlib from "zlib-ng" with { source: "../zlib-ng.tg.ts" };
 
 export const metadata = {
+	builds: {
+		exports: ["default", "build"],
+		hosts: ["aarch64-darwin", "x86_64-darwin"],
+	},
 	homepage: "https://github.com/apple-oss-distributions/xar",
 	hostPlatforms: ["aarch64-darwin", "x86_64-darwin"],
 	license: "BSD-3-Clause",

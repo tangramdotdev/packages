@@ -2,6 +2,7 @@ import * as perl from "perl" with { source: "./perl" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://openssl.org/",
 	license: "Apache-2.0",
 	name: "openssl",

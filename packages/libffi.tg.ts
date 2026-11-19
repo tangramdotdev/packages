@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://sourceware.org/libffi/",
 	license: "https://github.com/libffi/libffi/blob/master/LICENSE",
 	name: "libffi",

@@ -15,6 +15,7 @@ export function deps() {
 }
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/texinfo/",
 	license: "GPL-3.0-or-later",
 	name: "texinfo",

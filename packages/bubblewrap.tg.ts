@@ -3,6 +3,10 @@ import * as meson from "meson" with { source: "./meson.tg.ts" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: {
+		exports: ["default", "build"],
+		hosts: ["aarch64-linux", "x86_64-linux"],
+	},
 	homepage: "https://github.com/containers/bubblewrap",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "LGPL-2.0-or-later",

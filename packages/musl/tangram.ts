@@ -3,6 +3,10 @@ import * as std from "std" with { source: "../std" };
 import muslPermissionPatch from "./musl_permission.patch" with { type: "file" };
 
 export const metadata = {
+	builds: {
+		exports: ["default", "build"],
+		hosts: ["aarch64-linux", "x86_64-linux"],
+	},
 	homepage: "https://musl.libc.org/",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "MIT",

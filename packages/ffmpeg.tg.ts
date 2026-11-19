@@ -2,6 +2,7 @@ import * as nasm from "nasm" with { source: "./nasm.tg.ts" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.ffmpeg.org/",
 	name: "FFmpeg",
 	repository: "https://github.com/FFmpeg/FFmpeg",

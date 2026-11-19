@@ -6,6 +6,7 @@ import * as xz from "xz" with { source: "./xz.tg.ts" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://libarchive.org",
 	license:
 		"https://raw.githubusercontent.com/libarchive/libarchive/master/COPYING",

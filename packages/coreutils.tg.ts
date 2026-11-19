@@ -6,6 +6,7 @@ import * as std from "std" with { source: "./std" };
 import alwaysPreserveXattrsPatch from "./std/utils/coreutils-always-preserve-xattrs.patch" with { type: "file" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/coreutils/",
 	license: "GPL-3.0-or-later",
 	name: "coreutils",

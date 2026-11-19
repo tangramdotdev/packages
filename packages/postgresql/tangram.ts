@@ -12,6 +12,7 @@ import * as zstd from "zstd" with { source: "../zstd.tg.ts" };
 import patches from "./patches" with { type: "directory" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.postgresql.org",
 	license: "https://www.postgresql.org/about/licence/",
 	name: "postgresql",

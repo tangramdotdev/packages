@@ -11,6 +11,7 @@ import * as xz from "xz" with { source: "../xz.tg.ts" };
 import progrelocFix from "./gettext-progreloc-fix.patch" with { type: "file" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/gettext",
 	license: "GPL-3.0-or-later",
 	name: "gettext",

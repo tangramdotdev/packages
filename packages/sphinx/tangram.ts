@@ -3,6 +3,7 @@ import * as std from "std" with { source: "../std" };
 import * as python from "python" with { source: "../python" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.sphinx-doc.org/en/master/",
 	license: "BSD-2-Clause",
 	name: "sphinx",

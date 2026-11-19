@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://jqlang.github.io/jq/",
 	name: "jq",
 	license: "https://github.com/jqlang/jq?tab=License-1-ov-file#readme",

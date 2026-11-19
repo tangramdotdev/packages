@@ -8,6 +8,7 @@ import * as std from "std" with { source: "./std" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.isc.org/bind/",
 	license: "MPL-2.0",
 	name: "bind",

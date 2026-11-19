@@ -2,6 +2,7 @@ import { cargo } from "rust" with { source: "./rust" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://github.com/sharkdp/hyperfine",
 	license: "Apache-2.0, MIT",
 	name: "hyperfine",

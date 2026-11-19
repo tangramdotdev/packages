@@ -2,6 +2,7 @@ import * as go from "go" with { source: "./go.tg.ts" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://github.com/rakyll/hey",
 	license: "Apache-2.0",
 	name: "hey",

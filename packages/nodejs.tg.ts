@@ -2,6 +2,7 @@ import * as std from "std" with { source: "./std" };
 import { $ } from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "self"] },
 	homepage: "https://nodejs.org/en",
 	license:
 		"https://github.com/nodejs/node/blob/12fb157f79da8c094a54bc99370994941c28c235/LICENSE",

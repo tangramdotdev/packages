@@ -2,6 +2,10 @@ import * as gperf from "gperf" with { source: "./gperf.tg.ts" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: {
+		exports: ["default", "build"],
+		hosts: ["aarch64-linux", "x86_64-linux"],
+	},
 	homepage: "https://github.com/seccomp/libseccomp",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "LGPLv2.1",

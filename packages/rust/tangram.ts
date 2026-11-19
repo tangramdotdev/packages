@@ -57,6 +57,7 @@ import * as cargo_ from "./cargo.tg.ts";
 export * as cargo from "./cargo.tg.ts";
 
 export const metadata = {
+	builds: { exports: ["default", "self"] },
 	homepage: "https://www.rust-lang.org",
 	license: "MIT",
 	name: "rust",

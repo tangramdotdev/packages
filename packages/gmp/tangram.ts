@@ -2,6 +2,7 @@ import * as std from "std" with { source: "../std" };
 import patches from "./patches" with { type: "directory" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://gmplib.org",
 	license: "LGPL-3.0-or-later",
 	name: "gmp",

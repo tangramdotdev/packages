@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "../std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://savannah.gnu.org/projects/patch/",
 	license: "GPL-3.0-or-later",
 	name: "patch",

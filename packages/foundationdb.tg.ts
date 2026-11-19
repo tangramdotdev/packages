@@ -6,6 +6,7 @@ import xz from "xz" with { source: "./xz.tg.ts" };
 import zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.foundationdb.org/",
 	license: "Apache-2.0",
 	name: "foundationdb",

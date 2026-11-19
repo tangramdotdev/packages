@@ -2,6 +2,10 @@ import * as bash from "bash" with { source: "./bash.tg.ts" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: {
+		exports: ["default", "build"],
+		hosts: ["aarch64-linux", "x86_64-linux"],
+	},
 	homepage: "https://github.com/util-linux/util-linux",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "GPL-2.0-or-later, LGPL-2.1-or-later, BSD-3-Clause",

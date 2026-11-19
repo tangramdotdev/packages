@@ -5,6 +5,7 @@ import requirements from "./requirements.txt" with { type: "file" };
 import pyprojectToml from "./pyproject.toml" with { type: "file" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://httpie.io",
 	license: "BSD-3-Clause",
 	name: "httpie",

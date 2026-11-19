@@ -3,6 +3,7 @@ import * as cmake from "cmake" with { source: "./cmake" };
 import * as ogg from "ogg" with { source: "./ogg.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://xiph.org/flac",
 	name: "flac",
 	version: "1.5.0",

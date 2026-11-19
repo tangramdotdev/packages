@@ -3,6 +3,7 @@ import * as std from "std" with { source: "./std" };
 import * as texinfo from "texinfo" with { source: "./texinfo.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://github.com/westes/flex",
 	license: "https://github.com/westes/flex/tree/master?tab=License-1-ov-file",
 	name: "flex",

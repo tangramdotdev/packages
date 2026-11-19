@@ -1,6 +1,10 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: {
+		exports: ["default", "build"],
+		hosts: ["aarch64-linux", "x86_64-linux"],
+	},
 	homepage: "https://www.scylladb.com/",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "AGPL-3.0",

@@ -2,6 +2,7 @@ import * as std from "std" with { source: "./std" };
 import coreutils from "coreutils" with { source: "./coreutils.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.fftw.org/",
 	license: "GPL-2.0-or-later",
 	name: "fftw",

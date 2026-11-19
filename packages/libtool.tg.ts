@@ -5,6 +5,7 @@ import * as grep from "gnugrep" with { source: "./gnugrep.tg.ts" };
 import * as sed from "gnused" with { source: "./gnused.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/libtool",
 	license: "GPL-3.0-or-later",
 	name: "libtool",

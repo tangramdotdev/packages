@@ -2,6 +2,7 @@ import * as std from "std" with { source: "./std" };
 import * as bash from "bash" with { source: "./bash.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.iana.org/time-zones",
 	name: "tzdb",
 	license: "https://github.com/eggert/tz/blob/main/LICENSE",

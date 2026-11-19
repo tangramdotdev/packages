@@ -2,6 +2,7 @@ import * as std from "std" with { source: "./std" };
 import * as cmake from "cmake" with { source: "./cmake" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://xiph.org/ogg",
 	name: "ogg",
 	version: "1.3.6",

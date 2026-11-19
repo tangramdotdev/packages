@@ -2,6 +2,7 @@ import * as std from "std" with { source: "./std" };
 import * as cmake from "cmake" with { source: "./cmake" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://ninja-build.org/",
 	license: "Apache-2.0",
 	name: "ninja",

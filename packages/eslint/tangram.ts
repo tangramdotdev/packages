@@ -4,6 +4,7 @@ import * as std from "std" with { source: "../std" };
 import packageLock from "./package-lock.json" with { type: "file" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://eslint.org",
 	license: "MIT",
 	name: "eslint",

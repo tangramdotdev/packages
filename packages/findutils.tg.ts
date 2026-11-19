@@ -4,6 +4,7 @@ import * as gnused from "gnused" with { source: "./gnused.tg.ts" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/findutils/",
 	name: "findutils",
 	license: "GPL-3.0-or-later",

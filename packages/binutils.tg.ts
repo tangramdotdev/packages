@@ -2,6 +2,7 @@ import * as std from "std" with { source: "./std" };
 import * as texinfo from "texinfo" with { source: "./texinfo.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/binutils/",
 	license: "GPL-3.0-or-later",
 	name: "binutils",

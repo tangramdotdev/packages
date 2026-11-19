@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://facebook.github.io/zstd/",
 	license: "BSD-3-Clause",
 	name: "zstd",

@@ -2,6 +2,7 @@ import * as attr from "attr" with { source: "./attr" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://savannah.nongnu.org/projects/acl",
 	hosts: ["aarch64-linux", "x86_64-linux"],
 	license: "GPL-2.0-or-later",

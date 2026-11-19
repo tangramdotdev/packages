@@ -10,6 +10,7 @@ import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 import * as zstd from "zstd" with { source: "./zstd.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/wget/",
 	license: "GPL-3.0-or-later",
 	name: "wget",

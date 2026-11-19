@@ -2,6 +2,7 @@ import * as std from "std" with { source: "./std" };
 import { $ } from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "self"] },
 	homepage: "https://go.dev/",
 	license: "BSD-3-Clause",
 	name: "go",

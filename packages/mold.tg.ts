@@ -3,6 +3,10 @@ import * as cmake from "cmake" with { source: "./cmake" };
 import * as zstd from "zstd" with { source: "./zstd.tg.ts" };
 
 export const metadata = {
+	builds: {
+		exports: ["default", "build"],
+		hosts: ["aarch64-linux", "x86_64-linux"],
+	},
 	homepage: "https://github.com/rui314/mold",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "MIT",
