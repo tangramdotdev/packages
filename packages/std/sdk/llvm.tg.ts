@@ -1,4 +1,5 @@
 import * as bootstrap from "../bootstrap.tg.ts";
+import * as macho from "../file/macho.tg.ts";
 import * as std from "../tangram.ts";
 import { $ } from "../tangram.ts";
 import * as gnu from "./gnu.tg.ts";
@@ -8,7 +9,6 @@ import * as utils from "../utils.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
 import git from "./llvm/git.tg.ts";
 import * as libc from "./libc.tg.ts";
-import cctools from "./llvm/cctools_port.tg.ts";
 import { constructSysroot } from "./libc.tg.ts";
 import cmakeCacheDir from "./llvm/cmake" with { type: "directory" };
 
@@ -23,16 +23,16 @@ export const metadata = {
 	homepage: "https://llvm.org/",
 	name: "llvm",
 	license:
-		"https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/LICENSE.TXT",
+		"https://github.com/llvm/llvm-project/blob/llvmorg-23.1.6/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "23.1.3",
-	tag: "llvm/23.1.3",
+	version: "23.1.6",
+	tag: "llvm/23.1.6",
 };
 
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:c44186a7762ed28954be72e5ff6df9808e0779d4f1bf014ecc4e7e211d31ee34";
+		"sha256:d3b86ab29cfb4445a6652e5c2642ccc75e04e38084dde3701d323320f35a31da";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -281,6 +281,16 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 		}
 	}
 
+	// The unwrapped clang binary names the sysroot's dynamic linker by its store path. Reference the sysroot so that the dynamic linker is present wherever clang runs.
+	await sysroot.store();
+	const clangBinary = await binDir.get(clangBinaryName).then(tg.File.expect);
+	llvmArtifact = await tg.directory(llvmArtifact, {
+		[`bin/${clangBinaryName}`]: tg.file(clangBinary, {
+			executable: true,
+			dependencies: { [sysroot.id]: sysroot },
+		}),
+	});
+
 	// Replace clang and clang++ with shell scripts that exec the unwrapped clang binary.
 	// This allows the proxy to wrap shell scripts (which have no ELF dependencies) instead
 	// of wrapped binaries, enabling the toolchain to work in bootstrap mode.
@@ -292,7 +302,7 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 	});
 
 	if (target !== host) {
-		llvmArtifact = await addCrossTarget(llvmArtifact, target);
+		llvmArtifact = await addCrossTarget(llvmArtifact, host, target);
 	}
 
 	return llvmArtifact;
@@ -302,9 +312,10 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
  *
  * `$0` is the script's own path when it is invoked directly or found on `PATH`, but `std.wrap` re-roots it to a standalone file artifact with no siblings. Preferring the sibling keeps a checked-out toolchain from picking up a foreign compiler; the fallback keeps the wrapped case working. `${var%pattern}` and `[` are shell builtins, so the shim needs nothing on `PATH` to decide.
  */
-function driverShim(driver: string, args?: string) {
+function driverShim(driver: string, args?: string, preamble?: string) {
 	const script = [
 		`#!/bin/sh`,
+		...(preamble !== undefined ? [preamble] : []),
 		`dir=\${0%/*}`,
 		`if [ ! -x "\${dir}/${driver}" ]; then`,
 		`\tdir=$(command -v ${driver})`,
@@ -320,8 +331,15 @@ function driverShim(driver: string, args?: string) {
  *
  * This clang is configured with `CLANG_DEFAULT_RTLIB=compiler-rt` and `CLANG_DEFAULT_CXX_STDLIB=libc++`, but those runtimes are only built for the host. The prebuilt target sysroots ship libgcc and libstdc++ instead, so the cross drivers ask for those explicitly.
  */
-async function addCrossTarget(toolchainDir: tg.Directory, target: string) {
+async function addCrossTarget(
+	toolchainDir: tg.Directory,
+	host: string,
+	target: string,
+) {
 	const targetOs = std.triple.os(target);
+	if (targetOs === "darwin") {
+		return await addDarwinCrossTarget(toolchainDir, host, target);
+	}
 	if (targetOs !== "linux") {
 		return tg.unimplemented(`unrecognized cross target OS: ${targetOs}`);
 	}
@@ -351,6 +369,64 @@ async function addCrossTarget(toolchainDir: tg.Directory, target: string) {
 		[`bin/${target}-ld.lld`]: tg.symlink("ld.lld"),
 		[`bin/${target}-nm`]: tg.symlink("llvm-nm"),
 		[`bin/${target}-objcopy`]: tg.symlink("llvm-objcopy"),
+		[`bin/${target}-ranlib`]: tg.symlink("llvm-ar"),
+		[`bin/${target}-strip`]: tg.symlink("llvm-strip"),
+	});
+}
+
+/** Add a macOS SDK and the prefixed drivers and tools that target it.
+ *
+ * Clang reads the SDK and the linker from a configuration file beside the SDK. The driver does not report an argument from a configuration file as unused, so a compile-only invocation with `-Werror` succeeds. The `-stdlib++-isystem` line keeps the driver from picking up the host libc++ headers installed next to the binary.
+ */
+async function addDarwinCrossTarget(
+	toolchainDir: tg.Directory,
+	host: string,
+	target: string,
+) {
+	const config = [
+		"-fuse-ld=lld",
+		"-isysroot <CFGDIR>/MacOSX.sdk",
+		"-stdlib++-isystem <CFGDIR>/MacOSX.sdk/usr/include/c++/v1",
+		"",
+	].join("\n");
+	let result = await tg.directory(toolchainDir, {
+		[target]: tg.directory(bootstrap.macOsSdk(undefined, host), {
+			"clang.cfg": tg.file(config),
+		}),
+	});
+
+	// The shims default the deployment target so that clang does not derive it from the SDK version.
+	const preamble = `export MACOSX_DEPLOYMENT_TARGET="\${MACOSX_DEPLOYMENT_TARGET:-${std.sdk.macOsDeploymentTarget}}"`;
+	const flags = `-target ${target} --config="\${dir}/../${target}/clang.cfg"`;
+	for (const driver of ["clang", "clang++"]) {
+		result = await tg.directory(result, {
+			[`bin/${target}-${driver}`]: driverShim(driver, flags, preamble),
+		});
+	}
+
+	// Clang looks for `ld64.lld` when it links a Darwin target with `-fuse-ld=lld`.
+	const hasLd64 = (await toolchainDir.tryGet("bin/ld64.lld")) !== undefined;
+
+	// The unprefixed tools go away so that they cannot shadow the host tools of a native SDK in a combined environment. The `clang` and `clang++` shims stay because the prefixed shims exec them.
+	return await tg.directory(result, {
+		"bin/ar": null,
+		"bin/cc": null,
+		"bin/c++": null,
+		"bin/nm": null,
+		"bin/objcopy": null,
+		"bin/objdump": null,
+		"bin/ranlib": null,
+		"bin/strip": null,
+		...(hasLd64 ? {} : { "bin/ld64.lld": tg.symlink("lld") }),
+		[`bin/${target}-cc`]: tg.symlink(`${target}-clang`),
+		[`bin/${target}-c++`]: tg.symlink(`${target}-clang++`),
+		[`bin/${target}-ar`]: tg.symlink("llvm-ar"),
+		[`bin/${target}-install_name_tool`]: tg.symlink("llvm-objcopy"),
+		[`bin/${target}-ld`]: tg.symlink("ld64.lld"),
+		[`bin/${target}-nm`]: tg.symlink("llvm-nm"),
+		[`bin/${target}-objcopy`]: tg.symlink("llvm-objcopy"),
+		[`bin/${target}-objdump`]: tg.symlink("llvm-objdump"),
+		[`bin/${target}-otool`]: tg.symlink("llvm-objdump"),
 		[`bin/${target}-ranlib`]: tg.symlink("llvm-ar"),
 		[`bin/${target}-strip`]: tg.symlink("llvm-strip"),
 	});
@@ -451,65 +527,82 @@ export async function buildLld(arg?: LLVMArg) {
 	return output;
 }
 
-type LinuxToDarwinArg = {
-	host: string;
-	target?: string;
-};
-
-/** Produce a linux to darwin toolchain. */
-import testSource from "../wrap/test/inspectProcess.c" with { type: "file" };
-export async function linuxToDarwin(arg?: LinuxToDarwinArg) {
-	const { host, target: target_ } = arg ?? {
-		host: std.triple.host(),
-		target: "aarch64-apple-darwin",
-	};
-	const target = target_ ?? host;
-
-	// Obtain the clang toolchain.
-	let clangToolchain = await toolchain({ host }).then(tg.Directory.expect);
-
-	// Add the sysroot to the clang toolchain.
-	clangToolchain = await tg.directory(clangToolchain, {
-		["sysroot"]: bootstrap.macOsSdk(undefined, host),
-	});
-
-	// Add shell wrappers for clang and clang++.
-	const bins = ["clang", "clang++"];
-	for (const bin of bins) {
-		clangToolchain = await tg.directory(clangToolchain, {
-			[`bin/${target}-${bin}`]: tg.file(
-				`#!/usr/bin/env sh\nset -x\ninstalldir=$(${bin} -print-search-dirs | grep 'programs: =' | sed 's/programs: =//' | cut -d':' -f1)\nexec ${bin} -target ${target} --sysroot \${installdir}/../sysroot/MacOSX.sdk \"$@\"`,
-				{ executable: true },
-			),
-		});
-	}
-
-	// Obtain linker and SDK.
-	const cctoolsForTarget = await cctools(std.triple.arch(target));
-
-	// Return the combined environment.
-	return await std.env.compose(clangToolchain, cctoolsForTarget);
-}
-
-export async function testLinuxToDarwin(arg?: LinuxToDarwinArg) {
+/** Cross-compile C and C++ programs for both macOS architectures from Linux. */
+export async function testLinuxToDarwin() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
 		console.log("skipped sdk/llvm.tg.ts#testLinuxToDarwin: requires Linux");
 		return null;
 	}
+	const host = std.sdk.canonicalTriple(std.triple.host());
+	const system = std.triple.archAndOs(host);
 
-	const { target = "aarch64-apple-darwin" } = arg ?? {
-		host: std.triple.host(),
-		target: "aarch64-apple-darwin",
-	};
-	const combined = await linuxToDarwin(arg);
-	const f = await $`
-	set -x
-	${target}-clang --version
-	${target}-clang -v -xc ${testSource} -o ${tg.output}
-	`
-		.env(combined)
-		.then(tg.File.expect);
-	return f;
+	const cSource = tg.file`
+		#include <stdio.h>
+		int main() {
+			printf("Hello, world!\\n");
+			return 0;
+		}
+	`;
+	const cxxSource = tg.file`
+		#include <iostream>
+		int main() {
+			std::cout << "Hello, world!" << std::endl;
+			return 0;
+		}
+	`;
+
+	const results: Record<string, tg.Directory> = {};
+	for (const arch of ["aarch64", "x86_64"]) {
+		const target = `${arch}-apple-darwin`;
+		const directory = await toolchain({ host, target }).then(
+			tg.Directory.expect,
+		);
+		const output = await $(std.shBootstrap`
+			set -x
+			mkdir -p ${tg.output}
+			${target}-cc -v -xc ${cSource} -o ${tg.output}/c
+			${target}-c++ -v -xc++ ${cxxSource} -o ${tg.output}/cxx
+			${target}-cc -Werror -c -xc ${cSource} -o ${tg.output}/c.o
+			${target}-c++ -Werror -c -xc++ ${cxxSource} -o ${tg.output}/cxx.o
+		`)
+			.env(directory)
+			.host(system)
+			.then(tg.Directory.expect);
+
+		for (const [name, expectedDependencies] of [
+			["c", ["/usr/lib/libSystem.B.dylib"]],
+			["cxx", ["/usr/lib/libSystem.B.dylib", "/usr/lib/libc++.1.dylib"]],
+		] as const) {
+			const executable = await output.get(name).then(tg.File.expect);
+			const metadata = await std.file.executableMetadata(executable);
+			tg.assert(
+				metadata.format === "mach-o",
+				`expected ${target} ${name} to be a Mach-O file`,
+			);
+			tg.assert(
+				metadata.arches.length === 1 && metadata.arches[0] === arch,
+				`expected ${target} ${name} to be ${arch}, got ${metadata.arches.join(", ")}`,
+			);
+			const dependencies = metadata.dependencies ?? [];
+			for (const dependency of expectedDependencies) {
+				tg.assert(
+					dependencies.includes(dependency),
+					`expected ${target} ${name} to depend on ${dependency}, got ${dependencies.join(", ")}`,
+				);
+			}
+			// The linker signs arm64 output ad hoc, because macOS refuses to run unsigned arm64 code.
+			if (arch === "aarch64") {
+				const parsed = await macho.parse(executable);
+				tg.assert(!("files" in parsed));
+				tg.assert(
+					parsed.loadCommands.some((command) => command.cmd === 0x1d),
+					`expected ${target} ${name} to carry an LC_CODE_SIGNATURE load command`,
+				);
+			}
+		}
+		results[target] = output;
+	}
+	return tg.directory(results);
 }
 
 export function llvmMajorVersion() {
