@@ -6,8 +6,8 @@ This repository contains a collection of community maintained Tangram packages. 
 
 Run the repository scripts with `tg run` from the repository:
 
-- `tg run .#check` runs `tg check` on each package.
-- `tg run .#format` runs `tg format` on each package.
+- `tg run .#check` runs one `tg check` with every package.
+- `tg run .#format` runs one `tg format` with every package.
 - `tg run .#test` builds each package's default export and its `test` export.
 - `tg run .#publish` publishes the packages in one `tg publish --force`, which also creates the builds that each package lists in its `builds` metadata.
 

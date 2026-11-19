@@ -6,7 +6,7 @@ const EXCLUDED = ["demo" "sanity" "webdemo"]
 # The packages that have no build of their own, so that the test action does not build their default export.
 const BUILD_SKIP = ["autobuild"]
 
-# Run an action on packages. Arguments that start with `-` are passed to the tg subcommand, and the other arguments name the packages or package paths to run on, which defaults to every package.
+# Run an action on packages. The check, format, and publish actions run one tg command with every package path, and the test action builds each package in turn. Arguments that start with `-` are passed to the tg subcommand, and the other arguments name the packages or package paths to run on, which defaults to every package.
 def --wrapped main [
     action: string # One of check, format, publish, or test.
     ...args: string
@@ -16,8 +16,8 @@ def --wrapped main [
     let names = $args | where { not ($in | str starts-with "-") }
     let packages = resolve $names
     match $action {
-        "check" => { run_each $packages { |package| ^tg check ...$flags $package.path } }
-        "format" => { run_each $packages { |package| ^tg format ...$flags $package.path } }
+        "check" => { ^tg check ...$flags ...($packages | get path) }
+        "format" => { ^tg format ...$flags ...($packages | get path) }
         "publish" => { publish $packages $flags }
         "test" => { run_each $packages { |package| test $package $flags } }
         _ => { error make { msg: $"unknown action ($action)." } }
