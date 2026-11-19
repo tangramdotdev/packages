@@ -1271,14 +1271,12 @@ export async function testStandaloneBuildScript() {
 }
 
 export async function testStandaloneCross() {
-	// A cross build compiles C for the target against the deployment glibc's headers in a build script, and links the build script for the build machine.
+	// A cross build compiles C for the target in a build script, against the deployment glibc's headers on Linux, and links the build script for the build machine.
 	const host = std.sdk.canonicalTriple(std.triple.host());
-	if (std.triple.os(host) !== "linux") {
-		console.log("skipped cargo.tg.ts#testStandaloneCross: requires Linux");
-		return true;
-	}
+	const os = std.triple.os(host);
 	const arch = std.triple.arch(host) === "x86_64" ? "aarch64" : "x86_64";
-	const target = `${arch}-unknown-linux-gnu`;
+	const target =
+		os === "linux" ? `${arch}-unknown-linux-gnu` : `${arch}-apple-darwin`;
 	const source = tg.directory({
 		"Cargo.toml": tg.file`
 			[package]
@@ -1331,7 +1329,11 @@ export async function testStandaloneCross() {
 		.get("bin/standalone-cross")
 		.then(tg.File.expect);
 	const metadata = await std.file.executableMetadata(executable);
-	tg.assert(metadata.format === "elf" && metadata.arch === arch);
+	tg.assert(
+		os === "linux"
+			? metadata.format === "elf" && metadata.arch === arch
+			: metadata.format === "mach-o" && metadata.arches.includes(arch),
+	);
 
 	return output;
 }

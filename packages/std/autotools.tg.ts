@@ -356,12 +356,10 @@ printf 'prefix = %s\\nall:\\n\\t./program\\ninstall:\\n\\tmkdir -p $(prefix)/bin
 
 export async function testStandaloneCross() {
 	const build_ = std.sdk.canonicalTriple(std.triple.host());
-	if (std.triple.os(build_) !== "linux") {
-		console.log("skipped autotools.tg.ts#testStandaloneCross: requires Linux");
-		return true;
-	}
+	const os = std.triple.os(build_);
 	const arch = std.triple.arch(build_) === "x86_64" ? "aarch64" : "x86_64";
-	const host = `${arch}-unknown-linux-gnu`;
+	const host =
+		os === "linux" ? `${arch}-unknown-linux-gnu` : `${arch}-apple-darwin`;
 	const source = await tg.directory({
 		configure: tg.file({
 			contents: `#!/bin/sh
@@ -387,7 +385,11 @@ printf 'prefix = %s\\nall:\\ninstall:\\n\\tmkdir -p $(prefix)/bin\\n\\tcp progra
 	});
 	const executable = await output.get("bin/program").then(tg.File.expect);
 	const metadata = await std.file.executableMetadata(executable);
-	tg.assert(metadata.format === "elf" && metadata.arch === arch);
+	tg.assert(
+		os === "linux"
+			? metadata.format === "elf" && metadata.arch === arch
+			: metadata.format === "mach-o" && metadata.arches.includes(arch),
+	);
 
 	return output;
 }

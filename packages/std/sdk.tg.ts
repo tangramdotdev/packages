@@ -199,9 +199,12 @@ export namespace sdk {
 			host === canonicalTriple(std.triple.host()),
 			"standalone builds must run on their host",
 		);
+		// A Linux target links against a deployment sysroot, and a macOS target links against the macOS SDK of a macOS host.
 		tg.assert(
-			host === target || std.triple.os(target) === "linux",
-			"standalone cross-compilation requires a Linux target",
+			host === target ||
+				std.triple.os(target) === "linux" ||
+				std.triple.os(host) === "darwin",
+			"standalone cross-compilation requires a Linux target or a macOS host",
 		);
 		const args: Array<tg.Template> = [];
 		const compileArgs: Array<tg.Template> = [];

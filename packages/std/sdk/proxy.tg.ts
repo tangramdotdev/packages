@@ -180,6 +180,13 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 					toolchainDir: directory,
 				});
 				const darwinCross = isCross && std.triple.os(build) === "darwin";
+				// Select the ld proxy in a configuration file beside it, because clang does not report an argument from a configuration file as unused, so that a compile-only invocation with -Werror succeeds.
+				const ldConfig = darwinCross
+					? await tg.directory({
+							"clang.cfg": tg.file("--ld-path=<CFGDIR>/ld\n"),
+							ld: ldProxyArtifact,
+						})
+					: undefined;
 				const wrapCompiler = async (
 					compiler: tg.File | tg.Symlink,
 					name: string,
@@ -195,7 +202,9 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 					return std.wrap(executable, {
 						args: [
 							...args,
-							...(darwinCross ? [tg`--ld-path=${ldProxyArtifact}`] : []),
+							...(ldConfig !== undefined
+								? [tg`--config=${ldConfig}/clang.cfg`]
+								: []),
 						],
 						buildToolchain: buildToolchainDir,
 						env,
@@ -1551,6 +1560,25 @@ export async function testDarwinToLinuxLdProxy(
 		return null;
 	}
 	return await testTransitive(undefined, target);
+}
+
+/** A Darwin cross compiler compiles without linking under -Werror, as a configure script checks. */
+export async function testDarwinCrossCompileOnly() {
+	const host = std.triple.host();
+	if (std.triple.os(host) !== "darwin") {
+		console.log(
+			"skipped sdk/proxy.tg.ts#testDarwinCrossCompileOnly: requires Darwin",
+		);
+		return null;
+	}
+	const arch = std.triple.arch(host) === "x86_64" ? "aarch64" : "x86_64";
+	const target = `${arch}-apple-darwin`;
+	const source = await tg.file`int main(void) { return 0; }\n`;
+	const output = await std
+		.build(std.sh`${target}-cc -Werror -c -xc ${source} -o ${tg.output}`)
+		.env(std.sdk({ target }))
+		.then(tg.File.expect);
+	return output;
 }
 
 export async function testLinuxToDarwinLdProxy() {
