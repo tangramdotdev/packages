@@ -85,13 +85,14 @@ def main [
     # Publish the source closure and release the build outputs, one tag per export. `--eager` pushes
     # the object bytes, which the cold client has no other way to obtain; it is orthogonal to
     # recursion, which stays off so the build graphs beneath each output are never pushed.
+    # `--public` grants public read access, because the cold client has no token.
     if $publish {
         let problems = (publish_problems $publish_remote $remote_url $local_remote)
         if ($problems | is-not-empty) {
             fail "the primary server is not set up to publish to the remote the cold client pulls from." $problems
         }
         try {
-            ^bun run auto -pr --eager $"--remote=($publish_remote)" ...$PACKAGES
+            ^bun run auto -pr --eager --public $"--remote=($publish_remote)" ...$PACKAGES
         } catch {
             fail "the publish and release failed on the primary server."
         }
