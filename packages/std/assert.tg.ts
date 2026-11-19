@@ -88,6 +88,13 @@ export type Metadata = {
 	buildPlatforms?: Array<string>;
 	/** The supported host platforms (arch-os pairs) for the output of this package. If not provided, assumes all supported Tangram platforms. */
 	hostPlatforms?: Array<string>;
+	/** The builds to create and tag when publishing. If `true`, builds the default export on all supported Tangram platforms. */
+	builds?:
+		| boolean
+		| {
+				exports?: Array<string | { export: string; path: string }>;
+				hosts?: Array<string>;
+		  };
 };
 
 /** Assert a package contains the specified contents in the conventional locations.  As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
