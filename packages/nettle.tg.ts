@@ -2,6 +2,7 @@ import * as gmp from "gmp" with { source: "./gmp" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.lysator.liu.se/~nisse/nettle/",
 	license: "LGPL-3.0-or-later",
 	name: "nettle",

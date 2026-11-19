@@ -1,6 +1,10 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: {
+		exports: ["default", "build"],
+		hosts: ["aarch64-linux", "x86_64-linux"],
+	},
 	homepage: "https://github.com/strace/strace",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	name: "strace",

@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://github.com/gavinhoward/bc",
 	name: "bc",
 	license: "BSD-2-Clause",

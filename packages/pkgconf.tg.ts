@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "http://pkgconf.org",
 	license: "https://github.com/pkgconf/pkgconf?tab=License-1-ov-file#readme",
 	name: "pkgconf",

@@ -2,6 +2,7 @@ import { cargo } from "rust" with { source: "./rust" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://github.com/BLAKE3-team/BLAKE3",
 	license: "CC0-1.0",
 	name: "b3sum",

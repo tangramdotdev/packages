@@ -8,6 +8,10 @@ import texinfo from "texinfo" with { source: "../texinfo.tg.ts" };
 import zstd from "zstd" with { source: "../zstd.tg.ts" };
 
 export const metadata = {
+	builds: {
+		exports: ["default", "build"],
+		hosts: ["aarch64-linux", "x86_64-linux"],
+	},
 	homepage: "https://gcc.gnu.org/",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "GPL-3.0-or-later",

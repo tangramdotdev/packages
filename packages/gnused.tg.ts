@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/sed/",
 	license: "GPL-2.0-or-later",
 	name: "sed",

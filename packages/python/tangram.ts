@@ -39,6 +39,7 @@ export const defaultVersion = "3.15" as const;
 
 /** Package metadata for python (uses default version). */
 export const metadata = {
+	builds: { exports: ["default", "self"] },
 	homepage: "https://www.python.org/",
 	name: "python",
 	license: "Python Software Foundation License",

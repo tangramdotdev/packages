@@ -6,6 +6,7 @@ import { $ } from "std" with { source: "./std" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/autoconf/",
 	license: "GPL-3.0-or-later",
 	name: "autoconf",

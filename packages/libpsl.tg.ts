@@ -3,6 +3,7 @@ import * as python from "python" with { source: "./python" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://rockdaboot.github.io/libpsl/",
 	license: "MIT",
 	name: "libpsl",

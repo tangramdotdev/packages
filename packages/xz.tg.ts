@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://tukaani.org/xz/",
 	name: "xz",
 	version: "5.8.4",

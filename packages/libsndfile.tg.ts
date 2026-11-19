@@ -6,6 +6,7 @@ import * as vorbis from "vorbis" with { source: "./vorbis.tg.ts" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	license: "LGPL-2.1",
 	name: "libsndfile",
 	repository: "https://github.com/libsndfile/libsndfile",

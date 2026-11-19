@@ -5,6 +5,7 @@ import * as zlib from "zlib-ng" with { source: "../zlib-ng.tg.ts" };
 import patches from "./patches" with { type: "directory" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.perl.org/",
 	name: "perl",
 	license: "GPL-1.0-or-later",

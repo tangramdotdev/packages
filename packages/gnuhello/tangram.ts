@@ -4,6 +4,7 @@ import * as std from "std" with { source: "../std" };
 import c23ConstGenericPatch from "./c23-const-generic.patch" with { type: "file" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/hello/",
 	license: "GPL-3.0-or-later",
 	name: "hello",

@@ -17,6 +17,7 @@ import pcre2
 import std
 
 metadata: std.assert_.Metadata = {
+    "builds": {"exports": ["default", "build"]},
     "homepage": "https://www.greenwoodsoftware.com/less/",
     "license": "GPL-3.0-or-later OR BSD-2-Clause",
     "name": "less",

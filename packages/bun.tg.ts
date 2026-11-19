@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "self"] },
 	homepage: "https://bun.sh",
 	license: "MIT",
 	name: "bun",

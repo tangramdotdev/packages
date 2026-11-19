@@ -3,6 +3,7 @@ import * as pcre2 from "pcre2" with { source: "./pcre2.tg.ts" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.zsh.org/",
 	license: "https://sourceforge.net/p/zsh/code/ci/master/tree/LICENCE",
 	name: "zsh",

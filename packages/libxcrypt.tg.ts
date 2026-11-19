@@ -2,6 +2,7 @@ import * as std from "std" with { source: "./std" };
 import strchrConstFix from "./libxcrypt-strchr-const-fix.patch" with { type: "file" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://github.com/besser82/libxcrypt",
 	name: "libxcrypt",
 	license: "LGPL-2.1",

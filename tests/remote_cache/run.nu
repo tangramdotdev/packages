@@ -9,8 +9,8 @@
 #
 # The script only reads from the remote unless `--publish` is passed. Publishing runs on this
 # machine's primary server, which must already have the named remote configured and be logged in to
-# it. Nothing is pushed recursively: the release action pushes one tag per export, so the client
-# gets the output of each package and never the graph that produced it.
+# it. Nothing is pushed recursively: the publish pushes the build process of each export with its
+# output, so the client gets the output of each package and never the graph that produced it.
 #
 # `--local-remote` rehearses the whole publish-then-check workflow against a throwaway remote on
 # this machine, so that nothing is written to a shared deployment.
@@ -48,7 +48,7 @@ def main [
     --cleanup # Remove the experiment's servers and exit.
     --local-remote # Publish to and pull from a throwaway remote on this machine.
     --local-remote-port: int = 8091 # The port the throwaway remote listens on.
-    --publish # Publish and release std, jq, and ripgrep from the primary server first.
+    --publish # Publish std, jq, and ripgrep and their builds from the primary server first.
     --publish-remote: string = "default" # The primary server's name for the remote to publish to.
     --remote-url: string = "https://tangram.cloud" # The remote the cold client pulls from.
 ] {
@@ -82,19 +82,20 @@ def main [
         fail $"the cold client cannot reach ($remote_url)." [$health.stderr]
     }
 
-    # Publish the source closure and release the build outputs, one tag per export. `--eager` pushes
-    # the object bytes, which the cold client has no other way to obtain; it is orthogonal to
-    # recursion, which stays off so the build graphs beneath each output are never pushed.
-    # `--public` grants public read access, because the cold client has no token.
+    # Publish the source closure and the builds of this platform, one tag per export, in one publish.
+    # The publish pushes the object bytes, which the cold client has no other way to obtain, and does
+    # not push the build graphs beneath each output. `--public` lets the cold client, which has no
+    # token, read the tags and the builds.
     if $publish {
         let problems = (publish_problems $publish_remote $remote_url $local_remote)
         if ($problems | is-not-empty) {
             fail "the primary server is not set up to publish to the remote the cold client pulls from." $problems
         }
+        let paths = ($PACKAGES | each { |package| package_path $package })
         try {
-            ^bun run auto -pr --eager --public $"--remote=($publish_remote)" ...$PACKAGES
+            ^tangram publish --force --public $"--remote=($publish_remote)" --host (host_platform) ...$paths
         } catch {
-            fail "the publish and release failed on the primary server."
+            fail "the publish failed on the primary server."
         }
 
         # Tie the check to this publish. The demo resolves the latest version on the remote, so a
@@ -210,8 +211,7 @@ def publish_problems [name: string, url: string, local_remote: bool] {
 # Describe how the remote differs from what the primary server published for the package, or return
 # null if the remote serves the same package tag and no later version.
 def unpublished [package: string] {
-    let file = ($REPOSITORY | path join "packages" $"($package).tg.ts")
-    let path = if ($file | path exists) { $file } else { $REPOSITORY | path join "packages" $package }
+    let path = (package_path $package)
     let metadata = (^tangram build $"($path)#metadata" | from json)
     let tag = $metadata.tag
     let primary = (do -i { ^tangram tag get --local $tag } | complete)
@@ -257,6 +257,12 @@ def missing_release [package: string, platform: string] {
     $"($package)/($version): no ($platform) release. Released platforms: ($have)."
 }
 
+# The path of the package, which is a single file package or a directory package.
+def package_path [package: string] {
+    let file = ($REPOSITORY | path join "packages" $"($package).tg.ts")
+    if ($file | path exists) { $file } else { $REPOSITORY | path join "packages" $package }
+}
+
 # The latest version of the package on the remote, or null if none is published.
 def latest_version [package: string] {
     let listed = (do -i { ^tangram -c $CONFIG list --remote --all $package } | complete)
@@ -265,7 +271,7 @@ def latest_version [package: string] {
     if ($versions | is-empty) { null } else { $versions | last }
 }
 
-# The platform segment of a release tag, in the form the automation writes it.
+# The platform segment of a build tag, which is the host that the publish builds on.
 def host_platform [] {
     let os = if $nu.os-info.name == "macos" { "darwin" } else { $nu.os-info.name }
     $"($nu.os-info.arch)-($os)"

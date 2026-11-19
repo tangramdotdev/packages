@@ -3,6 +3,7 @@ import * as ncurses from "ncurses" with { source: "./ncurses.tg.ts" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/bash/",
 	license: "GPL-3.0-or-later",
 	name: "bash",

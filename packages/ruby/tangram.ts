@@ -15,6 +15,7 @@ import * as bootstrap from "./bootstrap.tg.ts";
 import skipUpdateGems from "./0001-skip-update-gems.patch" with { type: "file" };
 
 export const metadata = {
+	builds: { exports: ["default", "self"] },
 	homepage: "https://www.ruby-lang.org/",
 	name: "ruby",
 	license: "BSD-2-Clause",

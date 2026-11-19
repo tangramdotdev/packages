@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { hosts: ["aarch64-linux", "x86_64-linux"] },
 	homepage: "https://www.kernel.org",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "GPLv2",

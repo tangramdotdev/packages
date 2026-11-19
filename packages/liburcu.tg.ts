@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://liburcu.org/",
 	license: "LGPL-2.1-or-later",
 	name: "liburcu",

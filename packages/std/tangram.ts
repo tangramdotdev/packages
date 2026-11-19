@@ -40,6 +40,25 @@ import * as workspace from "./wrap/workspace.tg.ts";
 import { env as stdEnv } from "./env.tg.ts";
 
 export const metadata = {
+	builds: {
+		exports: [
+			"default",
+			"default_",
+			"sdk",
+			{ export: "buildGnuEnv", path: "utils/gnuEnv" },
+			{ export: "buildDefaultEnv", path: "utils/env" },
+			{ export: "buildDefaultInjection", path: "wrap/defaultInjection" },
+			{ export: "buildDefaultWorkspace", path: "wrap/defaultWorkspace" },
+			{ export: "buildDefaultWrapper", path: "wrap/defaultWrapper" },
+			{
+				export: "buildAutotoolsBuildTools",
+				path: "dependencies/buildTools/autotools",
+			},
+			{ export: "buildBootstrapSdkEnv", path: "bootstrap/sdkEnv" },
+			{ export: "buildSdk", path: "sdk/build" },
+			{ export: "buildCrossSdk", path: "sdk/cross" },
+		],
+	},
 	name: "std",
 	version: "0.0.0",
 	tag: "std/0.0.0",

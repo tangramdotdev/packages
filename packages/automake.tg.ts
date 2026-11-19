@@ -14,6 +14,7 @@ export function deps() {
 }
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/automake/",
 	license: "GPL-2.0-or-later",
 	name: "automake",

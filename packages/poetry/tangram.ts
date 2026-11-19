@@ -5,6 +5,7 @@ import * as lockfile from "./lockfile.tg.ts";
 import requirementsTxt from "./requirements.txt" with { type: "file" };
 
 export const metadata = {
+	builds: { exports: ["default", "self"] },
 	homepage: "https://python-poetry.org",
 	license: "MIT",
 	name: "poetry",

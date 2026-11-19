@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.bytereef.org/mpdecimal/index.html",
 	license: "Simplified BSD",
 	name: "mpdecimal",

@@ -5,6 +5,7 @@ import * as std from "std" with { source: "./std" };
 import { $ } from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	home: "https://esbuild.github.io",
 	license: "MIT",
 	name: "esbuild",

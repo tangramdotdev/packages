@@ -2,6 +2,7 @@ import * as ncurses from "ncurses" with { source: "./ncurses.tg.ts" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://tiswww.cwru.edu/php/chet/readline/rltop.html",
 	license: "https://tiswww.cwru.edu/php/chet/readline/rltop.html",
 	name: "readline",

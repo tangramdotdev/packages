@@ -3,6 +3,7 @@ import * as std from "std" with { source: "./std" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://libssh2.org",
 	license: "BSD-3-Clause",
 	name: "libssh2",

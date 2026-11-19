@@ -2,6 +2,7 @@ import * as std from "std" with { source: "./std" };
 import systemHeadersPatch from "./std/utils/gzip-system-headers.patch" with { type: "file" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.gnu.org/software/gzip",
 	license: "GPL-3.0-or-later",
 	name: "gzip",

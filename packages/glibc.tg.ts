@@ -4,6 +4,10 @@ import python from "python" with { source: "./python" };
 import texinfo from "texinfo" with { source: "./texinfo.tg.ts" };
 
 export const metadata = {
+	builds: {
+		exports: ["default", "build"],
+		hosts: ["aarch64-linux", "x86_64-linux"],
+	},
 	homepage: "https://sourceware.org/glibc/",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "LGPL-2.1-or-later",

@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://github.com/PCRE2Project/pcre2",
 	name: "pcre2",
 	repository: "https://github.com/PCRE2Project/pcre2",

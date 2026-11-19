@@ -1,6 +1,7 @@
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://pyyaml.org/wiki/LibYAML",
 	license: "MIT",
 	name: "libyaml",

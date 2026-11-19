@@ -2,6 +2,7 @@ import * as std from "std" with { source: "./std" };
 import * as cmake from "cmake" with { source: "./cmake" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://opus-codec.org/",
 	name: "opus",
 	version: "1.6.1",

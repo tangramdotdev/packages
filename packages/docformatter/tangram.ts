@@ -3,6 +3,7 @@ import * as std from "std" with { source: "../std" };
 import untokenizeModule from "./untokenize.py" with { type: "file" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://pypi.org/project/docformatter/",
 	name: "docformatter",
 	license: "MIT",

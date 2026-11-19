@@ -9,6 +9,7 @@ import * as glibc from "glibc" with { source: "../glibc.tg.ts" };
 import cmakeCacheDir from "./cmake" with { type: "directory" };
 
 export const metadata = {
+	builds: { exports: ["default", "libclang"] },
 	homepage: "https://llvm.org/",
 	name: "llvm",
 	license:

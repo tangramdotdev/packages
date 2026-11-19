@@ -14,6 +14,7 @@ import * as ninja from "./ninja.tg.ts";
 export * as ninja from "./ninja.tg.ts";
 
 export const metadata = {
+	builds: { exports: ["default", "self"] },
 	homepage: "https://cmake.org/",
 	license: "BSD-3-Clause",
 	name: "cmake",

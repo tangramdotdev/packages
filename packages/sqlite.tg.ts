@@ -4,6 +4,7 @@ import * as std from "std" with { source: "./std" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
+	builds: { exports: ["default", "build"] },
 	homepage: "https://www.sqlite.org/",
 	name: "sqlite",
 	license: "https://sqlite.org/src/file?name=LICENSE.md&ci=trunk",

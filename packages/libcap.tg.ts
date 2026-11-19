@@ -3,6 +3,10 @@ import * as bash from "bash" with { source: "./bash.tg.ts" };
 import * as std from "std" with { source: "./std" };
 
 export const metadata = {
+	builds: {
+		exports: ["default", "build"],
+		hosts: ["aarch64-linux", "x86_64-linux"],
+	},
 	homepage: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
 	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git/tree/License",
