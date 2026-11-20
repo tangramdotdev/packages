@@ -93,7 +93,7 @@ export type Arg = CommonArg & {
 	/** Produce native executables that use system libraries without a Tangram wrapper. Requires a native build with the rustc proxy disabled. */
 	standalone?: boolean | std.sdk.StandaloneArg;
 
-	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Default: "build". */
+	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Only the build subcommand copies the executables into the output. Default: "build". */
 	subcommand?: string;
 
 	/** Use a temporary target directory and copy the executables into the output. Use `RunArg` to select a target directory outside Tangram. */
@@ -629,15 +629,19 @@ target-applies-to-host = true`;
 		? tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
 		: tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString}`;
 
-	// Copy the executables with their dependency metadata before the temporary target directory is discarded.
+	// Copy the executables with their dependency metadata before the temporary target directory is discarded. Only a build copies them, because other subcommands, such as test runs, build executables only for their own use.
 	const profileDir = profile === "dev" ? "debug" : profile;
-	const install = tg`
+	const subcommandName = subcommand.trim().split(/\s+/)[0];
+	const install =
+		subcommandName === "build"
+			? tg`
 		for executable in "$SCRATCH_TARGET_DIR/${target}/${profileDir}"/*; do
 			if [ -f "$executable" ] && [ -x "$executable" ]; then
 				cp -aL "$executable" "${tg.output}/bin/"
 			fi
 		done
-	`;
+	`
+			: null;
 	const buildScript = tg.Template.join(
 		"\n",
 		preparePaths,
@@ -1186,6 +1190,7 @@ export async function test() {
 	tests.push(testStandalone());
 	tests.push(testStandaloneBuildScript());
 	tests.push(testStandaloneCross());
+	tests.push(testTestSubcommand());
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
 	await Promise.all(tests);
@@ -1377,6 +1382,40 @@ export async function testNestedCargoOffline() {
 		"src/main.rs": tg.file`fn main() {}`,
 	});
 	await build({ source });
+	return true;
+}
+
+export async function testTestSubcommand() {
+	// A test run builds the crate's executable for its integration test and leaves it out of the output.
+	const source = tg.directory({
+		"Cargo.toml": tg.file`
+			[package]
+			name = "test-subcommand"
+			version = "0.1.0"
+			edition = "2021"
+		`,
+		"Cargo.lock": tg.file`
+			version = 4
+
+			[[package]]
+			name = "test-subcommand"
+			version = "0.1.0"
+		`,
+		"src/main.rs": tg.file`fn main() {}`,
+		"tests/run.rs": tg.file`
+			#[test]
+			fn run() {
+				let executable = env!("CARGO_BIN_EXE_test-subcommand");
+				assert!(std::process::Command::new(executable).status().unwrap().success());
+			}
+		`,
+	});
+	const output = await build({ source, subcommand: "test" });
+	const executable = await output.tryGet("bin/test-subcommand");
+	tg.assert(
+		executable === null,
+		"the test run should not install the executable",
+	);
 	return true;
 }
 
