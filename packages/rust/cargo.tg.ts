@@ -316,6 +316,10 @@ VENDORCFG`;
 		const sdkArgs: Array<std.sdk.ArgObject> = [
 			{ host: rustHost, target: rustHost },
 		];
+		const sdkArgObject = std.sdk.argObject(resolved.sdk);
+		if (sdkArgObject !== undefined) {
+			sdkArgs.push(sdkArgObject);
+		}
 		if (std.triple.os(rustHost) === "linux") {
 			sdkArgs.push({ toolchain: "gnu" });
 		}

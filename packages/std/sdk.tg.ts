@@ -157,6 +157,9 @@ export async function sdkInner(...args: tg.Args<sdk.ResolvedArg>) {
 	if (linkerExe) {
 		proxyArg = { ...proxyArg, linkerExe };
 	}
+	if (linker === "mold") {
+		proxyArg = { ...proxyArg, linkerName: "mold" };
+	}
 	const proxiedSdk = await tg.build(proxy.env, proxyArg).named("proxy sdk");
 	if (hostOs !== "darwin") {
 		return proxiedSdk;
@@ -1724,6 +1727,28 @@ export async function testLLVMMold() {
 	await sdk.assertValid(moldSdk, sdkArg);
 
 	return moldSdk;
+}
+
+/** Test that a GCC SDK that links with mold also provides it to `-fuse-ld=mold`, which a build's flags can select, such as the rustflags in a user's Cargo configuration. */
+export async function testMoldFuseLd() {
+	const host = std.triple.host();
+	if (std.triple.os(host) !== "linux") {
+		console.log("skipped sdk.tg.ts#testMoldFuseLd: requires Linux");
+		return null;
+	}
+
+	// Link a shared library, as rustc links a proc macro.
+	const sdkEnv = await sdk({ host, linker: "mold", toolchain: "gnu" });
+	const library = await std
+		.build(
+			std.shBootstrap`echo 'int f() { return 0; }' | cc -shared -fPIC -fuse-ld=mold -xc - -o ${tg.output}`,
+		)
+		.env(sdkEnv)
+		.host(std.triple.archAndOs(host))
+		.then(tg.File.expect);
+	await assertComment(library, sdkEnv, "mold");
+
+	return true;
 }
 
 export async function testLLVMBfd() {
