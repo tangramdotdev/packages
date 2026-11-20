@@ -118,6 +118,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		.into();
 
 	let (mut env, toolchain_artifact) = build_env(&args.rustc, &source_artifact).await?;
+	let host_dirs = host_dirs(&env, &source_artifact, &source_dir);
 
 	// When the runner is in use, link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
 	if std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_some()
@@ -206,14 +207,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	// races the next wrapper's `-L dependency=` directory snapshot.
 	let materialize_start = Instant::now();
 	if let Some(out_dir) = &args.out_dir {
-		materialize_outputs(
-			&output_dir,
-			Path::new(out_dir),
-			&source_artifact,
-			&source_dir,
-			&args,
-		)
-		.await?;
+		materialize_outputs(&output_dir, Path::new(out_dir), &host_dirs, &args).await?;
 	}
 	timing.materialize = materialize_start.elapsed();
 
@@ -229,6 +223,22 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	forward_logs(&output_dir, None).await?;
 
 	Ok(())
+}
+
+// Get the host directories of the artifacts that the sandbox reads its source and the build script's output from, so that the depfiles name them by their host paths.
+fn host_dirs(
+	env: &tg::value::Map,
+	source_artifact: &tg::Artifact,
+	source_dir: &Path,
+) -> Vec<(tg::artifact::Id, PathBuf)> {
+	let mut host_dirs = vec![(source_artifact.id(), source_dir.to_owned())];
+	if let Some(tg::Value::Template(template)) = env.get("OUT_DIR")
+		&& let [tg::template::Component::Artifact(artifact)] = template.components.as_slice()
+		&& let Some(out_dir) = std::env::var_os("OUT_DIR")
+	{
+		host_dirs.push((artifact.id(), PathBuf::from(out_dir)));
+	}
+	host_dirs
 }
 
 // The sandbox env, with the toolchain artifact that provides rustc.
@@ -259,12 +269,16 @@ async fn build_env(
 	}
 	rewrite_dir_env(&mut env, "OUT_DIR").await?;
 	if let Ok(out_dir) = std::env::var("OUT_DIR") {
-		rewrite_out_dir_references(&mut env, &out_dir);
+		rewrite_dir_references(&mut env, "OUT_DIR", &out_dir);
 	}
 	// Cargo populates these with paths embedding the outer cargo-sandbox's
 	// source artifact id, which varies per `cargo.build`. Re-anchor on the
 	// per-crate source artifact so they depend only on this crate's source.
 	override_manifest_env(&mut env, source_artifact);
+	// Replace the crate's host source directory inside the other variables with its source artifact, so that a path into the crate's source that a build script exports with `cargo:rustc-env`, such as v8's `RUSTY_V8_SRC_BINDING_PATH` when Cargo runs on the host, resolves in the sandbox.
+	if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+		rewrite_dir_references(&mut env, "CARGO_MANIFEST_DIR", &manifest_dir);
+	}
 
 	let toolchain_artifact = resolve_toolchain(&mut env, rustc).await?;
 
@@ -331,8 +345,7 @@ fn append_spawn_log(process_id: &tg::process::Id) {
 async fn materialize_outputs(
 	output_dir: &tg::Directory,
 	out_dir: &Path,
-	source_artifact: &tg::Artifact,
-	source_dir: &Path,
+	host_dirs: &[(tg::artifact::Id, PathBuf)],
 	args: &Args,
 ) -> tg::Result<()> {
 	let build = output_dir
@@ -344,38 +357,37 @@ async fn materialize_outputs(
 	// Cargo's incremental fingerprint check `stat`s each depfile entry; the
 	// sandbox-internal paths do not exist on the host, so without this rewrite
 	// every rebuild reads as "stale: missing X".
-	rewrite_depfile_source_paths(out_dir, source_artifact, source_dir).await?;
+	let depfiles = build
+		.entries()
+		.await?
+		.into_keys()
+		.filter(|name| {
+			Path::new(name)
+				.extension()
+				.is_some_and(|extension| extension == "d")
+		})
+		.collect::<Vec<_>>();
+	rewrite_depfile_paths(out_dir, &depfiles, host_dirs).await?;
 	let own_stems = sidecar::own_stems(args.crate_name.as_deref(), args.extra_filename.as_deref());
 	let direct_extern_stems = sidecar::direct_extern_stems(&args.passthrough);
 	sidecar::write_sidecars(out_dir, &own_stems, &direct_extern_stems)
 }
 
-async fn rewrite_depfile_source_paths(
+// Replace the sandbox path of each artifact in the depfiles that this compilation produced with its host directory, both in the paths of files and in the values of environment variables, such as `# env-dep:OUT_DIR=`, which Cargo compares with the values that it sets. Rewrite only this compilation's depfiles, because Cargo can share its output directory between compilations, and the directories of two compilations with the same contents are one artifact.
+async fn rewrite_depfile_paths(
 	out_dir: &Path,
-	source_artifact: &tg::Artifact,
-	source_dir: &Path,
+	depfiles: &[String],
+	host_dirs: &[(tg::artifact::Id, PathBuf)],
 ) -> tg::Result<()> {
-	let sandbox_prefix = format!("{}/{}/", SANDBOX_STORE_DIR, source_artifact.id());
-	let host_prefix = format!("{}/", source_dir.display());
-	let mut entries = tokio::fs::read_dir(out_dir).await.map_err(|error| {
-		tg::error!(
-			"failed to read out_dir {} for depfile rewrite: {error}",
-			out_dir.display()
-		)
-	})?;
-	while let Some(entry) = entries
-		.next_entry()
-		.await
-		.map_err(|error| tg::error!("failed to iterate out_dir for depfile rewrite: {error}"))?
-	{
-		let path = entry.path();
-		if path.extension().and_then(|s| s.to_str()) != Some("d") {
-			continue;
-		}
-		let Ok(contents) = tokio::fs::read_to_string(&path).await else {
-			continue;
-		};
-		let rewritten = contents.replace(&sandbox_prefix, &host_prefix);
+	for depfile in depfiles {
+		let path = out_dir.join(depfile);
+		let contents = tokio::fs::read_to_string(&path).await.map_err(|error| {
+			tg::error!(
+				"failed to read the depfile {} for rewrite: {error}",
+				path.display()
+			)
+		})?;
+		let rewritten = rewrite_depfile_contents(&contents, host_dirs);
 		if rewritten != contents {
 			tokio::fs::write(&path, rewritten).await.map_err(|error| {
 				tg::error!(
@@ -388,9 +400,43 @@ async fn rewrite_depfile_source_paths(
 	Ok(())
 }
 
-// Per-file checkout: Cargo's legacy build-dir layout shares `--out-dir`
-// (`target/<triple>/<profile>/deps`) across every crate, so a directory-level
-// checkout with `force: true` would delete sibling crates' outputs.
+// Escape each host directory as rustc escapes the paths of files in a depfile, or as it escapes the values of environment variables on its `# env-dep:` lines.
+fn rewrite_depfile_contents(contents: &str, host_dirs: &[(tg::artifact::Id, PathBuf)]) -> String {
+	let replacements = host_dirs
+		.iter()
+		.map(|(id, host_dir)| {
+			let sandbox_dir = format!("{SANDBOX_STORE_DIR}/{id}");
+			let host_dir = host_dir.display().to_string();
+			let path = host_dir.replace(' ', "\\ ");
+			let value = escape_depfile_env_value(&host_dir);
+			(sandbox_dir, path, value)
+		})
+		.collect::<Vec<_>>();
+	let mut output = String::with_capacity(contents.len());
+	for line in contents.split_inclusive('\n') {
+		let env = line.starts_with("# env-dep:");
+		let mut line = line.to_owned();
+		for (sandbox_dir, path, value) in &replacements {
+			line = line.replace(sandbox_dir, if env { value } else { path });
+		}
+		output.push_str(&line);
+	}
+	output
+}
+
+fn escape_depfile_env_value(value: &str) -> String {
+	let mut escaped = String::with_capacity(value.len());
+	for c in value.chars() {
+		match c {
+			'\n' => escaped.push_str("\\n"),
+			'\r' => escaped.push_str("\\r"),
+			'\\' => escaped.push_str("\\\\"),
+			_ => escaped.push(c),
+		}
+	}
+	escaped
+}
+
 pub(crate) async fn checkout_artifact_entries(
 	dir: &tg::Directory,
 	target: &Path,
@@ -533,13 +579,13 @@ async fn rewrite_dir_env(env: &mut tg::value::Map, key: &str) -> tg::Result<()> 
 	Ok(())
 }
 
-// Replace cargo's `OUT_DIR` path inside the other variables with the checked-in directory, so that a path that a build script exports with `cargo:rustc-env` resolves in the sandbox.
-fn rewrite_out_dir_references(env: &mut tg::value::Map, out_dir: &str) {
-	let Some(tg::Value::Template(out_dir_template)) = env.get("OUT_DIR").cloned() else {
+// Replace a host directory inside the other variables with the template that `env[key]` holds for it, so that a path that a build script exports with `cargo:rustc-env` resolves in the sandbox.
+fn rewrite_dir_references(env: &mut tg::value::Map, key: &str, dir: &str) {
+	let Some(tg::Value::Template(dir_template)) = env.get(key).cloned() else {
 		return;
 	};
 	for (name, value) in env.iter_mut() {
-		if name == "OUT_DIR" {
+		if name == key {
 			continue;
 		}
 		let components = match value {
@@ -555,13 +601,13 @@ fn rewrite_out_dir_references(env: &mut tg::value::Map, out_dir: &str) {
 				continue;
 			};
 			let mut end = 0;
-			for (index, _) in string.match_indices(out_dir) {
+			for (index, _) in string.match_indices(dir) {
 				// Match the original path boundaries, including across artifact components.
 				let before = string[..index].chars().next_back();
 				let starts_path = before.map_or(component_index == 0, |c| {
 					c.is_whitespace() || matches!(c, ':' | '=' | '"' | '\'')
 				});
-				let after = &string[index + out_dir.len()..];
+				let after = &string[index + dir.len()..];
 				if !starts_path || after.chars().next().is_some_and(|c| c != '/' && c != ':') {
 					continue;
 				}
@@ -570,9 +616,9 @@ fn rewrite_out_dir_references(env: &mut tg::value::Map, out_dir: &str) {
 						string[end..index].to_owned(),
 					));
 				}
-				rewritten.extend(out_dir_template.components.iter().cloned());
+				rewritten.extend(dir_template.components.iter().cloned());
 				changed = true;
-				end = index + out_dir.len();
+				end = index + dir.len();
 			}
 			if end < string.len() {
 				rewritten.push(tg::template::Component::String(string[end..].to_owned()));
