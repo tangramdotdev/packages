@@ -353,35 +353,36 @@ async fn materialize_outputs(
 	// Cargo's incremental fingerprint check `stat`s each depfile entry; the
 	// sandbox-internal paths do not exist on the host, so without this rewrite
 	// every rebuild reads as "stale: missing X".
-	rewrite_depfile_paths(out_dir, host_dirs).await?;
+	let depfiles = build
+		.entries()
+		.await?
+		.into_keys()
+		.filter(|name| {
+			Path::new(name)
+				.extension()
+				.is_some_and(|extension| extension == "d")
+		})
+		.collect::<Vec<_>>();
+	rewrite_depfile_paths(out_dir, &depfiles, host_dirs).await?;
 	let own_stems = sidecar::own_stems(args.crate_name.as_deref(), args.extra_filename.as_deref());
 	let direct_extern_stems = sidecar::direct_extern_stems(&args.passthrough);
 	sidecar::write_sidecars(out_dir, &own_stems, &direct_extern_stems)
 }
 
-// Replace the sandbox path of each artifact in the depfiles with its host directory, both in the paths of files and in the values of environment variables, such as `# env-dep:OUT_DIR=`, which Cargo compares with the values that it sets.
+// Replace the sandbox path of each artifact in the depfiles that this compilation produced with its host directory, both in the paths of files and in the values of environment variables, such as `# env-dep:OUT_DIR=`, which Cargo compares with the values that it sets. Rewrite only this compilation's depfiles, because Cargo can share its output directory between compilations, and the directories of two compilations with the same contents are one artifact.
 async fn rewrite_depfile_paths(
 	out_dir: &Path,
+	depfiles: &[String],
 	host_dirs: &[(tg::artifact::Id, PathBuf)],
 ) -> tg::Result<()> {
-	let mut entries = tokio::fs::read_dir(out_dir).await.map_err(|error| {
-		tg::error!(
-			"failed to read out_dir {} for depfile rewrite: {error}",
-			out_dir.display()
-		)
-	})?;
-	while let Some(entry) = entries
-		.next_entry()
-		.await
-		.map_err(|error| tg::error!("failed to iterate out_dir for depfile rewrite: {error}"))?
-	{
-		let path = entry.path();
-		if path.extension().and_then(|s| s.to_str()) != Some("d") {
-			continue;
-		}
-		let Ok(contents) = tokio::fs::read_to_string(&path).await else {
-			continue;
-		};
+	for depfile in depfiles {
+		let path = out_dir.join(depfile);
+		let contents = tokio::fs::read_to_string(&path).await.map_err(|error| {
+			tg::error!(
+				"failed to read the depfile {} for rewrite: {error}",
+				path.display()
+			)
+		})?;
 		let rewritten = rewrite_depfile_contents(&contents, host_dirs);
 		if rewritten != contents {
 			tokio::fs::write(&path, rewritten).await.map_err(|error| {
@@ -395,18 +396,43 @@ async fn rewrite_depfile_paths(
 	Ok(())
 }
 
+// Escape each host directory as rustc escapes the paths of files in a depfile, or as it escapes the values of environment variables on its `# env-dep:` lines.
 fn rewrite_depfile_contents(contents: &str, host_dirs: &[(tg::artifact::Id, PathBuf)]) -> String {
-	let mut contents = contents.to_owned();
-	for (id, host_dir) in host_dirs {
-		let sandbox_dir = format!("{SANDBOX_STORE_DIR}/{id}");
-		contents = contents.replace(&sandbox_dir, &host_dir.display().to_string());
+	let replacements = host_dirs
+		.iter()
+		.map(|(id, host_dir)| {
+			let sandbox_dir = format!("{SANDBOX_STORE_DIR}/{id}");
+			let host_dir = host_dir.display().to_string();
+			let path = host_dir.replace(' ', "\\ ");
+			let value = escape_depfile_env_value(&host_dir);
+			(sandbox_dir, path, value)
+		})
+		.collect::<Vec<_>>();
+	let mut output = String::with_capacity(contents.len());
+	for line in contents.split_inclusive('\n') {
+		let env = line.starts_with("# env-dep:");
+		let mut line = line.to_owned();
+		for (sandbox_dir, path, value) in &replacements {
+			line = line.replace(sandbox_dir, if env { value } else { path });
+		}
+		output.push_str(&line);
 	}
-	contents
+	output
 }
 
-// Per-file checkout: Cargo's legacy build-dir layout shares `--out-dir`
-// (`target/<triple>/<profile>/deps`) across every crate, so a directory-level
-// checkout with `force: true` would delete sibling crates' outputs.
+fn escape_depfile_env_value(value: &str) -> String {
+	let mut escaped = String::with_capacity(value.len());
+	for c in value.chars() {
+		match c {
+			'\n' => escaped.push_str("\\n"),
+			'\r' => escaped.push_str("\\r"),
+			'\\' => escaped.push_str("\\\\"),
+			_ => escaped.push(c),
+		}
+	}
+	escaped
+}
+
 pub(crate) async fn checkout_artifact_entries(
 	dir: &tg::Directory,
 	target: &Path,

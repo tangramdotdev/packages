@@ -1,5 +1,8 @@
 use {
-	super::{SANDBOX_STORE_DIR, rewrite_depfile_contents, rewrite_out_dir_references},
+	super::{
+		SANDBOX_STORE_DIR, rewrite_depfile_contents, rewrite_depfile_paths,
+		rewrite_out_dir_references,
+	},
 	std::{collections::BTreeMap, path::PathBuf},
 	tangram_client::prelude::*,
 };
@@ -55,6 +58,44 @@ fn depfile_paths_use_host_dirs() {
 	assert_eq!(
 		rewrite_depfile_contents(&contents, &host_dirs),
 		"/build/lib.rmeta: /target/build/out/private.rs\n\n/target/build/out/private.rs:\n\n# env-dep:OUT_DIR=/target/build/out\n",
+	);
+}
+
+#[test]
+fn depfile_paths_escape_host_dirs() {
+	let artifact: tg::Artifact = tg::Directory::with_entries(BTreeMap::new()).into();
+	let id = artifact.id();
+	let sandbox_dir = format!("{SANDBOX_STORE_DIR}/{id}");
+	let contents =
+		format!("/build/lib.rmeta: {sandbox_dir}/private.rs\n\n# env-dep:OUT_DIR={sandbox_dir}\n");
+	let host_dirs = vec![(id, PathBuf::from("/target dir/out"))];
+	assert_eq!(
+		rewrite_depfile_contents(&contents, &host_dirs),
+		"/build/lib.rmeta: /target\\ dir/out/private.rs\n\n# env-dep:OUT_DIR=/target dir/out\n",
+	);
+}
+
+#[test]
+fn depfile_rewrite_skips_other_compilations() {
+	let artifact: tg::Artifact = tg::Directory::with_entries(BTreeMap::new()).into();
+	let id = artifact.id();
+	let contents = format!("/build/lib.rmeta: {SANDBOX_STORE_DIR}/{id}/private.rs\n");
+	let out_dir = tempfile::tempdir().unwrap();
+	std::fs::write(out_dir.path().join("this.d"), &contents).unwrap();
+	std::fs::write(out_dir.path().join("other.d"), &contents).unwrap();
+	let depfiles = vec!["this.d".to_owned()];
+	let host_dirs = vec![(id, PathBuf::from("/target/build/out"))];
+	crate::runtime()
+		.unwrap()
+		.block_on(rewrite_depfile_paths(out_dir.path(), &depfiles, &host_dirs))
+		.unwrap();
+	assert_eq!(
+		std::fs::read_to_string(out_dir.path().join("this.d")).unwrap(),
+		"/build/lib.rmeta: /target/build/out/private.rs\n",
+	);
+	assert_eq!(
+		std::fs::read_to_string(out_dir.path().join("other.d")).unwrap(),
+		contents,
 	);
 }
 
