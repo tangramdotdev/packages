@@ -1,4 +1,4 @@
-use {super::rewrite_out_dir_references, std::collections::BTreeMap, tangram_client::prelude::*};
+use {super::rewrite_dir_references, std::collections::BTreeMap, tangram_client::prelude::*};
 
 #[test]
 fn out_dir_references_respect_path_boundaries() {
@@ -34,9 +34,27 @@ fn out_dir_references_respect_path_boundaries() {
 			("GENERATED_PATH".to_owned(), raw.to_owned().into()),
 			("OUT_DIR".to_owned(), template.into()),
 		]);
-		rewrite_out_dir_references(&mut env, out_dir);
+		rewrite_dir_references(&mut env, "OUT_DIR", out_dir);
 		assert_eq!(render(&env["GENERATED_PATH"]), expected, "{raw}");
 	}
+}
+
+#[test]
+fn manifest_dir_references_use_the_source_artifact() {
+	let artifact = tg::Directory::with_entries(BTreeMap::new()).into();
+	let template = tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
+	let mut env = tg::value::Map::from([
+		("CARGO_MANIFEST_DIR".to_owned(), template.into()),
+		(
+			"RUSTY_V8_SRC_BINDING_PATH".to_owned(),
+			"/registry/v8-152.2.0/gen/src_binding.rs".to_owned().into(),
+		),
+	]);
+	rewrite_dir_references(&mut env, "CARGO_MANIFEST_DIR", "/registry/v8-152.2.0");
+	assert_eq!(
+		render(&env["RUSTY_V8_SRC_BINDING_PATH"]),
+		"/checked-in-out/gen/src_binding.rs",
+	);
 }
 
 #[test]
@@ -51,7 +69,7 @@ fn out_dir_references_preserve_existing_artifacts() {
 		("GENERATED_PATH".to_owned(), value.into()),
 		("OUT_DIR".to_owned(), template.into()),
 	]);
-	rewrite_out_dir_references(&mut env, "/tmp/build/out");
+	rewrite_dir_references(&mut env, "OUT_DIR", "/tmp/build/out");
 	assert_eq!(
 		render(&env["GENERATED_PATH"]),
 		"/checked-in-out/tmp/build/out/file.rs:/checked-in-out/generated.rs",

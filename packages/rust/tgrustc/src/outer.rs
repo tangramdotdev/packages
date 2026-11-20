@@ -259,12 +259,16 @@ async fn build_env(
 	}
 	rewrite_dir_env(&mut env, "OUT_DIR").await?;
 	if let Ok(out_dir) = std::env::var("OUT_DIR") {
-		rewrite_out_dir_references(&mut env, &out_dir);
+		rewrite_dir_references(&mut env, "OUT_DIR", &out_dir);
 	}
 	// Cargo populates these with paths embedding the outer cargo-sandbox's
 	// source artifact id, which varies per `cargo.build`. Re-anchor on the
 	// per-crate source artifact so they depend only on this crate's source.
 	override_manifest_env(&mut env, source_artifact);
+	// Replace the crate's host source directory inside the other variables with its source artifact, so that a path into the crate's source that a build script exports with `cargo:rustc-env`, such as v8's `RUSTY_V8_SRC_BINDING_PATH` when Cargo runs on the host, resolves in the sandbox.
+	if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+		rewrite_dir_references(&mut env, "CARGO_MANIFEST_DIR", &manifest_dir);
+	}
 
 	let toolchain_artifact = resolve_toolchain(&mut env, rustc).await?;
 
@@ -533,13 +537,13 @@ async fn rewrite_dir_env(env: &mut tg::value::Map, key: &str) -> tg::Result<()> 
 	Ok(())
 }
 
-// Replace cargo's `OUT_DIR` path inside the other variables with the checked-in directory, so that a path that a build script exports with `cargo:rustc-env` resolves in the sandbox.
-fn rewrite_out_dir_references(env: &mut tg::value::Map, out_dir: &str) {
-	let Some(tg::Value::Template(out_dir_template)) = env.get("OUT_DIR").cloned() else {
+// Replace a host directory inside the other variables with the template that `env[key]` holds for it, so that a path that a build script exports with `cargo:rustc-env` resolves in the sandbox.
+fn rewrite_dir_references(env: &mut tg::value::Map, key: &str, dir: &str) {
+	let Some(tg::Value::Template(dir_template)) = env.get(key).cloned() else {
 		return;
 	};
 	for (name, value) in env.iter_mut() {
-		if name == "OUT_DIR" {
+		if name == key {
 			continue;
 		}
 		let components = match value {
@@ -555,13 +559,13 @@ fn rewrite_out_dir_references(env: &mut tg::value::Map, out_dir: &str) {
 				continue;
 			};
 			let mut end = 0;
-			for (index, _) in string.match_indices(out_dir) {
+			for (index, _) in string.match_indices(dir) {
 				// Match the original path boundaries, including across artifact components.
 				let before = string[..index].chars().next_back();
 				let starts_path = before.map_or(component_index == 0, |c| {
 					c.is_whitespace() || matches!(c, ':' | '=' | '"' | '\'')
 				});
-				let after = &string[index + out_dir.len()..];
+				let after = &string[index + dir.len()..];
 				if !starts_path || after.chars().next().is_some_and(|c| c != '/' && c != ':') {
 					continue;
 				}
@@ -570,9 +574,9 @@ fn rewrite_out_dir_references(env: &mut tg::value::Map, out_dir: &str) {
 						string[end..index].to_owned(),
 					));
 				}
-				rewritten.extend(out_dir_template.components.iter().cloned());
+				rewritten.extend(dir_template.components.iter().cloned());
 				changed = true;
-				end = index + out_dir.len();
+				end = index + dir.len();
 			}
 			if end < string.len() {
 				rewritten.push(tg::template::Component::String(string[end..].to_owned()));
