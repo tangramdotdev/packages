@@ -14,8 +14,8 @@ export const metadata = {
 	license: "GPL-2.0-only",
 	name: "git",
 	repository: "https://github.com/git/git",
-	version: "2.56.0",
-	tag: "git/2.56.0",
+	version: "2.56.1",
+	tag: "git/2.56.1",
 	provides: {
 		binaries: ["git"],
 	},
@@ -26,7 +26,7 @@ export async function source() {
 	const extension = ".tar.xz";
 	const base = `https://mirrors.edge.kernel.org/pub/software/scm/${name}`;
 	const checksum =
-		"sha256:26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3";
+		"sha256:f0b0bf89264b9bd2e1c640363e7529643989da76281600473c50745cd34a607f";
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
@@ -68,8 +68,19 @@ export async function build(...args: tg.Args<Arg>) {
 	const setRuntimeLibraryPath =
 		std.triple.os(arg.host) === "linux" ? true : arg.setRuntimeLibraryPath;
 
+	// Git's Makefile runs cargo directly to build the `gitcore` crate for the build machine. On x86_64 Linux, rustc links with its self-contained lld by default, which cannot run in the sandbox, so link with the SDK's linker instead. Stable rustc accepts this flag only for x86_64 Linux, and other hosts do not use the self-contained lld by default.
+	const useSdkLinker =
+		std.triple.os(arg.build) === "linux" &&
+		std.triple.arch(arg.build) === "x86_64";
+	const env = useSdkLinker
+		? await std.env.arg(arg.env ?? null, {
+				RUSTFLAGS: tg.Mutation.suffix("-C linker-features=-lld", " "),
+			})
+		: arg.env;
+
 	const output = await std.autotools.build({
 		...arg,
+		...(env !== undefined ? { env } : {}),
 		...(setRuntimeLibraryPath !== undefined ? { setRuntimeLibraryPath } : {}),
 	});
 

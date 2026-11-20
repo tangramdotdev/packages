@@ -1,23 +1,19 @@
 --- a/Source/kwsys/SystemTools.cxx
 +++ b/Source/kwsys/SystemTools.cxx
-@@ -92,9 +92,15 @@
+@@ -92,6 +92,12 @@
  
  #ifdef __linux
  #  include <linux/fs.h>
 +#  include <linux/limits.h>
 +#  include <sys/xattr.h>
- #endif
- 
--#if defined(__APPLE__) &&                                                     \
-+#ifdef __APPLE__
-+#  include <sys/xattr.h>
 +#endif
 +
-+#if defined(__APPLE__) &&                                                   \
-   (__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ - 0 >= 101200)
- #  define KWSYS_SYSTEMTOOLS_HAVE_MACOS_COPYFILE_CLONE
- #  include <copyfile.h>
-@@ -2400,6 +2406,75 @@
++#ifdef __APPLE__
++#  include <sys/xattr.h>
+ #endif
+ 
+ #if defined(__APPLE__) &&                                                     \
+@@ -2355,6 +2361,75 @@
    return false;
  }
  
@@ -93,16 +89,20 @@
  SystemTools::CopyStatus SystemTools::CopyFileContentBlockwise(
    std::string const& source, std::string const& destination)
  {
-@@ -2450,7 +2525,7 @@
-     return CopyStatus{ Status::POSIX_errno(), CopyStatus::DestPath };
+@@ -2433,7 +2508,11 @@
+     path = CopyStatus::SourcePath;
    }
  
--  return CopyStatus{ Status::Success(), CopyStatus::NoPath };
+-  return CopyStatus{ status, path };
++  if (!status.IsSuccess()) {
++    return CopyStatus{ status, path };
++  }
++
 +  return CopyUserXattrs(source, destination);
  }
  
  /**
-@@ -2500,7 +2575,7 @@
+@@ -2483,7 +2562,7 @@
    close(in);
    close(out);
  

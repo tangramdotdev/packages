@@ -129,6 +129,7 @@ const testModules: Record<
 /** Tests whose dependencies require a different tier from their module default. */
 const testTiers: Record<string, Tier> = {
 	"autotools.tg.ts#testStandaloneCross": "extended",
+	"autotools.tg.ts#testStandaloneLinuxToDarwin": "extended",
 	"command.tg.ts#testCommandArgs": "bootstrap",
 	"image.tg.ts#testWrappedEntrypointWithEnv": "sdk",
 	"packages_test.tg.ts#testDepsEnv": "sdk",
@@ -140,7 +141,6 @@ const testTiers: Record<string, Tier> = {
 	"sdk/proxy.tg.ts#testCrossGccLdProxy": "extended",
 	"sdk/proxy.tg.ts#testDarwinCrossCompileOnly": "extended",
 	"sdk/proxy.tg.ts#testDarwinToLinuxLdProxy": "extended",
-	"sdk/proxy.tg.ts#testLinuxToDarwinLdProxy": "extended",
 	"wrap.tg.ts#testBasicCross": "extended",
 	"wrap.tg.ts#testLdLibraryPathPreservedThroughNestedWrapping": "sdk",
 	"wrap.tg.ts#testLoadThroughEnvLdLibraryPath": "sdk",

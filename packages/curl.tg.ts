@@ -53,8 +53,9 @@ export function deps() {
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export function build(...args: tg.Args<Arg>) {
-	return std.autotools.build(
+export async function build(...args: tg.Args<Arg>) {
+	const caCertificates = await std.caCertificates();
+	const output = await std.autotools.build(
 		{
 			deps,
 			source: source(),
@@ -65,7 +66,7 @@ export function build(...args: tg.Args<Arg>) {
 						"--disable-silent-rules",
 						"--enable-optimize",
 						"--with-openssl",
-						tg`--with-ca-bundle=${std.caCertificates()}/ca-bundle.crt`,
+						tg`--with-ca-bundle=${caCertificates}/ca-bundle.crt`,
 					],
 				},
 			},
@@ -73,6 +74,47 @@ export function build(...args: tg.Args<Arg>) {
 		},
 		...args,
 	);
+	return addCaCertificatesDependency(output, caCertificates);
+}
+
+/** Libcurl records the path of its CA bundle only as a string, so nothing makes the certificates directory a dependency of the output. Add the directory as a dependency of the shared library and the curl executable so that the bundle is present wherever they run. Binaries that link the static library also embed the path as a string, and this function cannot cover them. */
+async function addCaCertificatesDependency(
+	output: tg.Directory,
+	caCertificates: tg.Directory,
+): Promise<tg.Directory> {
+	await caCertificates.store();
+	const dependencies = { [caCertificates.id]: caCertificates };
+	const replacements: Record<string, tg.Unresolved<tg.File>> = {};
+
+	// Add the dependency to every regular file that is a shared library. The unversioned names are symlinks to these files.
+	const lib = await output.tryGet("lib");
+	if (lib instanceof tg.Directory) {
+		for await (const [name, artifact] of lib) {
+			const isSharedLibrary =
+				/^libcurl(\.[0-9]+)*\.(so(\.[0-9]+)*|dylib)$/.test(name);
+			if (isSharedLibrary && artifact instanceof tg.File) {
+				replacements[`lib/${name}`] = tg.file(artifact, {
+					executable: await artifact.executable,
+					dependencies,
+				});
+			}
+		}
+	}
+
+	// The curl executable is a wrapper that references the library directory as it was before the replacement above, so it needs the dependency as well.
+	const curl = await output.tryGet("bin/curl");
+	if (curl instanceof tg.File) {
+		replacements["bin/curl"] = tg.file(curl, {
+			executable: await curl.executable,
+			dependencies,
+		});
+	}
+
+	tg.assert(
+		Object.keys(replacements).length > 0,
+		"Expected the curl output to contain a shared library or the curl executable.",
+	);
+	return tg.directory(output, replacements);
 }
 
 export default build;

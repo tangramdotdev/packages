@@ -464,9 +464,15 @@ export async function build(
 	const target = target_ ? rustTriple(target_) : rustHost;
 
 	const crossCompiling = target !== rustHost;
+	const linuxToDarwin = os === "linux" && std.triple.os(target) === "darwin";
 
 	if (standalone && proxy) {
 		throw new Error("standalone builds do not yet support the rustc proxy");
+	}
+	if (linuxToDarwin && !standalone) {
+		throw new Error(
+			"a build for a macOS target on a Linux build machine must be standalone, because wrapping Mach-O outputs on a Linux build machine is not supported",
+		);
 	}
 	const standaloneOptions = standalone
 		? await std.sdk.standalone({
@@ -484,6 +490,18 @@ export async function build(
 	if (sdkArgObject !== undefined) {
 		sdkArgs.push(sdkArgObject);
 	}
+	// A macOS target on a Linux build machine uses the LLVM cross toolchain without proxies, because the GNU toolchain cannot target macOS and the outputs are not wrapped. Copy the arguments before the GCC override below, which applies only to the native SDK in this case.
+	const crossSdkArgs: Array<std.sdk.ArgObject> | undefined = linuxToDarwin
+		? [
+				...sdkArgs,
+				{
+					proxyCompiler: false,
+					proxyLinker: false,
+					proxyStrip: false,
+					toolchain: "llvm",
+				},
+			]
+		: undefined;
 	if (
 		os === "linux" &&
 		sdkArgs.filter((arg) => arg?.toolchain === "llvm").length > 0
@@ -503,7 +521,7 @@ export async function build(
 		});
 		envs.push(nativeSdk);
 	}
-	const sdk = await tg.build(std.sdk, ...sdkArgs);
+	const sdk = await tg.build(std.sdk, ...(crossSdkArgs ?? sdkArgs));
 	envs.push(sdk);
 	const channel = channel_ ?? (proxy ? NIGHTLY : "stable");
 	const rustArtifact = await self({
@@ -675,8 +693,8 @@ target-applies-to-host = true`;
 	};
 	envs.push(toolchainEnv);
 
-	// The wrappers carry `SDKROOT` in their manifests, so build scripts and rustc never see it.
-	if (os === "darwin" && std.triple.os(target) === "darwin") {
+	// Point rustc, the cc crate, and build scripts at the macOS SDK for a macOS target on any build machine. On a Linux build machine, the cc crate cannot run `xcrun` to find the SDK.
+	if (std.triple.os(target) === "darwin") {
 		envs.push({
 			MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget,
 			SDKROOT: tg`${await std.bootstrap.macOsSdk(undefined, host)}/MacOSX.sdk`,
@@ -805,7 +823,7 @@ target-applies-to-host = true`;
 	if (standaloneOptions) {
 		// Find the target's GCC runtime libraries in a cross SDK, because the wrapped compiler cannot find them relative to its own path.
 		const runtimeLibraryPaths: Array<tg.Directory> = [];
-		if (crossCompiling) {
+		if (crossCompiling && !linuxToDarwin) {
 			const entry = await sdk.tryGet(target);
 			const targetDirectory =
 				entry instanceof tg.Symlink ? await entry.resolve() : entry;
@@ -818,29 +836,37 @@ target-applies-to-host = true`;
 				}
 			}
 		}
-		// Keep Cargo's Rust flags and wrap build-time executables until export. A cross build links with the SDK's compiler for the target, and searches the deployment libc before the SDK's runtime libraries.
-		const linker = await std.wrap(
-			await sdk.get(`bin/${targetLinkerName}`).then(tg.File.expect),
-			{
-				args: [
-					...standaloneOptions.args,
-					...standaloneOptions.libraryPaths.map((path) => tg`-L${path}`),
-					...runtimeLibraryPaths.map((path) => tg`-L${path}`),
-				],
-			},
-		);
+		// Keep Cargo's Rust flags and wrap build-time executables until export. A cross build links with the SDK's compiler for the target, and searches the deployment libc before the SDK's runtime libraries. A macOS target on a Linux build machine keeps the linker set above by name, because there are no flags to add and the cross driver shim finds its configuration relative to its own path.
+		const linker = linuxToDarwin
+			? undefined
+			: await std.wrap(
+					await sdk.get(`bin/${targetLinkerName}`).then(tg.File.expect),
+					{
+						args: [
+							...standaloneOptions.args,
+							...standaloneOptions.libraryPaths.map((path) => tg`-L${path}`),
+							...runtimeLibraryPaths.map((path) => tg`-L${path}`),
+						],
+					},
+				);
 		// Compile C and C++ against the deployment libc's headers, as the cc crate and build scripts that run a compiler read these flags. A cross build sets only the target's flags, so that C compiled for the build machine keeps its own headers.
 		const compileFlags = tg.Template.join(
 			" ",
 			...standaloneOptions.compileArgs,
 		);
 		const flagSuffix = crossCompiling ? `_${tripleToEnvVar(target)}` : "";
-		const linkerEnv = filterLld
-			? {
-					[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: lldFilter,
-					TANGRAM_CARGO_TARGET_LINKER: linker,
-				}
-			: { [`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: linker };
+		const linkerEnv =
+			linker === undefined
+				? {}
+				: filterLld
+					? {
+							[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]:
+								lldFilter,
+							TANGRAM_CARGO_TARGET_LINKER: linker,
+						}
+					: {
+							[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: linker,
+						};
 		env = await std.env.arg(env, {
 			...linkerEnv,
 			[`CFLAGS${flagSuffix}`]: tg.Mutation.suffix(compileFlags, " "),
@@ -1286,7 +1312,57 @@ export async function testStandaloneCross() {
 	const arch = std.triple.arch(host) === "x86_64" ? "aarch64" : "x86_64";
 	const target =
 		os === "linux" ? `${arch}-unknown-linux-gnu` : `${arch}-apple-darwin`;
-	const source = tg.directory({
+	const output = await build({
+		host,
+		source: standaloneCrossSource(),
+		standalone: { glibcVersion: "2.35" },
+		target,
+	});
+	const executable = await output
+		.get("bin/standalone-cross")
+		.then(tg.File.expect);
+	const metadata = await std.file.executableMetadata(executable);
+	tg.assert(
+		os === "linux"
+			? metadata.format === "elf" && metadata.arch === arch
+			: metadata.format === "mach-o" && metadata.arches.includes(arch),
+	);
+
+	return output;
+}
+
+export async function testStandaloneCrossDarwin() {
+	// A Linux build machine builds the standalone cross fixture for both macOS architectures with the LLVM cross toolchain.
+	const host = std.sdk.canonicalTriple(std.triple.host());
+	if (std.triple.os(host) !== "linux") {
+		return true;
+	}
+	const outputs: Record<string, tg.Directory> = {};
+	for (const arch of ["aarch64", "x86_64"] as const) {
+		const target = `${arch}-apple-darwin`;
+		const output = await build({
+			host,
+			source: standaloneCrossSource(),
+			standalone: true,
+			target,
+		});
+		const executable = await output
+			.get("bin/standalone-cross")
+			.then(tg.File.expect);
+		const metadata = await std.file.executableMetadata(executable);
+		tg.assert(
+			metadata.format === "mach-o" && metadata.arches.includes(arch),
+			`expected a Mach-O executable for ${arch}`,
+		);
+		outputs[target] = output;
+	}
+
+	return tg.directory(outputs);
+}
+
+/** A crate whose build script compiles C for the target through the `CC_`, `AR_`, and `CFLAGS_` variables for the target. */
+function standaloneCrossSource() {
+	return tg.directory({
 		"Cargo.toml": tg.file`
 			[package]
 			name = "standalone-cross"
@@ -1328,23 +1404,6 @@ export async function testStandaloneCross() {
 			}
 		`,
 	});
-	const output = await build({
-		host,
-		source,
-		standalone: { glibcVersion: "2.35" },
-		target,
-	});
-	const executable = await output
-		.get("bin/standalone-cross")
-		.then(tg.File.expect);
-	const metadata = await std.file.executableMetadata(executable);
-	tg.assert(
-		os === "linux"
-			? metadata.format === "elf" && metadata.arch === arch
-			: metadata.format === "mach-o" && metadata.arches.includes(arch),
-	);
-
-	return output;
 }
 
 export async function testNestedCargoOffline() {

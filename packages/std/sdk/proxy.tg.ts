@@ -56,6 +56,16 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	const buildToolchainDir = arg.toolchain;
 	const buildToolchain = await std.env.compose(buildToolchainDir);
 
+	if (
+		std.triple.os(build) === "linux" &&
+		os === "darwin" &&
+		(proxyCompiler || proxyLinker || proxyStrip)
+	) {
+		return tg.unimplemented(
+			"Wrapping Mach-O outputs on a Linux build machine is not supported. Disable the compiler, linker, and strip proxies to produce standalone outputs.",
+		);
+	}
+
 	if (!proxyCompiler && !proxyLinker && !proxyStrip && !proxyInstallNameTool) {
 		return buildToolchainDir;
 	}
@@ -104,11 +114,7 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 				: {}),
 			linker:
 				arg.linkerExe ??
-				(os === "linux" && isLlvm
-					? await tg`${directory}/bin/ld.lld`
-					: os === "darwin" && std.triple.os(build) === "linux"
-						? await tg`${directory}/bin/${host}-ld.gold`
-						: ld),
+				(os === "linux" && isLlvm ? await tg`${directory}/bin/ld.lld` : ld),
 			...(ldso !== undefined
 				? { interpreter: ldso, interpreterLibraryPath: libDir }
 				: {}),
@@ -1586,18 +1592,6 @@ export async function testDarwinCrossCompileOnly() {
 		.env(std.sdk({ target }))
 		.then(tg.File.expect);
 	return output;
-}
-
-export async function testLinuxToDarwinLdProxy() {
-	const host = std.triple.host();
-	if (std.triple.os(host) !== "linux") {
-		console.log(
-			"skipped sdk/proxy.tg.ts#testLinuxToDarwinLdProxy: requires Linux",
-		);
-		return null;
-	}
-	const target = "aarch64-apple-darwin";
-	return await testTransitive(undefined, target);
 }
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */

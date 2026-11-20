@@ -168,6 +168,10 @@ export async function self(unresolvedArg?: tg.Unresolved<ToolchainArg>) {
 	// Use tg.build to create cacheable build nodes matching the std release.
 	const sdks: Array<tg.Unresolved<std.env.Arg>> = [tg.build(std.sdk, { host })];
 	for (const target of targets) {
+		// The rust-std installer only copies files, so a macOS target on a Linux host does not need the cross SDK.
+		if (std.triple.os(host) === "linux" && std.triple.os(target) === "darwin") {
+			continue;
+		}
 		sdks.push(tg.build(std.sdk, { host, target }));
 	}
 	const env = await std.env.arg(...sdks);

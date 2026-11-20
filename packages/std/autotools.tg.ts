@@ -354,13 +354,9 @@ printf 'prefix = %s\\nall:\\n\\t./program\\ninstall:\\n\\tmkdir -p $(prefix)/bin
 	return output;
 }
 
-export async function testStandaloneCross() {
-	const build_ = std.sdk.canonicalTriple(std.triple.host());
-	const os = std.triple.os(build_);
-	const arch = std.triple.arch(build_) === "x86_64" ? "aarch64" : "x86_64";
-	const host =
-		os === "linux" ? `${arch}-unknown-linux-gnu` : `${arch}-apple-darwin`;
-	const source = await tg.directory({
+/** A configure script that compiles a program without running it, so that it works for any host. */
+const standaloneCrossSource = () =>
+	tg.directory({
 		configure: tg.file({
 			contents: `#!/bin/sh
 set -eu
@@ -377,6 +373,14 @@ printf 'prefix = %s\\nall:\\ninstall:\\n\\tmkdir -p $(prefix)/bin\\n\\tcp progra
 			'#include <stdio.h>\n#include <stdlib.h>\nint main(int argc, char **argv) { puts("standalone autotools"); return argc > 1 ? (int)strtol(argv[1], NULL, 10) : 0; }\n',
 		),
 	});
+
+export async function testStandaloneCross() {
+	const build_ = std.sdk.canonicalTriple(std.triple.host());
+	const os = std.triple.os(build_);
+	const arch = std.triple.arch(build_) === "x86_64" ? "aarch64" : "x86_64";
+	const host =
+		os === "linux" ? `${arch}-unknown-linux-gnu` : `${arch}-apple-darwin`;
+	const source = await standaloneCrossSource();
 	const output = await build({
 		build: build_,
 		host,
@@ -392,6 +396,41 @@ printf 'prefix = %s\\nall:\\ninstall:\\n\\tmkdir -p $(prefix)/bin\\n\\tcp progra
 	);
 
 	return output;
+}
+
+/** Build standalone macOS executables for both architectures on a Linux build machine. */
+export async function testStandaloneLinuxToDarwin() {
+	const build_ = std.sdk.canonicalTriple(std.triple.host());
+	if (std.triple.os(build_) !== "linux") {
+		console.log(
+			"skipped autotools.tg.ts#testStandaloneLinuxToDarwin: requires Linux",
+		);
+		return null;
+	}
+	const source = await standaloneCrossSource();
+	const results = await Promise.all(
+		["aarch64", "x86_64"].map(async (arch) => {
+			const host = `${arch}-apple-darwin`;
+			const output = await build({
+				build: build_,
+				host,
+				source,
+				standalone: true,
+			});
+			const executable = await output.get("bin/program").then(tg.File.expect);
+			const metadata = await std.file.executableMetadata(executable);
+			tg.assert(
+				metadata.format === "mach-o",
+				`Expected the ${host} program to be a Mach-O file, but it is ${metadata.format}.`,
+			);
+			tg.assert(
+				metadata.arches.length === 1 && metadata.arches[0] === arch,
+				`Expected the ${host} program to be ${arch}, but it is ${metadata.arches.join(", ")}.`,
+			);
+			return [host, output] as const;
+		}),
+	);
+	return tg.directory(Object.fromEntries(results));
 }
 
 /** The result of arg() - an Arg with build, host, and source guaranteed to be resolved. */

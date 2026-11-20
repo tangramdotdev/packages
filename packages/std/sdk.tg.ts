@@ -202,13 +202,7 @@ export namespace sdk {
 			host === canonicalTriple(std.triple.host()),
 			"standalone builds must run on their host",
 		);
-		// A Linux target links against a deployment sysroot, and a macOS target links against the macOS SDK of a macOS host.
-		tg.assert(
-			host === target ||
-				std.triple.os(target) === "linux" ||
-				std.triple.os(host) === "darwin",
-			"standalone cross-compilation requires a Linux target or a macOS host",
-		);
+		// A Linux target links against a deployment sysroot. A macOS target needs no options, because its compiler driver already selects the macOS SDK and the deployment target.
 		const args: Array<tg.Template> = [];
 		const compileArgs: Array<tg.Template> = [];
 		const libraryPaths: Array<tg.Directory> = [];
@@ -342,6 +336,28 @@ export namespace sdk {
 		}
 
 		validateCrossTarget({ host, target });
+
+		// A Linux host targets macOS only with the LLVM toolchain and produces standalone Mach-O outputs, because Tangram cannot yet wrap Mach-O outputs on a Linux build machine. The proxies are therefore always off.
+		if (hostOs === "linux" && std.triple.os(target) === "darwin") {
+			if (toolchain_ === "gnu") {
+				throw new Error(
+					`The GNU toolchain cannot target ${target}. Use the LLVM toolchain to target macOS from a Linux host.`,
+				);
+			}
+			if (linker !== undefined && linker !== null && linker !== "lld") {
+				throw new Error(
+					`Alternate linkers are not available when targeting ${target} from a Linux host.`,
+				);
+			}
+			if (toolchain_ === undefined || toolchain_ === null) {
+				toolchain_ = "llvm";
+			}
+			linker = undefined;
+			embedWrapper = undefined;
+			proxyCompiler = false;
+			proxyLinker = false;
+			proxyStrip = false;
+		}
 
 		// Set the default toolchain if not provided.
 		if (toolchain_ === undefined || toolchain_ === null) {
@@ -531,6 +547,7 @@ export namespace sdk {
 			directory,
 			env,
 			os,
+			std.triple.os(target),
 			compilerInfo.flavor,
 			compilerInfo.targetPrefix,
 		);
@@ -756,11 +773,12 @@ export namespace sdk {
 	async function locateLinker(
 		directory: tg.Directory,
 		env: std.env.EnvObject,
-		os: string,
+		hostOs: string,
+		targetOs: string,
 		flavor: sdk.ToolchainFlavor,
 		targetPrefix: string,
 	): Promise<tg.Symlink> {
-		const linkerName = getLinkerName(os, flavor, targetPrefix);
+		const linkerName = getLinkerName(hostOs, targetOs, flavor, targetPrefix);
 
 		// Try to find linker in toolchain directory first
 		const foundLd = await directory.tryGet(`bin/${linkerName}`);
@@ -778,11 +796,17 @@ export namespace sdk {
 	}
 
 	function getLinkerName(
-		os: string,
+		hostOs: string,
+		targetOs: string,
 		flavor: "gnu" | "llvm",
 		targetPrefix: string,
 	): string {
-		if (os === "darwin") {
+		// The Linux-to-Darwin LLVM toolchain provides `ld64.lld` under the prefixed name.
+		if (hostOs === "linux" && targetOs === "darwin") {
+			return `${targetPrefix}ld`;
+		}
+
+		if (hostOs === "darwin") {
 			return "ld";
 		}
 
@@ -1219,6 +1243,8 @@ export namespace sdk {
 	) {
 		const expected = await resolveHostAndTarget(arg);
 		const env = await std.env.compose(toolchainDir);
+		// The resolved argument decides whether the linker proxy is in use, since some combinations of host and target always turn it off.
+		const { proxyLinker } = await sdk.arg(arg);
 
 		// Assert we can determine a host and it matches the expected.
 		const actualHost = await sdk.determineToolchainHost({
@@ -1274,7 +1300,7 @@ export namespace sdk {
 
 				// The linker proxy only wraps the target selected for this SDK.
 				const proxiedLinker =
-					(arg.proxyLinker ?? true) &&
+					proxyLinker &&
 					sdk.canonicalTriple(target) === sdk.canonicalTriple(expected.target);
 
 				// The mold and LLD linkers leave comments in the binary. Check for these if applicable.
@@ -1416,7 +1442,7 @@ export namespace sdk {
 			actualHostOs === "linux" &&
 			isGlibc &&
 			hasNativeCc &&
-			(arg?.proxyLinker ?? true)
+			proxyLinker
 		) {
 			await assertIconv(env, expected.host);
 		}
@@ -1868,11 +1894,16 @@ export async function testLinuxToDarwin() {
 		return null;
 	}
 
-	const target = "aarch64-apple-darwin";
-	const sdkArg = { host, target };
-	const env = await sdk(sdkArg);
-	await sdk.assertValid(env, sdkArg);
-	return true;
+	const targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"];
+	const results = await Promise.all(
+		targets.map(async (target) => {
+			const sdkArg = { host, target };
+			const env = await sdk(sdkArg);
+			await sdk.assertValid(env, sdkArg);
+			return [target, env] as const;
+		}),
+	);
+	return tg.directory(Object.fromEntries(results));
 }
 
 export async function testAllNativeProxied() {

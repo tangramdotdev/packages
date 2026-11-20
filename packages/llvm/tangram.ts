@@ -13,16 +13,16 @@ export const metadata = {
 	homepage: "https://llvm.org/",
 	name: "llvm",
 	license:
-		"https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/LICENSE.TXT",
+		"https://github.com/llvm/llvm-project/blob/llvmorg-23.1.6/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "23.1.3",
-	tag: "llvm/23.1.3",
+	version: "23.1.6",
+	tag: "llvm/23.1.6",
 };
 
 export async function source() {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:c44186a7762ed28954be72e5ff6df9808e0779d4f1bf014ecc4e7e211d31ee34";
+		"sha256:d3b86ab29cfb4445a6652e5c2642ccc75e04e38084dde3701d323320f35a31da";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -187,65 +187,6 @@ export async function toolchain(arg?: LLVMArg) {
 }
 
 export default toolchain;
-
-type PrebuiltArg = {
-	host?: string;
-};
-
-export async function prebuilt(arg?: PrebuiltArg) {
-	const { host: host_ } = arg ?? {};
-	const { version } = metadata;
-	const host = host_ ?? std.triple.host();
-
-	const arch = std.triple.arch(host);
-	const os = std.triple.os(host);
-
-	// The upstream does not provide x86_64-darwin builds.
-	if (arch === "x86_64" && os === "darwin") {
-		throw new Error(
-			"Prebuilt LLVM binaries are not available for x86_64-darwin",
-		);
-	}
-
-	const checksums: Record<string, tg.Checksum> = {
-		["aarch64-linux"]:
-			"sha256:56d005e339c979a696ed6c244e6472e16f3b1371e48987a07e6145bda7ee0d03",
-		["x86_64-linux"]:
-			"sha256:ca9fe385a5d9e2d88132dc0e23a00e9f87f38fa75f67207b5e457d208e71d013",
-		["aarch64-darwin"]:
-			"sha256:3dcfd88aec10be204a24037bcb0dc0ad777882e9dbe8ac60e2639060d8a794b1",
-	};
-	const archAndOs = `${arch}-${os}`;
-	const checksum = checksums[archAndOs];
-	tg.assert(checksum, `unable to locate checksum for ${archAndOs}`);
-
-	const filenameArch = arch === "aarch64" ? "ARM64" : "X64";
-	const filenameOs = os === "darwin" ? "macOS" : "Linux";
-
-	const url = `https://github.com/llvm/llvm-project/releases/download/llvmorg-${version}/LLVM-${version}-${filenameOs}-${filenameArch}.tar.xz`;
-
-	let output = await std
-		.download({ url, checksum, mode: "extract" })
-		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
-
-	// On Linux, we have to wrap.
-	const binDir = await output.get("bin").then(tg.Directory.expect);
-	for await (let [name, file] of binDir) {
-		// If the file is an executable with an interpreter, wrap it.
-		if (file instanceof tg.File) {
-			const metadata = await std.file.executableMetadata(file);
-			if (metadata.format === "elf" && metadata.interpreter !== undefined) {
-				const wrapped = await std.wrap(file);
-				output = await tg.directory(output, {
-					[`bin/${name}`]: wrapped,
-				});
-			}
-		}
-	}
-
-	return output;
-}
 
 /** Build libclang only. */
 export async function libclang(arg?: LLVMArg) {
