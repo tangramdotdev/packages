@@ -1438,12 +1438,7 @@ export namespace sdk {
 		const hostEnvironment = std.triple.environment(expected.host);
 		const isGlibc =
 			hostEnvironment === undefined || hostEnvironment.includes("gnu");
-		if (
-			actualHostOs === "linux" &&
-			isGlibc &&
-			hasNativeCc &&
-			proxyLinker
-		) {
+		if (actualHostOs === "linux" && isGlibc && hasNativeCc && proxyLinker) {
 			await assertIconv(env, expected.host);
 		}
 	}
