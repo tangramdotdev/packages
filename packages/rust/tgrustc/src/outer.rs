@@ -118,6 +118,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		.into();
 
 	let (mut env, toolchain_artifact) = build_env(&args.rustc, &source_artifact).await?;
+	let host_dirs = host_dirs(&env, &source_artifact, &source_dir);
 
 	// When the runner is in use, link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
 	if std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_some()
@@ -206,14 +207,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	// races the next wrapper's `-L dependency=` directory snapshot.
 	let materialize_start = Instant::now();
 	if let Some(out_dir) = &args.out_dir {
-		materialize_outputs(
-			&output_dir,
-			Path::new(out_dir),
-			&source_artifact,
-			&source_dir,
-			&args,
-		)
-		.await?;
+		materialize_outputs(&output_dir, Path::new(out_dir), &host_dirs, &args).await?;
 	}
 	timing.materialize = materialize_start.elapsed();
 
@@ -229,6 +223,22 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	forward_logs(&output_dir, None).await?;
 
 	Ok(())
+}
+
+// Get the host directories of the artifacts that the sandbox reads its source and the build script's output from, so that the depfiles name them by their host paths.
+fn host_dirs(
+	env: &tg::value::Map,
+	source_artifact: &tg::Artifact,
+	source_dir: &Path,
+) -> Vec<(tg::artifact::Id, PathBuf)> {
+	let mut host_dirs = vec![(source_artifact.id(), source_dir.to_owned())];
+	if let Some(tg::Value::Template(template)) = env.get("OUT_DIR")
+		&& let [tg::template::Component::Artifact(artifact)] = template.components.as_slice()
+		&& let Some(out_dir) = std::env::var_os("OUT_DIR")
+	{
+		host_dirs.push((artifact.id(), PathBuf::from(out_dir)));
+	}
+	host_dirs
 }
 
 // The sandbox env, with the toolchain artifact that provides rustc.
@@ -331,8 +341,7 @@ fn append_spawn_log(process_id: &tg::process::Id) {
 async fn materialize_outputs(
 	output_dir: &tg::Directory,
 	out_dir: &Path,
-	source_artifact: &tg::Artifact,
-	source_dir: &Path,
+	host_dirs: &[(tg::artifact::Id, PathBuf)],
 	args: &Args,
 ) -> tg::Result<()> {
 	let build = output_dir
@@ -344,19 +353,17 @@ async fn materialize_outputs(
 	// Cargo's incremental fingerprint check `stat`s each depfile entry; the
 	// sandbox-internal paths do not exist on the host, so without this rewrite
 	// every rebuild reads as "stale: missing X".
-	rewrite_depfile_source_paths(out_dir, source_artifact, source_dir).await?;
+	rewrite_depfile_paths(out_dir, host_dirs).await?;
 	let own_stems = sidecar::own_stems(args.crate_name.as_deref(), args.extra_filename.as_deref());
 	let direct_extern_stems = sidecar::direct_extern_stems(&args.passthrough);
 	sidecar::write_sidecars(out_dir, &own_stems, &direct_extern_stems)
 }
 
-async fn rewrite_depfile_source_paths(
+// Replace the sandbox path of each artifact in the depfiles with its host directory, both in the paths of files and in the values of environment variables, such as `# env-dep:OUT_DIR=`, which Cargo compares with the values that it sets.
+async fn rewrite_depfile_paths(
 	out_dir: &Path,
-	source_artifact: &tg::Artifact,
-	source_dir: &Path,
+	host_dirs: &[(tg::artifact::Id, PathBuf)],
 ) -> tg::Result<()> {
-	let sandbox_prefix = format!("{}/{}/", SANDBOX_STORE_DIR, source_artifact.id());
-	let host_prefix = format!("{}/", source_dir.display());
 	let mut entries = tokio::fs::read_dir(out_dir).await.map_err(|error| {
 		tg::error!(
 			"failed to read out_dir {} for depfile rewrite: {error}",
@@ -375,7 +382,7 @@ async fn rewrite_depfile_source_paths(
 		let Ok(contents) = tokio::fs::read_to_string(&path).await else {
 			continue;
 		};
-		let rewritten = contents.replace(&sandbox_prefix, &host_prefix);
+		let rewritten = rewrite_depfile_contents(&contents, host_dirs);
 		if rewritten != contents {
 			tokio::fs::write(&path, rewritten).await.map_err(|error| {
 				tg::error!(
@@ -386,6 +393,15 @@ async fn rewrite_depfile_source_paths(
 		}
 	}
 	Ok(())
+}
+
+fn rewrite_depfile_contents(contents: &str, host_dirs: &[(tg::artifact::Id, PathBuf)]) -> String {
+	let mut contents = contents.to_owned();
+	for (id, host_dir) in host_dirs {
+		let sandbox_dir = format!("{SANDBOX_STORE_DIR}/{id}");
+		contents = contents.replace(&sandbox_dir, &host_dir.display().to_string());
+	}
+	contents
 }
 
 // Per-file checkout: Cargo's legacy build-dir layout shares `--out-dir`

@@ -1,4 +1,8 @@
-use {super::rewrite_out_dir_references, std::collections::BTreeMap, tangram_client::prelude::*};
+use {
+	super::{SANDBOX_STORE_DIR, rewrite_depfile_contents, rewrite_out_dir_references},
+	std::{collections::BTreeMap, path::PathBuf},
+	tangram_client::prelude::*,
+};
 
 #[test]
 fn out_dir_references_respect_path_boundaries() {
@@ -37,6 +41,21 @@ fn out_dir_references_respect_path_boundaries() {
 		rewrite_out_dir_references(&mut env, out_dir);
 		assert_eq!(render(&env["GENERATED_PATH"]), expected, "{raw}");
 	}
+}
+
+#[test]
+fn depfile_paths_use_host_dirs() {
+	let artifact: tg::Artifact = tg::Directory::with_entries(BTreeMap::new()).into();
+	let id = artifact.id();
+	let sandbox_dir = format!("{SANDBOX_STORE_DIR}/{id}");
+	let contents = format!(
+		"/build/lib.rmeta: {sandbox_dir}/private.rs\n\n{sandbox_dir}/private.rs:\n\n# env-dep:OUT_DIR={sandbox_dir}\n"
+	);
+	let host_dirs = vec![(id, PathBuf::from("/target/build/out"))];
+	assert_eq!(
+		rewrite_depfile_contents(&contents, &host_dirs),
+		"/build/lib.rmeta: /target/build/out/private.rs\n\n/target/build/out/private.rs:\n\n# env-dep:OUT_DIR=/target/build/out\n",
+	);
 }
 
 #[test]
