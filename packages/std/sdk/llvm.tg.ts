@@ -12,11 +12,6 @@ import * as libc from "./libc.tg.ts";
 import { constructSysroot } from "./libc.tg.ts";
 import cmakeCacheDir from "./llvm/cmake" with { type: "directory" };
 
-export * as appleLibdispatch from "./llvm/apple_libdispatch.tg.ts";
-export * as appleLibtapi from "./llvm/apple_libtapi.tg.ts";
-export * as libBsd from "./llvm/libbsd.tg.ts";
-export * as libMd from "./llvm/libmd.tg.ts";
-export * as cctools from "./llvm/cctools_port.tg.ts";
 export * as git from "./llvm/git.tg.ts";
 
 export const metadata = {
@@ -377,6 +372,8 @@ async function addCrossTarget(
 /** Add a macOS SDK and the prefixed drivers and tools that target it.
  *
  * Clang reads the SDK and the linker from a configuration file beside the SDK. The driver does not report an argument from a configuration file as unused, so a compile-only invocation with `-Werror` succeeds. The `-stdlib++-isystem` line keeps the driver from picking up the host libc++ headers installed next to the binary.
+ *
+ * The `-L` line puts the SDK libraries ahead of the toolchain `lib` directory, which the driver passes to the linker and which holds the host glibc. Without it, `-lc` and `-lm` resolve to the ELF `libc.so` and `libm.so` there instead of the SDK `libc.tbd` and `libm.tbd`.
  */
 async function addDarwinCrossTarget(
 	toolchainDir: tg.Directory,
@@ -387,6 +384,7 @@ async function addDarwinCrossTarget(
 		"-fuse-ld=lld",
 		"-isysroot <CFGDIR>/MacOSX.sdk",
 		"-stdlib++-isystem <CFGDIR>/MacOSX.sdk/usr/include/c++/v1",
+		"-L<CFGDIR>/MacOSX.sdk/usr/lib",
 		"",
 	].join("\n");
 	let result = await tg.directory(toolchainDir, {
@@ -550,6 +548,15 @@ export async function testLinuxToDarwin() {
 			return 0;
 		}
 	`;
+	// The square root of a runtime value keeps the compiler from folding the call, so the link must resolve `sqrt` through `-lm`.
+	const mathSource = tg.file`
+		#include <math.h>
+		#include <stdio.h>
+		int main(int argc, char **argv) {
+			printf("%f\\n", sqrt((double)argc));
+			return 0;
+		}
+	`;
 
 	const results: Record<string, tg.Directory> = {};
 	for (const arch of ["aarch64", "x86_64"]) {
@@ -562,6 +569,7 @@ export async function testLinuxToDarwin() {
 			mkdir -p ${tg.output}
 			${target}-cc -v -xc ${cSource} -o ${tg.output}/c
 			${target}-c++ -v -xc++ ${cxxSource} -o ${tg.output}/cxx
+			${target}-cc -v -xc ${mathSource} -o ${tg.output}/math -lc -lm
 			${target}-cc -Werror -c -xc ${cSource} -o ${tg.output}/c.o
 			${target}-c++ -Werror -c -xc++ ${cxxSource} -o ${tg.output}/cxx.o
 		`)
@@ -572,6 +580,7 @@ export async function testLinuxToDarwin() {
 		for (const [name, expectedDependencies] of [
 			["c", ["/usr/lib/libSystem.B.dylib"]],
 			["cxx", ["/usr/lib/libSystem.B.dylib", "/usr/lib/libc++.1.dylib"]],
+			["math", ["/usr/lib/libSystem.B.dylib"]],
 		] as const) {
 			const executable = await output.get(name).then(tg.File.expect);
 			const metadata = await std.file.executableMetadata(executable);

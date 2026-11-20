@@ -14,8 +14,8 @@ export const metadata = {
 	license: "GPL-2.0-only",
 	name: "git",
 	repository: "https://github.com/git/git",
-	version: "2.56.0",
-	tag: "git/2.56.0",
+	version: "2.56.1",
+	tag: "git/2.56.1",
 	provides: {
 		binaries: ["git"],
 	},
@@ -26,7 +26,7 @@ export async function source() {
 	const extension = ".tar.xz";
 	const base = `https://mirrors.edge.kernel.org/pub/software/scm/${name}`;
 	const checksum =
-		"sha256:26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3";
+		"sha256:f0b0bf89264b9bd2e1c640363e7529643989da76281600473c50745cd34a607f";
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
