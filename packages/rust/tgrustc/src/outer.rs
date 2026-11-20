@@ -535,7 +535,9 @@ pub(crate) fn is_denied_host_env(key: &str) -> bool {
 	) {
 		return true;
 	}
-	key.starts_with("TANGRAM_ENV_")
+	// Drop variables by prefix, including the ones that nextest sets for the processes that it runs, such as its setup scripts, which hold the run's ID and temporary paths.
+	key.starts_with("NEXTEST")
+		|| key.starts_with("TANGRAM_ENV_")
 		|| key.starts_with("TGRUSTC_")
 		|| key.starts_with("SSH_")
 		|| key.starts_with("GPG_")
