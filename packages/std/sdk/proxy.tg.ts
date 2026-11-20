@@ -20,7 +20,7 @@ export type Arg = {
 	linker?: boolean;
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
 	linkerExe?: tg.File | tg.Symlink | tg.Template | null;
-	/** The name that `-fuse-ld` selects the linker by, such as `mold`. The toolchain then also provides the ld proxy as `ld.<name>`, so that a build that selects the linker by name, such as with the rustflags in a user's Cargo configuration, uses the proxy. */
+	/** The name that `-fuse-ld` selects the linker by, such as `mold`. A GCC toolchain then also provides the ld proxy as `ld.<name>`, so that a build that selects the linker by name, such as with the rustflags in a user's Cargo configuration, uses the proxy. */
 	linkerName?: string;
 	/** The triple of the computer the toolchain being proxied produces binaries for. */
 	host?: string | null;
@@ -235,9 +235,6 @@ export async function env(...args: tg.Args<Arg>): Promise<tg.Directory> {
 					replacements.cc = tg.symlink("clang");
 					replacements["c++"] = tg.symlink("clang++");
 					replacements["ld"] = ldProxyArtifact;
-					if (arg.linkerName !== undefined) {
-						replacements[`ld.${arg.linkerName}`] = tg.symlink("ld");
-					}
 				}
 			}
 		}

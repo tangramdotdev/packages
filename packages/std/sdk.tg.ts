@@ -1729,7 +1729,7 @@ export async function testLLVMMold() {
 	return moldSdk;
 }
 
-/** Test that an SDK that links with mold also provides it to `-fuse-ld=mold`, which a build's flags can select, such as the rustflags in a user's Cargo configuration. */
+/** Test that a GCC SDK that links with mold also provides it to `-fuse-ld=mold`, which a build's flags can select, such as the rustflags in a user's Cargo configuration. */
 export async function testMoldFuseLd() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
@@ -1737,18 +1737,16 @@ export async function testMoldFuseLd() {
 		return null;
 	}
 
-	// Link a shared library, as rustc links a proc macro, with each toolchain.
-	for (const toolchain of ["gnu", "llvm"] as const) {
-		const sdkEnv = await sdk({ host, linker: "mold", toolchain });
-		const library = await std
-			.build(
-				std.shBootstrap`echo 'int f() { return 0; }' | cc -shared -fPIC -fuse-ld=mold -xc - -o ${tg.output}`,
-			)
-			.env(sdkEnv)
-			.host(std.triple.archAndOs(host))
-			.then(tg.File.expect);
-		await assertComment(library, sdkEnv, "mold");
-	}
+	// Link a shared library, as rustc links a proc macro.
+	const sdkEnv = await sdk({ host, linker: "mold", toolchain: "gnu" });
+	const library = await std
+		.build(
+			std.shBootstrap`echo 'int f() { return 0; }' | cc -shared -fPIC -fuse-ld=mold -xc - -o ${tg.output}`,
+		)
+		.env(sdkEnv)
+		.host(std.triple.archAndOs(host))
+		.then(tg.File.expect);
+	await assertComment(library, sdkEnv, "mold");
 
 	return true;
 }
