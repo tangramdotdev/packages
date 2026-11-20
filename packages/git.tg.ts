@@ -84,15 +84,12 @@ export async function build(...args: tg.Args<Arg>) {
 		...(setRuntimeLibraryPath !== undefined ? { setRuntimeLibraryPath } : {}),
 	});
 
-	// Wrap the git binary with GIT_EXEC_PATH so it can find its helper programs. Libcurl records the path of its CA bundle only as a string, so the wrapper also points git at the bundle by default to keep the bundle among the dependencies of git.
+	// Wrap the git binary with GIT_EXEC_PATH so it can find its helper programs.
 	const wrappedGit = await std.wrap(
 		tg.symlink({ artifact: output, path: "bin/git" }),
 		{
 			env: {
 				GIT_EXEC_PATH: tg`${output}/libexec/git-core`,
-				GIT_SSL_CAINFO: tg.Mutation.setIfUnset(
-					tg`${std.caCertificates()}/ca-bundle.crt`,
-				),
 			},
 		},
 	);
