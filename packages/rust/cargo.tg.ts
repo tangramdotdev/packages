@@ -93,7 +93,7 @@ export type Arg = CommonArg & {
 	/** Produce native executables that use system libraries without a Tangram wrapper. Requires a native build with the rustc proxy disabled. */
 	standalone?: boolean | std.sdk.StandaloneArg;
 
-	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Only the build subcommand copies the executables into the output. Default: "build". */
+	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Only the build subcommand copies the executables, and the static libraries of `staticlib` crates, into the output. Default: "build". */
 	subcommand?: string;
 
 	/** Use a temporary target directory and copy the executables into the output. Use `RunArg` to select a target directory outside Tangram. */
@@ -651,7 +651,7 @@ target-applies-to-host = true`;
 		? tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
 		: tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString}`;
 
-	// Copy the executables with their dependency metadata before the temporary target directory is discarded. Only a build copies them, because other subcommands, such as test runs, build executables only for their own use.
+	// Copy the executables with their dependency metadata, and the static libraries of `staticlib` crates, before the temporary target directory is discarded. Only a build copies them, because other subcommands, such as test runs, build executables only for their own use.
 	const profileDir = profile === "dev" ? "debug" : profile;
 	const subcommandName = subcommand.trim().split(/\s+/)[0];
 	const install =
@@ -660,6 +660,12 @@ target-applies-to-host = true`;
 		for executable in "$SCRATCH_TARGET_DIR/${target}/${profileDir}"/*; do
 			if [ -f "$executable" ] && [ -x "$executable" ]; then
 				cp -aL "$executable" "${tg.output}/bin/"
+			fi
+		done
+		for library in "$SCRATCH_TARGET_DIR/${target}/${profileDir}"/*.a; do
+			if [ -f "$library" ]; then
+				mkdir -p "${tg.output}/lib"
+				cp -aL "$library" "${tg.output}/lib/"
 			fi
 		done
 	`
@@ -904,6 +910,14 @@ target-applies-to-host = true`;
 	}
 
 	const result: Record<string, tg.Artifact> = { bin: binDir };
+
+	// Include the static libraries when the build produced any.
+	const installedLibs = await artifact
+		.tryGet("lib")
+		.then((a) => (a instanceof tg.Directory ? a : undefined));
+	if (installedLibs) {
+		result["lib"] = installedLibs;
+	}
 	if (captureStderr) {
 		const stderrLog = await artifact
 			.tryGet("cargo-stderr.log")
