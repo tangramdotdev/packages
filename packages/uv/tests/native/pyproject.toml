@@ -1,0 +1,13 @@
+[project]
+name = "native"
+version = "0.1.0"
+description = "A project with a dependency that ships a compiled extension."
+requires-python = ">=3.13"
+dependencies = ["markupsafe==3.0.3"]
+
+[project.scripts]
+native = "native:main"
+
+[build-system]
+requires = ["uv_build>=0.13.9,<0.14"]
+build-backend = "uv_build"

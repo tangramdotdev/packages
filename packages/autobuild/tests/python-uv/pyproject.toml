@@ -1,0 +1,13 @@
+[project]
+name = "demo_package"
+version = "0.1.0"
+description = "A demonstration package that displays text to stdout"
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+test = "demo_package.main:main"
+
+[build-system]
+requires = ["uv_build>=0.13.9,<0.14"]
+build-backend = "uv_build"

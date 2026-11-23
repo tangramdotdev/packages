@@ -1,0 +1,16 @@
+[project]
+name = "hatched"
+version = "0.1.0"
+description = "A project built with hatchling."
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+hatched = "hatched:main"
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+build = ["hatchling==1.27.0"]

@@ -1,0 +1,43 @@
+lock-version = "1.0"
+created-by = "test"
+
+# The same name and version is locked from a different index on each platform.
+[[packages]]
+name = "split"
+version = "1.0"
+marker = "sys_platform == 'darwin'"
+index = "https://darwin.example/simple"
+wheels = [
+    { url = "https://darwin.example/files/split-1.0-py3-none-any.whl", hashes = { sha256 = "1111111111111111111111111111111111111111111111111111111111111111" } },
+]
+
+[[packages]]
+name = "split"
+version = "1.0"
+marker = "sys_platform != 'darwin'"
+index = "https://other.example/simple"
+wheels = [
+    { url = "https://other.example/files/split-1.0-py3-none-any.whl", hashes = { sha256 = "2222222222222222222222222222222222222222222222222222222222222222" } },
+]
+
+# Two builds of the same version are equally compatible.
+[[packages]]
+name = "rebuilt"
+version = "1.0"
+index = "https://pypi.example/simple"
+wheels = [
+    { url = "https://pypi.example/files/rebuilt-1.0-1-py3-none-any.whl", hashes = { sha256 = "3333333333333333333333333333333333333333333333333333333333333333" } },
+    { url = "https://pypi.example/files/rebuilt-1.0-2-py3-none-any.whl", hashes = { sha256 = "4444444444444444444444444444444444444444444444444444444444444444" } },
+    { url = "https://pypi.example/files/rebuilt-1.0-py2-none-any.whl", hashes = { sha256 = "5555555555555555555555555555555555555555555555555555555555555555" } },
+]
+
+# The newer wheel requires a version of macOS above any deployment target.
+[[packages]]
+name = "native"
+version = "1.0"
+marker = "sys_platform == 'darwin'"
+index = "https://pypi.example/simple"
+wheels = [
+    { url = "https://pypi.example/files/native-1.0-py3-none-macosx_11_0_universal2.whl", hashes = { sha256 = "6666666666666666666666666666666666666666666666666666666666666666" } },
+    { url = "https://pypi.example/files/native-1.0-py3-none-macosx_99_0_universal2.whl", hashes = { sha256 = "7777777777777777777777777777777777777777777777777777777777777777" } },
+]
