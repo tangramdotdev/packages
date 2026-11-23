@@ -121,7 +121,7 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 				if ("env" in arg && arg.env !== undefined) {
 					object.env = arg.env;
 				}
-				if ("expose" in arg && arg.expose === undefined) {
+				if ("expose" in arg && arg.expose !== undefined) {
 					object.expose = arg.expose;
 				}
 				if ("format" in arg && arg.format !== undefined) {
