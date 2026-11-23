@@ -804,12 +804,14 @@ target-applies-to-host = true`;
 				envs.push(linkerEnv);
 			}
 		} else {
+			// Run the script with Bash, because it passes on the variables that Cargo names after hyphenated targets, such as `CARGO_BIN_EXE_my-bin`, which the sandbox's `/bin/sh` removes from the environment.
+			const shebang = "#!/usr/bin/env bash";
 			const namesTarget = `case " $* " in *" --target ${target} "*)`;
-			let script = `#!/bin/sh\nexec "$@" ${linkerFeatures}\n`;
+			let script = `${shebang}\nexec "$@" ${linkerFeatures}\n`;
 			if (!targetIsX8664Linux) {
-				script = `#!/bin/sh\n${namesTarget} exec "$@" ;; esac\nexec "$@" ${linkerFeatures}\n`;
+				script = `${shebang}\n${namesTarget} exec "$@" ;; esac\nexec "$@" ${linkerFeatures}\n`;
 			} else if (!hostIsX8664) {
-				script = `#!/bin/sh\n${namesTarget} exec "$@" ${linkerFeatures} ;; esac\nexec "$@"\n`;
+				script = `${shebang}\n${namesTarget} exec "$@" ${linkerFeatures} ;; esac\nexec "$@"\n`;
 			}
 			const wrapper = tg.file(script, { executable: true });
 			const linkerEnv = { RUSTC_WRAPPER: wrapper };
@@ -1237,6 +1239,7 @@ export async function test() {
 	tests.push(testStaticLibrary());
 	tests.push(testTestSubcommand());
 	tests.push(testUnproxiedWorkspace());
+	tests.push(testUnproxiedWorkspaceCross());
 	tests.push(testVendorDependencies());
 	await Promise.all(tests);
 
@@ -1651,9 +1654,16 @@ export async function testUnproxiedWorkspace() {
 }
 
 export async function testUnproxiedWorkspaceCross() {
+	// Cross-compile for the other architecture of the host's operating system.
+	const host = std.sdk.canonicalTriple(std.triple.host());
+	const arch = std.triple.arch(host) === "x86_64" ? "aarch64" : "x86_64";
+	const target =
+		std.triple.os(host) === "linux"
+			? `${arch}-unknown-linux-gnu`
+			: `${arch}-apple-darwin`;
 	const helloWorkspace = build({
-		host: "aarch64-unknown-linux-gnu",
-		target: "x86_64-unknown-linux-gnu",
+		host,
+		target,
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		env: {
 			TANGRAM_LINKER_TRACING: "tgld=trace",
