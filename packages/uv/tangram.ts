@@ -3,6 +3,7 @@ import * as std from "std" with { source: "../std" };
 import { $ } from "std" with { source: "../std" };
 
 import * as lockfile from "./lockfile.tg.ts";
+import planScript from "./plan.py" with { type: "file" };
 import tests from "./tests" with { type: "directory" };
 
 export { lockfile };
@@ -75,6 +76,9 @@ const releases: { [key: string]: { checksum: tg.Checksum; triple: string } } = {
 };
 
 export type Arg = {
+	/** The dependency groups that provide the build backends of the project and of any source distributions. They are made available to builds but are not installed. Default: `["build"]` if the project defines that group. */
+	buildGroups?: Array<string>;
+
 	/** Whether to install the default dependency groups, such as `dev`. Default: false. */
 	defaultGroups?: boolean;
 
@@ -139,6 +143,7 @@ export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 		args,
 		map: async (arg) => arg,
 		reduce: {
+			buildGroups: "append",
 			env: (a, b) => std.env.arg(a ?? null, b ?? null),
 			extras: "append",
 			groups: "append",
@@ -169,9 +174,10 @@ export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 	return { env, host, source, ...rest };
 }
 
-/** Install a uv project and its locked dependencies. Every distribution is downloaded with the checksum recorded in `uv.lock`, and uv runs without network access. */
+/** Install a uv project and its locked dependencies. uv selects the packages, every distribution is downloaded with the digest recorded in `uv.lock`, and uv runs without network access. */
 export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	const {
+		buildGroups: buildGroups_,
 		defaultGroups = false,
 		env: env_,
 		extras = [],
@@ -199,23 +205,14 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		host,
 		pythonVersion,
 	});
-	const interpreter = await tg.symlink(
-		tg`${pythonArtifact}/bin/python${pythonVersion}`,
-	);
+	const interpreterPath =
+		await tg`${pythonArtifact}/bin/python${pythonVersion}`;
+	const interpreter = await tg.symlink(interpreterPath);
 
-	// Download the distributions pinned by the lockfile.
-	const vendored = await tg
-		.build(lockfile.vendor, file, host, pythonVersion)
-		.then(tg.Directory.expect);
-
-	// Create the env.
-	const sdkArgObject = std.sdk.argObject(sdkArg);
-	const sdk = std.sdk(
-		{ host },
-		...(sdkArgObject !== undefined ? [sdkArgObject] : []),
-	);
+	// Create the env. An `sdk: "none"` argument adds no toolchain.
+	const sdk = sdkArg === "none" ? [] : [std.sdk({ host }, sdkArg ?? {})];
 	const env = await std.env.arg(
-		sdk,
+		...sdk,
 		self({ host }),
 		pythonArtifact,
 		{
@@ -228,22 +225,59 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		env_ ?? null,
 	);
 
-	// Create the scripts.
+	// Create the selection flags, validating each name so that it reaches uv as a single argument.
+	const buildGroups = buildGroups_ ?? (await defaultBuildGroups(source));
+	const flags = (flag: string, kind: string, names: Array<string>) =>
+		names.flatMap((name) => [flag, validateName(kind, name)]);
+	const packageFlags = flags("--package", "package", packages);
 	const selection = [
 		...(defaultGroups ? [] : ["--no-default-groups"]),
-		...extras.flatMap((extra) => ["--extra", extra]),
-		...groups.flatMap((group) => ["--group", group]),
-		...packages.flatMap((pkg) => ["--package", pkg]),
+		...flags("--extra", "extra", extras),
+		...flags("--group", "group", groups),
+		...packageFlags,
 	].join(" ");
-	const prepare = (tree: tg.Directory) => tg`
+	const buildSelection = [
+		...flags("--only-group", "group", buildGroups),
+		...packageFlags,
+	].join(" ");
+
+	// Create the scripts. The export fails if the lockfile is out of date for the manifests and the interpreter.
+	const prepare = (tree?: tg.Directory) => tg`
 		set -eu
 		export HOME="$PWD/home" TMPDIR="$PWD/tmp" UV_CACHE_DIR="$PWD/cache"
-		mkdir -p "$HOME" "$TMPDIR" ${tg.output}
-		cp -R ${tree}/. "$PWD/work"
+		mkdir -p "$HOME" "$TMPDIR" "$PWD/work" ${tg.output}
+		${tree !== undefined ? tg`cp -R ${tree}/. "$PWD/work"` : ""}
 		chmod -R u+w "$PWD/work"
 		cd "$PWD/work"`;
-	const exportRequirements = `uv export --frozen --format requirements.txt --no-header --no-annotate ${selection}`;
-	const install = tg`uv pip install --python ${pythonArtifact}/bin/python${pythonVersion} --no-python-downloads --prefix ${tg.output} --no-index --find-links ${vendored} --no-deps`;
+	const exportRequirements = tg`uv export --locked --python ${interpreterPath} --format requirements.txt --no-header --no-annotate`;
+
+	// Ask uv which locked packages are selected, and select a distribution of each for the interpreter. This reads the manifests alone, so that the dependencies are reused when only the code changes.
+	const manifests = await extractManifests(source);
+	const exportBuildRequirements =
+		buildGroups.length > 0
+			? tg`${exportRequirements} --no-emit-local ${buildSelection} -o ${tg.output}/build-requirements.txt`
+			: "";
+	const plan = await std.build`
+		${prepare(manifests)}
+		if ! ${exportRequirements} --no-emit-local ${selection} -o ${tg.output}/requirements.txt; then
+			echo 'error: uv could not verify uv.lock against the project without network access. If the lockfile is out of date, run "uv lock".' >&2
+			exit 1
+		fi
+		${exportBuildRequirements}
+		PYTHONPATH=${packaging()} ${interpreterPath} ${planScript} uv.lock ${tg.output}/downloads.json ${tg.output}/*requirements.txt`
+		.env(env)
+		.host(std.triple.archAndOs(host))
+		.then(tg.Directory.expect);
+	const requirements = await plan.get("requirements.txt").then(tg.File.expect);
+	const downloads = await plan
+		.get("downloads.json")
+		.then(tg.File.expect)
+		.then((file) => file.text)
+		.then((text) => tg.encoding.json.decode(text) as Array<lockfile.Download>);
+
+	// Download the selected distributions.
+	const vendored = await lockfile.vendor(downloads);
+	const install = tg`uv pip install --python ${interpreterPath} --no-python-downloads --prefix ${tg.output} --no-index --find-links ${vendored} --no-deps`;
 
 	// Remove the files that record the time and place of the installation, and replace each script's interpreter with a fixed path so that it can be wrapped.
 	const normalize = tg`
@@ -262,12 +296,10 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 			done
 		fi`;
 
-	// Install the locked dependencies from the manifests alone, so that the installation is reused when only the code changes.
-	const manifests = await extractManifests(source);
+	// Install the locked dependencies.
 	const dependencies = await std.build`
-		${prepare(manifests)}
-		${exportRequirements} --no-emit-local -o "$TMPDIR/requirements.txt"
-		${install} --require-hashes -r "$TMPDIR/requirements.txt"
+		${prepare()}
+		${install} --require-hashes -r ${requirements}
 		${normalize}`
 		.env(env)
 		.host(std.triple.archAndOs(host))
@@ -276,10 +308,10 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	// Build and install the project and any local packages it depends on.
 	let builder = std.build`
 		${prepare(source)}
-		${exportRequirements} --only-emit-local --no-editable --no-hashes -o "$TMPDIR/requirements.txt"
+		${exportRequirements} --only-emit-local --no-editable --no-hashes ${selection} -o "$TMPDIR/requirements.txt"
 		if grep -q '[^[:space:]]' "$TMPDIR/requirements.txt"; then
 			if ! ${install} -r "$TMPDIR/requirements.txt"; then
-				echo 'error: failed to build the project. If the build backend could not be found, add it to uv.lock, for example through a "build" dependency group.' >&2
+				echo 'error: failed to build the project. If the build backend could not be found, add it to uv.lock through a dependency group named in buildGroups, such as "build".' >&2
 				exit 1
 			fi
 		fi
@@ -313,6 +345,37 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 	return output;
 }
 
+/** Return the `packaging` library, which implements the standard marker and wheel tag rules, as a wheel that Python can import directly. */
+export async function packaging(): Promise<tg.File> {
+	const blob = await std
+		.download({
+			checksum:
+				"sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+			url: "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl",
+		})
+		.then(tg.Blob.expect);
+	return tg.file(blob);
+}
+
+/** Return the `build` dependency group if the project defines it. */
+async function defaultBuildGroups(source: tg.Directory) {
+	const file = await source.tryGet("pyproject.toml");
+	tg.assert(file instanceof tg.File, "could not locate pyproject.toml");
+	const pyproject = tg.encoding.toml.decode(await file.text) as {
+		"dependency-groups"?: Record<string, unknown>;
+	};
+	return "build" in (pyproject["dependency-groups"] ?? {}) ? ["build"] : [];
+}
+
+/** Require the name of an extra, a dependency group, or a package to be a valid Python distribution name. */
+export function validateName(kind: string, name: string): string {
+	tg.assert(
+		/^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(name),
+		`invalid ${kind} name: ${JSON.stringify(name)}`,
+	);
+	return name;
+}
+
 /** Extract the files that determine which dependencies uv installs. */
 export async function extractManifests(
 	source: tg.Directory,
@@ -338,17 +401,23 @@ export async function selectPythonVersion(
 	source: tg.Directory,
 	lock: lockfile.Lockfile,
 ): Promise<PythonVersion> {
-	// Use the pinned version if there is one.
+	// Use the pinned version if there is one. A pin that names a patch version must match an available version exactly.
 	const pin = await source.tryGet(".python-version");
 	if (pin instanceof tg.File) {
-		const match = (await pin.text).match(/(\d+)\.(\d+)/);
-		tg.assert(match, "could not parse .python-version");
-		const version = `${match[1]}.${match[2]}`;
+		const text = (await pin.text)
+			.split("\n")
+			.map((line) => line.trim())
+			.find((line) => line.length > 0 && !line.startsWith("#"));
+		const match = text?.match(/^(\d+)\.(\d+)(\.\d+)?$/);
+		tg.assert(match, `unsupported .python-version: ${text}`);
+		const version = `${match[1]}.${match[2]}` as PythonVersion;
+		const available = Object.values(python.versions).map((v) => v.version);
 		tg.assert(
-			version in python.versions,
-			`the python version ${version} is not available`,
+			version in python.versions &&
+				(match[3] === undefined || python.versions[version].version === text),
+			`the python version ${text} from .python-version is not available, the available versions are ${available.join(", ")}`,
 		);
-		return version as PythonVersion;
+		return version;
 	}
 
 	// Otherwise, prefer the default version, then the newest version that the project supports.
@@ -409,12 +478,16 @@ export async function test() {
 	await Promise.all([
 		lockfile.test(),
 		testDependency(),
+		testDevGroup(),
 		testHatchling(),
 		testHello(),
 		testMissingBackend(),
 		testPlatformWheel(),
+		testPythonPin(),
 		testSatisfies(),
+		testStaleLockfile(),
 		testToolchain(),
+		testValidateName(),
 		testWorkspace(),
 	]);
 	return true;
@@ -551,4 +624,75 @@ export async function testWorkspace() {
 	tg.assert(names.includes("member"), `expected member in ${names}`);
 	tg.assert(!names.includes("root_app"), `unexpected root_app in ${names}`);
 	return root;
+}
+
+/** Return whether a promise is rejected. */
+async function rejects(promise: PromiseLike<unknown>) {
+	return promise.then(
+		() => false,
+		() => true,
+	);
+}
+
+export async function testStaleLockfile() {
+	// Add a dependency to the project without updating its lockfile.
+	const hello = await tests.get("hello").then(tg.Directory.expect);
+	const pyproject = await hello.get("pyproject.toml").then(tg.File.expect);
+	const text = await pyproject.text;
+	tg.assert(text.includes("dependencies = []"));
+	const source = await tg.directory(hello, {
+		"pyproject.toml": tg.file(
+			text.replace("dependencies = []", 'dependencies = ["cowsay==6.1"]'),
+		),
+	});
+	tg.assert(
+		await rejects(build({ source })),
+		"expected the build to fail with a stale lockfile",
+	);
+	return true;
+}
+
+export async function testDevGroup() {
+	// The fixture locks its dev group with a digest that does not match the download, so the build succeeds only if the group is neither downloaded nor installed.
+	const source = await tests.get("dev-group").then(tg.Directory.expect);
+	const output = await build({ source });
+	const names = await sitePackagesNames(output);
+	tg.assert(names.includes("cowsay"), `expected cowsay in ${names}`);
+	tg.assert(!names.includes("iniconfig"), `unexpected iniconfig in ${names}`);
+
+	// Selecting the group must fail the download.
+	tg.assert(
+		await rejects(build({ groups: ["dev"], source })),
+		"expected the mismatched digest to fail the build",
+	);
+	return output;
+}
+
+export async function testPythonPin() {
+	const lock = { version: 1 };
+	const select = (pin: string) =>
+		tg
+			.directory({ ".python-version": tg.file(pin) })
+			.then((source) => selectPythonVersion(source, lock));
+	const { version } = python.versions["3.14"];
+	tg.assert((await select("3.14\n")) === "3.14");
+	tg.assert((await select(`${version}\n`)) === "3.14");
+	tg.assert(await rejects(select("3.14.0\n")), "expected 3.14.0 to fail");
+	tg.assert(await rejects(select("3.9\n")), "expected 3.9 to fail");
+	tg.assert(await rejects(select("pypy@3.11\n")), "expected pypy to fail");
+	return true;
+}
+
+export async function testValidateName() {
+	tg.assert(validateName("group", "dev-tools_1.x") === "dev-tools_1.x");
+	for (const name of ["", "dev; rm -rf /", "$(id)", "a b", "-flag"]) {
+		const rejected = await rejects((async () => validateName("group", name))());
+		tg.assert(rejected, `expected ${JSON.stringify(name)} to be rejected`);
+	}
+	const source = await tests.get("hello").then(tg.Directory.expect);
+	tg.assert(
+		await rejects(build({ groups: ["dev; exit 0"], source })),
+		"expected an invalid group name to fail the build",
+	);
+	return true;
 }
