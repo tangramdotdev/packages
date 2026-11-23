@@ -628,13 +628,37 @@ export async function testNoBinary() {
 		await rejects(build({ buildGroups: [], source })),
 		"expected the dependency to be built from its source distribution",
 	);
+
+	// A dependency that is locked without a source distribution must be rejected, not installed from its wheel.
+	const dependency = await tests.get("dependency").then(tg.Directory.expect);
+	const pyproject = await dependency.get("pyproject.toml").then(tg.File.expect);
+	const wheelOnly = await tg.directory(dependency, {
+		"pyproject.toml": tg.file(
+			`${await pyproject.text}\n[tool.uv]\nno-binary-package = ["cowsay"]\n`,
+		),
+	});
+	tg.assert(
+		await rejects(build({ source: wheelOnly })),
+		"expected a wheel-only dependency to be rejected",
+	);
 	return output;
 }
 
 export async function testPlan() {
 	// Plan a lock file that does not come from uv, with the default interpreter.
 	const host = std.triple.host();
-	const lock = await tests.get("plan/pylock.toml").then(tg.File.expect);
+	const fixture = await tests.get("plan/pylock.toml").then(tg.File.expect);
+
+	// Add a wheel that is specific to the interpreter but not to a platform.
+	const interpreter = `cp${python.defaultVersion.replace(".", "")}`;
+	const lock = await tg.file(`${await fixture.text}
+[[packages]]
+name = "interpreted"
+version = "1.0"
+wheels = [
+    { url = "https://pypi.example/files/interpreted-1.0-${interpreter}-none-any.whl", hashes = { sha256 = "${"8".repeat(64)}" } },
+]
+`);
 	const text =
 		await $`PYTHONPATH=${packaging()} python3 ${planScript} ${tg.output} ${lock}`
 			.env(python.self())
@@ -661,6 +685,12 @@ export async function testPlan() {
 	const rebuilt = urls.filter((url) => url.includes("/rebuilt-"));
 	tg.assert(
 		rebuilt.length === 2 && rebuilt.every((url) => url.includes("-py3-")),
+		`unexpected downloads: ${urls}`,
+	);
+
+	// A wheel for the interpreter on any platform must be selected.
+	tg.assert(
+		urls.some((url) => url.includes("/interpreted-")),
 		`unexpected downloads: ${urls}`,
 	);
 

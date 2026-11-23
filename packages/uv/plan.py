@@ -11,7 +11,7 @@ import sys
 import tomllib
 
 from packaging.pylock import PackageDirectory, PackageSdist, PackageWheel, Pylock
-from packaging.tags import compatible_tags, cpython_tags, mac_platforms, sys_tags
+from packaging.tags import compatible_tags, cpython_tags, interpreter_name, interpreter_version, mac_platforms, sys_tags
 from packaging.utils import canonicalize_name, parse_wheel_filename
 
 
@@ -34,7 +34,8 @@ def supported_tags():
         return list(sys_tags())
     major, minor, *_ = [int(part) for part in target.split(".")] + [0]
     platforms = list(mac_platforms((major, minor)))
-    return [*cpython_tags(platforms=platforms), *compatible_tags(platforms=platforms)]
+    interpreter = f"{interpreter_name()}{interpreter_version()}"
+    return [*cpython_tags(platforms=platforms), *compatible_tags(interpreter=interpreter, platforms=platforms)]
 
 
 def settings():
@@ -78,6 +79,9 @@ def main():
                     fail(f"the package {name} must be built from source, but the uv settings do not allow it to be built")
                 artifacts = [artifact]
             elif isinstance(artifact, PackageWheel):
+                # The selection falls back to a wheel when a package has no source distribution.
+                if no_binary(name):
+                    fail(f"the uv settings do not allow a wheel of {name}, but uv.lock has no source distribution of it")
                 # Keep every wheel that is as compatible as the best one, so that uv chooses between them, for example by build number.
                 best = rank(artifact)
                 artifacts = [wheel for wheel in package.wheels if rank(wheel) == best]
