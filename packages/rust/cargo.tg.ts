@@ -3,14 +3,14 @@ import { $ } from "std" with { source: "../std" };
 import openssl from "openssl" with { source: "../openssl.tg.ts" };
 import pkgconf from "pkgconf" with { source: "../pkgconf.tg.ts" };
 import * as proxy_ from "./proxy.tg.ts";
-import { NIGHTLY, rustTriple, self } from "./tangram.ts";
+import { rustTriple, self } from "./tangram.ts";
 
 /** Fields shared between sandboxed `build()` and unsandboxed `run()`. */
 type CommonArg = {
 	/** The machine performing the compilation. */
 	build?: string;
 
-	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD". When proxy is enabled, defaults to the pinned `NIGHTLY`. */
+	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD". */
 	channel?: "stable" | "nightly" | string;
 
 	/** Dependencies configuration. When provided, deps are resolved to env automatically. */
@@ -523,7 +523,7 @@ export async function build(
 	}
 	const sdk = await tg.build(std.sdk, ...(crossSdkArgs ?? sdkArgs));
 	envs.push(sdk);
-	const channel = channel_ ?? (proxy ? NIGHTLY : "stable");
+	const channel = channel_ ?? "stable";
 	const rustArtifact = await self({
 		host: rustHost,
 		target,

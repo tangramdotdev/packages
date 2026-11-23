@@ -702,7 +702,7 @@ type CacheTestConfig = {
 	tag?: string;
 };
 
-/** Cargo's build-dir layouts. The new layout is the default on the pinned nightly and from Cargo 1.100, and a temporary opt-out restores the legacy layout until Cargo removes it. */
+/** Cargo's build-dir layouts. The new layout is the default from Cargo 1.100, and a temporary opt-out restores the legacy layout until Cargo removes it. */
 type Layout = "legacy" | "new";
 
 const layoutArgs: Record<Layout, cargo.Arg> = {
