@@ -514,6 +514,8 @@ pub(crate) fn is_denied_host_env(key: &str) -> bool {
 		// Shell / process identity — varies per host, no rustc effect.
 		"HOME" | "USER" | "LOGNAME" | "SHELL" | "SHLVL" | "PWD" | "OLDPWD"
 		| "MAIL" | "HOSTNAME" | "TMPDIR" | "TMP" | "TEMP"
+		// The ID of the systemd unit or scope that runs the process, which differs in every run.
+		| "INVOCATION_ID"
 		// The sandbox replaces these for each process, and the outer process's values embed its own sandbox id and token.
 		| "TANGRAM_CONFIG" | "TANGRAM_DIRECTORY" | "TANGRAM_MODE" | "TANGRAM_OUTPUT"
 		| "TANGRAM_TOKEN" | "TANGRAM_TRACING" | "TANGRAM_URL"
@@ -533,7 +535,9 @@ pub(crate) fn is_denied_host_env(key: &str) -> bool {
 	) {
 		return true;
 	}
-	key.starts_with("TANGRAM_ENV_")
+	// Drop variables by prefix, including the ones that nextest sets for the processes that it runs, such as its setup scripts, which hold the run's ID and temporary paths.
+	key.starts_with("NEXTEST")
+		|| key.starts_with("TANGRAM_ENV_")
 		|| key.starts_with("TGRUSTC_")
 		|| key.starts_with("SSH_")
 		|| key.starts_with("GPG_")
