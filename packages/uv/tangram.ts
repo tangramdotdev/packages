@@ -222,6 +222,10 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 			UV_NO_PROGRESS: "1",
 			UV_OFFLINE: "1",
 		},
+		// Select wheels for the deployment target of the SDK, not for the version of the machine that runs the build.
+		std.triple.os(host) === "darwin"
+			? { MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget }
+			: null,
 		env_ ?? null,
 	);
 
@@ -249,13 +253,15 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		${tree !== undefined ? tg`cp -R ${tree}/. "$PWD/work"` : ""}
 		chmod -R u+w "$PWD/work"
 		cd "$PWD/work"`;
-	const exportRequirements = tg`uv export --locked --python ${interpreterPath} --format requirements.txt --no-header --no-annotate`;
+	const exportLocked = tg`uv export --locked --python ${interpreterPath}`;
+	const exportRequirements = tg`${exportLocked} --format requirements.txt --no-header --no-annotate`;
+	const exportPylock = tg`${exportLocked} --format pylock.toml --no-emit-local`;
 
-	// Ask uv which locked packages are selected, and select a distribution of each for the interpreter. This reads the manifests alone, so that the dependencies are reused when only the code changes.
+	// Ask uv which locked packages are selected, and select the distributions of each for the interpreter. The requirements file carries the hashes that uv requires at installation, and the lock files carry the index, URLs, and hashes of each package. This reads the manifests alone, so that the dependencies are reused when only the code changes.
 	const manifests = await extractManifests(source);
-	const exportBuildRequirements =
+	const exportBuildPylock =
 		buildGroups.length > 0
-			? tg`${exportRequirements} --no-emit-local ${buildSelection} -o ${tg.output}/build-requirements.txt`
+			? tg`${exportPylock} ${buildSelection} -o ${tg.output}/pylock.build.toml`
 			: "";
 	const plan = await std.build`
 		${prepare(manifests)}
@@ -263,8 +269,9 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 			echo 'error: uv could not verify uv.lock against the project without network access. If the lockfile is out of date, run "uv lock".' >&2
 			exit 1
 		fi
-		${exportBuildRequirements}
-		PYTHONPATH=${packaging()} ${interpreterPath} ${planScript} uv.lock ${tg.output}/downloads.json ${tg.output}/*requirements.txt`
+		${exportPylock} ${selection} -o ${tg.output}/pylock.toml
+		${exportBuildPylock}
+		PYTHONPATH=${packaging()} ${interpreterPath} ${planScript} ${tg.output}/downloads.json ${tg.output}/pylock*.toml`
 		.env(env)
 		.host(std.triple.archAndOs(host))
 		.then(tg.Directory.expect);
@@ -482,6 +489,8 @@ export async function test() {
 		testHatchling(),
 		testHello(),
 		testMissingBackend(),
+		testNoBinary(),
+		testPlan(),
 		testPlatformWheel(),
 		testPythonPin(),
 		testSatisfies(),
@@ -604,6 +613,65 @@ export async function testMissingBackend() {
 		() => false,
 	);
 	tg.assert(!succeeded, "expected the build to fail without its backend");
+	return true;
+}
+
+export async function testNoBinary() {
+	// The fixture sets `no-binary-package` for its dependency, whose build backend is in the `build` group.
+	const source = await tests.get("no-binary").then(tg.Directory.expect);
+	const output = await build({ source });
+	const text = await run(output, "no-binary");
+	tg.assert(text.trim() === "six 1.17.0", `unexpected output: ${text}`);
+
+	// Without the build backend, the build succeeds only if the wheel is used.
+	tg.assert(
+		await rejects(build({ buildGroups: [], source })),
+		"expected the dependency to be built from its source distribution",
+	);
+	return output;
+}
+
+export async function testPlan() {
+	// Plan a lock file that does not come from uv, with the default interpreter.
+	const host = std.triple.host();
+	const lock = await tests.get("plan/pylock.toml").then(tg.File.expect);
+	const text =
+		await $`PYTHONPATH=${packaging()} python3 ${planScript} ${tg.output} ${lock}`
+			.env(python.self())
+			.env({ MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget })
+			.then(tg.File.expect)
+			.then((file) => file.text);
+	const downloads = tg.encoding.json.decode(text) as Array<lockfile.Download>;
+	const urls = downloads.map((download) => download.url);
+	const darwin = std.triple.os(host) === "darwin";
+
+	// A package that is locked from a different index on each platform must keep the index and hash of its platform.
+	const split = downloads.filter((download) =>
+		download.filename.startsWith("split-"),
+	);
+	const index = darwin ? "darwin" : "other";
+	tg.assert(
+		split.length === 1 &&
+			split[0]?.url.startsWith(`https://${index}.example/`) &&
+			split[0]?.checksum === `sha256:${(darwin ? "1" : "2").repeat(64)}`,
+		`unexpected downloads: ${urls}`,
+	);
+
+	// Equally compatible builds must all be kept for uv to choose between, and incompatible wheels dropped.
+	const rebuilt = urls.filter((url) => url.includes("/rebuilt-"));
+	tg.assert(
+		rebuilt.length === 2 && rebuilt.every((url) => url.includes("-py3-")),
+		`unexpected downloads: ${urls}`,
+	);
+
+	// A wheel that requires a newer version of macOS than the deployment target must not be selected.
+	const native = urls.filter((url) => url.includes("/native-"));
+	tg.assert(
+		darwin
+			? native.length === 1 && native[0]?.includes("macosx_11_0")
+			: native.length === 0,
+		`unexpected downloads: ${urls}`,
+	);
 	return true;
 }
 

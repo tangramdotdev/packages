@@ -1,0 +1,19 @@
+[project]
+name = "no-binary"
+version = "0.1.0"
+description = "A project that requires a dependency to be built from its source distribution."
+requires-python = ">=3.13"
+dependencies = ["six==1.17.0"]
+
+[project.scripts]
+no-binary = "no_binary:main"
+
+[build-system]
+requires = ["uv_build>=0.13.9,<0.14"]
+build-backend = "uv_build"
+
+[dependency-groups]
+build = ["setuptools==80.9.0"]
+
+[tool.uv]
+no-binary-package = ["six"]
