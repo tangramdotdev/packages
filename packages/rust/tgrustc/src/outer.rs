@@ -1,4 +1,4 @@
-use crate::{args::Args, launcher, lock, sidecar};
+use crate::{args::Args, launcher, lock, sidecar, source};
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	path::{Path, PathBuf},
@@ -103,12 +103,10 @@ fn emit_proxy_complete(
 pub async fn run(args: Args) -> tg::Result<()> {
 	let run_start = Instant::now();
 	let cwd = std::env::current_dir().map_err(|error| tg::error!("failed to read cwd: {error}"))?;
-	// Scope the source artifact to `CARGO_MANIFEST_DIR` (per-crate) rather than
-	// the workspace so a sibling crate's edits cannot blow this crate's
-	// spawn-key cache. Fall back to CWD when cargo is absent.
+	// Scope the source to the crate's directory and the files that it includes from elsewhere in the Cargo source, so that a sibling crate's edits do not change this crate's key. Fall back to the current directory when Cargo is absent.
 	let source_dir =
 		std::env::var_os("CARGO_MANIFEST_DIR").map_or_else(|| cwd.clone(), PathBuf::from);
-	let source_artifact = tg::Artifact::with_referent(checkin(&source_dir).await?.artifact);
+	let source = source::checkin(&source_dir).await?;
 	let self_exe = std::env::current_exe()
 		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
 	let driver_artifact = tg::Artifact::with_referent(checkin(&self_exe).await?.artifact);
@@ -117,8 +115,8 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		.map_err(|_| tg::error!("the driver artifact must be a file"))?
 		.into();
 
-	let (mut env, toolchain_artifact) = build_env(&args.rustc, &source_artifact).await?;
-	let host_dirs = host_dirs(&env, &source_artifact, &source_dir);
+	let (mut env, toolchain_artifact) = build_env(&args.rustc, &source).await?;
+	let host_dirs = host_dirs(&env, &source.artifact, &source.directory);
 
 	// When the runner is in use, link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
 	let build_script = std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_some()
@@ -142,8 +140,8 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let spawn_args = build_spawn_args(
 		&args.passthrough,
 		&toolchain_artifact,
-		&source_artifact,
-		&source_dir,
+		&source.artifact,
+		&source.directory,
 		&cwd,
 		&closure,
 	)
@@ -248,7 +246,7 @@ fn host_dirs(
 // The sandbox env, with the toolchain artifact that provides rustc.
 async fn build_env(
 	rustc: &str,
-	source_artifact: &tg::Artifact,
+	source: &source::Source,
 ) -> tg::Result<(tg::value::Map, tg::Artifact)> {
 	// Retain the existing filter's distinction between host strings and typed values.
 	// Recover paths from the live strings so shell overrides take effect.
@@ -277,8 +275,8 @@ async fn build_env(
 	}
 	// Cargo populates these with paths embedding the outer cargo-sandbox's
 	// source artifact id, which varies per `cargo.build`. Re-anchor on the
-	// per-crate source artifact so they depend only on this crate's source.
-	override_manifest_env(&mut env, source_artifact);
+	// crate's source so they depend only on that source.
+	override_manifest_env(&mut env, source);
 	// Replace the crate's host source directory inside the other variables with its source artifact, so that a path into the crate's source that a build script exports with `cargo:rustc-env`, such as v8's `RUSTY_V8_SRC_BINDING_PATH` when Cargo runs on the host, resolves in the sandbox.
 	if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
 		rewrite_dir_references(&mut env, "CARGO_MANIFEST_DIR", &manifest_dir);
@@ -548,22 +546,19 @@ pub(crate) fn is_denied_host_env(key: &str) -> bool {
 		|| key.starts_with("XDG_")
 }
 
-fn override_manifest_env(env: &mut tg::value::Map, source_artifact: &tg::Artifact) {
+fn override_manifest_env(env: &mut tg::value::Map, source: &source::Source) {
 	if env.contains_key("CARGO_MANIFEST_DIR") {
+		let template = source.crate_template("");
 		env.insert(
 			"CARGO_MANIFEST_DIR".to_owned(),
-			tg::Value::Template(tg::Template::with_components([
-				tg::template::Component::Artifact(source_artifact.clone()),
-			])),
+			tg::Value::Template(template),
 		);
 	}
 	if env.contains_key("CARGO_MANIFEST_PATH") {
+		let template = source.crate_template("/Cargo.toml");
 		env.insert(
 			"CARGO_MANIFEST_PATH".to_owned(),
-			tg::Value::Template(tg::Template::with_components([
-				tg::template::Component::Artifact(source_artifact.clone()),
-				tg::template::Component::String("/Cargo.toml".to_owned()),
-			])),
+			tg::Value::Template(template),
 		);
 	}
 }

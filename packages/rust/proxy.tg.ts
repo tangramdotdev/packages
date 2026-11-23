@@ -1194,6 +1194,41 @@ export async function testRunnerCacheHitWorkspace() {
 	});
 }
 
+/** A workspace crate that includes a file from outside of its directory compiles through the proxy. Changing that file recompiles the crate, and changing another crate does not. */
+export async function testIncludeOutsideCrate() {
+	const source = await tests
+		.get("workspace-include-outside-crate")
+		.then(tg.Directory.expect);
+	const result = await buildWithStats({ source });
+	console.log("testIncludeOutsideCrate result", result.id);
+	const stats = await parseStats(result);
+	tg.assert(
+		stats !== undefined && getCrateStatus(stats, "app") !== undefined,
+		"expected app to compile through the proxy",
+	);
+
+	const output = await $`app | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text.trim() === "hello from outside the crate",
+		`unexpected output: ${text}`,
+	);
+
+	await assertCacheHit({
+		source,
+		modifyPath: "shared/message.txt",
+		expectations: { app: false },
+	});
+	await assertCacheHit({
+		source,
+		modifyPath: "packages/other/src/lib.rs",
+		expectations: { app: true, other: false },
+	});
+	return result;
+}
+
 /** Stable: build scripts run through the runner on the stable toolchain. */
 export async function testStableRunner() {
 	const result = await cargo.build({
@@ -1311,6 +1346,7 @@ export async function test() {
 		testBuildScriptEnvDep(),
 		testBuildScriptFileDep(),
 		testWorkspaceBuildScript(),
+		testIncludeOutsideCrate(),
 		testRunnerBuildScript(),
 		testRunnerCfgProbe(),
 		testRunnerEnvPassthrough(),
