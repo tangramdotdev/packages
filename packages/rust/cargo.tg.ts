@@ -93,7 +93,7 @@ export type Arg = CommonArg & {
 	/** Produce native executables that use system libraries without a Tangram wrapper. Requires a native build with the rustc proxy disabled. */
 	standalone?: boolean | std.sdk.StandaloneArg;
 
-	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Only the build subcommand copies the executables into the output. Default: "build". */
+	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Only the build subcommand copies the executables, and the static libraries of `staticlib` crates, into the output. Default: "build". */
 	subcommand?: string;
 
 	/** Use a temporary target directory and copy the executables into the output. Use `RunArg` to select a target directory outside Tangram. */
@@ -651,7 +651,7 @@ target-applies-to-host = true`;
 		? tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
 		: tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString}`;
 
-	// Copy the executables with their dependency metadata before the temporary target directory is discarded. Only a build copies them, because other subcommands, such as test runs, build executables only for their own use.
+	// Copy the executables with their dependency metadata, and the static libraries of `staticlib` crates, before the temporary target directory is discarded. Only a build copies them, because other subcommands, such as test runs, build executables only for their own use.
 	const profileDir = profile === "dev" ? "debug" : profile;
 	const subcommandName = subcommand.trim().split(/\s+/)[0];
 	const install =
@@ -660,6 +660,12 @@ target-applies-to-host = true`;
 		for executable in "$SCRATCH_TARGET_DIR/${target}/${profileDir}"/*; do
 			if [ -f "$executable" ] && [ -x "$executable" ]; then
 				cp -aL "$executable" "${tg.output}/bin/"
+			fi
+		done
+		for library in "$SCRATCH_TARGET_DIR/${target}/${profileDir}"/*.a; do
+			if [ -f "$library" ]; then
+				mkdir -p "${tg.output}/lib"
+				cp -aL "$library" "${tg.output}/lib/"
 			fi
 		done
 	`
@@ -904,6 +910,14 @@ target-applies-to-host = true`;
 	}
 
 	const result: Record<string, tg.Artifact> = { bin: binDir };
+
+	// Include the static libraries when the build produced any.
+	const installedLibs = await artifact
+		.tryGet("lib")
+		.then((a) => (a instanceof tg.Directory ? a : undefined));
+	if (installedLibs) {
+		result["lib"] = installedLibs;
+	}
 	if (captureStderr) {
 		const stderrLog = await artifact
 			.tryGet("cargo-stderr.log")
@@ -1220,6 +1234,7 @@ export async function test() {
 	tests.push(testStandalone());
 	tests.push(testStandaloneBuildScript());
 	tests.push(testStandaloneCross());
+	tests.push(testStaticLibrary());
 	tests.push(testTestSubcommand());
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
@@ -1445,6 +1460,78 @@ export async function testNestedCargoOffline() {
 		"src/main.rs": tg.file`fn main() {}`,
 	});
 	await build({ source });
+	return true;
+}
+
+export async function testStaticLibrary() {
+	// A build of a crate with a static library and an executable installs both, and a C program links the library.
+	const source = tg.directory({
+		"Cargo.toml": tg.file`
+			[package]
+			name = "static-library"
+			version = "0.1.0"
+			edition = "2021"
+
+			[lib]
+			crate-type = ["staticlib"]
+		`,
+		"Cargo.lock": tg.file`
+			version = 4
+
+			[[package]]
+			name = "static-library"
+			version = "0.1.0"
+		`,
+		"src/lib.rs": tg.file`
+			#[unsafe(no_mangle)]
+			pub extern "C" fn answer() -> i32 {
+				42
+			}
+		`,
+		"src/main.rs": tg.file`fn main() {}`,
+	});
+	const output = await build({ source });
+	const library = await output
+		.get("lib/libstatic_library.a")
+		.then(tg.File.expect);
+	const executable = await output.tryGet("bin/static-library");
+	tg.assert(
+		executable instanceof tg.File,
+		"the build should still install the executable",
+	);
+	const program = tg.file`
+		#include <stdio.h>
+		int answer(void);
+		int main(void) {
+			printf("%d", answer());
+			return 0;
+		}
+	`;
+	const stdout = await $`
+		cc -x c ${program} -x none ${library} -o program
+		./program > ${tg.output}
+	`
+		.env(std.sdk())
+		.then(tg.File.expect);
+	tg.assert((await stdout.text) === "42");
+
+	// A build without a static library has no library directory.
+	const plain = await build({
+		source: tg.directory(source, {
+			"Cargo.toml": tg.file`
+				[package]
+				name = "static-library"
+				version = "0.1.0"
+				edition = "2021"
+			`,
+		}),
+	});
+	const libraries = await plain.tryGet("lib");
+	tg.assert(
+		!(libraries instanceof tg.Directory),
+		"a build without a static library should not have a library directory",
+	);
+
 	return true;
 }
 
