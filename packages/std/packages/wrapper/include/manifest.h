@@ -110,6 +110,17 @@ TG_VISIBILITY void find_store_dir (Arena* arena, String* path) {
 
 	// Get the parent directory of the current executable.
 	*path = executable_path(arena);
+
+	// Locate an internal checkout in the installation's store before looking for a bundled store.
+	for (uint64_t i = path->len; i-- > 0;) {
+		if (i + 11 > path->len) continue;
+		String store = { .ptr = path->ptr + i, .len = 7 };
+		if (!cstreq(store, "/store/")) continue;
+		String artifact = { .ptr = path->ptr + i + 7, .len = 4 };
+		if (!cstreq(artifact, "dir_") && !cstreq(artifact, "fil_")) continue;
+		path->len = i + 6;
+		return;
+	}
 	*path = parent_dir(*path);
 
 	// Walk the parent directory tree.

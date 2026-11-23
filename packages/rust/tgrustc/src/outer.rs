@@ -154,6 +154,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		executable: Some(executable),
 		host: Some(crate::host().to_owned()),
 		name: Some(name),
+		retry: std::env::var("TGRUSTC_RETRY").is_ok_and(|value| value == "1"),
 		sandbox: Some(tg::process::SandboxArg::Bool(true)),
 		stderr: tg::process::Stdio::Log,
 		stdin: tg::process::Stdio::Null,
@@ -392,6 +393,10 @@ async fn rewrite_depfile_paths(
 		})?;
 		let rewritten = rewrite_depfile_contents(&contents, host_dirs);
 		if rewritten != contents {
+			// Replace the checkout so that a read-only or shared cache file is never modified.
+			tokio::fs::remove_file(&path).await.map_err(|error| {
+				tg::error!(!error, "failed to replace the depfile {}", path.display())
+			})?;
 			tokio::fs::write(&path, rewritten).await.map_err(|error| {
 				tg::error!(
 					"failed to write rewritten depfile {}: {error}",
@@ -966,19 +971,29 @@ pub(crate) async fn forward_logs(
 			}
 			text.into_bytes()
 		};
-		tokio::io::stdout()
+		let mut stdout = tokio::io::stdout();
+		stdout
 			.write_all(&bytes)
 			.await
 			.map_err(|error| tg::error!("failed to forward stdout: {error}"))?;
+		stdout
+			.flush()
+			.await
+			.map_err(|error| tg::error!(!error, "failed to flush stdout"))?;
 	}
 	if let Ok(artifact) = output_dir.get("log/stderr").await
 		&& let Ok(file) = artifact.try_unwrap_file()
 	{
 		let bytes = file.bytes().await?;
-		tokio::io::stderr()
+		let mut stderr = tokio::io::stderr();
+		stderr
 			.write_all(&bytes)
 			.await
 			.map_err(|error| tg::error!("failed to forward stderr: {error}"))?;
+		stderr
+			.flush()
+			.await
+			.map_err(|error| tg::error!(!error, "failed to flush stderr"))?;
 	}
 	Ok(())
 }

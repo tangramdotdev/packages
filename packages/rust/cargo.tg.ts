@@ -90,7 +90,7 @@ export type Arg = CommonArg & {
 	/** A name for the build process. */
 	processName?: string;
 
-	/** Produce native executables that use system libraries without a Tangram wrapper. Requires a native build with the rustc proxy disabled. */
+	/** Produce native executables that use system libraries without a Tangram wrapper. Host builds leave the Cargo outputs in the target directory; use `std.file.standalone` to export an executable. */
 	standalone?: boolean | std.sdk.StandaloneArg;
 
 	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Only the build subcommand copies the executables, and the static libraries of `staticlib` crates, into the output. Default: "build". */
@@ -125,6 +125,9 @@ export type RunArg = CommonArg & {
 
 	/** When proxy is true, whether workspace members should be compiled directly via passthrough. Default: true. */
 	passthrough?: boolean;
+
+	/** Build with the standalone toolchain and compiler cache while retaining Cargo's target directory. */
+	standalone?: boolean | std.sdk.StandaloneArg;
 
 	/** The target directory, which is outside of Tangram. `true` uses the directory that the host's Cargo would choose, and a path uses that directory. Default: true. */
 	targetDir?: true | string;
@@ -210,7 +213,16 @@ async function resolveDepsEnv(
 
 /** Create a command to run Cargo on the host. The command uses the host's default target directory and enables the rustc proxy unless overridden. */
 export async function run(...args: tg.Args<RunArg>): Promise<tg.Command> {
-	return runCommand(await runArg(...args));
+	const resolved = await runArg(...args);
+	if (resolved.standalone) {
+		const output = await build({
+			...resolved,
+			targetDir: resolved.targetDir ?? true,
+		});
+		tg.assert(output instanceof tg.Command);
+		return output;
+	}
+	return runCommand(resolved);
 }
 
 /** Create a command for `tg run -b`, which runs Cargo on the host and forwards trailing arguments. */
@@ -425,7 +437,8 @@ export async function build(
 ): Promise<tg.Command | tg.Directory> {
 	const merged = await mergeArgs(...args);
 	const { targetDir } = merged;
-	if (targetDir === true || typeof targetDir === "string") {
+	const runOnHost = targetDir === true || typeof targetDir === "string";
+	if (runOnHost && !merged.standalone) {
 		return runCommand({ ...merged, targetDir });
 	}
 	const resolved = requireSource(merged);
@@ -449,7 +462,7 @@ export async function build(
 		processName,
 		profile = "release",
 		profileFlag = "--profile",
-		proxy = false,
+		proxy = runOnHost,
 		sdk: sdk_ = {},
 		source,
 		standalone = false,
@@ -466,9 +479,10 @@ export async function build(
 	const crossCompiling = target !== rustHost;
 	const linuxToDarwin = os === "linux" && std.triple.os(target) === "darwin";
 
-	if (standalone && proxy) {
-		throw new Error("standalone builds do not yet support the rustc proxy");
-	}
+	tg.assert(
+		!runOnHost || !captureStderr,
+		"host builds stream their diagnostics directly",
+	);
 	if (linuxToDarwin && !standalone) {
 		throw new Error(
 			"a build for a macOS target on a Linux build machine must be standalone, because wrapping Mach-O outputs on a Linux build machine is not supported",
@@ -523,7 +537,9 @@ export async function build(
 	}
 	const sdk = await tg.build(std.sdk, ...(crossSdkArgs ?? sdkArgs));
 	envs.push(sdk);
-	const channel = channel_ ?? "stable";
+	const channel =
+		channel_ ??
+		(runOnHost ? ((await readToolchainChannel(source)) ?? "stable") : "stable");
 	const rustArtifact = await self({
 		host: rustHost,
 		target,
@@ -564,18 +580,24 @@ directory = "${vendoredDir}"`;
 		envs.push({ TGRUSTC_PROXY_BUILD_SCRIPTS: "1" });
 	}
 
-	// Keep Cargo's target directory and home in the temporary workspace and write the generated configuration.
-	const preparePathCommands = [
-		tg`mkdir -p "$PWD/target" "${tg.output}/bin"`,
-		tg`SCRATCH_TARGET_DIR="$(realpath "$PWD/target")"`,
-		tg`export CARGO_HOME="$(mktemp -d)"`,
-		tg`cargo_config_path="$PWD/config.toml"\necho '${cargoConfig}' > "$cargo_config_path"`,
-	];
+	// Keep host builds in Cargo's chosen target directory and preserve the user's Cargo configuration.
+	const preparePathCommands = runOnHost
+		? [
+				tg`cargo_config_path="$(mktemp)"\ntrap 'rm -f "$cargo_config_path"' EXIT\necho '${cargoConfig}' > "$cargo_config_path"`,
+			]
+		: [
+				tg`mkdir -p "$PWD/target" "${tg.output}/bin"`,
+				tg`SCRATCH_TARGET_DIR="$(realpath "$PWD/target")"`,
+				tg`export CARGO_HOME="$(mktemp -d)"`,
+				tg`cargo_config_path="$PWD/config.toml"\necho '${cargoConfig}' > "$cargo_config_path"`,
+			];
 	const preparePaths = tg.Template.join("\n", ...preparePathCommands);
 
-	const prepareSource = buildInTree
-		? tg`cp -R ${source}/. $PWD/work\nchmod -R u+w $PWD/work\nexport TGRUSTC_SOURCE_DIR="$PWD/work"`
-		: tg`export TGRUSTC_SOURCE_DIR=$(realpath ${source})`;
+	const prepareSource = runOnHost
+		? tg`export TGRUSTC_SOURCE_DIR="$(pwd -P)"`
+		: buildInTree
+			? tg`cp -R ${source}/. $PWD/work\nchmod -R u+w $PWD/work\nexport TGRUSTC_SOURCE_DIR="$PWD/work"`
+			: tg`export TGRUSTC_SOURCE_DIR=$(realpath ${source})`;
 
 	// Discover the project configuration from the manifest directory.
 	const enterSource = tg`cd "$TGRUSTC_SOURCE_DIR/${manifestSubdir ?? "."}"`;
@@ -585,7 +607,7 @@ directory = "${vendoredDir}"`;
 		: `"Cargo.toml"`;
 	const cargoArgs = [
 		`${profileFlag} ${profile}`,
-		`--target-dir "$SCRATCH_TARGET_DIR"`,
+		...(runOnHost ? [] : [`--target-dir "$SCRATCH_TARGET_DIR"`]),
 		`--manifest-path "$TGRUSTC_SOURCE_DIR/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
 		"--target $RUST_TARGET",
@@ -612,13 +634,13 @@ directory = "${vendoredDir}"`;
 	// before flushing on Linux.
 	const buildCommand = captureStderr
 		? tg`cargo ${configArg} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
-		: tg`cargo ${configArg} ${subcommand} ${cargoArgString}`;
+		: tg`cargo ${configArg} ${subcommand} ${cargoArgString} ${runOnHost ? '"$@"' : ""}`;
 
 	// Copy the executables with their dependency metadata, and the static libraries of `staticlib` crates, before the temporary target directory is discarded. Only a build copies them, because other subcommands, such as test runs, build executables only for their own use.
 	const profileDir = profile === "dev" ? "debug" : profile;
 	const subcommandName = subcommand.trim().split(/\s+/)[0];
 	const install =
-		subcommandName === "build"
+		!runOnHost && subcommandName === "build"
 			? tg`
 		for executable in "$SCRATCH_TARGET_DIR/${target}/${profileDir}"/*; do
 			if [ -f "$executable" ] && [ -x "$executable" ]; then
@@ -645,7 +667,7 @@ directory = "${vendoredDir}"`;
 			? tg`find "$SCRATCH_TARGET_DIR" -type f -name stderr -exec cat {} + >> "${tg.output}/cargo-stderr.log"`
 			: null,
 		install,
-		timings
+		timings && !runOnHost
 			? tg`if [ -d "$SCRATCH_TARGET_DIR/cargo-timings" ]; then cp -R "$SCRATCH_TARGET_DIR/cargo-timings" "${tg.output}/cargo-timings"; fi`
 			: null,
 	);
@@ -744,7 +766,8 @@ directory = "${vendoredDir}"`;
 	}
 
 	{
-		const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
+		const effectiveJobs =
+			parallelJobs ?? (proxy && !runOnHost ? 256 : undefined);
 		if (effectiveJobs !== undefined) {
 			const jobsEnv = {
 				CARGO_BUILD_JOBS: `${effectiveJobs}`,
@@ -842,6 +865,17 @@ directory = "${vendoredDir}"`;
 			...linkerEnv,
 			[`CFLAGS${flagSuffix}`]: tg.Mutation.suffix(compileFlags, " "),
 			[`CXXFLAGS${flagSuffix}`]: tg.Mutation.suffix(compileFlags, " "),
+		});
+	}
+
+	if (runOnHost) {
+		if (typeof targetDir === "string") {
+			env = await std.env.arg(env, { CARGO_TARGET_DIR: targetDir });
+		}
+		return tg.command({
+			args: ["-c", tg`set -euo pipefail\n${buildScript}`, "--"],
+			env,
+			executable: { path: "/bin/bash" },
 		});
 	}
 
@@ -1197,6 +1231,7 @@ export async function test() {
 	tests.push(testConfig());
 	tests.push(testNestedCargoOffline());
 	tests.push(testStandalone());
+	tests.push(testStandaloneProxy());
 	tests.push(testStandaloneBuildScript());
 	tests.push(testStandaloneCross());
 	tests.push(testStaticLibrary());
@@ -1209,10 +1244,11 @@ export async function test() {
 	return true;
 }
 
-export async function testStandalone() {
+export async function testStandalone(arg?: { proxy?: boolean }) {
 	const fixture = await tests.get("hello-file-dep").then(tg.Directory.expect);
 	const config = await fixture.get("data/config.txt").then(tg.File.expect);
 	const outputs: Record<string, tg.Directory> = {};
+	const proxy = arg?.proxy ?? false;
 	for (const key of [
 		"RUSTFLAGS",
 		"CARGO_ENCODED_RUSTFLAGS",
@@ -1236,7 +1272,9 @@ export async function testStandalone() {
 			`,
 		});
 		const arg = {
+			channel: "stable",
 			env: fromEnv ? { [key]: "--cfg=standalone_test" } : {},
+			proxy,
 			source,
 			standalone: { glibcVersion: "2.39" as const },
 		};
@@ -1252,6 +1290,10 @@ export async function testStandalone() {
 	}
 
 	return tg.directory(outputs);
+}
+
+export async function testStandaloneProxy() {
+	return testStandalone({ proxy: true });
 }
 
 export async function testStandaloneBuildScript() {
@@ -1312,7 +1354,7 @@ export async function testStandaloneCross() {
 	return output;
 }
 
-export async function testStandaloneCrossDarwin() {
+export async function testStandaloneCrossDarwin(arg?: { proxy?: boolean }) {
 	// A Linux build machine builds the standalone cross fixture for both macOS architectures with the LLVM cross toolchain.
 	const host = std.sdk.canonicalTriple(std.triple.host());
 	if (std.triple.os(host) !== "linux") {
@@ -1322,7 +1364,9 @@ export async function testStandaloneCrossDarwin() {
 	for (const arch of ["aarch64", "x86_64"] as const) {
 		const target = `${arch}-apple-darwin`;
 		const output = await build({
+			channel: "stable",
 			host,
+			proxy: arg?.proxy ?? false,
 			source: standaloneCrossSource(),
 			standalone: true,
 			target,

@@ -80,6 +80,7 @@ pub async fn run() -> tg::Result<()> {
 		executable: Some(executable),
 		host: Some(crate::host().to_owned()),
 		name: Some(format!("build-script {crate_name}")),
+		retry: std::env::var("TGRUSTC_RETRY").is_ok_and(|value| value == "1"),
 		sandbox: Some(tg::process::SandboxArg::Bool(true)),
 		stderr: tg::process::Stdio::Log,
 		stdin: tg::process::Stdio::Null,

@@ -1,7 +1,6 @@
 use {
 	super::{
-		SANDBOX_STORE_DIR, rewrite_depfile_contents, rewrite_depfile_paths,
-		rewrite_dir_references,
+		SANDBOX_STORE_DIR, rewrite_depfile_contents, rewrite_depfile_paths, rewrite_dir_references,
 	},
 	std::{collections::BTreeMap, path::PathBuf},
 	tangram_client::prelude::*,
@@ -12,7 +11,10 @@ fn out_dir_references_respect_path_boundaries() {
 	let out_dir = "/tmp/build/out";
 	for (raw, expected) in [
 		(out_dir, "/checked-in-out"),
-		("/tmp/build/out/generated.rs", "/checked-in-out/generated.rs"),
+		(
+			"/tmp/build/out/generated.rs",
+			"/checked-in-out/generated.rs",
+		),
 		(
 			"/tmp/build/out:/tmp/build/out/generated.rs",
 			"/checked-in-out:/checked-in-out/generated.rs",
@@ -25,7 +27,10 @@ fn out_dir_references_respect_path_boundaries() {
 			"/backup/tmp/build/out/generated.rs",
 			"/backup/tmp/build/out/generated.rs",
 		),
-		("/tmp/build/out-other/file.rs", "/tmp/build/out-other/file.rs"),
+		(
+			"/tmp/build/out-other/file.rs",
+			"/tmp/build/out-other/file.rs",
+		),
 		(
 			"/tmp/build/out/tmp/build/out/file.rs",
 			"/checked-in-out/tmp/build/out/file.rs",
@@ -76,12 +81,17 @@ fn depfile_paths_escape_host_dirs() {
 }
 
 #[test]
-fn depfile_rewrite_skips_other_compilations() {
+fn depfile_rewrite_preserves_cached_files_and_other_compilations() {
 	let artifact: tg::Artifact = tg::Directory::with_entries(BTreeMap::new()).into();
 	let id = artifact.id();
 	let contents = format!("/build/lib.rmeta: {SANDBOX_STORE_DIR}/{id}/private.rs\n");
 	let out_dir = tempfile::tempdir().unwrap();
-	std::fs::write(out_dir.path().join("this.d"), &contents).unwrap();
+	let cached = out_dir.path().join("cached.d");
+	std::fs::write(&cached, &contents).unwrap();
+	let mut permissions = std::fs::metadata(&cached).unwrap().permissions();
+	permissions.set_readonly(true);
+	std::fs::set_permissions(&cached, permissions).unwrap();
+	std::fs::hard_link(&cached, out_dir.path().join("this.d")).unwrap();
 	std::fs::write(out_dir.path().join("other.d"), &contents).unwrap();
 	let depfiles = vec!["this.d".to_owned()];
 	let host_dirs = vec![(id, PathBuf::from("/target/build/out"))];
@@ -93,6 +103,7 @@ fn depfile_rewrite_skips_other_compilations() {
 		std::fs::read_to_string(out_dir.path().join("this.d")).unwrap(),
 		"/build/lib.rmeta: /target/build/out/private.rs\n",
 	);
+	assert_eq!(std::fs::read_to_string(&cached).unwrap(), contents);
 	assert_eq!(
 		std::fs::read_to_string(out_dir.path().join("other.d")).unwrap(),
 		contents,
@@ -142,7 +153,9 @@ fn render(value: &tg::Value) -> String {
 		tg::Value::Template(template) => template
 			.try_render_sync(|component| match component {
 				tg::template::Component::Artifact(_) => Ok("/checked-in-out".into()),
-				tg::template::Component::Placeholder(_) => panic!("expected a literal or an artifact"),
+				tg::template::Component::Placeholder(_) => {
+					panic!("expected a literal or an artifact")
+				},
 				tg::template::Component::String(string) => Ok(string.as_str().into()),
 			})
 			.unwrap(),
