@@ -300,10 +300,16 @@ pub fn run_driver() -> tg::Result<()> {
 
 	// Strip the sandbox prefix so captured stdout becomes sandbox-agnostic.
 	// The placeholder it leaves behind gets substituted by the outer with
-	// cargo's real OUT_DIR.
+	// cargo's real OUT_DIR. Strip the output's path relative to the manifest directory as well, which a build script can print instead of the absolute path, so that the outer substitutes Cargo's absolute `OUT_DIR` for it.
 	let sandbox_prefix = format!("{tangram_output}/");
+	let relative_prefix = format!(
+		"{}/",
+		relative_path(Path::new(&manifest_dir), Path::new(&tangram_output)).display()
+	);
 	let stdout_text = String::from_utf8_lossy(&output.stdout);
-	let stdout_cleaned = stdout_text.replace(&sandbox_prefix, "");
+	let stdout_cleaned = stdout_text
+		.replace(&sandbox_prefix, "")
+		.replace(&relative_prefix, "");
 
 	// tmp is never part of the output artifact.
 	let _ = std::fs::remove_dir_all(&tmp_dir_path);
@@ -332,6 +338,23 @@ fn is_exported_path(name: &str, raw: &str) -> bool {
 		&& path.is_absolute()
 		&& !path.starts_with(outer::SANDBOX_STORE_DIR)
 		&& path.exists()
+}
+
+// Get the path to `to` relative to `from`, from their components alone, as a build script computes it.
+fn relative_path(from: &Path, to: &Path) -> PathBuf {
+	let common = from
+		.components()
+		.zip(to.components())
+		.take_while(|(left, right)| left == right)
+		.count();
+	let mut path = PathBuf::new();
+	for _ in from.components().skip(common) {
+		path.push("..");
+	}
+	for component in to.components().skip(common) {
+		path.push(component);
+	}
+	path
 }
 
 fn toolchain_subpath(toolchain: &tg::Artifact, suffix: &str) -> tg::Value {

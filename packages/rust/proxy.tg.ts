@@ -1194,6 +1194,30 @@ export async function testRunnerCacheHitWorkspace() {
 	});
 }
 
+/** Runner: a build script that exports a path into `OUT_DIR` relative to its manifest directory, which a macro such as `rust-embed`'s resolves against the manifest directory, runs through the runner, and the crate that reads the path compiles through the proxy. */
+export async function testRunnerRelativeOutDir() {
+	const source = await tests
+		.get("runner-relative-out-dir")
+		.then(tg.Directory.expect);
+	const result = await buildWithStats({ source });
+	console.log("testRunnerRelativeOutDir result", result.id);
+	const runnerStats = await parseStats(result, "runner_complete");
+	tg.assert(
+		runnerStats?.some((s) => s.crate_name === "app"),
+		"expected the app build script to run through the runner",
+	);
+
+	const output = await $`app | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text.trim() === "hello from the output directory",
+		`unexpected output: ${text}`,
+	);
+	return result;
+}
+
 /** A workspace crate that includes a file from outside of its directory compiles through the proxy. Changing that file recompiles the crate, and changing another crate does not. */
 export async function testIncludeOutsideCrate() {
 	const source = await tests
@@ -1347,6 +1371,7 @@ export async function test() {
 		testBuildScriptFileDep(),
 		testWorkspaceBuildScript(),
 		testIncludeOutsideCrate(),
+		testRunnerRelativeOutDir(),
 		testRunnerBuildScript(),
 		testRunnerCfgProbe(),
 		testRunnerEnvPassthrough(),
