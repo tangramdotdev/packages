@@ -12,27 +12,20 @@ use tangram_client::prelude::*;
 // before forwarding, so cached stdout stays sandbox-agnostic.
 const OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_OUT_DIR@@";
 
-pub async fn run() -> tg::Result<()> {
+pub async fn run(script_binary: &Path, extra_args: Vec<String>) -> tg::Result<()> {
 	let start = Instant::now();
-
-	// argv: [self, "runner", <build-script>, <extra args>...]
-	let script_binary = std::env::args()
-		.nth(2)
-		.ok_or_else(|| tg::error!("expected build script binary path after 'runner'"))?;
-	let extra_args: Vec<String> = std::env::args().skip(3).collect();
 
 	let crate_name = std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "unknown".into());
 
 	// Run the build script directly if it cannot run in a sandbox.
 	if passthrough(&crate_name) {
-		let mut command = std::process::Command::new(&script_binary);
-		command.args(&extra_args);
-		crate::passthrough::remove_rustc_bootstrap(&mut command);
-		let error = command.exec();
+		let error = std::process::Command::new(script_binary)
+			.args(&extra_args)
+			.exec();
 		return Err(tg::error!("failed to exec the build script: {error}"));
 	}
 
-	let output = outer::checkin(Path::new(&script_binary)).await?;
+	let output = outer::checkin(script_binary).await?;
 	let mut script_artifact = tg::Artifact::with_referent(output.artifact)
 		.try_unwrap_file()
 		.map_err(|_| tg::error!("expected a build script file"))?;
@@ -56,7 +49,9 @@ pub async fn run() -> tg::Result<()> {
 	let source_template =
 		tg::Template::with_components([tg::template::Component::Artifact(source_artifact)]);
 
+	// Resolve the launcher's symbolic link, so that the driver is this executable's file.
 	let self_exe = std::env::current_exe()
+		.and_then(std::fs::canonicalize)
 		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
 	let driver_artifact = tg::Artifact::with_referent(outer::checkin(&self_exe).await?.artifact);
 	let executable: tg::command::Executable = driver_artifact
@@ -324,21 +319,10 @@ pub fn run_driver() -> tg::Result<()> {
 	Ok(())
 }
 
-// Whether a build script runs directly: its package is named in `TGRUSTC_RUNNER_PASSTHROUGH`, for a build script that writes outside of `OUT_DIR`, or it belongs to the passthrough project and the build links without Tangram wrappers, because the project's build scripts are then compiled directly and have no wrapper to run them in a sandbox.
+// Whether a build script runs directly because its package is named in `TGRUSTC_RUNNER_PASSTHROUGH`, for a build script that writes outside of `OUT_DIR`.
 fn passthrough(crate_name: &str) -> bool {
-	let named = std::env::var("TGRUSTC_RUNNER_PASSTHROUGH")
-		.is_ok_and(|names| names.split(',').any(|name| name == crate_name));
-	if named {
-		return true;
-	}
-	if std::env::var_os("TANGRAM_LINKER_PASSTHROUGH").is_none() {
-		return false;
-	}
-	let Some(project_dir) = std::env::var_os("TGRUSTC_PASSTHROUGH_PROJECT_DIR") else {
-		return false;
-	};
-	std::env::var_os("CARGO_MANIFEST_DIR")
-		.is_some_and(|manifest_dir| Path::new(&manifest_dir).starts_with(&project_dir))
+	std::env::var("TGRUSTC_RUNNER_PASSTHROUGH")
+		.is_ok_and(|names| names.split(',').any(|name| name == crate_name))
 }
 
 // Whether a variable holds a path that a dependency's build script exported from outside of the store. Cargo passes a dependency's `cargo::metadata` values in `DEP_` variables.

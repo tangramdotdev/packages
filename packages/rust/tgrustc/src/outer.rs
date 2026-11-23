@@ -1,4 +1,4 @@
-use crate::{args::Args, lock, sidecar};
+use crate::{args::Args, launcher, lock, sidecar};
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	path::{Path, PathBuf},
@@ -121,12 +121,12 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let host_dirs = host_dirs(&env, &source_artifact, &source_dir);
 
 	// When the runner is in use, link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
-	if std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_some()
+	let build_script = std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_some()
 		&& args
 			.crate_name
 			.as_deref()
-			.is_some_and(|name| name.starts_with("build_script_"))
-	{
+			.is_some_and(|name| name.starts_with("build_script_"));
+	if build_script {
 		env.remove("TANGRAM_LINKER_PASSTHROUGH");
 	}
 
@@ -208,6 +208,10 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let materialize_start = Instant::now();
 	if let Some(out_dir) = &args.out_dir {
 		materialize_outputs(&output_dir, Path::new(out_dir), &host_dirs, &args).await?;
+		// Leave a launcher in place of a build script's executable, so that Cargo runs the build script through the runner.
+		if build_script {
+			launcher::install(Path::new(out_dir), &args)?;
+		}
 	}
 	timing.materialize = materialize_start.elapsed();
 

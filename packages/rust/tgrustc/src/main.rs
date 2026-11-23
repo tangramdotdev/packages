@@ -2,6 +2,7 @@ use tangram_client::prelude::*;
 
 mod args;
 mod driver;
+mod launcher;
 mod lock;
 mod outer;
 mod passthrough;
@@ -22,11 +23,11 @@ fn main_inner() -> tg::Result<()> {
 	if std::env::var("TGRUSTC_RUNNER_DRIVER").is_ok() {
 		return runner::run_driver();
 	}
-	// The runner subcommand has its own argv shape; dispatch before parsing
-	// rustc args.
-	if std::env::args().nth(1).as_deref() == Some("runner") {
+	// Run a build script through the runner when Cargo starts this process through the launcher that the proxy left in the build script's place.
+	if let Some(script) = launcher::script() {
+		let args = std::env::args().skip(1).collect();
 		tg::init()?;
-		return runtime()?.block_on(runner::run());
+		return runtime()?.block_on(runner::run(&script, args));
 	}
 
 	let args = args::Args::parse()?;

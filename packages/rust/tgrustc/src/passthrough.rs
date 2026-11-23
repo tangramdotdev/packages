@@ -46,14 +46,6 @@ pub fn exec(args: &Args) -> tg::Result<()> {
 	if let Some(out_dir) = &args.out_dir {
 		command.arg("--out-dir").arg(out_dir);
 	}
-	remove_rustc_bootstrap(&mut command);
 	let err = command.exec();
 	Err(tg::error!("failed to exec rustc for passthrough: {err}"))
-}
-
-// Remove `RUSTC_BOOTSTRAP` from a command that runs directly when the build set it only so that Cargo accepts unstable options, so that the compilation or build script sees the toolchain's own channel.
-pub fn remove_rustc_bootstrap(command: &mut std::process::Command) {
-	if std::env::var_os("TGRUSTC_REMOVE_RUSTC_BOOTSTRAP").is_some() {
-		command.env_remove("RUSTC_BOOTSTRAP");
-	}
 }

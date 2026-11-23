@@ -559,40 +559,9 @@ directory = "${vendoredDir}"`;
 
 	const proxyDir = proxy ? proxy_.proxy() : undefined;
 
-	// Wire `host.runner` to the tgrustc runner subcommand so cargo invokes it
-	// for every build script. `target-applies-to-host = false` + the unstable
-	// `host-config` option together let `host.linker`/`host.runner` apply to
-	// the build-script crate (a host artefact distinct from `--target`).
-	const isNightly = channel === "nightly" || channel.startsWith("nightly-");
-	const useHostRunner = proxy && proxyDir !== undefined;
-	if (useHostRunner && proxyDir !== undefined) {
-		const hostLinker = os === "darwin" ? "clang" : "gcc";
-		// Bare keys must appear before any `[section]` (TOML rule); prepend
-		// `target-applies-to-host = false` rather than appending, otherwise
-		// it falls under the trailing `[source.vendored-sources]` table and
-		// cargo silently warns "unused config key" — leaving the [host]
-		// runner unreachable.
-		// Enable the unstable options in the configuration as well as on the command line, so that a Cargo invocation that a subcommand starts, such as the one that nextest runs, enables them when it reads this configuration.
-		cargoConfig = await tg`target-applies-to-host = false
-
-${cargoConfig}
-
-[host]
-runner = ["${proxyDir}/bin/tgrustc", "runner"]
-linker = "${hostLinker}"
-
-[unstable]
-host-config = true
-target-applies-to-host = true`;
-		// Compile build scripts outside the project through the proxy, so that they are linked to run in the runner's sandbox.
+	// Compile build scripts outside the project through the proxy, which links each one to run in the runner's sandbox and leaves a launcher in its place, so that Cargo runs every such build script through the runner.
+	if (proxy) {
 		envs.push({ TGRUSTC_PROXY_BUILD_SCRIPTS: "1" });
-		// A stable Cargo accepts unstable options only with `RUSTC_BOOTSTRAP` set. Tell the proxy and the runner to remove it from the compilations and build scripts that they run directly, so that only Cargo sees it.
-		if (!isNightly) {
-			envs.push({
-				RUSTC_BOOTSTRAP: "1",
-				TGRUSTC_REMOVE_RUSTC_BOOTSTRAP: "1",
-			});
-		}
 	}
 
 	// Keep Cargo's target directory and home in the temporary workspace and write the generated configuration.
@@ -635,12 +604,6 @@ target-applies-to-host = true`;
 	}
 
 	const cargoArgString = tg.Template.join(" ", ...cargoArgs);
-	// `-Zhost-config` + `-Ztarget-applies-to-host` are required to make
-	// `[host]` config sections apply to build-script crates; both are
-	// unstable, so emit them only when host.runner is wired.
-	const cargoCmd = useHostRunner
-		? "cargo -Zhost-config -Ztarget-applies-to-host"
-		: "cargo";
 
 	// Give the generated configuration precedence over the project configuration.
 	const configArg = '--config "$cargo_config_path"';
@@ -648,8 +611,8 @@ target-applies-to-host = true`;
 	// Redirect + replay (not process substitution) to avoid tee being killed
 	// before flushing on Linux.
 	const buildCommand = captureStderr
-		? tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
-		: tg`${cargoCmd} ${configArg} ${subcommand} ${cargoArgString}`;
+		? tg`cargo ${configArg} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
+		: tg`cargo ${configArg} ${subcommand} ${cargoArgString}`;
 
 	// Copy the executables with their dependency metadata, and the static libraries of `staticlib` crates, before the temporary target directory is discarded. Only a build copies them, because other subcommands, such as test runs, build executables only for their own use.
 	const profileDir = profile === "dev" ? "debug" : profile;
@@ -773,7 +736,7 @@ target-applies-to-host = true`;
 	}
 
 	// Filter the workspace once for all of its build scripts. An in-tree build copies the source out of the store, so its build scripts already see only their own crate.
-	if (useHostRunner && !buildInTree) {
+	if (proxy && !buildInTree) {
 		const runnerWorkspace = await tg
 			.build(filterRunnerWorkspace, source)
 			.then(tg.Directory.expect);

@@ -967,7 +967,7 @@ export async function testCcRs() {
 	tg.assert(text.trim() === "10 + 32 = 42", `unexpected output: ${text}`);
 }
 
-/** Runner: build scripts execute inside a tangram sandbox via `host.runner`. Asserts cache stability: modifying another workspace member's Rust code must keep the runner process for the `lib` build script a cache hit, because a build script's inputs are the filtered workspace with only its own crate in full. */
+/** Runner: build scripts execute inside a tangram sandbox through the launcher that the proxy leaves in place of each one. Asserts cache stability: modifying another workspace member's Rust code must keep the runner process for the `lib` build script a cache hit, because a build script's inputs are the filtered workspace with only its own crate in full. */
 export async function testRunnerBuildScript() {
 	const source = await tests
 		.get("workspace-runner-cache")
@@ -1194,7 +1194,7 @@ export async function testRunnerCacheHitWorkspace() {
 	});
 }
 
-/** Stable: build scripts run through the runner on the stable toolchain, which requires Cargo to accept the unstable host configuration. */
+/** Stable: build scripts run through the runner on the stable toolchain. */
 export async function testStableRunner() {
 	const result = await cargo.build({
 		source: tests.get("hello-cc-rs").then(tg.Directory.expect),
@@ -1238,18 +1238,47 @@ export async function testStableLinkerPassthrough() {
 	return result;
 }
 
-/** Stable: the `RUSTC_BOOTSTRAP` that lets Cargo accept unstable options does not reach a compilation or a build script that runs directly. The fixture asserts this while it builds. The crate compiles directly because it belongs to the passthrough project, and its build script runs directly because the runner is told to pass it through by name. Linking without Tangram wrappers would also run the build script directly, but on Linux such a build script cannot run in the build's sandbox, which has no dynamic linker at the default path. */
+/** Stable: a proxied build sets no `RUSTC_BOOTSTRAP` in Cargo's environment, so a stable Cargo would reject any unstable option that the build passed. The fixture asserts this while it builds. The crate compiles directly and its build script runs directly, because both belong to the passthrough project, so both see Cargo's own environment. */
 export async function testStableBootstrapEnv() {
 	const result = await cargo.build({
 		source: tests.get("stable-bootstrap-env").then(tg.Directory.expect),
 		channel: "stable",
-		env: { TGRUSTC_RUNNER_PASSTHROUGH: "stable-bootstrap-env" },
 		pre: tg`export TGRUSTC_PASSTHROUGH_PROJECT_DIR="$TGRUSTC_SOURCE_DIR"`,
 		proxy: true,
 	});
 	console.log("testStableBootstrapEnv result", result.id);
 
 	await result.get("bin/stable-bootstrap-env").then(tg.File.expect);
+	return result;
+}
+
+/** Runner: a build script that the proxy compiled runs directly when its package is named in `TGRUSTC_RUNNER_PASSTHROUGH`. The fixture's build script asserts that it runs directly. */
+export async function testRunnerPassthrough() {
+	const result = await cargo.build({
+		source: tests.get("runner-passthrough").then(tg.Directory.expect),
+		captureStderr: true,
+		env: { TGRUSTC_RUNNER_PASSTHROUGH: "runner-passthrough" },
+		proxy: true,
+	});
+	console.log("testRunnerPassthrough result", result.id);
+	const runnerStats = await parseStats(result, "runner_complete");
+	tg.assert(
+		runnerStats === undefined,
+		"expected no build script to run through the runner",
+	);
+	const compileStats = await parseStats(result);
+	tg.assert(
+		compileStats?.some(
+			(s) => s.crate_name === "build_script_build(runner_passthrough)",
+		),
+		"expected the build script to compile through the proxy",
+	);
+
+	const output = await $`runner-passthrough | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(text.trim() === "ran directly", `unexpected output: ${text}`);
 	return result;
 }
 
@@ -1286,6 +1315,7 @@ export async function test() {
 		testRunnerCfgProbe(),
 		testRunnerEnvPassthrough(),
 		testRunnerPathTools(),
+		testRunnerPassthrough(),
 		testRunnerPathExec(),
 		testRunnerWorkspaceRootAccess(),
 		testRunnerCacheHitWorkspace(),

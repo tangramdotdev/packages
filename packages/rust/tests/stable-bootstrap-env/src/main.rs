@@ -5,7 +5,7 @@ const _: () = assert!(
 );
 const _: () = assert!(
 	option_env!("RUSTC_BOOTSTRAP").is_none(),
-	"expected RUSTC_BOOTSTRAP to be removed from the compilation"
+	"expected Cargo's environment to have no RUSTC_BOOTSTRAP"
 );
 
 fn main() {
