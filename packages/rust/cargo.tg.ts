@@ -1234,6 +1234,7 @@ export async function test() {
 	tests.push(testStandalone());
 	tests.push(testStandaloneBuildScript());
 	tests.push(testStandaloneCross());
+	tests.push(testStaticLibrary());
 	tests.push(testTestSubcommand());
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
@@ -1459,6 +1460,78 @@ export async function testNestedCargoOffline() {
 		"src/main.rs": tg.file`fn main() {}`,
 	});
 	await build({ source });
+	return true;
+}
+
+export async function testStaticLibrary() {
+	// A build of a crate with a static library and an executable installs both, and a C program links the library.
+	const source = tg.directory({
+		"Cargo.toml": tg.file`
+			[package]
+			name = "static-library"
+			version = "0.1.0"
+			edition = "2021"
+
+			[lib]
+			crate-type = ["staticlib"]
+		`,
+		"Cargo.lock": tg.file`
+			version = 4
+
+			[[package]]
+			name = "static-library"
+			version = "0.1.0"
+		`,
+		"src/lib.rs": tg.file`
+			#[unsafe(no_mangle)]
+			pub extern "C" fn answer() -> i32 {
+				42
+			}
+		`,
+		"src/main.rs": tg.file`fn main() {}`,
+	});
+	const output = await build({ source });
+	const library = await output
+		.get("lib/libstatic_library.a")
+		.then(tg.File.expect);
+	const executable = await output.tryGet("bin/static-library");
+	tg.assert(
+		executable instanceof tg.File,
+		"the build should still install the executable",
+	);
+	const program = tg.file`
+		#include <stdio.h>
+		int answer(void);
+		int main(void) {
+			printf("%d", answer());
+			return 0;
+		}
+	`;
+	const stdout = await $`
+		cc -x c ${program} -x none ${library} -o program
+		./program > ${tg.output}
+	`
+		.env(std.sdk())
+		.then(tg.File.expect);
+	tg.assert((await stdout.text) === "42");
+
+	// A build without a static library has no library directory.
+	const plain = await build({
+		source: tg.directory(source, {
+			"Cargo.toml": tg.file`
+				[package]
+				name = "static-library"
+				version = "0.1.0"
+				edition = "2021"
+			`,
+		}),
+	});
+	const libraries = await plain.tryGet("lib");
+	tg.assert(
+		!(libraries instanceof tg.Directory),
+		"a build without a static library should not have a library directory",
+	);
+
 	return true;
 }
 
