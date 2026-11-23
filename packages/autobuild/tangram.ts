@@ -17,6 +17,7 @@ import jsPlainTest from "./tests/js-plain" with { type: "directory" };
 import pythonTest from "./tests/python" with { type: "directory" };
 import pythonPlainTest from "./tests/python-plain" with { type: "directory" };
 import pythonPyprojectTest from "./tests/python-pyproject" with { type: "directory" };
+import pythonUvTest from "./tests/python-uv" with { type: "directory" };
 import rubyPlainTest from "./tests/ruby-plain" with { type: "directory" };
 import rustCargoTest from "./tests/rust-cargo" with { type: "directory" };
 import rustPlainTest from "./tests/rust-plain" with { type: "directory" };
@@ -72,6 +73,9 @@ export async function build(unresolvedArg: tg.Unresolved<Arg>) {
 		case "python-pyproject": {
 			return python.pyproject(arg_);
 		}
+		case "python-uv": {
+			return python.uvProject(arg_);
+		}
 		case "ruby-plain": {
 			return ruby.plain(arg_);
 		}
@@ -125,6 +129,9 @@ export async function env(unresolvedArg: tg.Unresolved<EnvArg>) {
 		case "python-pyproject": {
 			return python.env(arg_);
 		}
+		case "python-uv": {
+			return python.uvEnv(arg_);
+		}
 		case "ruby-plain": {
 			return ruby.env(arg_);
 		}
@@ -149,6 +156,7 @@ export type Kind =
 	| "python"
 	| "python-plain"
 	| "python-pyproject"
+	| "python-uv"
 	| "ruby-plain"
 	| "rust-cargo"
 	| "rust-plain";
@@ -181,6 +189,7 @@ export async function detectKind(source: tg.Directory): Promise<Kind> {
 	if ((await hasExecutableFile("configure")) || hasFile("configure.ac"))
 		return "cc-autotools";
 	if (hasFile("package.json")) return "js-node";
+	if (hasFile("pyproject.toml") && hasFile("uv.lock")) return "python-uv";
 	if (hasFile("pyproject.toml")) return "python-pyproject";
 	if (hasFile("setup.py") || hasFile("setup.cfg")) return "python";
 	if (hasFile("go.mod") || hasDir("vendor")) return "go";
@@ -202,6 +211,7 @@ export async function test() {
 		"js-plain",
 		"js-node",
 		"python-plain",
+		"python-uv",
 		"ruby-plain",
 		"rust-cargo",
 		// "rust-plain", // Known issue: binary not properly wrapped.
@@ -244,6 +254,7 @@ function testParamaters(): Record<Kind, TestFnArg> {
 				tg`${buildOutput}/main.py`,
 		},
 		"python-pyproject": defaultTestArg,
+		"python-uv": defaultTestArg,
 		"ruby-plain": {
 			...defaultTestArg,
 			testFile: (buildOutput: tg.Directory): PromiseLike<tg.Template> =>
@@ -268,6 +279,7 @@ async function testDirs(): Promise<Record<Kind, tg.Directory>> {
 		python: pythonTest,
 		"python-plain": pythonPlainTest,
 		"python-pyproject": pythonPyprojectTest,
+		"python-uv": pythonUvTest,
 		"ruby-plain": rubyPlainTest,
 		"rust-cargo": rustCargoTest,
 		"rust-plain": rustPlainTest,

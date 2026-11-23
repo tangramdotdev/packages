@@ -1,0 +1,13 @@
+[project]
+name = "missing"
+version = "0.1.0"
+description = "A project built with hatchling."
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+missing = "missing:main"
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"

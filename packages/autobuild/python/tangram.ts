@@ -1,5 +1,6 @@
 import * as std from "std" with { source: "../../std" };
 import * as python from "python" with { source: "../../python" };
+import * as uv from "uv" with { source: "../../uv" };
 // import * as poetry from "poetry" with { source: "../../poetry" };
 import { wrapScripts } from "../common";
 
@@ -87,6 +88,17 @@ export async function pyproject(arg: tg.Unresolved<Arg>) {
 	return python.build(arg_);
 }
 
+/** Build a project that has a `uv.lock`. */
+export async function uvProject(arg: tg.Unresolved<Arg>) {
+	const { env, host, source } = await tg.resolve(arg);
+	const output = await uv.build({
+		...std.args.optional("env", env),
+		...std.args.optional("host", host),
+		source,
+	});
+	return output;
+}
+
 type EnvArg = {
 	build?: string | null;
 	host?: string | null;
@@ -97,4 +109,14 @@ export async function env(arg: tg.Unresolved<EnvArg>) {
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 	return std.env(python.self({ ...std.triple.rotate({ build, host }) }));
+}
+
+export async function uvEnv(arg: tg.Unresolved<EnvArg>) {
+	const { build: build_, host: host_ } = arg ? await tg.resolve(arg) : {};
+	const host = host_ ?? std.triple.host();
+	const build = build_ ?? host;
+	return std.env(
+		python.self({ ...std.triple.rotate({ build, host }) }),
+		uv.self({ host: build }),
+	);
 }
