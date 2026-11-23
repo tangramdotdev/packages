@@ -151,8 +151,19 @@ macro_rules! impl_elf {
 				(max_vaddr, max_align, vaddr - offset)
 			}
 
-			fn appended_segment(&self, file: &File, file_size: usize) -> (usize, usize, usize) {
+			/// Choose the file offset, the virtual address, and the alignment of a segment appended after the end of the image. When `keep_bias` is true, the offset differs from the address by the same amount as in the first loadable segment, so a trailing BSS is written to the file as zeros. That is required when the new segment holds the program header table, because a kernel older than Linux 5.18 computes the address of the table from the first loadable segment. Otherwise, the segment starts at the end of the file.
+			fn appended_segment(
+				&self,
+				file: &File,
+				file_size: usize,
+				keep_bias: bool,
+			) -> (usize, usize, usize) {
 				let (max_vaddr, max_align, bias) = self.image_extent(file);
+				if !keep_bias {
+					let offset = align(file_size, max_align);
+					let vaddr = align(max_vaddr, max_align);
+					return (offset, vaddr, max_align);
+				}
 				let offset = align(file_size.max(align(max_vaddr, max_align) - bias), max_align);
 
 				let mut segment_align = max_align;
@@ -189,7 +200,7 @@ macro_rules! impl_elf {
 				let section_table_offset = align(file_size, align_of::<paste! {[<$elf _Shdr>]}>());
 				let section_table_size = section_table.len() + shdr_size;
 				let (segment_offset, segment_vaddr, segment_align) =
-					self.appended_segment(file, section_table_offset + section_table_size);
+					self.appended_segment(file, section_table_offset + section_table_size, true);
 				let headers_offset = segment_offset + ehdr_size;
 				let new_section_offset = headers_offset + new_phdr_count * phdr_size;
 				let segment_size = new_section_offset + data.len() - segment_offset;
@@ -427,8 +438,9 @@ macro_rules! impl_elf {
 						pt_interp_index = Some(i);
 					}
 				}
+				// The program header table moves into the new segment unless the PT_INTERP header is reused, so only then can the new segment's file offset skip the BSS.
 				let (segment_offset, segment_vaddr, segment_align) =
-					self.appended_segment(&file, file_size);
+					self.appended_segment(&file, file_size, pt_interp_index.is_none());
 
 				// Find wrapper and manifest section headers in a single pass.
 				let mut wrapper_shdr_offset: Option<usize> = None;
@@ -985,5 +997,100 @@ mod tests {
 			String::from_utf8_lossy(&child.stdout),
 			String::from_utf8_lossy(&child.stderr),
 		);
+	}
+
+	/// A BSS that is larger than the test executable's file once its debug information is removed, so a segment placed after the BSS in the file would make the file visibly larger.
+	#[used]
+	static LARGE_BSS: [AtomicU8; 64 << 20] = [const { AtomicU8::new(0) }; 64 << 20];
+
+	fn loadable_segments(file: &File) -> Vec<Elf64_Phdr> {
+		let ehdr = Elf64.elf_header(file);
+		let phdr_offset = ehdr.e_phoff.to_usize().unwrap();
+		let phdr_size = size_of::<Elf64_Phdr>();
+		(0..ehdr.e_phnum.to_usize().unwrap())
+			.map(|index| {
+				let offset = phdr_offset + index * phdr_size;
+				Elf64_Phdr::read_from_bytes(&file[offset..offset + phdr_size])
+					.expect("expected a program header")
+			})
+			.collect()
+	}
+
+	#[test]
+	fn embeds_wrapper_in_elf_with_bss_without_writing_bss() {
+		assert_eq!(LARGE_BSS[0].load(Ordering::Relaxed), 0);
+		let executable = std::env::current_exe().expect("failed to get the test executable");
+
+		// Copy the test executable without its debug information.
+		let temp = tempfile::tempdir().expect("failed to create a temporary directory");
+		let path = temp.path().join("wrap-embed-bss-test");
+		let status = std::process::Command::new(crate::objcopy_path())
+			.arg("--strip-debug")
+			.arg(&executable)
+			.arg(&path)
+			.status()
+			.expect("failed to run objcopy");
+		assert!(status.success(), "objcopy failed");
+
+		// Use the executable's interpreter as the wrapper, because it is a position-independent executable that is always present.
+		let original = File::open(&path, true).expect("failed to open the copied executable");
+		let segments = loadable_segments(&original);
+		let interpreter = segments
+			.iter()
+			.find(|phdr| phdr.p_type == sys::PT_INTERP)
+			.map(|phdr| {
+				let start = phdr.p_offset.to_usize().unwrap();
+				let end = start + phdr.p_filesz.to_usize().unwrap();
+				CStr::from_bytes_until_nul(&original[start..end])
+					.expect("expected a null-terminated interpreter path")
+					.to_str()
+					.expect("expected a UTF-8 interpreter path")
+					.to_owned()
+			})
+			.expect("expected the test executable to have an interpreter");
+		let bss_segment = last_loadable_segment(&original);
+		let bss_end = (bss_segment.p_offset + bss_segment.p_memsz)
+			.to_usize()
+			.unwrap();
+		let original_size = original.file_size().unwrap().to_usize().unwrap();
+		assert!(
+			original_size + (LARGE_BSS.len() / 2) < bss_end,
+			"expected the BSS to extend past the end of the file",
+		);
+		drop(original);
+
+		crate::set_wrapper_exe_path(&interpreter);
+		let manifest = serde_json::json!({ "bss": true });
+		crate::embed(&path, &manifest, None).expect("failed to embed the wrapper");
+		let output = crate::read_manifest::<serde_json::Value>(&path, None);
+		assert_eq!(output.manifest, Some(manifest));
+
+		// The wrapper's segment follows the BSS in memory, but not in the file.
+		let rewritten = File::open(&path, true).expect("failed to open the rewritten file");
+		let rewritten_size = rewritten.file_size().unwrap().to_usize().unwrap();
+		let interpreter_size = std::fs::metadata(&interpreter)
+			.unwrap()
+			.len()
+			.to_usize()
+			.unwrap();
+		assert!(
+			rewritten_size < bss_end,
+			"the rewritten file is {rewritten_size} bytes, which includes the BSS that ends at {bss_end}",
+		);
+		assert!(rewritten_size < original_size + 2 * interpreter_size + (1 << 20));
+		let segments = loadable_segments(&rewritten);
+		let stub = segments
+			.iter()
+			.filter(|phdr| phdr.p_type == sys::PT_LOAD)
+			.max_by_key(|phdr| phdr.p_vaddr)
+			.expect("expected a loadable segment");
+		assert!(stub.p_vaddr.to_usize().unwrap() >= bss_end);
+		assert_eq!(stub.p_offset % stub.p_align, stub.p_vaddr % stub.p_align);
+		let original_bss = segments
+			.iter()
+			.find(|phdr| phdr.p_type == sys::PT_LOAD && phdr.p_vaddr == bss_segment.p_vaddr)
+			.expect("expected the original BSS segment");
+		assert_eq!(original_bss.p_filesz, bss_segment.p_filesz);
+		assert_eq!(original_bss.p_memsz, bss_segment.p_memsz);
 	}
 }
