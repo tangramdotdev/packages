@@ -323,9 +323,9 @@ export async function dockerImageFromLayers(
 	// Add each layer file to the image directory.
 	const layerFilenames = await Promise.all(
 		layers.map(async (layer) => {
-			const bytes = await layer.tarball.bytes;
-			const size = bytes.length;
-			const checksum = await tg.checksum(bytes, "sha256");
+			// A layer in the Docker format is not compressed, so its diff ID is the checksum of its tarball. Do not read the tarball into memory, because a layer can be larger than the runtime's maximum buffer size.
+			const size = await layer.tarball.length;
+			const checksum = layer.diffId;
 			const checksumValue = checksum.slice("sha256:".length);
 
 			// Add the layer to the image directory, along with the legacy metadata used by older versions of the Docker image spec.
@@ -381,12 +381,13 @@ export async function ociImageFromLayers(
 	let blobs = tg.directory();
 
 	async function addBlob(file: tg.File) {
-		const bytes = await file.bytes;
-		const checksum = await tg.checksum(bytes, "sha256");
+		// Compute the checksum and the size from the file's handle, because a layer can be larger than the runtime's maximum buffer size.
+		const checksum = await tg.checksum(file, "sha256");
+		const size = await file.length;
 		blobs = tg.directory(blobs, {
 			[checksum.replace(":", "/")]: file,
 		});
-		return { digest: checksum, size: bytes.length };
+		return { digest: checksum, size };
 	}
 
 	const platform: Platform = {
@@ -492,10 +493,19 @@ export async function layer(
 ): Promise<Layer> {
 	const bundle = await tg.bundle(directory).then(tg.Directory.expect);
 	await bundle.store();
-	const tarball = await createTarball(bundle, compressionFormat);
+	const uncompressed = await createTarball(bundle);
+	await uncompressed.store();
+
+	// The diff ID is the checksum of the uncompressed tarball, even when the layer is compressed. Compute it from the file's handle, because a layer can be larger than the runtime's maximum buffer size.
+	const diffId = await tg.checksum(uncompressed, "sha256");
+
+	if (compressionFormat === undefined) {
+		return { tarball: uncompressed, diffId };
+	}
+	const tarball = await tg
+		.compress(await uncompressed.contents, compressionFormat)
+		.then(tg.file);
 	await tarball.store();
-	const bytes = await tarball.bytes;
-	const diffId = await tg.checksum(bytes, "sha256");
 	return { tarball, diffId };
 }
 

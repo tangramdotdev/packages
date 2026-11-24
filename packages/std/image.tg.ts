@@ -69,6 +69,38 @@ export async function testBasicRootfs() {
 	return imageFile;
 }
 
+/** Build a root file system with a layer larger than 2 GiB, which is larger than the runtime's maximum buffer size. */
+async function largeLayerRootfs() {
+	const utils = bootstrap.sdk.prepareBootstrapUtils();
+	const large = await std.build`head -c 3221225472 /dev/zero > ${tg.output}`
+		.named("large file")
+		.then(tg.File.expect);
+	return tg.directory(utils, { large });
+}
+
+export async function testLargeLayerDocker() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testLargeLayerDocker: requires Linux");
+		return null;
+	}
+	return await image(await largeLayerRootfs(), {
+		buildToolchain: await bootstrapBuildToolchain(),
+		cmd: ["/bin/sh", "-c", "wc -c /large"],
+	});
+}
+
+export async function testLargeLayerOci() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testLargeLayerOci: requires Linux");
+		return null;
+	}
+	return await image(await largeLayerRootfs(), {
+		buildToolchain: await bootstrapBuildToolchain(),
+		cmd: ["/bin/sh", "-c", "wc -c /large"],
+		format: "oci",
+	});
+}
+
 export async function testBasicRootfsWithEnv() {
 	if (std.triple.os(std.triple.host()) !== "linux") {
 		console.log("skipped image.tg.ts#testBasicRootfsWithEnv: requires Linux");
