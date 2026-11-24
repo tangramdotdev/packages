@@ -1,4 +1,4 @@
-use crate::outer;
+use crate::{outer, source};
 use std::{
 	os::unix::process::CommandExt as _,
 	path::{Path, PathBuf},
@@ -11,6 +11,9 @@ use tangram_client::prelude::*;
 // the outer rewrites every occurrence in stdout to cargo's real `OUT_DIR`
 // before forwarding, so cached stdout stays sandbox-agnostic.
 const OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_OUT_DIR@@";
+
+// The placeholder for the path to `OUT_DIR` relative to the manifest directory, which the outer replaces with the path to Cargo's `OUT_DIR` relative to Cargo's manifest directory.
+const RELATIVE_OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_RELATIVE_OUT_DIR@@";
 
 pub async fn run(script_binary: &Path, extra_args: Vec<String>) -> tg::Result<()> {
 	let start = Instant::now();
@@ -119,8 +122,25 @@ pub async fn run(script_binary: &Path, extra_args: Vec<String>) -> tg::Result<()
 	.await
 	.map(|_| ())?;
 
-	outer::forward_logs(&output_dir, Some((OUT_DIR_PLACEHOLDER, &cargo_out_dir))).await?;
+	forward_logs(&output_dir, &manifest_dir, &cargo_out_dir).await?;
 
+	Ok(())
+}
+
+// Forward the build script's logs with Cargo's paths in place of the placeholders for `OUT_DIR`.
+async fn forward_logs(
+	output_dir: &tg::Directory,
+	manifest_dir: &str,
+	out_dir: &str,
+) -> tg::Result<()> {
+	let relative_out_dir = source::relative_path(Path::new(manifest_dir), Path::new(out_dir))
+		.display()
+		.to_string();
+	let substitutions = [
+		(RELATIVE_OUT_DIR_PLACEHOLDER, relative_out_dir.as_str()),
+		(OUT_DIR_PLACEHOLDER, out_dir),
+	];
+	outer::forward_logs(output_dir, &substitutions).await?;
 	Ok(())
 }
 
@@ -300,16 +320,16 @@ pub fn run_driver() -> tg::Result<()> {
 
 	// Strip the sandbox prefix so captured stdout becomes sandbox-agnostic.
 	// The placeholder it leaves behind gets substituted by the outer with
-	// cargo's real OUT_DIR. Strip the output's path relative to the manifest directory as well, which a build script can print instead of the absolute path, so that the outer substitutes Cargo's absolute `OUT_DIR` for it.
+	// cargo's real OUT_DIR. Replace the path to `OUT_DIR` relative to the manifest directory, which a build script prints for a macro that resolves paths against the manifest directory, with its own placeholder, so that the outer substitutes Cargo's relative path for it.
 	let sandbox_prefix = format!("{tangram_output}/");
-	let relative_prefix = format!(
-		"{}/",
-		relative_path(Path::new(&manifest_dir), Path::new(&tangram_output)).display()
+	let relative_out_dir = format!(
+		"{}/{OUT_DIR_PLACEHOLDER}",
+		source::relative_path(Path::new(&manifest_dir), Path::new(&tangram_output)).display()
 	);
 	let stdout_text = String::from_utf8_lossy(&output.stdout);
 	let stdout_cleaned = stdout_text
 		.replace(&sandbox_prefix, "")
-		.replace(&relative_prefix, "");
+		.replace(&relative_out_dir, RELATIVE_OUT_DIR_PLACEHOLDER);
 
 	// tmp is never part of the output artifact.
 	let _ = std::fs::remove_dir_all(&tmp_dir_path);
@@ -338,23 +358,6 @@ fn is_exported_path(name: &str, raw: &str) -> bool {
 		&& path.is_absolute()
 		&& !path.starts_with(outer::SANDBOX_STORE_DIR)
 		&& path.exists()
-}
-
-// Get the path to `to` relative to `from`, from their components alone, as a build script computes it.
-fn relative_path(from: &Path, to: &Path) -> PathBuf {
-	let common = from
-		.components()
-		.zip(to.components())
-		.take_while(|(left, right)| left == right)
-		.count();
-	let mut path = PathBuf::new();
-	for _ in from.components().skip(common) {
-		path.push("..");
-	}
-	for component in to.components().skip(common) {
-		path.push(component);
-	}
-	path
 }
 
 fn toolchain_subpath(toolchain: &tg::Artifact, suffix: &str) -> tg::Value {

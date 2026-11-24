@@ -11,11 +11,15 @@ mod tests;
 // The macros that read a file at a path relative to the file that invokes them.
 const INCLUDE_MACROS: [&str; 3] = ["include!", "include_bytes!", "include_str!"];
 
-// The source that a compilation reads. It is the crate's directory, unless the crate includes files from outside of its directory, in which case it is a skeleton of the Cargo source that holds the crate's directory and only those files.
+// The name of `OUT_DIR` in a source that holds it beside the crate's directory.
+const OUT_DIR_NAME: &str = ".tgrustc-out-dir";
+
+// The source that a compilation reads. It is the crate's directory, unless the crate includes files from outside of its directory or a variable holds a path into `OUT_DIR` relative to the crate's directory, in which case it is a skeleton that holds the crate's directory, only those files, and `OUT_DIR`.
 pub struct Source {
 	pub artifact: tg::Artifact,
 	pub directory: PathBuf,
 	pub path: Option<PathBuf>,
+	pub relative_out_dir: Option<(String, String)>,
 }
 
 // A directory tree under construction, whose leaves are artifacts.
@@ -30,45 +34,75 @@ pub async fn checkin(crate_directory: &Path) -> tg::Result<Source> {
 	let crate_artifact =
 		tg::Artifact::with_referent(outer::checkin(crate_directory).await?.artifact);
 
-	// Find the files that the crate includes from elsewhere in the Cargo source.
+	// Find the files that the crate includes from elsewhere in the Cargo source, and whether a variable holds a path into `OUT_DIR` relative to the crate's directory.
 	let source_directory = std::env::var_os("TGRUSTC_SOURCE_DIR").map(PathBuf::from);
 	let files = match &source_directory {
 		Some(source_directory) => external_files(crate_directory, source_directory)?,
 		None => BTreeSet::new(),
 	};
-	let Some(source_directory) = source_directory.filter(|_| !files.is_empty()) else {
+	let out_dir = relative_out_dir(crate_directory);
+	if files.is_empty() && out_dir.is_none() {
 		let source = Source {
 			artifact: crate_artifact,
 			directory: crate_directory.to_owned(),
 			path: None,
+			relative_out_dir: None,
 		};
 		return Ok(source);
-	};
+	}
 
-	// Place the crate's directory and each file at its path in the Cargo source.
-	let crate_path = crate_directory
-		.strip_prefix(&source_directory)
-		.map_err(|_| tg::error!("expected the crate to be in the Cargo source"))?
-		.to_owned();
+	// Place the crate's directory in a new root.
+	let (directory, crate_path) = placement(crate_directory, source_directory.as_deref())?;
 	let mut root = BTreeMap::new();
 	insert(&mut root, &crate_path, crate_artifact)?;
+
+	// Place each included file at its path in the Cargo source.
 	for file in files {
 		let artifact = tg::Artifact::with_referent(outer::checkin(&file).await?.artifact);
 		let path = file
-			.strip_prefix(&source_directory)
+			.strip_prefix(&directory)
 			.map_err(|_| tg::error!("expected an included file to be in the Cargo source"))?;
 		insert(&mut root, path, artifact)?;
 	}
+
+	// Place `OUT_DIR` beside the crate's directory, so that the path to it relative to the crate's directory is the same in every sandbox.
+	let relative_out_dir = match out_dir {
+		Some((out_dir, host)) => {
+			let artifact = tg::Artifact::with_referent(outer::checkin(&out_dir).await?.artifact);
+			insert(&mut root, Path::new(OUT_DIR_NAME), artifact)?;
+			let sandbox = relative_path(&crate_path, Path::new(OUT_DIR_NAME));
+			Some((host, sandbox.display().to_string()))
+		},
+		None => None,
+	};
 	let artifact = build(root);
 	artifact.store().await?;
 
 	let source = Source {
 		artifact,
-		directory: source_directory,
+		directory,
 		path: Some(crate_path),
+		relative_out_dir,
 	};
 
 	Ok(source)
+}
+
+// Get the path to `to` relative to `from`, from their components alone, as a build script computes it.
+pub fn relative_path(from: &Path, to: &Path) -> PathBuf {
+	let common = from
+		.components()
+		.zip(to.components())
+		.take_while(|(left, right)| left == right)
+		.count();
+	let mut path = PathBuf::new();
+	for _ in from.components().skip(common) {
+		path.push("..");
+	}
+	for component in to.components().skip(common) {
+		path.push(component);
+	}
+	path
 }
 
 impl Source {
@@ -86,6 +120,42 @@ impl Source {
 		}
 		tg::Template::with_components(components)
 	}
+}
+
+// Get the host directory that a new root stands for and the crate's path in it, which is the crate's path in the Cargo source, or its name in its parent directory if it is not inside the Cargo source.
+fn placement(
+	crate_directory: &Path,
+	source_directory: Option<&Path>,
+) -> tg::Result<(PathBuf, PathBuf)> {
+	if let Some(source_directory) = source_directory
+		&& let Ok(path) = crate_directory.strip_prefix(source_directory)
+		&& !path.as_os_str().is_empty()
+	{
+		return Ok((source_directory.to_owned(), path.to_owned()));
+	}
+	let parent = crate_directory
+		.parent()
+		.ok_or_else(|| tg::error!("expected the crate's directory to have a parent"))?;
+	let name = crate_directory
+		.file_name()
+		.ok_or_else(|| tg::error!("expected the crate's directory to have a name"))?;
+	Ok((parent.to_owned(), PathBuf::from(name)))
+}
+
+// Get `OUT_DIR` and its path relative to the crate's directory if a variable other than `OUT_DIR` holds a path that starts with that relative path, as a build script prints for a macro that resolves paths against the manifest directory.
+fn relative_out_dir(crate_directory: &Path) -> Option<(PathBuf, String)> {
+	let out_dir = PathBuf::from(std::env::var_os("OUT_DIR")?);
+	if !out_dir.is_absolute() || !out_dir.is_dir() {
+		return None;
+	}
+	let relative = relative_path(crate_directory, &out_dir)
+		.to_str()?
+		.to_owned();
+	let prefix = format!("{relative}/");
+	let found = std::env::vars().any(|(name, value)| {
+		name != "OUT_DIR" && (value == relative || value.starts_with(&prefix))
+	});
+	found.then_some((out_dir, relative))
 }
 
 // Find the files outside of the crate's directory and inside the Cargo source that the crate's Rust files include with a literal path, following included Rust files.

@@ -1,5 +1,5 @@
 use {
-	super::{external_files, included_paths, normalize},
+	super::{external_files, included_paths, normalize, relative_path},
 	std::path::{Path, PathBuf},
 };
 
@@ -66,4 +66,15 @@ fn external_files_follows_includes_out_of_the_crate() {
 
 	// A crate at the root of the Cargo source has nothing outside of it to include.
 	assert!(external_files(&root, &root).unwrap().is_empty());
+}
+
+#[test]
+fn relative_path_climbs_to_the_common_ancestor() {
+	let path = relative_path(
+		Path::new("/opt/tangram/store/source/packages/python"),
+		Path::new("/opt/tangram/tmp/sandbox/output/out"),
+	);
+	assert_eq!(path, PathBuf::from("../../../../tmp/sandbox/output/out"));
+	let path = relative_path(Path::new("packages/python"), Path::new(".tgrustc-out-dir"));
+	assert_eq!(path, PathBuf::from("../../.tgrustc-out-dir"));
 }

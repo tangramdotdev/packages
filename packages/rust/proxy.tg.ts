@@ -1194,7 +1194,7 @@ export async function testRunnerCacheHitWorkspace() {
 	});
 }
 
-/** Runner: a build script that exports a path into `OUT_DIR` relative to its manifest directory, which a macro such as `rust-embed`'s resolves against the manifest directory, runs through the runner, and the crate that reads the path compiles through the proxy. */
+/** Runner: a build script that exports a path into `OUT_DIR` relative to its manifest directory, which a macro such as `rust-embed`'s requires to stay relative under its `compression` feature, runs through the runner, and the crate that reads the path compiles through the proxy. */
 export async function testRunnerRelativeOutDir() {
 	const source = await tests
 		.get("runner-relative-out-dir")
