@@ -49,7 +49,7 @@ export async function build(...args: tg.Args<Arg>) {
 	);
 	const { build, env: env_, host, sdk, source: source_ } = arg;
 	const target = target_ ?? host;
-	const fortifySource = fortifySource_ ?? host === target;
+	const fortifySource = fortifySource_ ?? false;
 
 	// Collect configuration.
 	const configure = {
