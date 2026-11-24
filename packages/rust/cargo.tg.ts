@@ -782,27 +782,27 @@ directory = "${vendoredDir}"`;
 		std.triple.arch(target) === "x86_64" && std.triple.os(target) === "linux";
 	if (os === "linux" && (hostIsX8664 || targetIsX8664Linux)) {
 		const linkerFeatures = "-C linker-features=-lld";
-		if (proxy && proxyDir !== undefined) {
-			if (hostIsX8664 && targetIsX8664Linux) {
-				const linkerEnv = {
-					RUSTFLAGS: tg.Mutation.suffix(linkerFeatures, " "),
-				};
-				envs.push(linkerEnv);
-			}
-		} else {
-			// Run the script with Bash, because it passes on the variables that Cargo names after hyphenated targets, such as `CARGO_BIN_EXE_my-bin`, which the sandbox's `/bin/sh` removes from the environment.
-			const shebang = "#!/usr/bin/env bash";
-			const namesTarget = `case " $* " in *" --target ${target} "*)`;
-			let script = `${shebang}\nexec "$@" ${linkerFeatures}\n`;
-			if (!targetIsX8664Linux) {
-				script = `${shebang}\n${namesTarget} exec "$@" ;; esac\nexec "$@" ${linkerFeatures}\n`;
-			} else if (!hostIsX8664) {
-				script = `${shebang}\n${namesTarget} exec "$@" ${linkerFeatures} ;; esac\nexec "$@"\n`;
-			}
-			const wrapper = tg.file(script, { executable: true });
-			const linkerEnv = { RUSTC_WRAPPER: wrapper };
-			envs.push(linkerEnv);
+		// Add the linker option at rustc invocation time so Cargo still reads all user Rust flags.
+		const shebang = "#!/usr/bin/env bash";
+		const namesTarget = `case " $* " in *" --target ${target} "*)`;
+		const exec =
+			proxy && proxyDir !== undefined
+				? 'exec "$TANGRAM_CARGO_RUSTC_PROXY" "$@"'
+				: 'exec "$@"';
+		let script = `${shebang}\n${exec} ${linkerFeatures}\n`;
+		if (!targetIsX8664Linux) {
+			script = `${shebang}\n${namesTarget} ${exec} ;; esac\n${exec} ${linkerFeatures}\n`;
+		} else if (!hostIsX8664) {
+			script = `${shebang}\n${namesTarget} ${exec} ${linkerFeatures} ;; esac\n${exec}\n`;
 		}
+		const wrapper = tg.file(script, { executable: true });
+		const linkerEnv = {
+			RUSTC_WRAPPER: wrapper,
+			...(proxy && proxyDir !== undefined
+				? { TANGRAM_CARGO_RUSTC_PROXY: tg`${proxyDir}/bin/tgrustc` }
+				: {}),
+		};
+		envs.push(linkerEnv);
 	}
 
 	if (verbose) {
@@ -1296,6 +1296,14 @@ export async function testStandaloneProxy() {
 	return testStandalone({ proxy: true });
 }
 
+/** Run from the packages checkout with `tg run -b ./packages/rust/cargo.tg.ts#testStandaloneHost`. */
+export function testStandaloneHost() {
+	return tg.command({
+		args: ["packages/rust/tests/standalone_cache.py"],
+		executable: { path: "python3" },
+	});
+}
+
 export async function testStandaloneBuildScript() {
 	// A standalone build script spawns the compiler through fork and exec, as the cc crate does, and unwinds a caught panic.
 	const source = tg.directory({
@@ -1328,7 +1336,7 @@ export async function testStandaloneBuildScript() {
 	return true;
 }
 
-export async function testStandaloneCross() {
+export async function testStandaloneCross(arg?: { proxy?: boolean }) {
 	// A cross build compiles C for the target in a build script, against the deployment glibc's headers on Linux, and links the build script for the build machine.
 	const host = std.sdk.canonicalTriple(std.triple.host());
 	const os = std.triple.os(host);
@@ -1336,7 +1344,9 @@ export async function testStandaloneCross() {
 	const target =
 		os === "linux" ? `${arch}-unknown-linux-gnu` : `${arch}-apple-darwin`;
 	const output = await build({
+		channel: "stable",
 		host,
+		proxy: arg?.proxy ?? false,
 		source: standaloneCrossSource(),
 		standalone: { glibcVersion: "2.35" },
 		target,
@@ -1388,6 +1398,9 @@ export async function testStandaloneCrossDarwin(arg?: { proxy?: boolean }) {
 /** A crate whose build script compiles C for the target through the `CC_`, `AR_`, and `CFLAGS_` variables for the target. */
 function standaloneCrossSource() {
 	return tg.directory({
+		".cargo/config.toml": tg.file`[build]
+rustflags = ["--cfg=standalone_test"]
+`,
 		"Cargo.toml": tg.file`
 			[package]
 			name = "standalone-cross"
@@ -1421,6 +1434,8 @@ function standaloneCrossSource() {
 			}
 		`,
 		"src/main.rs": tg.file`
+			#[cfg(not(standalone_test))]
+			compile_error!("the caller's Rust flags must be preserved");
 			unsafe extern "C" {
 				fn answer() -> i32;
 			}

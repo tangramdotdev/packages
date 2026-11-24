@@ -25,12 +25,10 @@ proxy = { path = "../../std/packages/proxy" }
 rustix = { version = "1", features = ["stdio"] }
 serde = { version = "1", default-features = false, features = ["derive", "std"] }
 tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "815ace09c8f5bddb12ba8490e7f753c7179613f4" }
+tempfile = "3"
 tokio = { version = "1", default-features = false, features = ["rt", "fs"] }
 toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
 which = "8"
-
-[dev-dependencies]
-tempfile = "3"
 
 [profile.release]
 codegen-units = 1

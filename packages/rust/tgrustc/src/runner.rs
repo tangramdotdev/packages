@@ -116,16 +116,7 @@ pub async fn run() -> tg::Result<()> {
 				"expected '{OUT_DIR_PLACEHOLDER}' directory in runner output (id {process_id})"
 			)
 		})?;
-	tg::checkout(tg::checkout::Arg {
-		dependencies: true,
-		extension: None,
-		force: true,
-		lock: None,
-		nodes: vec![build_dir.to_referent().map(Into::into)],
-		path: Some(std::path::PathBuf::from(&cargo_out_dir)),
-	})
-	.await
-	.map(|_| ())?;
+	crate::checkout::entries(&build_dir, Path::new(&cargo_out_dir), true).await?;
 
 	forward_logs(&output_dir, &manifest_dir, &cargo_out_dir).await?;
 

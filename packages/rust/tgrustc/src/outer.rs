@@ -357,7 +357,7 @@ async fn materialize_outputs(
 		.await?
 		.try_unwrap_directory()
 		.map_err(|_| tg::error!("expected build/ to be a directory"))?;
-	checkout_artifact_entries(&build, out_dir).await?;
+	crate::checkout::entries(&build, out_dir, false).await?;
 	// Cargo's incremental fingerprint check `stat`s each depfile entry; the
 	// sandbox-internal paths do not exist on the host, so without this rewrite
 	// every rebuild reads as "stale: missing X".
@@ -443,36 +443,6 @@ fn escape_depfile_env_value(value: &str) -> String {
 		}
 	}
 	escaped
-}
-
-pub(crate) async fn checkout_artifact_entries(
-	dir: &tg::Directory,
-	target: &Path,
-) -> tg::Result<()> {
-	tokio::fs::create_dir_all(target)
-		.await
-		.map_err(|error| tg::error!("failed to create {}: {error}", target.display()))?;
-	let entries: BTreeMap<String, tg::Artifact> = dir.entries().await?;
-	let mut set = tokio::task::JoinSet::new();
-	for (name, artifact) in entries {
-		let dest = target.join(&name);
-		set.spawn(async move {
-			tg::checkout(tg::checkout::Arg {
-				dependencies: false,
-				extension: None,
-				force: true,
-				lock: None,
-				nodes: vec![artifact.to_referent().map(Into::into)],
-				path: Some(dest),
-			})
-			.await
-			.map(|_| ())
-		});
-	}
-	while let Some(joined) = set.join_next().await {
-		joined.map_err(|error| tg::error!("checkout task panicked: {error}"))??;
-	}
-	Ok(())
 }
 
 pub(crate) async fn process_output_or_exit(

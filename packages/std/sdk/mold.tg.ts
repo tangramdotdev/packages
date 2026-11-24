@@ -64,10 +64,12 @@ export async function mold(...args: tg.Args<Arg>) {
 
 	const env = await std.env.compose(zstd({ build, host }), env_ ?? null);
 
+	// Limit concurrent C++ compilations to fit the SDK build on smaller machines.
 	const result = cmake.build({
 		host: build,
 		target: host,
 		env,
+		parallel: 2,
 		phases: { configure },
 		...std.args.optional("sdk", sdk),
 		source: sourceDir,
