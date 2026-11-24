@@ -26,7 +26,7 @@ export {
 	testCodegenEnv,
 	testExternalTsImport,
 	testHello,
-	testMissingExternsFallback,
+	testIndirectWorkspaceDependency,
 	testMultiVersionCacheHit,
 	testOpenSSL,
 	testPassthrough,

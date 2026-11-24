@@ -584,14 +584,15 @@ export async function testVendoredPubUse() {
 	return result;
 }
 
-/** Legacy fixture: missing-externs fallback (old wrapper relied on TGRUSTC_TEST_SKIP_EXTERNS).
- *  The new wrapper does not maintain externs sidecars; this test may need adaptation. */
-export async function testMissingExternsFallback() {
+/** A workspace crate compiles through the proxy when it reaches a dependency's own dependency, which Cargo passes only as a search path and not as an extern. */
+export async function testIndirectWorkspaceDependency() {
 	const result = await cargo.build({
-		source: tests.get("missing-externs").then(tg.Directory.expect),
+		source: tests
+			.get("indirect-workspace-dependency")
+			.then(tg.Directory.expect),
 		proxy: true,
 	});
-	console.log("testMissingExternsFallback result", result.id);
+	console.log("testIndirectWorkspaceDependency result", result.id);
 
 	const out = await $`top | tee ${tg.output}`.env(result).then(tg.File.expect);
 	tg.assert(
@@ -1263,6 +1264,16 @@ export async function test() {
 		testHello(),
 		testProcMacro(),
 		testProcMacroWithDeps(),
+		testProcMacroCross(),
+		testProxyCrossterm(),
+		testExternalTsImport(),
+		testPassthrough(),
+		testXzNative(),
+		testVendoredTransitiveDeps(),
+		testAliasedExtern(),
+		testPubUseReexport(),
+		testVendoredPubUse(),
+		testIndirectWorkspaceDependency(),
 		testCcRs(),
 		testProxyCompiles(),
 		testPkgconfig(),
@@ -1274,6 +1285,7 @@ export async function test() {
 		testRunnerBuildScript(),
 		testRunnerCfgProbe(),
 		testRunnerEnvPassthrough(),
+		testRunnerPathTools(),
 		testRunnerPathExec(),
 		testRunnerWorkspaceRootAccess(),
 		testRunnerCacheHitWorkspace(),
@@ -1282,8 +1294,10 @@ export async function test() {
 		testStableBootstrapEnv(),
 		testCacheHitVendoredDeps(),
 		testCacheHitSharedDepsAcrossProjects(),
+		testCacheHitUnchangedWorkspaceCrates(),
 		testMultiVersionCacheHit(),
 		testCacheHitWithDepVars(),
+		testCacheHitWithPreScript(),
 		testSysLinkCache(),
 	]);
 	return true;
