@@ -144,6 +144,26 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 				: manifestArgs,
 	};
 
+	// When the existing library paths were optimized again, drop the dependencies that only the existing interpreter used, so the new wrapper does not retain the directories it no longer searches.
+	const excluded = new Set<tg.Object.Id>();
+	if (
+		existingManifest?.interpreter !== undefined &&
+		arg.libraryPathStrategy !== undefined &&
+		arg.libraryPathStrategy !== null
+	) {
+		const retained = new Set(
+			[...manifestDependencies(manifest)].map((object) => object.id),
+		);
+		for (const object of manifestInterpreterDependencies(
+			existingManifest.interpreter,
+		)) {
+			if (!retained.has(object.id)) {
+				excluded.add(object.id);
+				references.delete(object.id);
+			}
+		}
+	}
+
 	// Get the wrapper executable.
 	const detectedOs = std.triple.os(buildTriple);
 	const build =
@@ -153,7 +173,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 
 	// If there's an existing binary, use it.
 	if (binary) {
-		return wrap.Manifest.write(binary, manifest, references);
+		return wrap.Manifest.write(binary, manifest, references, excluded);
 	} else {
 		// We can't wrap a non-existent binary with a manifest specifying an address.
 		if (manifest.executable.kind === "address") {
@@ -446,17 +466,20 @@ export namespace wrap {
 				references,
 			);
 
-			// Preserve the existing library paths, which were optimized when the wrapper was created, so that optimizing the merged interpreter does not drop libraries the executable does not itself need.
+			// Preserve the existing library paths, which were optimized when the wrapper was created, so that optimizing the merged interpreter does not drop libraries the executable does not itself need. If the caller requests a library path strategy, optimize the existing library paths with it instead.
 			if (
 				existingInterpreter !== undefined &&
 				existingInterpreter.kind !== "normal" &&
 				existingInterpreter.libraryPaths !== undefined
 			) {
-				const existingLibraryPaths = await Promise.all(
-					existingInterpreter.libraryPaths.map(async (path) => ({
-						path: await tg.template(path),
-						preserve: true as const,
-					})),
+				const preserve =
+					libraryPathStrategy === undefined || libraryPathStrategy === null;
+				const existingLibraryPaths: Array<wrap.LibraryPath> = await Promise.all(
+					existingInterpreter.libraryPaths.map(async (path) =>
+						preserve
+							? { path: await tg.template(path), preserve: true as const }
+							: await tg.template(path),
+					),
 				);
 				libraryPaths = [...existingLibraryPaths, ...(libraryPaths ?? [])];
 				const { libraryPaths: _, ...rest } = existingInterpreter;
@@ -1049,6 +1072,7 @@ export namespace wrap {
 			file: tg.File,
 			manifest: wrap.Manifest,
 			references: ManifestReferences,
+			excluded?: Set<tg.Object.Id>,
 		) {
 			// Validate the manifest references.
 			await validateManifestReferences(manifest, references);
@@ -1088,7 +1112,10 @@ export namespace wrap {
 					.then(tg.File.expect);
 			}
 
-			const fileDependencies = await file.dependencyObjects;
+			// Keep the file's dependencies, except the ones the caller excluded.
+			const fileDependencies = (await file.dependencyObjects).filter(
+				(dependency) => !excluded?.has(dependency.id),
+			);
 			await Promise.all(
 				fileDependencies.map((reference) =>
 					addManifestReference(references, reference),
@@ -2555,48 +2582,7 @@ export function* manifestDependencies(
 	manifest: wrap.Manifest,
 ): Generator<tg.Object> {
 	// Get the references from the interpreter.
-	switch (manifest.interpreter?.kind) {
-		case undefined: {
-			break;
-		}
-		case "normal":
-			yield* manifestTemplateDependencies(manifest.interpreter.path);
-			for (const arg of manifest.interpreter.args ?? []) {
-				yield* manifestTemplateDependencies(arg);
-			}
-			break;
-		case "ld-linux":
-		case "ld-musl": {
-			yield* manifestTemplateDependencies(manifest.interpreter.path);
-			if (manifest.interpreter.libraryPaths) {
-				for (const libraryPath of manifest.interpreter.libraryPaths) {
-					yield* manifestTemplateDependencies(libraryPath);
-				}
-			}
-			if (manifest.interpreter.preloads) {
-				for (const preload of manifest.interpreter.preloads) {
-					yield* manifestTemplateDependencies(preload);
-				}
-			}
-			for (const arg of manifest.interpreter.args ?? []) {
-				yield* manifestTemplateDependencies(arg);
-			}
-			break;
-		}
-		case "dyld": {
-			if (manifest.interpreter.libraryPaths) {
-				for (const libraryPath of manifest.interpreter.libraryPaths) {
-					yield* manifestTemplateDependencies(libraryPath);
-				}
-			}
-			if (manifest.interpreter.preloads) {
-				for (const preload of manifest.interpreter.preloads) {
-					yield* manifestTemplateDependencies(preload);
-				}
-			}
-			break;
-		}
-	}
+	yield* manifestInterpreterDependencies(manifest.interpreter);
 
 	// Get the references from the executable.
 	yield* manifestExecutableDependencies(manifest.executable);
@@ -2612,6 +2598,54 @@ export function* manifestDependencies(
 			if (isManifestTemplate(arg)) {
 				yield* manifestTemplateDependencies(arg);
 			}
+		}
+	}
+}
+
+/** Yield the objects referenced by a manifest interpreter. */
+function* manifestInterpreterDependencies(
+	interpreter: wrap.Manifest.Interpreter | undefined,
+): Generator<tg.Object> {
+	switch (interpreter?.kind) {
+		case undefined: {
+			break;
+		}
+		case "normal":
+			yield* manifestTemplateDependencies(interpreter.path);
+			for (const arg of interpreter.args ?? []) {
+				yield* manifestTemplateDependencies(arg);
+			}
+			break;
+		case "ld-linux":
+		case "ld-musl": {
+			yield* manifestTemplateDependencies(interpreter.path);
+			if (interpreter.libraryPaths) {
+				for (const libraryPath of interpreter.libraryPaths) {
+					yield* manifestTemplateDependencies(libraryPath);
+				}
+			}
+			if (interpreter.preloads) {
+				for (const preload of interpreter.preloads) {
+					yield* manifestTemplateDependencies(preload);
+				}
+			}
+			for (const arg of interpreter.args ?? []) {
+				yield* manifestTemplateDependencies(arg);
+			}
+			break;
+		}
+		case "dyld": {
+			if (interpreter.libraryPaths) {
+				for (const libraryPath of interpreter.libraryPaths) {
+					yield* manifestTemplateDependencies(libraryPath);
+				}
+			}
+			if (interpreter.preloads) {
+				for (const preload of interpreter.preloads) {
+					yield* manifestTemplateDependencies(preload);
+				}
+			}
+			break;
 		}
 	}
 }
@@ -2921,6 +2955,59 @@ export async function testRewrapRetainsPreservedLibraryPaths() {
 			`expected the ${name} to retain the preserved library path`,
 		);
 	}
+
+	return true;
+}
+
+export async function testRewrapWithLibraryPathStrategy() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log(
+			"skipped wrap.tg.ts#testRewrapWithLibraryPathStrategy: requires Linux",
+		);
+		return null;
+	}
+
+	// Get the directories of the library paths that the linker chose with the default strategy.
+	const wrapper = await argAndEnvDump();
+	const manifest = await wrap.Manifest.read(wrapper);
+	tg.assert(manifest?.interpreter !== undefined);
+	tg.assert(manifest.interpreter.kind !== "normal");
+	const existing = new Set<tg.Object.Id>();
+	for (const libraryPath of manifest.interpreter.libraryPaths ?? []) {
+		for (const object of manifestTemplateDependencies(libraryPath)) {
+			existing.add(object.id);
+		}
+	}
+	tg.assert(existing.size > 0, "expected the wrapper to have library paths");
+
+	// Rewrap the wrapper with the "isolate" strategy.
+	const rewrapped = await wrap(wrapper, { libraryPathStrategy: "isolate" });
+	const rewrappedManifest = await wrap.Manifest.read(rewrapped);
+	tg.assert(rewrappedManifest !== undefined);
+	const retained = new Set(
+		[...manifestDependencies(rewrappedManifest)].map((object) => object.id),
+	);
+	const dependencies = new Set(
+		(await rewrapped.dependencyObjects).map((object) => object.id),
+	);
+	let dropped = 0;
+	for (const id of existing) {
+		if (!retained.has(id)) {
+			tg.assert(
+				!dependencies.has(id),
+				`expected the rewrapped wrapper not to depend on ${id}`,
+			);
+			dropped += 1;
+		}
+	}
+	tg.assert(dropped > 0, "expected the rewrap to drop a library path");
+
+	// The rewrapped executable must still find its libraries.
+	const output = await std
+		.build(std.shBootstrap`${rewrapped} > ${tg.output}`)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(text.length > 0, "expected the rewrapped executable to run");
 
 	return true;
 }
