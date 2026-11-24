@@ -131,6 +131,9 @@ const testTiers: Record<string, Tier> = {
 	"autotools.tg.ts#testStandaloneCross": "extended",
 	"autotools.tg.ts#testStandaloneLinuxToDarwin": "extended",
 	"command.tg.ts#testCommandArgs": "bootstrap",
+	// The large layer tests each build a 3 GiB layer, so they run only in the extended tier.
+	"image.tg.ts#testLargeLayerDocker": "extended",
+	"image.tg.ts#testLargeLayerOci": "extended",
 	"image.tg.ts#testWrappedEntrypointWithEnv": "sdk",
 	"packages_test.tg.ts#testDepsEnv": "sdk",
 	"process.tg.ts#testBuildTemplate": "sdk",
