@@ -2967,8 +2967,16 @@ export async function testRewrapWithLibraryPathStrategy() {
 		return null;
 	}
 
-	// Get the directories of the library paths that the linker chose with the default strategy.
-	const wrapper = await argAndEnvDump();
+	// Link the executable with the "filter" strategy, which keeps every library path that the linker needed. The default strategy, "isolate", would leave nothing for the rewrap to drop.
+	const host = std.triple.host();
+	const wrapper = await std
+		.build(std.shBootstrap`cc -xc ${inspectProcessSource} -o ${tg.output}`)
+		.env(bootstrap.sdk(bootstrap.toolchainTriple(host)), {
+			TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "filter",
+		})
+		.then(tg.File.expect);
+
+	// Get the directories of the library paths that the linker chose.
 	const manifest = await wrap.Manifest.read(wrapper);
 	tg.assert(manifest?.interpreter !== undefined);
 	tg.assert(manifest.interpreter.kind !== "normal");
