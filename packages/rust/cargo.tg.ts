@@ -120,10 +120,10 @@ export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 
 /** The args for running Cargo on the host, with dependencies compiled through Tangram by default. */
 export type RunArg = CommonArg & {
-	/** Cargo.lock file for vendoring (alternative to providing full source). */
+	/** Cargo.lock file for vendoring (alternative to providing full source). A standalone build requires the full source instead. */
 	cargoLock?: tg.File;
 
-	/** When proxy is true, whether workspace members should be compiled directly via passthrough. Default: true. */
+	/** When proxy is true, whether workspace members should be compiled directly via passthrough. A standalone build compiles workspace members through the proxy and does not support passthrough. Default: true. */
 	passthrough?: boolean;
 
 	/** Build with the standalone toolchain and compiler cache while retaining Cargo's target directory. */
@@ -440,6 +440,16 @@ export async function build(
 	const runOnHost = targetDir === true || typeof targetDir === "string";
 	if (runOnHost && !merged.standalone) {
 		return runCommand({ ...merged, targetDir });
+	}
+	if (runOnHost) {
+		tg.assert(
+			merged.cargoLock === undefined,
+			"a standalone host build does not support the cargoLock argument",
+		);
+		tg.assert(
+			!merged.passthrough,
+			"a standalone host build does not support passthrough",
+		);
 	}
 	const resolved = requireSource(merged);
 	const depsEnv = await resolveDepsEnv(resolved);
@@ -782,7 +792,7 @@ directory = "${vendoredDir}"`;
 		std.triple.arch(target) === "x86_64" && std.triple.os(target) === "linux";
 	if (os === "linux" && (hostIsX8664 || targetIsX8664Linux)) {
 		const linkerFeatures = "-C linker-features=-lld";
-		// Add the linker option at rustc invocation time so Cargo still reads all user Rust flags.
+		// Add the flag to each invocation rather than to `RUSTFLAGS`, so that Cargo still reads the Rust flags in its configuration. Run the script with Bash, because it passes on the variables that Cargo names after hyphenated targets, such as `CARGO_BIN_EXE_my-bin`, which the sandbox's `/bin/sh` removes from the environment.
 		const shebang = "#!/usr/bin/env bash";
 		const namesTarget = `case " $* " in *" --target ${target} "*)`;
 		const exec =
@@ -1232,8 +1242,10 @@ export async function test() {
 	tests.push(testNestedCargoOffline());
 	tests.push(testStandalone());
 	tests.push(testStandaloneProxy());
+	tests.push(testStandaloneHost());
 	tests.push(testStandaloneBuildScript());
 	tests.push(testStandaloneCross());
+	tests.push(testStandaloneCrossProxy());
 	tests.push(testStaticLibrary());
 	tests.push(testTestSubcommand());
 	tests.push(testUnproxiedWorkspace());
@@ -1296,12 +1308,91 @@ export async function testStandaloneProxy() {
 	return testStandalone({ proxy: true });
 }
 
-/** Run from the packages checkout with `tg run -b ./packages/rust/cargo.tg.ts#testStandaloneHost`. */
-export function testStandaloneHost() {
-	return tg.command({
-		args: ["packages/rust/tests/standalone_cache.py"],
-		executable: { path: "python3" },
+/** A command for a standalone host build of a workspace, which the test runs repeatedly. */
+export async function standaloneHostCommand() {
+	const command = await build({
+		channel: "stable",
+		profile: "dev",
+		source: tests.get("standalone-host").then(tg.Directory.expect),
+		standalone: { glibcVersion: "2.39" },
+		targetDir: true,
 	});
+	return tg.Command.expect(command);
+}
+
+/** A standalone host build reuses its target directory. Cargo considers every unit fresh when nothing changed, rebuilds what a change affects, and compiles nothing new in another target directory. */
+export async function testStandaloneHost() {
+	const command = await standaloneHostCommand();
+	const args = await command.args;
+	const env = Object.fromEntries(
+		Object.entries(await command.env).map(([name, { value }]) => [name, value]),
+	);
+	const script = tg.file(tg.Template.expect(args[1]?.value));
+	const source = tests.get("standalone-host").then(tg.Directory.expect);
+	const target = rustTriple(std.triple.host());
+	const output = await std.build`
+		cp -R ${source} work
+		chmod -R u+w work
+		cd work
+		export HOME="$PWD"
+
+		build() {
+			log="${tg.output}/$1"
+			if ! bash ${script} -v > "$log" 2>&1; then
+				cat "$log" >&2
+				exit 1
+			fi
+			"\${CARGO_TARGET_DIR:-target/reused directory}/${target}/debug/app" >> "$log"
+		}
+
+		mkdir -p "${tg.output}"
+		build initial
+		build unchanged
+		sed -i s/original/edited/ packages/message/src/lib.rs
+		build source
+		echo reread > shared/read.txt
+		build read
+		echo reincluded > shared/included.txt
+		build included
+		sed -i s/generated/regenerated/ packages/codegen/src/lib.rs
+		build dependency
+		build unchanged-again
+		CARGO_TARGET_DIR="$PWD/target/new" build new-target
+	`
+		.env(env)
+		.then(tg.Directory.expect);
+
+	const log = async (name: string) =>
+		await output
+			.get(name)
+			.then(tg.File.expect)
+			.then((file) => file.text);
+	for (const [name, message] of [
+		["initial", "original, generated read, included"],
+		["source", "edited, generated read, included"],
+		["read", "edited, generated reread, included"],
+		["included", "edited, generated reread, reincluded"],
+		["dependency", "edited, regenerated reread, reincluded"],
+		["new-target", "edited, regenerated reread, reincluded"],
+	] as const) {
+		const text = await log(name);
+		tg.assert(text.trim().endsWith(message), `unexpected output: ${text}`);
+	}
+	for (const name of ["unchanged", "unchanged-again"]) {
+		const text = await log(name);
+		const fresh = text.match(/^ *Fresh /gm)?.length;
+		tg.assert(
+			fresh === 3 && !/^ *(Compiling|Dirty) /m.test(text),
+			`expected every unit to be fresh: ${text}`,
+		);
+	}
+	const text = await log("new-target");
+	tg.assert(
+		text.includes("cached=true") && !text.includes("cached=false"),
+		`expected every compilation to be cached: ${text}`,
+	);
+
+	return output;
 }
 
 export async function testStandaloneBuildScript() {
@@ -1364,6 +1455,10 @@ export async function testStandaloneCross(arg?: { proxy?: boolean }) {
 	return output;
 }
 
+export async function testStandaloneCrossProxy() {
+	return testStandaloneCross({ proxy: true });
+}
+
 export async function testStandaloneCrossDarwin(arg?: { proxy?: boolean }) {
 	// A Linux build machine builds the standalone cross fixture for both macOS architectures with the LLVM cross toolchain.
 	const host = std.sdk.canonicalTriple(std.triple.host());
@@ -1393,6 +1488,10 @@ export async function testStandaloneCrossDarwin(arg?: { proxy?: boolean }) {
 	}
 
 	return tg.directory(outputs);
+}
+
+export async function testStandaloneCrossDarwinProxy() {
+	return testStandaloneCrossDarwin({ proxy: true });
 }
 
 /** A crate whose build script compiles C for the target through the `CC_`, `AR_`, and `CFLAGS_` variables for the target. */

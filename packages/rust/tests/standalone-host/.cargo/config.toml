@@ -1,0 +1,5 @@
+[build]
+target-dir = "target/reused directory"
+
+[target.'cfg(all())']
+rustflags = ["--cfg=standalone_test"]
