@@ -188,10 +188,9 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			`-DLLVM_HOST_TRIPLE=${host}`,
 			`-DTANGRAM_HOST_TRIPLE=${host}`,
-			"-DLLVM_PARALLEL_COMPILE_JOBS=2",
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
 			tg`-DZLIB_ROOT=${zlibArtifact}`,
-			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_COMPILE_JOBS;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT;TANGRAM_HOST_TRIPLE"`,
+			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT;TANGRAM_HOST_TRIPLE"`,
 		],
 	};
 
@@ -210,8 +209,7 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 	// Add the cmake cache file last.
 	configure.args.push(tg`-C${cmakeCacheDir}/Distribution.cmake`);
 
-	// Bound both bootstrap stages so concurrent C++ compilations fit on smaller machines.
-	const buildPhase = "cd build && ninja -j2 stage2-distribution";
+	const buildPhase = "cd build && ninja stage2-distribution";
 	const install = "ninja stage2-install-distribution";
 	const phases = { prepare, configure, build: buildPhase, install };
 

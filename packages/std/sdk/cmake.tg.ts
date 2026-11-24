@@ -152,7 +152,7 @@ export type BuildArg = {
 	/** Override the default phase order. Default: ["configure", "build", "install"]. */
 	order?: Array<string>;
 
-	/** Whether to build in parallel, or the maximum number of concurrent build jobs. Default: true. */
+	/** Should make jobs run in parallel? Default: false until new branch. */
 	parallel?: boolean | number;
 
 	/** Override the phases. */
@@ -316,14 +316,7 @@ export async function build(...args: tg.Args<BuildArg>) {
 		args: configureArgs,
 	};
 
-	const jobs =
-		typeof parallel === "number"
-			? `${parallel}`
-			: parallel
-				? os === "darwin"
-					? "8"
-					: "$(nproc)"
-				: "1";
+	const jobs = parallel ? (os === "darwin" ? "8" : "$(nproc)") : "1";
 	const jobsArg = `-j${jobs}`;
 	const defaultBuild = {
 		command: `cmake`,
