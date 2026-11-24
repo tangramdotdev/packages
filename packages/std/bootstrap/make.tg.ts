@@ -23,7 +23,6 @@ export function source() {
 
 export type Arg = {
 	host?: string | null;
-	embedWrapper?: boolean;
 };
 
 export async function build(...args: tg.Args<Arg>) {
@@ -33,7 +32,6 @@ export async function build(...args: tg.Args<Arg>) {
 		reduce: {},
 	});
 	const host = arg.host ?? std.triple.host();
-	const embedWrapper = arg.embedWrapper ?? std.triple.os(host) === "linux";
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],
@@ -50,8 +48,9 @@ export async function build(...args: tg.Args<Arg>) {
 	};
 
 	let envArgs: tg.Args<std.env.Arg> = [sdk(host)];
-	if (embedWrapper) {
-		envArgs.push({ TANGRAM_LINKER_EMBED_WRAPPER: true });
+	if (std.triple.os(host) === "linux") {
+		// Link a static executable, because the bootstrap utils cannot preserve the xattrs that record a wrapper's dependencies.
+		envArgs.push({ CC: "cc -static", TANGRAM_LINKER_PASSTHROUGH: true });
 	}
 	const env = std.env.compose(...envArgs);
 
@@ -71,6 +70,18 @@ export async function build(...args: tg.Args<Arg>) {
 export default build;
 
 export async function test() {
-	// The bootstrap install drops the xattrs that record wrapper dependencies, so this make may not run outside of the build that produced it. The utils build that uses it repairs the wrappers, so only check that it builds.
-	return await build();
+	const output = await build();
+
+	// On Linux, run it in a sandbox that receives nothing else, so that it must not depend on anything that the install did not record. On other hosts, the bootstrap install drops the xattrs that record wrapper dependencies, so only check that it builds.
+	if (std.triple.os(std.triple.host()) === "linux") {
+		const version = await std
+			.build(std.shBootstrap`${output}/bin/make --version > ${tg.output}`)
+			.then(tg.File.expect);
+		tg.assert(
+			(await version.text).startsWith(`GNU Make ${metadata.version}`),
+			"expected the bootstrap make to run",
+		);
+	}
+
+	return output;
 }
