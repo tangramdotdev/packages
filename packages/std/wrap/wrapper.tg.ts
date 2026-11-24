@@ -717,7 +717,7 @@ export async function testEmbedNonuniformWrapper() {
 	);
 
 	const wrapped = await std
-		.run(std.shBootstrap`
+		.build(std.shBootstrap`
 			gcc ${source}/host.c -o host
 			${wrapWorkspace.wrap({ host })} embed host \
 				--manifest ${source}/manifest.json \
@@ -739,6 +739,84 @@ export async function testEmbedNonuniformWrapper() {
 		text === "embedded wrapper: ok\n",
 		`unexpected output ${JSON.stringify(text)}`,
 	);
+	return true;
+}
+
+/** Embedding a wrapper in a dynamically linked executable must not write its BSS to the file, and the executable must still run. */
+export async function testEmbedLargeBss() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped wrap/wrapper.tg.ts#testEmbedLargeBss: requires Linux");
+		return null;
+	}
+	const toolchain = await bootstrap.sdk();
+	const source = await tg.file`
+		#include <stdio.h>
+		#define SIZE (64 << 20)
+		volatile char bss[SIZE];
+		int main() {
+			if (bss[0] != 0 || bss[SIZE - 1] != 0) {
+				return 1;
+			}
+			bss[SIZE - 1] = 7;
+			printf("large bss: ok\\n");
+			return 0;
+		}
+	`;
+	const compile = (env: std.env.Arg) =>
+		std
+			.build(std.shBootstrap`gcc -xc ${source} -o ${tg.output}`)
+			.env(toolchain, env)
+			.then(tg.File.expect);
+
+	const executable = await compile({ TANGRAM_LINKER_PASSTHROUGH: true });
+	const original = await elf.parse(executable);
+	tg.assert(
+		original.programHeaders.some((segment) => segment.p_type === PT_INTERP),
+		"expected a dynamically linked executable",
+	);
+	const bssSegment = lastLoadableSegment(original);
+	const bssEnd = Number(bssSegment.p_offset) + Number(bssSegment.p_memsz);
+	tg.assert(
+		(await executable.length) < bssEnd,
+		"expected the BSS to extend past the end of the file",
+	);
+
+	const embedded = await compile({ TANGRAM_LINKER_EMBED_WRAPPER: true });
+	const manifest = await std.wrap.Manifest.read(embedded);
+	tg.assert(
+		manifest?.executable.kind === "address",
+		"expected an embedded wrapper",
+	);
+	const length = await embedded.length;
+	tg.assert(
+		length < bssEnd,
+		`the embedded executable is ${length} bytes, which includes the BSS that ends at ${bssEnd}`,
+	);
+
+	// The wrapper's segment follows the BSS in memory, but not in the file.
+	const parsed = await elf.parse(embedded);
+	const stub = lastLoadableSegment(parsed);
+	tg.assert(
+		Number(stub.p_vaddr) >=
+			Number(bssSegment.p_vaddr) + Number(bssSegment.p_memsz),
+		"expected the wrapper's segment after the BSS in memory",
+	);
+	tg.assert(
+		Number(stub.p_offset) % Number(stub.p_align) ===
+			Number(stub.p_vaddr) % Number(stub.p_align),
+		"expected a loadable alignment for the wrapper's segment",
+	);
+	const preservedBss = loadableSegments(parsed).find(
+		(segment) => Number(segment.p_vaddr) === Number(bssSegment.p_vaddr),
+	);
+	tg.assert(preservedBss !== undefined, "original BSS segment is missing");
+	tg.assert(
+		Number(preservedBss.p_filesz) === Number(bssSegment.p_filesz) &&
+			Number(preservedBss.p_memsz) === Number(bssSegment.p_memsz),
+		"original BSS segment changed",
+	);
+
+	await std.assert.stdoutIncludes(embedded, "large bss: ok");
 	return true;
 }
 

@@ -1045,14 +1045,15 @@ export async function testLinkerControls() {
 
 /** SDK defaults yield to incoming environment and then invocation-local linker controls. */
 export async function testSdkControlPrecedence() {
-	const rawToolchain = await bootstrap.sdk.env(std.triple.host());
+	const host = bootstrap.toolchainTriple();
+	const rawToolchain = await bootstrap.sdk.env(host);
 	const source = await tg.file`#include <stdio.h>
 int main(void) { puts("SDK controls"); }`;
 	const linux = std.triple.os(std.triple.host()) === "linux";
 	for (const defaultValue of [false, true]) {
 		// Build each SDK independently, as the bootstrap SDK does.
 		const toolchain = await tg
-			.build(env, { toolchain: rawToolchain, embedWrapper: defaultValue })
+			.build(env, { toolchain: rawToolchain, host, embedWrapper: defaultValue })
 			.named(`SDK embedding default ${defaultValue}`);
 		for (const [environment, cli, expected] of [
 			[undefined, undefined, linux && defaultValue],
@@ -1205,6 +1206,8 @@ export async function testLinkerOutputCheckout() {
 	const darwin = std.triple.os(std.triple.host()) === "darwin";
 	const library = darwin ? "libmessage.dylib" : "libmessage.so";
 	const libraryNameFlag = darwin ? `-Wl,-install_name,@rpath/${library}` : "";
+	// Without a SONAME, the linker records the path of a shared library whose filename does not end in .so.
+	const archiveNameFlag = darwin ? libraryNameFlag : `-Wl,-soname,${library}`;
 	await std
 		.build(std.shBootstrap`
 			# Give each execution a distinct library so an earlier test cannot materialize its wrapper.
@@ -1227,7 +1230,7 @@ EOF
 			rm lib/${library}
 			./program
 			# A shared library can have a filename ending in .a.
-			cc -fPIC -shared library.c ${libraryNameFlag} -o lib/libmessage.a
+			cc -fPIC -shared library.c ${archiveNameFlag} -o lib/libmessage.a
 			cc main.o -Llib -lmessage -o program
 			rm lib/libmessage.a
 			./program
@@ -1715,13 +1718,19 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 			return 0;
 		}`;
 
-	// Add a library path that doesn't get used to make sure it gets retained or removed appropriately.
-	const uselessLibDir = tg.directory({ lib: tg.directory() });
+	// Add a library path with a library that does not get used to make sure it gets retained or removed appropriately.
+	const unused = await makeShared({
+		libName: "libunused",
+		sdk: testSDK,
+		source: await tg.file`void unused() {}`,
+		...(target !== undefined ? { target } : {}),
+	});
+	await unused.store();
 
 	// Compile the executable.
 	const output = await std
 		.build(
-			std.shBootstrap`${compiler} -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o ${tg.output}`,
+			std.shBootstrap`${compiler} -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${unused}/lib -xc ${mainSource} -o ${tg.output}`,
 		)
 		.env(
 			std.env.compose(testSDK, {
@@ -1749,19 +1758,26 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 	const libraryPaths = interpreter.libraryPaths;
 	tg.assert(libraryPaths !== undefined);
 
-	// NOTE - the input has six paths: libc, greeta, constantsa, greetb, constantsb, empty. The output will differ based on the opt level and OS.
+	// NOTE - the input has six paths: libc, greeta, constantsa, greetb, constantsb, unused. The output will differ based on the opt level and OS.
 	const numLibraryPaths = libraryPaths.length;
 
 	switch (opt) {
 		case "none": {
-			// All the paths are retained.
-			// On Linux, we get the 6 from our libraries plus an additional set of internal paths from the toolchain, none of which are filtered out.
-			const expectedNumLibraryPaths = os === "linux" ? 15 : 6;
-			tg.assert(numLibraryPaths === expectedNumLibraryPaths);
+			// All the paths that contain libraries are retained in order, including the unused path. The toolchain can provide additional paths.
+			const expectedIds = [greetA, constantsA, constantsB, greetB, unused].map(
+				(directory) => directory.id,
+			);
+			const actualIds = libraryPaths
+				.map((path) => path.components[0]?.value)
+				.filter((id) => expectedIds.some((expected) => expected === id));
+			tg.assert(
+				JSON.stringify(actualIds) === JSON.stringify(expectedIds),
+				`expected the library paths to include ${expectedIds}, got ${actualIds}`,
+			);
 			break;
 		}
 		case "filter": {
-			// The empty path with no needed library was dropped.
+			// The path with no needed library was dropped.
 			// On Linux, we also have a path for libc.
 			const expectedNumLibraryPaths = os === "linux" ? 5 : 4;
 			tg.assert(numLibraryPaths === expectedNumLibraryPaths);
@@ -1789,7 +1805,7 @@ export async function testTransitive(optLevel?: OptLevel, target?: string) {
 			break;
 		}
 		case "resolve": {
-			// The empty path with no needed library was dropped.
+			// The path with no needed library was dropped.
 			// On Linux, we also have a path for libc.
 			const expectedNumLibraryPaths = os === "linux" ? 5 : 4;
 			tg.assert(numLibraryPaths === expectedNumLibraryPaths);
