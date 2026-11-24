@@ -14,6 +14,11 @@ mod tests;
 // `/opt/tangram/store/<id>/...` into emitted `.d` depfiles.
 pub(crate) const SANDBOX_STORE_DIR: &str = "/opt/tangram/store";
 
+struct DepfilePaths {
+	directories: Vec<(String, PathBuf)>,
+	relative_out_dir: Option<(String, String)>,
+}
+
 // The phases of one wrapper invocation. `prepare` is the check-ins and the arg
 // and env rewriting before the spawn; `materialize` is the checkout and sidecar
 // write after it.
@@ -107,16 +112,10 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let source_dir =
 		std::env::var_os("CARGO_MANIFEST_DIR").map_or_else(|| cwd.clone(), PathBuf::from);
 	let source = source::checkin(&source_dir).await?;
-	let self_exe = std::env::current_exe()
-		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
-	let driver_artifact = tg::Artifact::with_referent(checkin(&self_exe).await?.artifact);
-	let executable: tg::command::Executable = driver_artifact
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("the driver artifact must be a file"))?
-		.into();
+	let executable = driver().await?;
 
 	let (mut env, toolchain_artifact) = build_env(&args.rustc, &source).await?;
-	let host_dirs = host_dirs(&env, &source.artifact, &source.directory);
+	let host_dirs = host_dirs(&env, &source);
 
 	// When the runner is in use, link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
 	let build_script =
@@ -225,20 +224,47 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	Ok(())
 }
 
+async fn driver() -> tg::Result<tg::command::Executable> {
+	let self_exe = std::env::current_exe()
+		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
+	let driver_artifact = tg::Artifact::with_referent(checkin(&self_exe).await?.artifact);
+	let executable: tg::command::Executable = driver_artifact
+		.try_unwrap_file()
+		.map_err(|_| tg::error!("the driver artifact must be a file"))?
+		.into();
+	Ok(executable)
+}
+
 // Get the host directories of the artifacts that the sandbox reads its source and the build script's output from, so that the depfiles name them by their host paths.
-fn host_dirs(
-	env: &tg::value::Map,
-	source_artifact: &tg::Artifact,
-	source_dir: &Path,
-) -> Vec<(tg::artifact::Id, PathBuf)> {
-	let mut host_dirs = vec![(source_artifact.id(), source_dir.to_owned())];
-	if let Some(tg::Value::Template(template)) = env.get("OUT_DIR")
-		&& let [tg::template::Component::Artifact(artifact)] = template.components.as_slice()
-		&& let Some(out_dir) = std::env::var_os("OUT_DIR")
-	{
-		host_dirs.push((artifact.id(), PathBuf::from(out_dir)));
+fn host_dirs(env: &tg::value::Map, source: &source::Source) -> DepfilePaths {
+	let id = source.artifact.id();
+	let mut directories = vec![(id.to_string(), source.directory.clone())];
+	if let Some(out_dir) = std::env::var_os("OUT_DIR") {
+		let out_dir = PathBuf::from(out_dir);
+		if let Some((_, relative)) = &source.relative_out_dir {
+			directories.push((format!("{id}/{}", source::OUT_DIR_NAME), out_dir.clone()));
+			if let Some(path) = &source.path {
+				directories.push((
+					format!("{id}/{}/{relative}", path.display()),
+					out_dir.clone(),
+				));
+			}
+		}
+		if let Some(tg::Value::Template(template)) = env.get("OUT_DIR")
+			&& let [tg::template::Component::Artifact(artifact)] = template.components.as_slice()
+		{
+			directories.push((artifact.id().to_string(), out_dir));
+		}
 	}
-	host_dirs
+
+	// Replace the generated directory's aliases before the source root that contains them.
+	directories.sort_by_key(|(path, _)| std::cmp::Reverse(path.len()));
+	let relative_out_dir = source.relative_out_dir.clone();
+
+	DepfilePaths {
+		directories,
+		relative_out_dir,
+	}
 }
 
 // The sandbox env, with the toolchain artifact that provides rustc.
@@ -349,7 +375,7 @@ fn append_spawn_log(process_id: &tg::process::Id) {
 async fn materialize_outputs(
 	output_dir: &tg::Directory,
 	out_dir: &Path,
-	host_dirs: &[(tg::artifact::Id, PathBuf)],
+	host_dirs: &DepfilePaths,
 	args: &Args,
 ) -> tg::Result<()> {
 	let build = output_dir
@@ -381,7 +407,7 @@ async fn materialize_outputs(
 async fn rewrite_depfile_paths(
 	out_dir: &Path,
 	depfiles: &[String],
-	host_dirs: &[(tg::artifact::Id, PathBuf)],
+	host_dirs: &DepfilePaths,
 ) -> tg::Result<()> {
 	for depfile in depfiles {
 		let path = out_dir.join(depfile);
@@ -409,26 +435,48 @@ async fn rewrite_depfile_paths(
 }
 
 // Escape each host directory as rustc escapes the paths of files in a depfile, or as it escapes the values of environment variables on its `# env-dep:` lines.
-fn rewrite_depfile_contents(contents: &str, host_dirs: &[(tg::artifact::Id, PathBuf)]) -> String {
+fn rewrite_depfile_contents(contents: &str, host_dirs: &DepfilePaths) -> String {
 	let replacements = host_dirs
+		.directories
 		.iter()
 		.map(|(id, host_dir)| {
 			let sandbox_dir = format!("{SANDBOX_STORE_DIR}/{id}");
 			let host_dir = host_dir.display().to_string();
 			let path = host_dir.replace(' ', "\\ ");
 			let value = escape_depfile_env_value(&host_dir);
-			(sandbox_dir, path, value)
+			let sandbox_path = sandbox_dir.replace(' ', "\\ ");
+			let sandbox_value = escape_depfile_env_value(&sandbox_dir);
+			(sandbox_path, sandbox_value, path, value)
 		})
 		.collect::<Vec<_>>();
 	let mut output = String::with_capacity(contents.len());
 	for line in contents.split_inclusive('\n') {
 		let env = line.starts_with("# env-dep:");
 		let mut line = line.to_owned();
-		for (sandbox_dir, path, value) in &replacements {
-			line = line.replace(sandbox_dir, if env { value } else { path });
+		for (sandbox_path, sandbox_value, path, value) in &replacements {
+			line = if env {
+				line.replace(sandbox_value, value)
+			} else {
+				line.replace(sandbox_path, path)
+			};
+		}
+
+		// Restore the manifest-relative environment values that Cargo compares with its build-script output.
+		if env
+			&& let Some((host, sandbox)) = &host_dirs.relative_out_dir
+			&& let Some((name, value)) = line.split_once('=')
+		{
+			let sandbox = escape_depfile_env_value(sandbox);
+			if let Some(suffix) = value.strip_prefix(&sandbox)
+				&& (suffix.is_empty() || suffix == "\n" || suffix.starts_with('/'))
+			{
+				let host = escape_depfile_env_value(host);
+				line = format!("{name}={host}{suffix}");
+			}
 		}
 		output.push_str(&line);
 	}
+
 	output
 }
 

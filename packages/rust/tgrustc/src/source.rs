@@ -12,7 +12,7 @@ mod tests;
 const INCLUDE_MACROS: [&str; 3] = ["include!", "include_bytes!", "include_str!"];
 
 // The name of `OUT_DIR` in a source that holds it beside the crate's directory.
-const OUT_DIR_NAME: &str = ".tgrustc-out-dir";
+pub const OUT_DIR_NAME: &str = ".tgrustc-out-dir";
 
 // The source that a compilation reads. It is the crate's directory, unless the crate includes files from outside of its directory or a variable holds a path into `OUT_DIR` relative to the crate's directory, in which case it is a skeleton that holds the crate's directory, only those files, and `OUT_DIR`.
 pub struct Source {
