@@ -6,11 +6,17 @@ use std::{
 };
 use tangram_client::prelude::*;
 
+#[cfg(test)]
+mod tests;
+
 // Literal name used as `OUT_DIR` inside the runner sandbox. The driver
 // writes the build script's outputs under `$TANGRAM_OUTPUT/<placeholder>/`;
 // the outer rewrites every occurrence in stdout to cargo's real `OUT_DIR`
 // before forwarding, so cached stdout stays sandbox-agnostic.
 const OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_OUT_DIR@@";
+
+// The placeholder for the directory of the build script's source, which the outer replaces with the host's directory.
+const SOURCE_PLACEHOLDER: &str = "@@TGRUSTC_SOURCE@@";
 
 // The placeholder for the path to `OUT_DIR` relative to the manifest directory, which the outer replaces with the path to Cargo's `OUT_DIR` relative to Cargo's manifest directory.
 const RELATIVE_OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_RELATIVE_OUT_DIR@@";
@@ -52,19 +58,16 @@ pub async fn run() -> tg::Result<()> {
 
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
 		.map_err(|_| tg::error!("CARGO_MANIFEST_DIR is not set"))?;
-	let (source_artifact, manifest_subpath) = source(Path::new(&manifest_dir)).await?;
-	let manifest_subpath =
-		manifest_subpath.map_or_default(|path| path.to_string_lossy().into_owned());
+	let (source_artifact, source_dir) = source(Path::new(&manifest_dir)).await?;
+	let manifest_subpath = Path::new(&manifest_dir)
+		.strip_prefix(&source_dir)
+		.map_err(|error| tg::error!(!error, "expected the crate to be in its source"))?
+		.to_string_lossy()
+		.into_owned();
 	let source_template =
 		tg::Template::with_components([tg::template::Component::Artifact(source_artifact)]);
 
-	let self_exe = std::env::current_exe()
-		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
-	let driver_artifact = tg::Artifact::with_referent(outer::checkin(&self_exe).await?.artifact);
-	let executable: tg::command::Executable = driver_artifact
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("the driver artifact must be a file"))?
-		.into();
+	let executable = outer::driver().await?;
 
 	let env = build_env(source_template, &manifest_subpath).await?;
 
@@ -116,55 +119,66 @@ pub async fn run() -> tg::Result<()> {
 				"expected '{OUT_DIR_PLACEHOLDER}' directory in runner output (id {process_id})"
 			)
 		})?;
-	crate::checkout::entries(&build_dir, Path::new(&cargo_out_dir), true).await?;
+	let store = crate::checkout::entries(&build_dir, Path::new(&cargo_out_dir), true).await?;
 
-	forward_logs(&output_dir, &manifest_dir, &cargo_out_dir).await?;
+	forward_logs(
+		&output_dir,
+		&manifest_dir,
+		&cargo_out_dir,
+		&source_dir,
+		&store,
+	)
+	.await?;
 
 	Ok(())
 }
 
-// Forward the build script's logs with Cargo's paths in place of the placeholders for `OUT_DIR`.
+// Forward the build script's logs with Cargo's paths in place of the placeholders, and the host's store in place of the sandbox's.
 async fn forward_logs(
 	output_dir: &tg::Directory,
 	manifest_dir: &str,
 	out_dir: &str,
+	source_dir: &Path,
+	store: &Path,
 ) -> tg::Result<()> {
 	let relative_out_dir = source::relative_path(Path::new(manifest_dir), Path::new(out_dir))
 		.display()
 		.to_string();
+	let source_dir = source_dir.display().to_string();
+	let store = store.display().to_string();
 	let substitutions = [
+		(outer::SANDBOX_STORE_DIR, store.as_str()),
 		(RELATIVE_OUT_DIR_PLACEHOLDER, relative_out_dir.as_str()),
 		(OUT_DIR_PLACEHOLDER, out_dir),
+		(SOURCE_PLACEHOLDER, source_dir.as_str()),
 	];
 	outer::forward_logs(output_dir, &substitutions).await?;
 	Ok(())
 }
 
-// The source a build script runs against, with the manifest directory's path within it. A crate inside the Cargo source gets the filtered workspace from `TGRUSTC_RUNNER_WORKSPACE` with its own crate grafted back in, so editing another crate's Rust code does not change its inputs. Any other crate gets only its own directory, because a package from a registry or a vendor directory cannot rely on files outside of it.
-async fn source(manifest_dir: &Path) -> tg::Result<(tg::Artifact, Option<PathBuf>)> {
+// The source a build script runs against, with the host directory that it stands for. A crate inside the Cargo source gets the filtered workspace from `TGRUSTC_RUNNER_WORKSPACE` with its own crate grafted back in, so editing another crate's Rust code does not change its inputs. Any other crate gets only its own directory, because a package from a registry or a vendor directory cannot rely on files outside of it.
+async fn source(manifest_dir: &Path) -> tg::Result<(tg::Artifact, PathBuf)> {
 	let output = outer::checkin(manifest_dir).await?;
-	let (root, subpath) = proxy::artifact_path(&output.artifact)?;
-	let Some(subpath) = subpath else {
-		return Ok((root, None));
-	};
 	let crate_artifact = tg::Artifact::with_referent(output.artifact);
 	let Some(workspace) = outer::checkin_env_artifact("TGRUSTC_RUNNER_WORKSPACE").await? else {
-		return Ok((crate_artifact, None));
+		return Ok((crate_artifact, manifest_dir.to_owned()));
 	};
 	let source_dir = std::env::var_os("TGRUSTC_SOURCE_DIR").ok_or_else(|| {
 		tg::error!("TGRUSTC_SOURCE_DIR must be set with TGRUSTC_RUNNER_WORKSPACE")
 	})?;
-	let output = outer::checkin(Path::new(&source_dir)).await?;
-	let (source_root, _) = proxy::artifact_path(&output.artifact)?;
-	if source_root.id() != root.id() {
-		return Ok((crate_artifact, None));
+	let source_dir = PathBuf::from(source_dir);
+	let Ok(subpath) = manifest_dir.strip_prefix(&source_dir) else {
+		return Ok((crate_artifact, manifest_dir.to_owned()));
+	};
+	if subpath.as_os_str().is_empty() {
+		return Ok((crate_artifact, manifest_dir.to_owned()));
 	}
 	let workspace = workspace
 		.try_unwrap_directory()
 		.map_err(|_| tg::error!("expected TGRUSTC_RUNNER_WORKSPACE to be a directory"))?;
-	let workspace = graft(workspace, &subpath, crate_artifact).await?;
+	let workspace = graft(workspace, subpath, crate_artifact).await?;
 	workspace.store().await?;
-	Ok((workspace.into(), Some(subpath)))
+	Ok((workspace.into(), source_dir))
 }
 
 // Replace the entry at `path` with `artifact`, rebuilding each directory along the path.
@@ -326,6 +340,7 @@ pub fn run_driver() -> tg::Result<()> {
 	let stdout_cleaned = stdout_text
 		.replace(&sandbox_prefix, "")
 		.replace(&relative_out_dir, RELATIVE_OUT_DIR_PLACEHOLDER);
+	let stdout_cleaned = replace_rerun_paths(&stdout_cleaned, &source_dir);
 
 	// tmp is never part of the output artifact.
 	let _ = std::fs::remove_dir_all(&tmp_dir_path);
@@ -339,6 +354,24 @@ pub fn run_driver() -> tg::Result<()> {
 		std::process::exit(output.status.code().unwrap_or(1));
 	}
 	Ok(())
+}
+
+// Replace the source's directory with its placeholder in the paths that a build script tells Cargo to watch, so that Cargo watches the files in the host's directory. A path in any other instruction names the source's artifact.
+fn replace_rerun_paths(stdout: &str, source_dir: &str) -> String {
+	stdout
+		.split_inclusive('\n')
+		.map(|line| {
+			let path = line
+				.strip_prefix("cargo:")
+				.map(|line| line.strip_prefix(':').unwrap_or(line))
+				.and_then(|line| line.strip_prefix("rerun-if-changed="));
+			if path.is_some_and(|path| path.starts_with(source_dir)) {
+				line.replacen(source_dir, SOURCE_PLACEHOLDER, 1)
+			} else {
+				line.to_owned()
+			}
+		})
+		.collect()
 }
 
 // Whether a build script runs directly because its package is named in `TGRUSTC_RUNNER_PASSTHROUGH`, for a build script that writes outside of `OUT_DIR`.

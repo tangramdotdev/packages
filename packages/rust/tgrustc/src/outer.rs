@@ -224,7 +224,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	Ok(())
 }
 
-async fn driver() -> tg::Result<tg::command::Executable> {
+pub(crate) async fn driver() -> tg::Result<tg::command::Executable> {
 	let self_exe = std::env::current_exe()
 		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
 	let driver_artifact = tg::Artifact::with_referent(checkin(&self_exe).await?.artifact);
@@ -383,7 +383,7 @@ async fn materialize_outputs(
 		.await?
 		.try_unwrap_directory()
 		.map_err(|_| tg::error!("expected build/ to be a directory"))?;
-	crate::checkout::entries(&build, out_dir, false).await?;
+	let store = crate::checkout::entries(&build, out_dir, false).await?;
 	// Cargo's incremental fingerprint check `stat`s each depfile entry; the
 	// sandbox-internal paths do not exist on the host, so without this rewrite
 	// every rebuild reads as "stale: missing X".
@@ -397,7 +397,7 @@ async fn materialize_outputs(
 				.is_some_and(|extension| extension == "d")
 		})
 		.collect::<Vec<_>>();
-	rewrite_depfile_paths(out_dir, &depfiles, host_dirs).await?;
+	rewrite_depfile_paths(out_dir, &depfiles, host_dirs, &store).await?;
 	let own_stems = sidecar::own_stems(args.crate_name.as_deref(), args.extra_filename.as_deref());
 	let direct_extern_stems = sidecar::direct_extern_stems(&args.passthrough);
 	sidecar::write_sidecars(out_dir, &own_stems, &direct_extern_stems)
@@ -408,6 +408,7 @@ async fn rewrite_depfile_paths(
 	out_dir: &Path,
 	depfiles: &[String],
 	host_dirs: &DepfilePaths,
+	store: &Path,
 ) -> tg::Result<()> {
 	for depfile in depfiles {
 		let path = out_dir.join(depfile);
@@ -417,12 +418,8 @@ async fn rewrite_depfile_paths(
 				path.display()
 			)
 		})?;
-		let rewritten = rewrite_depfile_contents(&contents, host_dirs);
+		let rewritten = rewrite_depfile_contents(&contents, host_dirs, store);
 		if rewritten != contents {
-			// Replace the checkout so that a read-only or shared cache file is never modified.
-			tokio::fs::remove_file(&path).await.map_err(|error| {
-				tg::error!(!error, "failed to replace the depfile {}", path.display())
-			})?;
 			tokio::fs::write(&path, rewritten).await.map_err(|error| {
 				tg::error!(
 					"failed to write rewritten depfile {}: {error}",
@@ -434,13 +431,14 @@ async fn rewrite_depfile_paths(
 	Ok(())
 }
 
-// Escape each host directory as rustc escapes the paths of files in a depfile, or as it escapes the values of environment variables on its `# env-dep:` lines.
-fn rewrite_depfile_contents(contents: &str, host_dirs: &DepfilePaths) -> String {
+// Escape each host directory as rustc escapes the paths of files in a depfile, or as it escapes the values of environment variables on its `# env-dep:` lines. Replace the sandbox's store last, so that the other artifacts are named by their paths in the host's store.
+fn rewrite_depfile_contents(contents: &str, host_dirs: &DepfilePaths, store: &Path) -> String {
 	let replacements = host_dirs
 		.directories
 		.iter()
-		.map(|(id, host_dir)| {
-			let sandbox_dir = format!("{SANDBOX_STORE_DIR}/{id}");
+		.map(|(id, host_dir)| (format!("{SANDBOX_STORE_DIR}/{id}"), host_dir.as_path()))
+		.chain([(SANDBOX_STORE_DIR.to_owned(), store)])
+		.map(|(sandbox_dir, host_dir)| {
 			let host_dir = host_dir.display().to_string();
 			let path = host_dir.replace(' ', "\\ ");
 			let value = escape_depfile_env_value(&host_dir);
