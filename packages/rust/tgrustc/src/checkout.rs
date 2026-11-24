@@ -76,6 +76,10 @@ fn copy(source: &Path, target: &Path, root: &Path, store: &Path) -> tg::Result<(
 	let metadata = fs::symlink_metadata(source)
 		.map_err(|error| tg::error!(!error, "failed to read the output metadata"))?;
 	if metadata.is_dir() {
+		if target.is_symlink() {
+			fs::remove_file(target)
+				.map_err(|error| tg::error!(!error, "failed to remove the old output symlink"))?;
+		}
 		fs::create_dir_all(target)
 			.map_err(|error| tg::error!(!error, "failed to create the output directory"))?;
 		let entries = fs::read_dir(source)

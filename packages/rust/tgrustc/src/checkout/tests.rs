@@ -58,3 +58,26 @@ fn output_symlinks_keep_local_targets_and_cached_dependencies() {
 		"edited"
 	);
 }
+
+#[test]
+fn copied_directories_do_not_follow_old_output_symlinks() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join("source");
+	let cached = directory.path().join("cached");
+	let target = directory.path().join("output");
+	fs::create_dir_all(source.join("nested")).unwrap();
+	fs::create_dir_all(&cached).unwrap();
+	fs::create_dir_all(&target).unwrap();
+	fs::write(source.join("nested/generated"), "new output").unwrap();
+	fs::write(cached.join("generated"), "cached dependency").unwrap();
+	std::os::unix::fs::symlink(&cached, target.join("nested")).unwrap();
+	copy(&source, &target, &source, directory.path()).unwrap();
+	assert_eq!(
+		fs::read_to_string(cached.join("generated")).unwrap(),
+		"cached dependency"
+	);
+	assert_eq!(
+		fs::read_to_string(target.join("nested/generated")).unwrap(),
+		"new output"
+	);
+}
