@@ -69,6 +69,24 @@ fn external_files_follows_includes_out_of_the_crate() {
 }
 
 #[test]
+fn external_files_skips_only_the_target_directory_of_the_crate() {
+	let temp = tempfile::tempdir().unwrap();
+	let root = temp.path().canonicalize().unwrap();
+	let app = root.join("app");
+	for (directory, name) in [("src/target", "module.txt"), ("target/src", "output.txt")] {
+		std::fs::create_dir_all(app.join(directory)).unwrap();
+		let contents = format!("include_str!(\"../../../{name}\");\n");
+		std::fs::write(app.join(directory).join("mod.rs"), contents).unwrap();
+		std::fs::write(root.join(name), "contents").unwrap();
+	}
+	let files = external_files(&app, &root).unwrap();
+	assert_eq!(
+		files.into_iter().collect::<Vec<_>>(),
+		[root.join("module.txt")]
+	);
+}
+
+#[test]
 fn relative_path_climbs_to_the_common_ancestor() {
 	let path = relative_path(
 		Path::new("/opt/tangram/store/source/packages/python"),

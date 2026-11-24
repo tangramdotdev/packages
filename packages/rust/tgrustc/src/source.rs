@@ -199,10 +199,11 @@ fn external_files(
 	Ok(files)
 }
 
-// List the Rust files in a directory recursively, skipping hidden directories and Cargo's target directory.
-fn rust_files(directory: &Path) -> tg::Result<Vec<PathBuf>> {
+// List the Rust files in a crate's directory recursively, skipping hidden directories and Cargo's target directory.
+fn rust_files(crate_directory: &Path) -> tg::Result<Vec<PathBuf>> {
+	let target_directory = crate_directory.join("target");
 	let mut files = Vec::new();
-	let mut pending = vec![directory.to_owned()];
+	let mut pending = vec![crate_directory.to_owned()];
 	while let Some(directory) = pending.pop() {
 		let entries = std::fs::read_dir(&directory).map_err(
 			|source| tg::error!(!source, path = %directory.display(), "failed to read the directory"),
@@ -216,7 +217,7 @@ fn rust_files(directory: &Path) -> tg::Result<Vec<PathBuf>> {
 				.map_err(|source| tg::error!(!source, "failed to get the file type"))?;
 			let name = entry.file_name();
 			if file_type.is_dir() {
-				if name != "target" && !name.to_string_lossy().starts_with('.') {
+				if path != target_directory && !name.to_string_lossy().starts_with('.') {
 					pending.push(path);
 				}
 			} else if file_type.is_file()
