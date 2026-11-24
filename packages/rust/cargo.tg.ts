@@ -348,6 +348,7 @@ VENDORCFG`;
 		proxySetup = await tg`export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
 export TGRUSTC_SANDBOX_TOOLCHAIN="${toolchainDir}"
 export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
+export TGRUSTC_COPY_OUTPUTS=1
 export TGRUSTC_SOURCE_DIR="$PWD"`;
 	}
 
@@ -590,9 +591,9 @@ directory = "${vendoredDir}"`;
 		envs.push({ TGRUSTC_PROXY_BUILD_SCRIPTS: "1" });
 	}
 
-	// Turn off incremental compilation in a proxied host build, because a compilation in a sandbox cannot use the incremental directory, whose path in the target directory would vary its key.
+	// In a proxied host build, copy cached outputs so that the user owns them, and turn off incremental compilation, because a compilation in a sandbox cannot use the incremental directory, whose path in the target directory would vary its key.
 	if (proxy && runOnHost) {
-		envs.push({ CARGO_INCREMENTAL: "0" });
+		envs.push({ CARGO_INCREMENTAL: "0", TGRUSTC_COPY_OUTPUTS: "1" });
 	}
 
 	// Keep host builds in Cargo's chosen target directory and preserve the user's Cargo configuration.

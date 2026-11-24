@@ -1,4 +1,5 @@
 use {
+	crate::outer::SANDBOX_STORE_DIR,
 	std::{
 		fs,
 		os::unix::fs::PermissionsExt as _,
@@ -10,8 +11,61 @@ use {
 #[cfg(test)]
 mod tests;
 
-// Copy the entries of a cached output to a directory, and return the path of the store on this machine.
+// Materialize the entries of a cached output in a directory, and return the path of the store for this process.
 pub async fn entries(
+	directory: &tg::Directory,
+	target: &Path,
+	replace: bool,
+) -> tg::Result<PathBuf> {
+	// Copy the outputs only when Cargo runs on the host, where another user can run the server.
+	if std::env::var_os("TGRUSTC_COPY_OUTPUTS").is_some() {
+		return copy_entries(directory, target, replace).await;
+	}
+	check_out_entries(directory, target, replace).await?;
+
+	Ok(PathBuf::from(SANDBOX_STORE_DIR))
+}
+
+// Check out the entries of a cached output to a directory through the server.
+async fn check_out_entries(
+	directory: &tg::Directory,
+	target: &Path,
+	replace: bool,
+) -> tg::Result<()> {
+	let entries: Vec<(tg::Artifact, PathBuf)> = if replace {
+		vec![(directory.clone().into(), target.to_owned())]
+	} else {
+		fs::create_dir_all(target)
+			.map_err(|error| tg::error!(!error, "failed to create the output directory"))?;
+		directory
+			.entries()
+			.await?
+			.into_iter()
+			.map(|(name, artifact)| (artifact, target.join(name)))
+			.collect()
+	};
+	let mut set = tokio::task::JoinSet::new();
+	for (artifact, path) in entries {
+		set.spawn(async move {
+			let arg = tg::checkout::Arg {
+				dependencies: replace,
+				extension: None,
+				force: true,
+				lock: None,
+				nodes: vec![artifact.to_referent().map(Into::into)],
+				path: Some(path),
+			};
+			tg::checkout(arg).await
+		});
+	}
+	while let Some(result) = set.join_next().await {
+		result.map_err(|error| tg::error!(!error, "the checkout task panicked"))??;
+	}
+
+	Ok(())
+}
+
+async fn copy_entries(
 	directory: &tg::Directory,
 	target: &Path,
 	replace: bool,
