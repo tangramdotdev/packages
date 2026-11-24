@@ -590,6 +590,11 @@ directory = "${vendoredDir}"`;
 		envs.push({ TGRUSTC_PROXY_BUILD_SCRIPTS: "1" });
 	}
 
+	// Turn off incremental compilation in a proxied host build, because a compilation in a sandbox cannot use the incremental directory, whose path in the target directory would vary its key.
+	if (proxy && runOnHost) {
+		envs.push({ CARGO_INCREMENTAL: "0" });
+	}
+
 	// Keep host builds in Cargo's chosen target directory and preserve the user's Cargo configuration.
 	const preparePathCommands = runOnHost
 		? [
@@ -604,7 +609,7 @@ directory = "${vendoredDir}"`;
 	const preparePaths = tg.Template.join("\n", ...preparePathCommands);
 
 	const prepareSource = runOnHost
-		? tg`export TGRUSTC_SOURCE_DIR="$(pwd -P)"`
+		? tg`export TGRUSTC_SOURCE_DIR="$(pwd -P)"\nexport TGRUSTC_RUNNER_WORKSPACE="$TGRUSTC_SOURCE_DIR"`
 		: buildInTree
 			? tg`cp -R ${source}/. $PWD/work\nchmod -R u+w $PWD/work\nexport TGRUSTC_SOURCE_DIR="$PWD/work"`
 			: tg`export TGRUSTC_SOURCE_DIR=$(realpath ${source})`;
@@ -767,8 +772,8 @@ directory = "${vendoredDir}"`;
 		envs.push(proxyEnv);
 	}
 
-	// Filter the workspace once for all of its build scripts. An in-tree build copies the source out of the store, so its build scripts already see only their own crate.
-	if (proxy && !buildInTree) {
+	// Filter the workspace once for all of its build scripts. An in-tree build copies the source out of the store, so its build scripts already see only their own crate. The build scripts of a host build read the workspace itself, which can change after this command is created.
+	if (proxy && !buildInTree && !runOnHost) {
 		const runnerWorkspace = await tg
 			.build(filterRunnerWorkspace, source)
 			.then(tg.Directory.expect);
@@ -1327,7 +1332,7 @@ export async function testStandaloneHost() {
 	const env = Object.fromEntries(
 		Object.entries(await command.env).map(([name, { value }]) => [name, value]),
 	);
-	const script = tg.file(tg.Template.expect(args[1]?.value));
+	const script = tg.Template.expect(args[1]?.value);
 	const source = tests.get("standalone-host").then(tg.Directory.expect);
 	const target = rustTriple(std.triple.host());
 	const output = await std.build`
@@ -1338,7 +1343,7 @@ export async function testStandaloneHost() {
 
 		build() {
 			log="${tg.output}/$1"
-			if ! bash ${script} -v > "$log" 2>&1; then
+			if ! bash -c "$HOST_BUILD_SCRIPT" -- -v > "$log" 2>&1; then
 				cat "$log" >&2
 				exit 1
 			fi
@@ -1359,7 +1364,7 @@ export async function testStandaloneHost() {
 		build unchanged-again
 		CARGO_TARGET_DIR="$PWD/target/new" build new-target
 	`
-		.env(env)
+		.env(env, { HOST_BUILD_SCRIPT: script })
 		.then(tg.Directory.expect);
 
 	const log = async (name: string) =>

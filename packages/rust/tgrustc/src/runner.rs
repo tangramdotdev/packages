@@ -156,7 +156,7 @@ async fn forward_logs(
 	Ok(())
 }
 
-// The source a build script runs against, with the host directory that it stands for. A crate inside the Cargo source gets the filtered workspace from `TGRUSTC_RUNNER_WORKSPACE` with its own crate grafted back in, so editing another crate's Rust code does not change its inputs. Any other crate gets only its own directory, because a package from a registry or a vendor directory cannot rely on files outside of it.
+// The source a build script runs against, with the host directory that it stands for. A crate inside the Cargo source gets the workspace from `TGRUSTC_RUNNER_WORKSPACE` with its own crate grafted in. A sandboxed build filters that workspace, so editing another crate's Rust code does not change the inputs. Any other crate gets only its own directory, because a package from a registry or a vendor directory cannot rely on files outside of it.
 async fn source(manifest_dir: &Path) -> tg::Result<(tg::Artifact, PathBuf)> {
 	let output = outer::checkin(manifest_dir).await?;
 	let crate_artifact = tg::Artifact::with_referent(output.artifact);
