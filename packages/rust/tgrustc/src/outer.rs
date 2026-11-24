@@ -119,11 +119,8 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let host_dirs = host_dirs(&env, &source.artifact, &source.directory);
 
 	// When the runner is in use, link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
-	let build_script = std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_some()
-		&& args
-			.crate_name
-			.as_deref()
-			.is_some_and(|name| name.starts_with("build_script_"));
+	let build_script =
+		std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_some() && args.is_build_script();
 	if build_script {
 		env.remove("TANGRAM_LINKER_PASSTHROUGH");
 	}

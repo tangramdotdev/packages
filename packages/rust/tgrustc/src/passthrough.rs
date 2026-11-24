@@ -17,10 +17,7 @@ pub fn applies(args: &Args) -> tg::Result<bool> {
 	let Ok(project_dir) = std::env::var("TGRUSTC_PASSTHROUGH_PROJECT_DIR") else {
 		return Ok(false);
 	};
-	if let Some(crate_name) = args.crate_name.as_deref()
-		&& crate_name.starts_with("build_script_")
-		&& std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_none()
-	{
+	if args.is_build_script() && std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_none() {
 		return Ok(true);
 	}
 	let project_dir = PathBuf::from(project_dir);

@@ -15,20 +15,26 @@ const OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_OUT_DIR@@";
 // The placeholder for the path to `OUT_DIR` relative to the manifest directory, which the outer replaces with the path to Cargo's `OUT_DIR` relative to Cargo's manifest directory.
 const RELATIVE_OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_RELATIVE_OUT_DIR@@";
 
-pub async fn run(script_binary: &Path, extra_args: Vec<String>) -> tg::Result<()> {
+pub async fn run() -> tg::Result<()> {
 	let start = Instant::now();
+
+	// argv: [self, "runner", <build-script>, <extra args>...]
+	let script_binary = std::env::args()
+		.nth(2)
+		.ok_or_else(|| tg::error!("expected build script binary path after 'runner'"))?;
+	let extra_args: Vec<String> = std::env::args().skip(3).collect();
 
 	let crate_name = std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "unknown".into());
 
 	// Run the build script directly if it cannot run in a sandbox.
 	if passthrough(&crate_name) {
-		let error = std::process::Command::new(script_binary)
+		let error = std::process::Command::new(&script_binary)
 			.args(&extra_args)
 			.exec();
 		return Err(tg::error!("failed to exec the build script: {error}"));
 	}
 
-	let output = outer::checkin(script_binary).await?;
+	let output = outer::checkin(Path::new(&script_binary)).await?;
 	let mut script_artifact = tg::Artifact::with_referent(output.artifact)
 		.try_unwrap_file()
 		.map_err(|_| tg::error!("expected a build script file"))?;
@@ -52,9 +58,7 @@ pub async fn run(script_binary: &Path, extra_args: Vec<String>) -> tg::Result<()
 	let source_template =
 		tg::Template::with_components([tg::template::Component::Artifact(source_artifact)]);
 
-	// Resolve the launcher's symbolic link, so that the driver is this executable's file.
 	let self_exe = std::env::current_exe()
-		.and_then(std::fs::canonicalize)
 		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
 	let driver_artifact = tg::Artifact::with_referent(outer::checkin(&self_exe).await?.artifact);
 	let executable: tg::command::Executable = driver_artifact
