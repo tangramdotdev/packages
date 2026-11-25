@@ -3,9 +3,14 @@ use std::path::{Path, PathBuf};
 fn main() {
 	println!("cargo:rerun-if-changed=build.rs");
 
-	// Read a file of the workspace from outside of the crate, and watch it by its absolute path.
+	// Find a file of the workspace from outside of the crate, and watch it by its absolute path.
 	let manifest_directory = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
-	let path = manifest_directory.join("../../shared/read.txt");
+	let path = manifest_directory.join("../../shared/included.txt");
+	println!("cargo:rerun-if-changed={}", path.display());
+	assert!(path.is_file());
+
+	// Read a file of the workspace that Cargo's configuration names by its absolute path, and watch it.
+	let path = PathBuf::from(std::env::var_os("READ_PATH").unwrap());
 	println!("cargo:rerun-if-changed={}", path.display());
 	let contents = std::fs::read_to_string(path).unwrap();
 

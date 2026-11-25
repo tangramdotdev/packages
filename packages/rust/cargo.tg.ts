@@ -1357,10 +1357,10 @@ export async function testStandaloneHost() {
 		mkdir -p "${tg.output}"
 		build initial
 		build unchanged
-		sed -i s/original/edited/ packages/message/src/lib.rs
-		build source
 		echo reread > shared/read.txt
 		build read
+		sed -i s/original/edited/ packages/message/src/lib.rs
+		build source
 		echo reincluded > shared/included.txt
 		build included
 		sed -i s/generated/regenerated/ packages/codegen/src/lib.rs
@@ -1378,8 +1378,8 @@ export async function testStandaloneHost() {
 			.then((file) => file.text);
 	for (const [name, message] of [
 		["initial", "original, generated read, included"],
-		["source", "edited, generated read, included"],
-		["read", "edited, generated reread, included"],
+		["read", "original, generated reread, included"],
+		["source", "edited, generated reread, included"],
 		["included", "edited, generated reread, reincluded"],
 		["dependency", "edited, regenerated reread, reincluded"],
 		["new-target", "edited, regenerated reread, reincluded"],

@@ -114,8 +114,8 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let source = source::checkin(&source_dir).await?;
 	let executable = driver().await?;
 
-	let (mut env, toolchain_artifact) = build_env(&args.rustc, &source).await?;
-	let host_dirs = host_dirs(&env, &source);
+	let (mut env, toolchain_artifact, files) = build_env(&args.rustc, &source).await?;
+	let host_dirs = host_dirs(&env, &source, files);
 
 	// When the runner is in use, link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
 	let build_script =
@@ -236,9 +236,14 @@ pub(crate) async fn driver() -> tg::Result<tg::command::Executable> {
 }
 
 // Get the host directories of the artifacts that the sandbox reads its source and the build script's output from, so that the depfiles name them by their host paths.
-fn host_dirs(env: &tg::value::Map, source: &source::Source) -> DepfilePaths {
+fn host_dirs(
+	env: &tg::value::Map,
+	source: &source::Source,
+	files: Vec<(tg::artifact::Id, PathBuf)>,
+) -> DepfilePaths {
 	let id = source.artifact.id();
 	let mut directories = vec![(id.to_string(), source.directory.clone())];
+	directories.extend(files.into_iter().map(|(id, path)| (id.to_string(), path)));
 	if let Some(out_dir) = std::env::var_os("OUT_DIR") {
 		let out_dir = PathBuf::from(out_dir);
 		if let Some((_, relative)) = &source.relative_out_dir {
@@ -271,7 +276,11 @@ fn host_dirs(env: &tg::value::Map, source: &source::Source) -> DepfilePaths {
 async fn build_env(
 	rustc: &str,
 	source: &source::Source,
-) -> tg::Result<(tg::value::Map, tg::Artifact)> {
+) -> tg::Result<(
+	tg::value::Map,
+	tg::Artifact,
+	Vec<(tg::artifact::Id, PathBuf)>,
+)> {
 	// Retain the existing filter's distinction between host strings and typed values.
 	// Recover paths from the live strings so shell overrides take effect.
 	let mut env = tg::process::env::env()?;
@@ -309,6 +318,7 @@ async fn build_env(
 	if let Some((host, sandbox)) = &source.relative_out_dir {
 		rewrite_relative_out_dir(&mut env, host, sandbox);
 	}
+	let files = checkin_source_files(&mut env).await?;
 
 	let toolchain_artifact = resolve_toolchain(&mut env, rustc).await?;
 
@@ -329,7 +339,36 @@ async fn build_env(
 		tg::Value::String("1".to_owned()),
 	);
 
-	Ok((env, toolchain_artifact))
+	Ok((env, toolchain_artifact, files))
+}
+
+// Check in each file of the Cargo source that a variable names by its host path, such as one that Cargo's configuration sets relative to the workspace, so that the path resolves in the sandbox. Return the artifact and the host path of each file.
+pub(crate) async fn checkin_source_files(
+	env: &mut tg::value::Map,
+) -> tg::Result<Vec<(tg::artifact::Id, PathBuf)>> {
+	let Some(source_dir) = std::env::var_os("TGRUSTC_SOURCE_DIR") else {
+		return Ok(Vec::new());
+	};
+	let mut files = Vec::new();
+	for (name, value) in env.iter_mut() {
+		let tg::Value::String(string) = value else {
+			continue;
+		};
+		let path = PathBuf::from(&*string);
+		if is_denied_host_env(name)
+			|| !path.is_absolute()
+			|| !path.starts_with(&source_dir)
+			|| !path.is_file()
+		{
+			continue;
+		}
+		let artifact = tg::Artifact::with_referent(checkin(&path).await?.artifact);
+		files.push((artifact.id(), path));
+		let template = tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
+		*value = tg::Value::Template(template);
+	}
+
+	Ok(files)
 }
 
 async fn resolve_toolchain(env: &mut tg::value::Map, rustc: &str) -> tg::Result<tg::Artifact> {

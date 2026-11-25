@@ -69,7 +69,7 @@ pub async fn run() -> tg::Result<()> {
 
 	let executable = outer::driver().await?;
 
-	let env = build_env(source_template, &manifest_subpath).await?;
+	let (env, files) = build_env(source_template, &manifest_subpath).await?;
 
 	let mut spawn_args: tg::value::Array = Vec::with_capacity(1 + extra_args.len());
 	spawn_args.push(tg::Value::Template(script_template));
@@ -127,6 +127,7 @@ pub async fn run() -> tg::Result<()> {
 		&cargo_out_dir,
 		&source_dir,
 		&store,
+		&files,
 	)
 	.await?;
 
@@ -140,18 +141,31 @@ async fn forward_logs(
 	out_dir: &str,
 	source_dir: &Path,
 	store: &Path,
+	files: &[(tg::artifact::Id, PathBuf)],
 ) -> tg::Result<()> {
 	let relative_out_dir = source::relative_path(Path::new(manifest_dir), Path::new(out_dir))
 		.display()
 		.to_string();
 	let source_dir = source_dir.display().to_string();
 	let store = store.display().to_string();
-	let substitutions = [
+	// Name each file of the Cargo source by its host path before the store, so that Cargo watches the caller's file.
+	let files = files
+		.iter()
+		.map(|(id, path)| {
+			let sandbox = format!("{}/{id}", outer::SANDBOX_STORE_DIR);
+			(sandbox, path.display().to_string())
+		})
+		.collect::<Vec<_>>();
+	let mut substitutions = files
+		.iter()
+		.map(|(sandbox, host)| (sandbox.as_str(), host.as_str()))
+		.collect::<Vec<_>>();
+	substitutions.extend([
 		(outer::SANDBOX_STORE_DIR, store.as_str()),
 		(RELATIVE_OUT_DIR_PLACEHOLDER, relative_out_dir.as_str()),
 		(OUT_DIR_PLACEHOLDER, out_dir),
 		(SOURCE_PLACEHOLDER, source_dir.as_str()),
-	];
+	]);
 	outer::forward_logs(output_dir, &substitutions).await?;
 	Ok(())
 }
@@ -221,7 +235,7 @@ async fn graft(
 async fn build_env(
 	source_template: tg::Template,
 	manifest_subpath: &str,
-) -> tg::Result<tg::value::Map> {
+) -> tg::Result<(tg::value::Map, Vec<(tg::artifact::Id, PathBuf)>)> {
 	let toolchain_artifact = outer::checkin_env_artifact("TGRUSTC_SANDBOX_TOOLCHAIN").await?;
 	let sdk_artifact = outer::checkin_env_artifact("TGRUSTC_SANDBOX_SDK").await?;
 
@@ -248,6 +262,8 @@ async fn build_env(
 		};
 		env.insert(name, value);
 	}
+
+	let files = outer::checkin_source_files(&mut env).await?;
 
 	if let Some(sdk) = sdk_artifact {
 		outer::prepend_sdk_to_path(&mut env, sdk);
@@ -282,7 +298,7 @@ async fn build_env(
 			tg::Value::String(manifest_subpath.to_owned()),
 		);
 	}
-	Ok(env)
+	Ok((env, files))
 }
 
 pub fn run_driver() -> tg::Result<()> {

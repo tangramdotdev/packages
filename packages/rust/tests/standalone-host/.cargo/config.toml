@@ -1,3 +1,6 @@
+[env]
+READ_PATH = { value = "shared/read.txt", relative = true }
+
 [build]
 target-dir = "target/reused directory"
 
