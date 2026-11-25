@@ -81,3 +81,26 @@ fn copied_directories_do_not_follow_old_output_symlinks() {
 		"new output"
 	);
 }
+
+#[test]
+fn only_the_outputs_of_a_compilation_link_the_store() {
+	let directory = tempfile::tempdir().unwrap();
+	let store = directory.path().join("store");
+	let source = store.join("output");
+	fs::create_dir_all(&source).unwrap();
+	fs::write(source.join("generated"), "generated").unwrap();
+
+	// Link the store beside the outputs of a compilation, and again when the compilation runs again.
+	let target = directory.path().join("compilation");
+	for _ in 0..2 {
+		install(&source, &target, &store, false).unwrap();
+		assert_eq!(fs::read_link(target.join(".tangram/store")).unwrap(), store);
+		assert!(target.join("generated").is_file());
+	}
+
+	// Replace an `OUT_DIR`, including a link to the store that it holds, without changing the store.
+	install(&source, &target, &store, true).unwrap();
+	assert!(fs::symlink_metadata(target.join(".tangram")).is_err());
+	assert!(target.join("generated").is_file());
+	assert!(source.join("generated").is_file());
+}

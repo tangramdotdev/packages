@@ -98,17 +98,33 @@ async fn copy_entries(
 	// Copy the outputs as the invoking user while retaining their dependency metadata.
 	let target = target.to_owned();
 	let output = tokio::task::spawn_blocking(move || {
-		if replace {
-			fs::remove_dir_all(&target)
-				.map_err(|error| tg::error!(!error, "failed to remove the old output directory"))?;
-		}
-		copy(&source, &target, &source, &store)?;
+		install(&source, &target, &store, replace)?;
 		Ok::<_, tg::Error>(store)
 	})
 	.await
 	.map_err(|error| tg::error!(!error, "the output copy task panicked"))??;
 
 	Ok(output)
+}
+
+// Copy a cached output to a directory, and replace the directory if it is an `OUT_DIR`.
+fn install(source: &Path, target: &Path, store: &Path, replace: bool) -> tg::Result<()> {
+	if replace {
+		fs::remove_dir_all(target)
+			.map_err(|error| tg::error!(!error, "failed to remove the old output directory"))?;
+	}
+	copy(source, target, source, store)?;
+
+	// Link the store beside the outputs of a compilation, so that an executable that runs from this directory finds a store at a custom path. Do not link it in an `OUT_DIR`, because a checkin of a directory also reads every entry of the store that the directory links.
+	if !replace {
+		let metadata = target.join(".tangram");
+		fs::create_dir_all(&metadata).map_err(|error| {
+			tg::error!(!error, "failed to create the output metadata directory")
+		})?;
+		link(store, &metadata.join("store"))?;
+	}
+
+	Ok(())
 }
 
 fn copy(source: &Path, target: &Path, root: &Path, store: &Path) -> tg::Result<()> {
