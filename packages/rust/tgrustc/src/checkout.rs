@@ -103,11 +103,6 @@ async fn copy_entries(
 				.map_err(|error| tg::error!(!error, "failed to remove the old output directory"))?;
 		}
 		copy(&source, &target, &source, &store)?;
-		let metadata = target.join(".tangram");
-		fs::create_dir_all(&metadata).map_err(|error| {
-			tg::error!(!error, "failed to create the output metadata directory")
-		})?;
-		link(&store, &metadata.join("store"))?;
 		Ok::<_, tg::Error>(store)
 	})
 	.await
