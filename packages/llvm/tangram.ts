@@ -113,10 +113,13 @@ export async function toolchain(arg?: LLVMArg) {
 	const install = "ninja stage2-install-distribution";
 	const phases = { prepare, configure, build: buildPhase, install };
 
+	// Bound the build's hardware threads, which bounds its concurrent C++ compilations, and reserve memory for them, so that the build fits on a machine with many threads and little memory.
 	let llvmArtifact = await cmake.build({
 		host: build,
 		target: host,
+		cpu: 4,
 		env,
+		memory: { min: 4 * 1024 ** 3 },
 		phases,
 		...std.args.optional("sdk", sdk),
 		source: tg`${sourceDir}/llvm`,
@@ -227,9 +230,12 @@ export async function libclang(arg?: LLVMArg) {
 	const install = "ninja install-libclang install-clang-resource-headers";
 	const phases = { configure, build: buildPhase, install };
 
+	// Bound the build's hardware threads, which bounds its concurrent C++ compilations, and reserve memory for them, so that the build fits on a machine with many threads and little memory.
 	const libclangArtifact = await cmake.build({
 		...(await std.triple.rotate({ build, host })),
+		cpu: 4,
 		env,
+		memory: { min: 4 * 1024 ** 3 },
 		phases,
 		...std.args.optional("sdk", sdk),
 		source: tg`${sourceDir}/llvm`,
@@ -274,9 +280,12 @@ export async function lld(arg?: LLVMArg) {
 
 	const phases = { configure };
 
+	// Bound the build's hardware threads, which bounds its concurrent C++ compilations, and reserve memory for them, so that the build fits on a machine with many threads and little memory.
 	return await cmake.build({
 		...(await std.triple.rotate({ build, host })),
+		cpu: 4,
 		env,
+		memory: { min: 4 * 1024 ** 3 },
 		phases,
 		...std.args.optional("sdk", sdk),
 		source: tg`${sourceDir}/llvm`,
