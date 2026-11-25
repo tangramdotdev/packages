@@ -1,4 +1,4 @@
-import { $ } from "./tangram.ts";
+import { build } from "./process.tg.ts";
 
 /** Apply one or more patches to a directory. Files and symlinks are assumed to be patchfiles, directories are recursively walked and any patchfiles found are added. */
 export async function patch(
@@ -37,7 +37,7 @@ export async function patch(
 
 	// Apply the patches.
 	const allPatchFiles = tg.Template.join(" ", ...patchFiles);
-	return await $`cp -R ${source} ${tg.output} && chmod -R u+w ${tg.output} && cat ${allPatchFiles} | patch -p${stripCount} -d ${tg.output}`.then(
+	return await build`cp -R ${source} ${tg.output} && chmod -R u+w ${tg.output} && cat ${allPatchFiles} | patch -p${stripCount} -d ${tg.output}`.then(
 		tg.Directory.expect,
 	);
 }
