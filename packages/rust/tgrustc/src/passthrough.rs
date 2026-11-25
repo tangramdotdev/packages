@@ -17,10 +17,7 @@ pub fn applies(args: &Args) -> tg::Result<bool> {
 	let Ok(project_dir) = std::env::var("TGRUSTC_PASSTHROUGH_PROJECT_DIR") else {
 		return Ok(false);
 	};
-	if let Some(crate_name) = args.crate_name.as_deref()
-		&& crate_name.starts_with("build_script_")
-		&& std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_none()
-	{
+	if args.is_build_script() && std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_none() {
 		return Ok(true);
 	}
 	let project_dir = PathBuf::from(project_dir);
@@ -46,14 +43,6 @@ pub fn exec(args: &Args) -> tg::Result<()> {
 	if let Some(out_dir) = &args.out_dir {
 		command.arg("--out-dir").arg(out_dir);
 	}
-	remove_rustc_bootstrap(&mut command);
 	let err = command.exec();
 	Err(tg::error!("failed to exec rustc for passthrough: {err}"))
-}
-
-// Remove `RUSTC_BOOTSTRAP` from a command that runs directly when the build set it only so that Cargo accepts unstable options, so that the compilation or build script sees the toolchain's own channel.
-pub fn remove_rustc_bootstrap(command: &mut std::process::Command) {
-	if std::env::var_os("TGRUSTC_REMOVE_RUSTC_BOOTSTRAP").is_some() {
-		command.env_remove("RUSTC_BOOTSTRAP");
-	}
 }

@@ -2,11 +2,13 @@ use tangram_client::prelude::*;
 
 mod args;
 mod driver;
+mod launcher;
 mod lock;
 mod outer;
 mod passthrough;
 mod runner;
 mod sidecar;
+mod source;
 
 fn main() {
 	if let Err(error) = main_inner() {

@@ -1,5 +1,8 @@
 use tangram_client::prelude::*;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug)]
 pub struct Args {
 	pub rustc: String,
@@ -63,5 +66,18 @@ impl Args {
 			extra_filename,
 			passthrough,
 		})
+	}
+
+	// Whether this compiles a build script. A library, or a binary that Cargo names in `CARGO_BIN_NAME`, can have a name with the same prefix.
+	pub fn is_build_script(&self) -> bool {
+		let name = self
+			.crate_name
+			.as_deref()
+			.is_some_and(|name| name.starts_with("build_script_"));
+		let executable = self
+			.passthrough
+			.windows(2)
+			.any(|args| args[0] == "--crate-type" && args[1] == "bin");
+		name && executable && std::env::var_os("CARGO_BIN_NAME").is_none()
 	}
 }

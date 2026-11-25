@@ -7,6 +7,6 @@ fn main() {
 	);
 	assert!(
 		std::env::var_os("RUSTC_BOOTSTRAP").is_none(),
-		"expected RUSTC_BOOTSTRAP to be removed from the build script"
+		"expected Cargo's environment to have no RUSTC_BOOTSTRAP"
 	);
 }

@@ -1,4 +1,4 @@
-use crate::{args::Args, lock, sidecar};
+use crate::{args::Args, launcher, lock, sidecar, source};
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	path::{Path, PathBuf},
@@ -103,12 +103,10 @@ fn emit_proxy_complete(
 pub async fn run(args: Args) -> tg::Result<()> {
 	let run_start = Instant::now();
 	let cwd = std::env::current_dir().map_err(|error| tg::error!("failed to read cwd: {error}"))?;
-	// Scope the source artifact to `CARGO_MANIFEST_DIR` (per-crate) rather than
-	// the workspace so a sibling crate's edits cannot blow this crate's
-	// spawn-key cache. Fall back to CWD when cargo is absent.
+	// Scope the source to the crate's directory and the files that it includes from elsewhere in the Cargo source, so that a sibling crate's edits do not change this crate's key. Fall back to the current directory when Cargo is absent.
 	let source_dir =
 		std::env::var_os("CARGO_MANIFEST_DIR").map_or_else(|| cwd.clone(), PathBuf::from);
-	let source_artifact = tg::Artifact::with_referent(checkin(&source_dir).await?.artifact);
+	let source = source::checkin(&source_dir).await?;
 	let self_exe = std::env::current_exe()
 		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
 	let driver_artifact = tg::Artifact::with_referent(checkin(&self_exe).await?.artifact);
@@ -117,16 +115,13 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		.map_err(|_| tg::error!("the driver artifact must be a file"))?
 		.into();
 
-	let (mut env, toolchain_artifact) = build_env(&args.rustc, &source_artifact).await?;
-	let host_dirs = host_dirs(&env, &source_artifact, &source_dir);
+	let (mut env, toolchain_artifact) = build_env(&args.rustc, &source).await?;
+	let host_dirs = host_dirs(&env, &source.artifact, &source.directory);
 
 	// When the runner is in use, link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
-	if std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_some()
-		&& args
-			.crate_name
-			.as_deref()
-			.is_some_and(|name| name.starts_with("build_script_"))
-	{
+	let build_script =
+		std::env::var_os("TGRUSTC_PROXY_BUILD_SCRIPTS").is_some() && args.is_build_script();
+	if build_script {
 		env.remove("TANGRAM_LINKER_PASSTHROUGH");
 	}
 
@@ -142,8 +137,8 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let spawn_args = build_spawn_args(
 		&args.passthrough,
 		&toolchain_artifact,
-		&source_artifact,
-		&source_dir,
+		&source.artifact,
+		&source.directory,
 		&cwd,
 		&closure,
 	)
@@ -208,6 +203,10 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let materialize_start = Instant::now();
 	if let Some(out_dir) = &args.out_dir {
 		materialize_outputs(&output_dir, Path::new(out_dir), &host_dirs, &args).await?;
+		// Leave a launcher in place of a build script's executable, so that Cargo runs the build script through the runner.
+		if build_script {
+			launcher::install(Path::new(out_dir), &args)?;
+		}
 	}
 	timing.materialize = materialize_start.elapsed();
 
@@ -220,7 +219,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		&command_id,
 	);
 
-	forward_logs(&output_dir, None).await?;
+	forward_logs(&output_dir, &[]).await?;
 
 	Ok(())
 }
@@ -244,7 +243,7 @@ fn host_dirs(
 // The sandbox env, with the toolchain artifact that provides rustc.
 async fn build_env(
 	rustc: &str,
-	source_artifact: &tg::Artifact,
+	source: &source::Source,
 ) -> tg::Result<(tg::value::Map, tg::Artifact)> {
 	// Retain the existing filter's distinction between host strings and typed values.
 	// Recover paths from the live strings so shell overrides take effect.
@@ -273,11 +272,15 @@ async fn build_env(
 	}
 	// Cargo populates these with paths embedding the outer cargo-sandbox's
 	// source artifact id, which varies per `cargo.build`. Re-anchor on the
-	// per-crate source artifact so they depend only on this crate's source.
-	override_manifest_env(&mut env, source_artifact);
+	// crate's source so they depend only on that source.
+	override_manifest_env(&mut env, source);
 	// Replace the crate's host source directory inside the other variables with its source artifact, so that a path into the crate's source that a build script exports with `cargo:rustc-env`, such as v8's `RUSTY_V8_SRC_BINDING_PATH` when Cargo runs on the host, resolves in the sandbox.
 	if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
 		rewrite_dir_references(&mut env, "CARGO_MANIFEST_DIR", &manifest_dir);
+	}
+	// Replace the path to `OUT_DIR` relative to the crate's directory with the path to it relative to the crate's directory in the sandbox's source, so that a macro that resolves the path against the manifest directory finds `OUT_DIR`.
+	if let Some((host, sandbox)) = &source.relative_out_dir {
+		rewrite_relative_out_dir(&mut env, host, sandbox);
 	}
 
 	let toolchain_artifact = resolve_toolchain(&mut env, rustc).await?;
@@ -477,7 +480,7 @@ pub(crate) async fn process_output_or_exit(
 			&& let Ok(object) = output.clone().try_unwrap_object()
 			&& let Ok(output_dir) = object.try_unwrap_directory()
 		{
-			forward_logs(&output_dir, None).await?;
+			forward_logs(&output_dir, &[]).await?;
 		}
 		eprintln!(
 			"tgrustc: {label} exited {}. tangram log {process_id}",
@@ -544,22 +547,19 @@ pub(crate) fn is_denied_host_env(key: &str) -> bool {
 		|| key.starts_with("XDG_")
 }
 
-fn override_manifest_env(env: &mut tg::value::Map, source_artifact: &tg::Artifact) {
+fn override_manifest_env(env: &mut tg::value::Map, source: &source::Source) {
 	if env.contains_key("CARGO_MANIFEST_DIR") {
+		let template = source.crate_template("");
 		env.insert(
 			"CARGO_MANIFEST_DIR".to_owned(),
-			tg::Value::Template(tg::Template::with_components([
-				tg::template::Component::Artifact(source_artifact.clone()),
-			])),
+			tg::Value::Template(template),
 		);
 	}
 	if env.contains_key("CARGO_MANIFEST_PATH") {
+		let template = source.crate_template("/Cargo.toml");
 		env.insert(
 			"CARGO_MANIFEST_PATH".to_owned(),
-			tg::Value::Template(tg::Template::with_components([
-				tg::template::Component::Artifact(source_artifact.clone()),
-				tg::template::Component::String("/Cargo.toml".to_owned()),
-			])),
+			tg::Value::Template(template),
 		);
 	}
 }
@@ -630,6 +630,24 @@ fn rewrite_dir_references(env: &mut tg::value::Map, key: &str, dir: &str) {
 		}
 		if changed {
 			*value = tg::Value::Template(tg::Template::with_components(rewritten));
+		}
+	}
+}
+
+// Replace a host path relative to the crate's directory at the start of each string variable with the corresponding sandbox path.
+fn rewrite_relative_out_dir(env: &mut tg::value::Map, host: &str, sandbox: &str) {
+	let prefix = format!("{host}/");
+	for (name, value) in env.iter_mut() {
+		if name == "OUT_DIR" {
+			continue;
+		}
+		let tg::Value::String(string) = value else {
+			continue;
+		};
+		if string == host {
+			sandbox.clone_into(string);
+		} else if let Some(rest) = string.strip_prefix(&prefix) {
+			*string = format!("{sandbox}/{rest}");
 		}
 	}
 }
@@ -930,28 +948,26 @@ fn rewrite_arg(
 	tg::Value::Template(template)
 }
 
-// `substitute = Some((from, to))` rewrites every occurrence of `from` to `to`
-// in stdout before forwarding (used by the runner to swap the sandbox OUT_DIR
-// placeholder for cargo's host path). stderr is forwarded verbatim.
+// Each `(from, to)` in `substitutions` rewrites every occurrence of `from` to `to`, in order, in stdout before forwarding, which the runner uses to swap the sandbox's `OUT_DIR` placeholders for Cargo's host paths. Stderr is forwarded verbatim.
 pub(crate) async fn forward_logs(
 	output_dir: &tg::Directory,
-	substitute: Option<(&str, &str)>,
+	substitutions: &[(&str, &str)],
 ) -> tg::Result<()> {
 	if let Ok(artifact) = output_dir.get("log/stdout").await
 		&& let Ok(file) = artifact.try_unwrap_file()
 	{
 		let bytes = file.bytes().await?;
-		let bytes: &[u8] = &bytes;
-		let replaced;
-		let out: &[u8] = match substitute {
-			Some((from, to)) => {
-				replaced = String::from_utf8_lossy(bytes).replace(from, to);
-				replaced.as_bytes()
-			},
-			None => bytes,
+		let bytes = if substitutions.is_empty() {
+			bytes
+		} else {
+			let mut text = String::from_utf8_lossy(&bytes).into_owned();
+			for (from, to) in substitutions {
+				text = text.replace(from, to);
+			}
+			text.into_bytes()
 		};
 		tokio::io::stdout()
-			.write_all(out)
+			.write_all(&bytes)
 			.await
 			.map_err(|error| tg::error!("failed to forward stdout: {error}"))?;
 	}

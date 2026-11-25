@@ -1,4 +1,4 @@
-use crate::outer;
+use crate::{outer, source};
 use std::{
 	os::unix::process::CommandExt as _,
 	path::{Path, PathBuf},
@@ -11,6 +11,9 @@ use tangram_client::prelude::*;
 // the outer rewrites every occurrence in stdout to cargo's real `OUT_DIR`
 // before forwarding, so cached stdout stays sandbox-agnostic.
 const OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_OUT_DIR@@";
+
+// The placeholder for the path to `OUT_DIR` relative to the manifest directory, which the outer replaces with the path to Cargo's `OUT_DIR` relative to Cargo's manifest directory.
+const RELATIVE_OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_RELATIVE_OUT_DIR@@";
 
 pub async fn run() -> tg::Result<()> {
 	let start = Instant::now();
@@ -25,10 +28,9 @@ pub async fn run() -> tg::Result<()> {
 
 	// Run the build script directly if it cannot run in a sandbox.
 	if passthrough(&crate_name) {
-		let mut command = std::process::Command::new(&script_binary);
-		command.args(&extra_args);
-		crate::passthrough::remove_rustc_bootstrap(&mut command);
-		let error = command.exec();
+		let error = std::process::Command::new(&script_binary)
+			.args(&extra_args)
+			.exec();
 		return Err(tg::error!("failed to exec the build script: {error}"));
 	}
 
@@ -124,8 +126,25 @@ pub async fn run() -> tg::Result<()> {
 	.await
 	.map(|_| ())?;
 
-	outer::forward_logs(&output_dir, Some((OUT_DIR_PLACEHOLDER, &cargo_out_dir))).await?;
+	forward_logs(&output_dir, &manifest_dir, &cargo_out_dir).await?;
 
+	Ok(())
+}
+
+// Forward the build script's logs with Cargo's paths in place of the placeholders for `OUT_DIR`.
+async fn forward_logs(
+	output_dir: &tg::Directory,
+	manifest_dir: &str,
+	out_dir: &str,
+) -> tg::Result<()> {
+	let relative_out_dir = source::relative_path(Path::new(manifest_dir), Path::new(out_dir))
+		.display()
+		.to_string();
+	let substitutions = [
+		(RELATIVE_OUT_DIR_PLACEHOLDER, relative_out_dir.as_str()),
+		(OUT_DIR_PLACEHOLDER, out_dir),
+	];
+	outer::forward_logs(output_dir, &substitutions).await?;
 	Ok(())
 }
 
@@ -305,10 +324,16 @@ pub fn run_driver() -> tg::Result<()> {
 
 	// Strip the sandbox prefix so captured stdout becomes sandbox-agnostic.
 	// The placeholder it leaves behind gets substituted by the outer with
-	// cargo's real OUT_DIR.
+	// cargo's real OUT_DIR. Replace the path to `OUT_DIR` relative to the manifest directory, which a build script prints for a macro that resolves paths against the manifest directory, with its own placeholder, so that the outer substitutes Cargo's relative path for it.
 	let sandbox_prefix = format!("{tangram_output}/");
+	let relative_out_dir = format!(
+		"{}/{OUT_DIR_PLACEHOLDER}",
+		source::relative_path(Path::new(&manifest_dir), Path::new(&tangram_output)).display()
+	);
 	let stdout_text = String::from_utf8_lossy(&output.stdout);
-	let stdout_cleaned = stdout_text.replace(&sandbox_prefix, "");
+	let stdout_cleaned = stdout_text
+		.replace(&sandbox_prefix, "")
+		.replace(&relative_out_dir, RELATIVE_OUT_DIR_PLACEHOLDER);
 
 	// tmp is never part of the output artifact.
 	let _ = std::fs::remove_dir_all(&tmp_dir_path);
@@ -324,21 +349,10 @@ pub fn run_driver() -> tg::Result<()> {
 	Ok(())
 }
 
-// Whether a build script runs directly: its package is named in `TGRUSTC_RUNNER_PASSTHROUGH`, for a build script that writes outside of `OUT_DIR`, or it belongs to the passthrough project and the build links without Tangram wrappers, because the project's build scripts are then compiled directly and have no wrapper to run them in a sandbox.
+// Whether a build script runs directly because its package is named in `TGRUSTC_RUNNER_PASSTHROUGH`, for a build script that writes outside of `OUT_DIR`.
 fn passthrough(crate_name: &str) -> bool {
-	let named = std::env::var("TGRUSTC_RUNNER_PASSTHROUGH")
-		.is_ok_and(|names| names.split(',').any(|name| name == crate_name));
-	if named {
-		return true;
-	}
-	if std::env::var_os("TANGRAM_LINKER_PASSTHROUGH").is_none() {
-		return false;
-	}
-	let Some(project_dir) = std::env::var_os("TGRUSTC_PASSTHROUGH_PROJECT_DIR") else {
-		return false;
-	};
-	std::env::var_os("CARGO_MANIFEST_DIR")
-		.is_some_and(|manifest_dir| Path::new(&manifest_dir).starts_with(&project_dir))
+	std::env::var("TGRUSTC_RUNNER_PASSTHROUGH")
+		.is_ok_and(|names| names.split(',').any(|name| name == crate_name))
 }
 
 // Whether a variable holds a path that a dependency's build script exported from outside of the store. Cargo passes a dependency's `cargo::metadata` values in `DEP_` variables.
