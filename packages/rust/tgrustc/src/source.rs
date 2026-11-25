@@ -88,6 +88,26 @@ pub async fn checkin(crate_directory: &Path) -> tg::Result<Source> {
 	Ok(source)
 }
 
+// Check in a file of the Cargo source as the only file of a directory that stands for the Cargo source, so that the file keeps its name and files with the same contents have different paths. Return the directory and the file's path in it, or nothing if the path is not that of a file of the Cargo source.
+pub async fn checkin_file(
+	path: &Path,
+	source_directory: &Path,
+) -> tg::Result<Option<(tg::Artifact, PathBuf)>> {
+	let Some(subpath) = file_path(path, source_directory) else {
+		return Ok(None);
+	};
+
+	// Check in the target of a symbolic link, because the directory does not hold the target.
+	let file = std::fs::canonicalize(path).map_err(
+		|source| tg::error!(!source, path = %path.display(), "failed to canonicalize the path"),
+	)?;
+	let artifact = tg::Artifact::with_referent(outer::checkin(&file).await?.artifact);
+	let directory = place(&subpath, artifact)?;
+	directory.store().await?;
+
+	Ok(Some((directory, subpath)))
+}
+
 // Get the path to `to` relative to `from`, from their components alone, as a build script computes it.
 pub fn relative_path(from: &Path, to: &Path) -> PathBuf {
 	let common = from
@@ -285,6 +305,23 @@ fn normalize(path: &Path) -> PathBuf {
 		}
 	}
 	normalized
+}
+
+// Get the path in the Cargo source of the file at an absolute path.
+fn file_path(path: &Path, source_directory: &Path) -> Option<PathBuf> {
+	if !path.is_absolute() || !path.is_file() {
+		return None;
+	}
+	let path = normalize(path);
+	let path = path.strip_prefix(source_directory).ok()?;
+	Some(path.to_owned())
+}
+
+// Place an artifact at a relative path in a new directory.
+fn place(path: &Path, artifact: tg::Artifact) -> tg::Result<tg::Artifact> {
+	let mut root = BTreeMap::new();
+	insert(&mut root, path, artifact)?;
+	Ok(build(root))
 }
 
 // Insert an artifact into a directory tree at a relative path.

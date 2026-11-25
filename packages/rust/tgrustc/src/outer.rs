@@ -239,11 +239,11 @@ pub(crate) async fn driver() -> tg::Result<tg::command::Executable> {
 fn host_dirs(
 	env: &tg::value::Map,
 	source: &source::Source,
-	files: Vec<(tg::artifact::Id, PathBuf)>,
+	files: Vec<(String, PathBuf)>,
 ) -> DepfilePaths {
 	let id = source.artifact.id();
 	let mut directories = vec![(id.to_string(), source.directory.clone())];
-	directories.extend(files.into_iter().map(|(id, path)| (id.to_string(), path)));
+	directories.extend(files);
 	if let Some(out_dir) = std::env::var_os("OUT_DIR") {
 		let out_dir = PathBuf::from(out_dir);
 		if let Some((_, relative)) = &source.relative_out_dir {
@@ -276,11 +276,7 @@ fn host_dirs(
 async fn build_env(
 	rustc: &str,
 	source: &source::Source,
-) -> tg::Result<(
-	tg::value::Map,
-	tg::Artifact,
-	Vec<(tg::artifact::Id, PathBuf)>,
-)> {
+) -> tg::Result<(tg::value::Map, tg::Artifact, Vec<(String, PathBuf)>)> {
 	// Retain the existing filter's distinction between host strings and typed values.
 	// Recover paths from the live strings so shell overrides take effect.
 	let mut env = tg::process::env::env()?;
@@ -344,11 +340,11 @@ async fn build_env(
 	Ok((env, toolchain_artifact, files))
 }
 
-// Check in each file of the Cargo source that a variable names by its host path, such as one that Cargo's configuration sets relative to the workspace, so that the path resolves in the sandbox. Return the artifact and the host path of each file.
+// Check in each file of the Cargo source that a variable names by its host path, such as one that Cargo's configuration sets relative to the workspace, so that the path resolves in the sandbox. Return the path of each file in the sandbox's store and its host path.
 pub(crate) async fn checkin_source_files(
 	env: &mut tg::value::Map,
-) -> tg::Result<Vec<(tg::artifact::Id, PathBuf)>> {
-	let Some(source_dir) = std::env::var_os("TGRUSTC_SOURCE_DIR") else {
+) -> tg::Result<Vec<(String, PathBuf)>> {
+	let Some(source_dir) = std::env::var_os("TGRUSTC_SOURCE_DIR").map(PathBuf::from) else {
 		return Ok(Vec::new());
 	};
 	let mut files = Vec::new();
@@ -356,21 +352,28 @@ pub(crate) async fn checkin_source_files(
 		let tg::Value::String(string) = value else {
 			continue;
 		};
-		let path = PathBuf::from(&*string);
-		if is_denied_host_env(name)
-			|| !path.is_absolute()
-			|| !path.starts_with(&source_dir)
-			|| !path.is_file()
-		{
+		if is_denied_host_env(name) || is_test_executable(name) {
 			continue;
 		}
-		let artifact = tg::Artifact::with_referent(checkin(&path).await?.artifact);
-		files.push((artifact.id(), path));
-		let template = tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
+		let path = PathBuf::from(&*string);
+		let Some((artifact, subpath)) = source::checkin_file(&path, &source_dir).await? else {
+			continue;
+		};
+		let subpath = format!("/{}", subpath.display());
+		files.push((format!("{}{subpath}", artifact.id()), path));
+		let template = tg::Template::with_components([
+			tg::template::Component::Artifact(artifact),
+			tg::template::Component::String(subpath),
+		]);
 		*value = tg::Value::Template(template);
 	}
 
 	Ok(files)
+}
+
+// Whether a variable names an executable that a test runs. The test runs the executable on the host, and Cargo can replace the executable without compiling the test again.
+fn is_test_executable(name: &str) -> bool {
+	name.starts_with("CARGO_BIN_EXE_")
 }
 
 async fn resolve_toolchain(env: &mut tg::value::Map, rustc: &str) -> tg::Result<tg::Artifact> {
@@ -651,7 +654,7 @@ fn rewrite_dir_references(env: &mut tg::value::Map, key: &str, dir: &str) {
 		return;
 	};
 	for (name, value) in env.iter_mut() {
-		if name == key {
+		if name == key || is_test_executable(name) {
 			continue;
 		}
 		let components = match value {

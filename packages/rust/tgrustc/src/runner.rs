@@ -141,7 +141,7 @@ async fn forward_logs(
 	out_dir: &str,
 	source_dir: &Path,
 	store: &Path,
-	files: &[(tg::artifact::Id, PathBuf)],
+	files: &[(String, PathBuf)],
 ) -> tg::Result<()> {
 	let relative_out_dir = source::relative_path(Path::new(manifest_dir), Path::new(out_dir))
 		.display()
@@ -151,8 +151,8 @@ async fn forward_logs(
 	// Name each file of the Cargo source by its host path before the store, so that Cargo watches the caller's file.
 	let files = files
 		.iter()
-		.map(|(id, path)| {
-			let sandbox = format!("{}/{id}", outer::SANDBOX_STORE_DIR);
+		.map(|(sandbox, path)| {
+			let sandbox = format!("{}/{sandbox}", outer::SANDBOX_STORE_DIR);
 			(sandbox, path.display().to_string())
 		})
 		.collect::<Vec<_>>();
@@ -235,7 +235,7 @@ async fn graft(
 async fn build_env(
 	source_template: tg::Template,
 	manifest_subpath: &str,
-) -> tg::Result<(tg::value::Map, Vec<(tg::artifact::Id, PathBuf)>)> {
+) -> tg::Result<(tg::value::Map, Vec<(String, PathBuf)>)> {
 	let toolchain_artifact = outer::checkin_env_artifact("TGRUSTC_SANDBOX_TOOLCHAIN").await?;
 	let sdk_artifact = outer::checkin_env_artifact("TGRUSTC_SANDBOX_SDK").await?;
 

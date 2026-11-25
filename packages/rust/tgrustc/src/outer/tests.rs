@@ -181,6 +181,25 @@ fn manifest_dir_references_use_the_source_artifact() {
 }
 
 #[test]
+fn test_executables_keep_their_host_paths() {
+	let artifact = tg::Directory::with_entries(BTreeMap::new()).into();
+	let template = tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
+	let mut env = tg::value::Map::from([
+		("CARGO_MANIFEST_DIR".to_owned(), template.into()),
+		(
+			"CARGO_BIN_EXE_my-app".to_owned(),
+			"/crate/target/debug/my-app".to_owned().into(),
+		),
+		("OTHER".to_owned(), "/crate/other".to_owned().into()),
+	]);
+	rewrite_dir_references(&mut env, "CARGO_MANIFEST_DIR", "/crate");
+	assert!(
+		matches!(&env["CARGO_BIN_EXE_my-app"], tg::Value::String(path) if path == "/crate/target/debug/my-app")
+	);
+	assert_eq!(render(&env["OTHER"]), "/checked-in-out/other");
+}
+
+#[test]
 fn out_dir_references_preserve_existing_artifacts() {
 	let artifact = tg::Directory::with_entries(BTreeMap::new()).into();
 	let template = tg::Template::with_components([tg::template::Component::Artifact(artifact)]);

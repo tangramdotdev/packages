@@ -9,10 +9,15 @@ fn main() {
 	println!("cargo:rerun-if-changed={}", path.display());
 	assert!(path.is_file());
 
-	// Read a file of the workspace that Cargo's configuration names by its absolute path, and watch it.
-	let path = PathBuf::from(std::env::var_os("READ_PATH").unwrap());
-	println!("cargo:rerun-if-changed={}", path.display());
-	let contents = std::fs::read_to_string(path).unwrap();
+	// Read the files of the workspace that Cargo's configuration names by their absolute paths, and watch them. Two of them have the same contents, and one is a symbolic link.
+	let mut contents = Vec::new();
+	for name in ["READ_PATH", "SAME_PATH", "LINK_PATH"] {
+		let path = PathBuf::from(std::env::var_os(name).unwrap());
+		println!("cargo:rerun-if-changed={}", path.display());
+		assert_eq!(path.extension().unwrap(), "txt");
+		contents.push(std::fs::read_to_string(path).unwrap().trim().to_owned());
+	}
+	let contents = contents.join(" ");
 
 	// Write a file to a new directory in the output directory, and export its path relative to the manifest directory.
 	let output = PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("nested");

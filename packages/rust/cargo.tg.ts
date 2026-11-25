@@ -1314,19 +1314,20 @@ export async function testStandaloneProxy() {
 	return testStandalone({ proxy: true });
 }
 
-/** A command for a standalone host build of a workspace, which the test runs repeatedly. */
-export async function standaloneHostCommand() {
+/** A command that runs a Cargo subcommand for a standalone host build of a workspace, which the test runs repeatedly. */
+export async function standaloneHostCommand(subcommand = "build") {
 	const command = await build({
 		channel: "stable",
 		profile: "dev",
 		source: tests.get("standalone-host").then(tg.Directory.expect),
 		standalone: { glibcVersion: "2.39" },
+		subcommand,
 		targetDir: true,
 	});
 	return tg.Command.expect(command);
 }
 
-/** A standalone host build reuses its target directory. Cargo considers every unit fresh when nothing changed, rebuilds what a change affects, and compiles nothing new in another target directory. */
+/** A standalone host build reuses its target directory. Cargo considers every unit fresh when nothing changed, rebuilds what a change affects, and compiles nothing new in another target directory. A test runs the current build of an executable. */
 export async function testStandaloneHost() {
 	const command = await standaloneHostCommand();
 	const args = await command.args;
@@ -1337,6 +1338,8 @@ export async function testStandaloneHost() {
 		]),
 	);
 	const script = tg.Template.expect(args[1]?.value);
+	const testArgs = await (await standaloneHostCommand("test")).args;
+	const testScript = tg.Template.expect(testArgs[1]?.value);
 	const source = tests.get("standalone-host").then(tg.Directory.expect);
 	const target = rustTriple(std.triple.host());
 	const output = await std.build`
@@ -1354,9 +1357,21 @@ export async function testStandaloneHost() {
 			"\${CARGO_TARGET_DIR:-target/reused directory}/${target}/debug/app" >> "$log"
 		}
 
+		run_test() {
+			log="${tg.output}/$1"
+			if ! bash -c "$HOST_TEST_SCRIPT" -- --test program -- --nocapture > "$log" 2>&1; then
+				cat "$log" >&2
+				exit 1
+			fi
+		}
+
 		mkdir -p "${tg.output}"
 		build initial
 		build unchanged
+		echo resame > shared/same.txt
+		build same
+		echo relinked > shared/linked.txt
+		build linked
 		echo reread > shared/read.txt
 		build read
 		sed -i s/original/edited/ packages/message/src/lib.rs
@@ -1367,8 +1382,11 @@ export async function testStandaloneHost() {
 		build dependency
 		build unchanged-again
 		CARGO_TARGET_DIR="$PWD/target/new" build new-target
+		run_test test
+		sed -i 's/{}, {GENERATED}/{}; {GENERATED}/' packages/app/src/main.rs
+		run_test test-edited
 	`
-		.env(env, { HOST_BUILD_SCRIPT: script })
+		.env(env, { HOST_BUILD_SCRIPT: script, HOST_TEST_SCRIPT: testScript })
 		.then(tg.Directory.expect);
 
 	const log = async (name: string) =>
@@ -1377,12 +1395,14 @@ export async function testStandaloneHost() {
 			.then(tg.File.expect)
 			.then((file) => file.text);
 	for (const [name, message] of [
-		["initial", "original, generated read, included"],
-		["read", "original, generated reread, included"],
-		["source", "edited, generated reread, included"],
-		["included", "edited, generated reread, reincluded"],
-		["dependency", "edited, regenerated reread, reincluded"],
-		["new-target", "edited, regenerated reread, reincluded"],
+		["initial", "original, generated read read linked, included"],
+		["same", "original, generated read resame linked, included"],
+		["linked", "original, generated read resame relinked, included"],
+		["read", "original, generated reread resame relinked, included"],
+		["source", "edited, generated reread resame relinked, included"],
+		["included", "edited, generated reread resame relinked, reincluded"],
+		["dependency", "edited, regenerated reread resame relinked, reincluded"],
+		["new-target", "edited, regenerated reread resame relinked, reincluded"],
 	] as const) {
 		const text = await log(name);
 		tg.assert(text.trim().endsWith(message), `unexpected output: ${text}`);
@@ -1400,6 +1420,14 @@ export async function testStandaloneHost() {
 		text.includes("cached=true") && !text.includes("cached=false"),
 		`expected every compilation to be cached: ${text}`,
 	);
+	for (const [name, separator] of [
+		["test", ","],
+		["test-edited", ";"],
+	] as const) {
+		const message = `edited${separator} regenerated reread resame relinked, reincluded`;
+		const text = await log(name);
+		tg.assert(text.includes(message), `unexpected output: ${text}`);
+	}
 
 	return output;
 }
