@@ -1,6 +1,7 @@
 use tangram_client::prelude::*;
 
 mod args;
+mod checkout;
 mod driver;
 mod launcher;
 mod lock;

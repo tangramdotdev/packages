@@ -14,6 +14,11 @@ mod tests;
 // `/opt/tangram/store/<id>/...` into emitted `.d` depfiles.
 pub(crate) const SANDBOX_STORE_DIR: &str = "/opt/tangram/store";
 
+struct DepfilePaths {
+	directories: Vec<(String, PathBuf)>,
+	relative_out_dir: Option<(String, String)>,
+}
+
 // The phases of one wrapper invocation. `prepare` is the check-ins and the arg
 // and env rewriting before the spawn; `materialize` is the checkout and sidecar
 // write after it.
@@ -107,16 +112,10 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let source_dir =
 		std::env::var_os("CARGO_MANIFEST_DIR").map_or_else(|| cwd.clone(), PathBuf::from);
 	let source = source::checkin(&source_dir).await?;
-	let self_exe = std::env::current_exe()
-		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
-	let driver_artifact = tg::Artifact::with_referent(checkin(&self_exe).await?.artifact);
-	let executable: tg::command::Executable = driver_artifact
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("the driver artifact must be a file"))?
-		.into();
+	let executable = driver().await?;
 
-	let (mut env, toolchain_artifact) = build_env(&args.rustc, &source).await?;
-	let host_dirs = host_dirs(&env, &source.artifact, &source.directory);
+	let (mut env, toolchain_artifact, files) = build_env(&args.rustc, &source).await?;
+	let host_dirs = host_dirs(&env, &source, files);
 
 	// When the runner is in use, link a build script with a Tangram wrapper even when the build links its other executables without one, so that the build script runs in the runner's sandbox.
 	let build_script =
@@ -154,6 +153,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		executable: Some(executable),
 		host: Some(crate::host().to_owned()),
 		name: Some(name),
+		retry: std::env::var("TGRUSTC_RETRY").is_ok_and(|value| value == "1"),
 		sandbox: Some(tg::process::SandboxArg::Bool(true)),
 		stderr: tg::process::Stdio::Log,
 		stdin: tg::process::Stdio::Null,
@@ -224,32 +224,66 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	Ok(())
 }
 
+pub(crate) async fn driver() -> tg::Result<tg::command::Executable> {
+	let self_exe = std::env::current_exe()
+		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
+	let driver_artifact = tg::Artifact::with_referent(checkin(&self_exe).await?.artifact);
+	let executable: tg::command::Executable = driver_artifact
+		.try_unwrap_file()
+		.map_err(|_| tg::error!("the driver artifact must be a file"))?
+		.into();
+	Ok(executable)
+}
+
 // Get the host directories of the artifacts that the sandbox reads its source and the build script's output from, so that the depfiles name them by their host paths.
 fn host_dirs(
 	env: &tg::value::Map,
-	source_artifact: &tg::Artifact,
-	source_dir: &Path,
-) -> Vec<(tg::artifact::Id, PathBuf)> {
-	let mut host_dirs = vec![(source_artifact.id(), source_dir.to_owned())];
-	if let Some(tg::Value::Template(template)) = env.get("OUT_DIR")
-		&& let [tg::template::Component::Artifact(artifact)] = template.components.as_slice()
-		&& let Some(out_dir) = std::env::var_os("OUT_DIR")
-	{
-		host_dirs.push((artifact.id(), PathBuf::from(out_dir)));
+	source: &source::Source,
+	files: Vec<(String, PathBuf)>,
+) -> DepfilePaths {
+	let id = source.artifact.id();
+	let mut directories = vec![(id.to_string(), source.directory.clone())];
+	directories.extend(files);
+	if let Some(out_dir) = std::env::var_os("OUT_DIR") {
+		let out_dir = PathBuf::from(out_dir);
+		if let Some((_, relative)) = &source.relative_out_dir {
+			directories.push((format!("{id}/{}", source::OUT_DIR_NAME), out_dir.clone()));
+			if let Some(path) = &source.path {
+				directories.push((
+					format!("{id}/{}/{relative}", path.display()),
+					out_dir.clone(),
+				));
+			}
+		}
+		if let Some(tg::Value::Template(template)) = env.get("OUT_DIR")
+			&& let [tg::template::Component::Artifact(artifact)] = template.components.as_slice()
+		{
+			directories.push((artifact.id().to_string(), out_dir));
+		}
 	}
-	host_dirs
+
+	// Replace the generated directory's aliases before the source root that contains them.
+	directories.sort_by_key(|(path, _)| std::cmp::Reverse(path.len()));
+	let relative_out_dir = source.relative_out_dir.clone();
+
+	DepfilePaths {
+		directories,
+		relative_out_dir,
+	}
 }
 
 // The sandbox env, with the toolchain artifact that provides rustc.
 async fn build_env(
 	rustc: &str,
 	source: &source::Source,
-) -> tg::Result<(tg::value::Map, tg::Artifact)> {
+) -> tg::Result<(tg::value::Map, tg::Artifact, Vec<(String, PathBuf)>)> {
 	// Retain the existing filter's distinction between host strings and typed values.
 	// Recover paths from the live strings so shell overrides take effect.
 	let mut env = tg::process::env::env()?;
 	// Remove the runner's filtered workspace, which only build scripts read, so that it does not vary every compilation.
 	env.remove("TGRUSTC_RUNNER_WORKSPACE");
+	// Remove the path of the proxy, which only a build script's launcher reads.
+	env.remove("TGRUSTC_PROXY_BUILD_SCRIPTS");
 	for (name, value) in &mut env {
 		if name == "OUT_DIR"
 			|| name.starts_with("CARGO_MANIFEST_")
@@ -282,6 +316,7 @@ async fn build_env(
 	if let Some((host, sandbox)) = &source.relative_out_dir {
 		rewrite_relative_out_dir(&mut env, host, sandbox);
 	}
+	let files = checkin_source_files(&mut env).await?;
 
 	let toolchain_artifact = resolve_toolchain(&mut env, rustc).await?;
 
@@ -302,7 +337,43 @@ async fn build_env(
 		tg::Value::String("1".to_owned()),
 	);
 
-	Ok((env, toolchain_artifact))
+	Ok((env, toolchain_artifact, files))
+}
+
+// Check in each file of the Cargo source that a variable names by its host path, such as one that Cargo's configuration sets relative to the workspace, so that the path resolves in the sandbox. Return the path of each file in the sandbox's store and its host path.
+pub(crate) async fn checkin_source_files(
+	env: &mut tg::value::Map,
+) -> tg::Result<Vec<(String, PathBuf)>> {
+	let Some(source_dir) = std::env::var_os("TGRUSTC_SOURCE_DIR").map(PathBuf::from) else {
+		return Ok(Vec::new());
+	};
+	let mut files = Vec::new();
+	for (name, value) in env.iter_mut() {
+		let tg::Value::String(string) = value else {
+			continue;
+		};
+		if is_denied_host_env(name) || is_test_executable(name) {
+			continue;
+		}
+		let path = PathBuf::from(&*string);
+		let Some((artifact, subpath)) = source::checkin_file(&path, &source_dir).await? else {
+			continue;
+		};
+		let subpath = format!("/{}", subpath.display());
+		files.push((format!("{}{subpath}", artifact.id()), path));
+		let template = tg::Template::with_components([
+			tg::template::Component::Artifact(artifact),
+			tg::template::Component::String(subpath),
+		]);
+		*value = tg::Value::Template(template);
+	}
+
+	Ok(files)
+}
+
+// Whether a variable names an executable that a test runs. The test runs the executable on the host, and Cargo can replace the executable without compiling the test again.
+fn is_test_executable(name: &str) -> bool {
+	name.starts_with("CARGO_BIN_EXE_")
 }
 
 async fn resolve_toolchain(env: &mut tg::value::Map, rustc: &str) -> tg::Result<tg::Artifact> {
@@ -348,7 +419,7 @@ fn append_spawn_log(process_id: &tg::process::Id) {
 async fn materialize_outputs(
 	output_dir: &tg::Directory,
 	out_dir: &Path,
-	host_dirs: &[(tg::artifact::Id, PathBuf)],
+	host_dirs: &DepfilePaths,
 	args: &Args,
 ) -> tg::Result<()> {
 	let build = output_dir
@@ -356,7 +427,7 @@ async fn materialize_outputs(
 		.await?
 		.try_unwrap_directory()
 		.map_err(|_| tg::error!("expected build/ to be a directory"))?;
-	checkout_artifact_entries(&build, out_dir).await?;
+	let store = crate::checkout::entries(&build, out_dir, false).await?;
 	// Cargo's incremental fingerprint check `stat`s each depfile entry; the
 	// sandbox-internal paths do not exist on the host, so without this rewrite
 	// every rebuild reads as "stale: missing X".
@@ -370,7 +441,7 @@ async fn materialize_outputs(
 				.is_some_and(|extension| extension == "d")
 		})
 		.collect::<Vec<_>>();
-	rewrite_depfile_paths(out_dir, &depfiles, host_dirs).await?;
+	rewrite_depfile_paths(out_dir, &depfiles, host_dirs, &store).await?;
 	let own_stems = sidecar::own_stems(args.crate_name.as_deref(), args.extra_filename.as_deref());
 	let direct_extern_stems = sidecar::direct_extern_stems(&args.passthrough);
 	sidecar::write_sidecars(out_dir, &own_stems, &direct_extern_stems)
@@ -380,7 +451,8 @@ async fn materialize_outputs(
 async fn rewrite_depfile_paths(
 	out_dir: &Path,
 	depfiles: &[String],
-	host_dirs: &[(tg::artifact::Id, PathBuf)],
+	host_dirs: &DepfilePaths,
+	store: &Path,
 ) -> tg::Result<()> {
 	for depfile in depfiles {
 		let path = out_dir.join(depfile);
@@ -390,7 +462,7 @@ async fn rewrite_depfile_paths(
 				path.display()
 			)
 		})?;
-		let rewritten = rewrite_depfile_contents(&contents, host_dirs);
+		let rewritten = rewrite_depfile_contents(&contents, host_dirs, store);
 		if rewritten != contents {
 			tokio::fs::write(&path, rewritten).await.map_err(|error| {
 				tg::error!(
@@ -403,27 +475,50 @@ async fn rewrite_depfile_paths(
 	Ok(())
 }
 
-// Escape each host directory as rustc escapes the paths of files in a depfile, or as it escapes the values of environment variables on its `# env-dep:` lines.
-fn rewrite_depfile_contents(contents: &str, host_dirs: &[(tg::artifact::Id, PathBuf)]) -> String {
+// Escape each host directory as rustc escapes the paths of files in a depfile, or as it escapes the values of environment variables on its `# env-dep:` lines. Replace the sandbox's store last, so that the other artifacts are named by their paths in the host's store.
+fn rewrite_depfile_contents(contents: &str, host_dirs: &DepfilePaths, store: &Path) -> String {
 	let replacements = host_dirs
+		.directories
 		.iter()
-		.map(|(id, host_dir)| {
-			let sandbox_dir = format!("{SANDBOX_STORE_DIR}/{id}");
+		.map(|(id, host_dir)| (format!("{SANDBOX_STORE_DIR}/{id}"), host_dir.as_path()))
+		.chain([(SANDBOX_STORE_DIR.to_owned(), store)])
+		.map(|(sandbox_dir, host_dir)| {
 			let host_dir = host_dir.display().to_string();
 			let path = host_dir.replace(' ', "\\ ");
 			let value = escape_depfile_env_value(&host_dir);
-			(sandbox_dir, path, value)
+			let sandbox_path = sandbox_dir.replace(' ', "\\ ");
+			let sandbox_value = escape_depfile_env_value(&sandbox_dir);
+			(sandbox_path, sandbox_value, path, value)
 		})
 		.collect::<Vec<_>>();
 	let mut output = String::with_capacity(contents.len());
 	for line in contents.split_inclusive('\n') {
 		let env = line.starts_with("# env-dep:");
 		let mut line = line.to_owned();
-		for (sandbox_dir, path, value) in &replacements {
-			line = line.replace(sandbox_dir, if env { value } else { path });
+		for (sandbox_path, sandbox_value, path, value) in &replacements {
+			line = if env {
+				line.replace(sandbox_value, value)
+			} else {
+				line.replace(sandbox_path, path)
+			};
+		}
+
+		// Restore the manifest-relative environment values that Cargo compares with its build-script output.
+		if env
+			&& let Some((host, sandbox)) = &host_dirs.relative_out_dir
+			&& let Some((name, value)) = line.split_once('=')
+		{
+			let sandbox = escape_depfile_env_value(sandbox);
+			if let Some(suffix) = value.strip_prefix(&sandbox)
+				&& (suffix.is_empty() || suffix == "\n" || suffix.starts_with('/'))
+			{
+				let host = escape_depfile_env_value(host);
+				line = format!("{name}={host}{suffix}");
+			}
 		}
 		output.push_str(&line);
 	}
+
 	output
 }
 
@@ -438,36 +533,6 @@ fn escape_depfile_env_value(value: &str) -> String {
 		}
 	}
 	escaped
-}
-
-pub(crate) async fn checkout_artifact_entries(
-	dir: &tg::Directory,
-	target: &Path,
-) -> tg::Result<()> {
-	tokio::fs::create_dir_all(target)
-		.await
-		.map_err(|error| tg::error!("failed to create {}: {error}", target.display()))?;
-	let entries: BTreeMap<String, tg::Artifact> = dir.entries().await?;
-	let mut set = tokio::task::JoinSet::new();
-	for (name, artifact) in entries {
-		let dest = target.join(&name);
-		set.spawn(async move {
-			tg::checkout(tg::checkout::Arg {
-				dependencies: false,
-				extension: None,
-				force: true,
-				lock: None,
-				nodes: vec![artifact.to_referent().map(Into::into)],
-				path: Some(dest),
-			})
-			.await
-			.map(|_| ())
-		});
-	}
-	while let Some(joined) = set.join_next().await {
-		joined.map_err(|error| tg::error!("checkout task panicked: {error}"))??;
-	}
-	Ok(())
 }
 
 pub(crate) async fn process_output_or_exit(
@@ -589,7 +654,7 @@ fn rewrite_dir_references(env: &mut tg::value::Map, key: &str, dir: &str) {
 		return;
 	};
 	for (name, value) in env.iter_mut() {
-		if name == key {
+		if name == key || is_test_executable(name) {
 			continue;
 		}
 		let components = match value {
@@ -966,19 +1031,29 @@ pub(crate) async fn forward_logs(
 			}
 			text.into_bytes()
 		};
-		tokio::io::stdout()
+		let mut stdout = tokio::io::stdout();
+		stdout
 			.write_all(&bytes)
 			.await
 			.map_err(|error| tg::error!("failed to forward stdout: {error}"))?;
+		stdout
+			.flush()
+			.await
+			.map_err(|error| tg::error!(!error, "failed to flush stdout"))?;
 	}
 	if let Ok(artifact) = output_dir.get("log/stderr").await
 		&& let Ok(file) = artifact.try_unwrap_file()
 	{
 		let bytes = file.bytes().await?;
-		tokio::io::stderr()
+		let mut stderr = tokio::io::stderr();
+		stderr
 			.write_all(&bytes)
 			.await
 			.map_err(|error| tg::error!("failed to forward stderr: {error}"))?;
+		stderr
+			.flush()
+			.await
+			.map_err(|error| tg::error!(!error, "failed to flush stderr"))?;
 	}
 	Ok(())
 }

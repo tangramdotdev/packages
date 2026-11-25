@@ -1,0 +1,3 @@
+[workspace]
+members = ["packages/app", "packages/codegen", "packages/message"]
+resolver = "2"

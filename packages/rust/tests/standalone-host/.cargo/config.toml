@@ -1,0 +1,10 @@
+[env]
+LINK_PATH = { value = "shared/link.txt", relative = true }
+READ_PATH = { value = "shared/read.txt", relative = true }
+SAME_PATH = { value = "shared/same.txt", relative = true }
+
+[build]
+target-dir = "target/reused directory"
+
+[target.'cfg(all())']
+rustflags = ["--cfg=standalone_test"]

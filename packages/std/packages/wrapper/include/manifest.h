@@ -92,6 +92,32 @@ TG_VISIBILITY String render_object (Cx* cx, JsonValue* value);
 #define OPT_STORE_DIR "/opt/tangram/store"
 #define OPT_STORE_DIR_LEN 18
 
+#define ARTIFACT_ID_LEN 58
+#define ARTIFACT_ID_PREFIX_LEN 6
+
+// Check whether the first component of a path is the ID of a directory or a file.
+TG_VISIBILITY bool starts_with_artifact_id (String path) {
+	if (path.len < ARTIFACT_ID_LEN) {
+		return false;
+	}
+	if (path.len > ARTIFACT_ID_LEN && path.ptr[ARTIFACT_ID_LEN] != '/') {
+		return false;
+	}
+	String prefix = { .ptr = path.ptr, .len = ARTIFACT_ID_PREFIX_LEN };
+	if (!cstreq(prefix, "dir_01") && !cstreq(prefix, "fil_01")) {
+		return false;
+	}
+	for (uint64_t i = ARTIFACT_ID_PREFIX_LEN; i < ARTIFACT_ID_LEN; i++) {
+		uint8_t ch = path.ptr[i];
+		bool digit = ch >= '0' && ch <= '9';
+		bool letter = ch >= 'a' && ch <= 'z' && ch != 'i' && ch != 'l' && ch != 'o' && ch != 'u';
+		if (!digit && !letter) {
+			return false;
+		}
+	}
+	return true;
+}
+
 TG_VISIBILITY void find_store_dir (Arena* arena, String* path) {
 	struct stat statbuf;
 
@@ -110,6 +136,22 @@ TG_VISIBILITY void find_store_dir (Arena* arena, String* path) {
 
 	// Get the parent directory of the current executable.
 	*path = executable_path(arena);
+
+	// Locate an internal checkout in the installation's store before looking for a bundled store.
+	String store = STRING_LITERAL("/store/");
+	for (uint64_t i = path->len; i-- > 0;) {
+		String rest = { .ptr = path->ptr + i, .len = path->len - i };
+		if (!starts_with(rest, store)) {
+			continue;
+		}
+		rest.ptr += store.len;
+		rest.len -= store.len;
+		if (!starts_with_artifact_id(rest)) {
+			continue;
+		}
+		path->len = i + store.len - 1;
+		return;
+	}
 	*path = parent_dir(*path);
 
 	// Walk the parent directory tree.

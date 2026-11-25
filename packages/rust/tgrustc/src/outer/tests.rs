@@ -1,9 +1,12 @@
 use {
 	super::{
-		SANDBOX_STORE_DIR, rewrite_depfile_contents, rewrite_depfile_paths,
+		DepfilePaths, SANDBOX_STORE_DIR, rewrite_depfile_contents, rewrite_depfile_paths,
 		rewrite_dir_references,
 	},
-	std::{collections::BTreeMap, path::PathBuf},
+	std::{
+		collections::BTreeMap,
+		path::{Path, PathBuf},
+	},
 	tangram_client::prelude::*,
 };
 
@@ -54,9 +57,12 @@ fn depfile_paths_use_host_dirs() {
 	let contents = format!(
 		"/build/lib.rmeta: {sandbox_dir}/private.rs\n\n{sandbox_dir}/private.rs:\n\n# env-dep:OUT_DIR={sandbox_dir}\n"
 	);
-	let host_dirs = vec![(id, PathBuf::from("/target/build/out"))];
+	let host_dirs = DepfilePaths {
+		directories: vec![(id.to_string(), PathBuf::from("/target/build/out"))],
+		relative_out_dir: None,
+	};
 	assert_eq!(
-		rewrite_depfile_contents(&contents, &host_dirs),
+		rewrite_depfile_contents(&contents, &host_dirs, Path::new(SANDBOX_STORE_DIR)),
 		"/build/lib.rmeta: /target/build/out/private.rs\n\n/target/build/out/private.rs:\n\n# env-dep:OUT_DIR=/target/build/out\n",
 	);
 }
@@ -68,10 +74,59 @@ fn depfile_paths_escape_host_dirs() {
 	let sandbox_dir = format!("{SANDBOX_STORE_DIR}/{id}");
 	let contents =
 		format!("/build/lib.rmeta: {sandbox_dir}/private.rs\n\n# env-dep:OUT_DIR={sandbox_dir}\n");
-	let host_dirs = vec![(id, PathBuf::from("/target dir/out"))];
+	let host_dirs = DepfilePaths {
+		directories: vec![(id.to_string(), PathBuf::from("/target dir/out"))],
+		relative_out_dir: None,
+	};
 	assert_eq!(
-		rewrite_depfile_contents(&contents, &host_dirs),
+		rewrite_depfile_contents(&contents, &host_dirs, Path::new(SANDBOX_STORE_DIR)),
 		"/build/lib.rmeta: /target\\ dir/out/private.rs\n\n# env-dep:OUT_DIR=/target dir/out\n",
+	);
+}
+
+#[test]
+fn depfile_paths_restore_grafted_outputs_and_relative_environment() {
+	let artifact: tg::Artifact = tg::Directory::with_entries(BTreeMap::new()).into();
+	let id = artifact.id();
+	let root = format!("{SANDBOX_STORE_DIR}/{id}");
+	let contents = format!(
+		"/build/lib.rmeta: {root}/.tgrustc-out-dir/generated.rs {root}/app/../.tgrustc-out-dir/generated.rs {root}/app/src/lib.rs\n# env-dep:GENERATED_PATH=../.tgrustc-out-dir/generated.rs\n# env-dep:OTHER=../.tgrustc-out-dir-other/file\n"
+	);
+	let host_dirs = DepfilePaths {
+		directories: vec![
+			(
+				format!("{id}/app/../.tgrustc-out-dir"),
+				PathBuf::from("/target dir/out"),
+			),
+			(
+				format!("{id}/.tgrustc-out-dir"),
+				PathBuf::from("/target dir/out"),
+			),
+			(id.to_string(), PathBuf::from("/project")),
+		],
+		relative_out_dir: Some((
+			"../../target dir/out".to_owned(),
+			"../.tgrustc-out-dir".to_owned(),
+		)),
+	};
+	assert_eq!(
+		rewrite_depfile_contents(&contents, &host_dirs, Path::new(SANDBOX_STORE_DIR)),
+		"/build/lib.rmeta: /target\\ dir/out/generated.rs /target\\ dir/out/generated.rs /project/app/src/lib.rs\n# env-dep:GENERATED_PATH=../../target dir/out/generated.rs\n# env-dep:OTHER=../.tgrustc-out-dir-other/file\n",
+	);
+}
+
+#[test]
+fn depfile_paths_use_the_host_store() {
+	let host_dirs = DepfilePaths {
+		directories: Vec::new(),
+		relative_out_dir: None,
+	};
+	let contents = format!(
+		"/build/lib.rmeta: {SANDBOX_STORE_DIR}/fil_0\n\n# env-dep:FILE={SANDBOX_STORE_DIR}/fil_0\n"
+	);
+	assert_eq!(
+		rewrite_depfile_contents(&contents, &host_dirs, Path::new("/host data/store")),
+		"/build/lib.rmeta: /host\\ data/store/fil_0\n\n# env-dep:FILE=/host data/store/fil_0\n",
 	);
 }
 
@@ -84,10 +139,18 @@ fn depfile_rewrite_skips_other_compilations() {
 	std::fs::write(out_dir.path().join("this.d"), &contents).unwrap();
 	std::fs::write(out_dir.path().join("other.d"), &contents).unwrap();
 	let depfiles = vec!["this.d".to_owned()];
-	let host_dirs = vec![(id, PathBuf::from("/target/build/out"))];
+	let host_dirs = DepfilePaths {
+		directories: vec![(id.to_string(), PathBuf::from("/target/build/out"))],
+		relative_out_dir: None,
+	};
 	crate::runtime()
 		.unwrap()
-		.block_on(rewrite_depfile_paths(out_dir.path(), &depfiles, &host_dirs))
+		.block_on(rewrite_depfile_paths(
+			out_dir.path(),
+			&depfiles,
+			&host_dirs,
+			Path::new(SANDBOX_STORE_DIR),
+		))
 		.unwrap();
 	assert_eq!(
 		std::fs::read_to_string(out_dir.path().join("this.d")).unwrap(),
@@ -115,6 +178,25 @@ fn manifest_dir_references_use_the_source_artifact() {
 		render(&env["RUSTY_V8_SRC_BINDING_PATH"]),
 		"/checked-in-out/gen/src_binding.rs",
 	);
+}
+
+#[test]
+fn test_executables_keep_their_host_paths() {
+	let artifact = tg::Directory::with_entries(BTreeMap::new()).into();
+	let template = tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
+	let mut env = tg::value::Map::from([
+		("CARGO_MANIFEST_DIR".to_owned(), template.into()),
+		(
+			"CARGO_BIN_EXE_my-app".to_owned(),
+			"/crate/target/debug/my-app".to_owned().into(),
+		),
+		("OTHER".to_owned(), "/crate/other".to_owned().into()),
+	]);
+	rewrite_dir_references(&mut env, "CARGO_MANIFEST_DIR", "/crate");
+	assert!(
+		matches!(&env["CARGO_BIN_EXE_my-app"], tg::Value::String(path) if path == "/crate/target/debug/my-app")
+	);
+	assert_eq!(render(&env["OTHER"]), "/checked-in-out/other");
 }
 
 #[test]

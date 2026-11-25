@@ -90,7 +90,7 @@ export type Arg = CommonArg & {
 	/** A name for the build process. */
 	processName?: string;
 
-	/** Produce native executables that use system libraries without a Tangram wrapper. Requires a native build with the rustc proxy disabled. */
+	/** Produce native executables that use system libraries without a Tangram wrapper. Host builds leave the Cargo outputs in the target directory; use `std.file.standalone` to export an executable. */
 	standalone?: boolean | std.sdk.StandaloneArg;
 
 	/** The cargo subcommand to invoke. May include subcommand-specific arguments, which are placed before the standard ones. Only the build subcommand copies the executables, and the static libraries of `staticlib` crates, into the output. Default: "build". */
@@ -120,11 +120,14 @@ export async function arg(...args: tg.Args<Arg>): Promise<ResolvedArg> {
 
 /** The args for running Cargo on the host, with dependencies compiled through Tangram by default. */
 export type RunArg = CommonArg & {
-	/** Cargo.lock file for vendoring (alternative to providing full source). */
+	/** Cargo.lock file for vendoring (alternative to providing full source). A standalone build requires the full source instead. */
 	cargoLock?: tg.File;
 
-	/** When proxy is true, whether workspace members should be compiled directly via passthrough. Default: true. */
+	/** When proxy is true, whether workspace members should be compiled directly via passthrough. A standalone build compiles workspace members through the proxy and does not support passthrough. Default: true. */
 	passthrough?: boolean;
+
+	/** Build with the standalone toolchain and compiler cache while retaining Cargo's target directory. */
+	standalone?: boolean | std.sdk.StandaloneArg;
 
 	/** The target directory, which is outside of Tangram. `true` uses the directory that the host's Cargo would choose, and a path uses that directory. Default: true. */
 	targetDir?: true | string;
@@ -210,7 +213,16 @@ async function resolveDepsEnv(
 
 /** Create a command to run Cargo on the host. The command uses the host's default target directory and enables the rustc proxy unless overridden. */
 export async function run(...args: tg.Args<RunArg>): Promise<tg.Command> {
-	return runCommand(await runArg(...args));
+	const resolved = await runArg(...args);
+	if (resolved.standalone) {
+		const output = await build({
+			...resolved,
+			targetDir: resolved.targetDir ?? true,
+		});
+		tg.assert(output instanceof tg.Command);
+		return output;
+	}
+	return runCommand(resolved);
 }
 
 /** Create a command for `tg run -b`, which runs Cargo on the host and forwards trailing arguments. */
@@ -336,6 +348,7 @@ VENDORCFG`;
 		proxySetup = await tg`export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
 export TGRUSTC_SANDBOX_TOOLCHAIN="${toolchainDir}"
 export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
+export TGRUSTC_COPY_OUTPUTS=1
 export TGRUSTC_SOURCE_DIR="$PWD"`;
 	}
 
@@ -425,8 +438,19 @@ export async function build(
 ): Promise<tg.Command | tg.Directory> {
 	const merged = await mergeArgs(...args);
 	const { targetDir } = merged;
-	if (targetDir === true || typeof targetDir === "string") {
+	const runOnHost = targetDir === true || typeof targetDir === "string";
+	if (runOnHost && !merged.standalone) {
 		return runCommand({ ...merged, targetDir });
+	}
+	if (runOnHost) {
+		tg.assert(
+			merged.cargoLock === undefined,
+			"a standalone host build does not support the cargoLock argument",
+		);
+		tg.assert(
+			!merged.passthrough,
+			"a standalone host build does not support passthrough",
+		);
 	}
 	const resolved = requireSource(merged);
 	const depsEnv = await resolveDepsEnv(resolved);
@@ -449,7 +473,7 @@ export async function build(
 		processName,
 		profile = "release",
 		profileFlag = "--profile",
-		proxy = false,
+		proxy = runOnHost,
 		sdk: sdk_ = {},
 		source,
 		standalone = false,
@@ -466,9 +490,10 @@ export async function build(
 	const crossCompiling = target !== rustHost;
 	const linuxToDarwin = os === "linux" && std.triple.os(target) === "darwin";
 
-	if (standalone && proxy) {
-		throw new Error("standalone builds do not yet support the rustc proxy");
-	}
+	tg.assert(
+		!runOnHost || !captureStderr,
+		"host builds stream their diagnostics directly",
+	);
 	if (linuxToDarwin && !standalone) {
 		throw new Error(
 			"a build for a macOS target on a Linux build machine must be standalone, because wrapping Mach-O outputs on a Linux build machine is not supported",
@@ -523,7 +548,9 @@ export async function build(
 	}
 	const sdk = await tg.build(std.sdk, ...(crossSdkArgs ?? sdkArgs));
 	envs.push(sdk);
-	const channel = channel_ ?? "stable";
+	const channel =
+		channel_ ??
+		(runOnHost ? ((await readToolchainChannel(source)) ?? "stable") : "stable");
 	const rustArtifact = await self({
 		host: rustHost,
 		target,
@@ -560,22 +587,33 @@ directory = "${vendoredDir}"`;
 	const proxyDir = proxy ? proxy_.proxy() : undefined;
 
 	// Compile build scripts outside the project through the proxy, which links each one to run in the runner's sandbox and leaves a launcher in its place, so that Cargo runs every such build script through the runner.
-	if (proxy) {
-		envs.push({ TGRUSTC_PROXY_BUILD_SCRIPTS: "1" });
+	if (proxy && proxyDir !== undefined) {
+		envs.push({ TGRUSTC_PROXY_BUILD_SCRIPTS: tg`${proxyDir}/bin/tgrustc` });
 	}
 
-	// Keep Cargo's target directory and home in the temporary workspace and write the generated configuration.
-	const preparePathCommands = [
-		tg`mkdir -p "$PWD/target" "${tg.output}/bin"`,
-		tg`SCRATCH_TARGET_DIR="$(realpath "$PWD/target")"`,
-		tg`export CARGO_HOME="$(mktemp -d)"`,
-		tg`cargo_config_path="$PWD/config.toml"\necho '${cargoConfig}' > "$cargo_config_path"`,
-	];
+	// In a proxied host build, copy cached outputs so that the user owns them, and turn off incremental compilation, because a compilation in a sandbox cannot use the incremental directory, whose path in the target directory would vary its key.
+	if (proxy && runOnHost) {
+		envs.push({ CARGO_INCREMENTAL: "0", TGRUSTC_COPY_OUTPUTS: "1" });
+	}
+
+	// Keep host builds in Cargo's chosen target directory and preserve the user's Cargo configuration.
+	const preparePathCommands = runOnHost
+		? [
+				tg`cargo_config_path="$(mktemp)"\ntrap 'rm -f "$cargo_config_path"' EXIT\necho '${cargoConfig}' > "$cargo_config_path"`,
+			]
+		: [
+				tg`mkdir -p "$PWD/target" "${tg.output}/bin"`,
+				tg`SCRATCH_TARGET_DIR="$(realpath "$PWD/target")"`,
+				tg`export CARGO_HOME="$(mktemp -d)"`,
+				tg`cargo_config_path="$PWD/config.toml"\necho '${cargoConfig}' > "$cargo_config_path"`,
+			];
 	const preparePaths = tg.Template.join("\n", ...preparePathCommands);
 
-	const prepareSource = buildInTree
-		? tg`cp -R ${source}/. $PWD/work\nchmod -R u+w $PWD/work\nexport TGRUSTC_SOURCE_DIR="$PWD/work"`
-		: tg`export TGRUSTC_SOURCE_DIR=$(realpath ${source})`;
+	const prepareSource = runOnHost
+		? tg`export TGRUSTC_SOURCE_DIR="$(pwd -P)"\nexport TGRUSTC_RUNNER_WORKSPACE="$TGRUSTC_SOURCE_DIR"`
+		: buildInTree
+			? tg`cp -R ${source}/. $PWD/work\nchmod -R u+w $PWD/work\nexport TGRUSTC_SOURCE_DIR="$PWD/work"`
+			: tg`export TGRUSTC_SOURCE_DIR=$(realpath ${source})`;
 
 	// Discover the project configuration from the manifest directory.
 	const enterSource = tg`cd "$TGRUSTC_SOURCE_DIR/${manifestSubdir ?? "."}"`;
@@ -585,7 +623,7 @@ directory = "${vendoredDir}"`;
 		: `"Cargo.toml"`;
 	const cargoArgs = [
 		`${profileFlag} ${profile}`,
-		`--target-dir "$SCRATCH_TARGET_DIR"`,
+		...(runOnHost ? [] : [`--target-dir "$SCRATCH_TARGET_DIR"`]),
 		`--manifest-path "$TGRUSTC_SOURCE_DIR/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
 		"--target $RUST_TARGET",
@@ -612,13 +650,13 @@ directory = "${vendoredDir}"`;
 	// before flushing on Linux.
 	const buildCommand = captureStderr
 		? tg`cargo ${configArg} ${subcommand} ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
-		: tg`cargo ${configArg} ${subcommand} ${cargoArgString}`;
+		: tg`cargo ${configArg} ${subcommand} ${cargoArgString} ${runOnHost ? '"$@"' : ""}`;
 
 	// Copy the executables with their dependency metadata, and the static libraries of `staticlib` crates, before the temporary target directory is discarded. Only a build copies them, because other subcommands, such as test runs, build executables only for their own use.
 	const profileDir = profile === "dev" ? "debug" : profile;
 	const subcommandName = subcommand.trim().split(/\s+/)[0];
 	const install =
-		subcommandName === "build"
+		!runOnHost && subcommandName === "build"
 			? tg`
 		for executable in "$SCRATCH_TARGET_DIR/${target}/${profileDir}"/*; do
 			if [ -f "$executable" ] && [ -x "$executable" ]; then
@@ -645,7 +683,7 @@ directory = "${vendoredDir}"`;
 			? tg`find "$SCRATCH_TARGET_DIR" -type f -name stderr -exec cat {} + >> "${tg.output}/cargo-stderr.log"`
 			: null,
 		install,
-		timings
+		timings && !runOnHost
 			? tg`if [ -d "$SCRATCH_TARGET_DIR/cargo-timings" ]; then cp -R "$SCRATCH_TARGET_DIR/cargo-timings" "${tg.output}/cargo-timings"; fi`
 			: null,
 	);
@@ -735,8 +773,8 @@ directory = "${vendoredDir}"`;
 		envs.push(proxyEnv);
 	}
 
-	// Filter the workspace once for all of its build scripts. An in-tree build copies the source out of the store, so its build scripts already see only their own crate.
-	if (proxy && !buildInTree) {
+	// Filter the workspace once for all of its build scripts. An in-tree build copies the source out of the store, so its build scripts already see only their own crate. The build scripts of a host build read the workspace itself, which can change after this command is created.
+	if (proxy && !buildInTree && !runOnHost) {
 		const runnerWorkspace = await tg
 			.build(filterRunnerWorkspace, source)
 			.then(tg.Directory.expect);
@@ -744,7 +782,8 @@ directory = "${vendoredDir}"`;
 	}
 
 	{
-		const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
+		const effectiveJobs =
+			parallelJobs ?? (proxy && !runOnHost ? 256 : undefined);
 		if (effectiveJobs !== undefined) {
 			const jobsEnv = {
 				CARGO_BUILD_JOBS: `${effectiveJobs}`,
@@ -759,27 +798,27 @@ directory = "${vendoredDir}"`;
 		std.triple.arch(target) === "x86_64" && std.triple.os(target) === "linux";
 	if (os === "linux" && (hostIsX8664 || targetIsX8664Linux)) {
 		const linkerFeatures = "-C linker-features=-lld";
-		if (proxy && proxyDir !== undefined) {
-			if (hostIsX8664 && targetIsX8664Linux) {
-				const linkerEnv = {
-					RUSTFLAGS: tg.Mutation.suffix(linkerFeatures, " "),
-				};
-				envs.push(linkerEnv);
-			}
-		} else {
-			// Run the script with Bash, because it passes on the variables that Cargo names after hyphenated targets, such as `CARGO_BIN_EXE_my-bin`, which the sandbox's `/bin/sh` removes from the environment.
-			const shebang = "#!/usr/bin/env bash";
-			const namesTarget = `case " $* " in *" --target ${target} "*)`;
-			let script = `${shebang}\nexec "$@" ${linkerFeatures}\n`;
-			if (!targetIsX8664Linux) {
-				script = `${shebang}\n${namesTarget} exec "$@" ;; esac\nexec "$@" ${linkerFeatures}\n`;
-			} else if (!hostIsX8664) {
-				script = `${shebang}\n${namesTarget} exec "$@" ${linkerFeatures} ;; esac\nexec "$@"\n`;
-			}
-			const wrapper = tg.file(script, { executable: true });
-			const linkerEnv = { RUSTC_WRAPPER: wrapper };
-			envs.push(linkerEnv);
+		// Add the flag to each invocation rather than to `RUSTFLAGS`, so that Cargo still reads the Rust flags in its configuration. Run the script with Bash, because it passes on the variables that Cargo names after hyphenated targets, such as `CARGO_BIN_EXE_my-bin`, which the sandbox's `/bin/sh` removes from the environment.
+		const shebang = "#!/usr/bin/env bash";
+		const namesTarget = `case " $* " in *" --target ${target} "*)`;
+		const exec =
+			proxy && proxyDir !== undefined
+				? 'exec "$TANGRAM_CARGO_RUSTC_PROXY" "$@"'
+				: 'exec "$@"';
+		let script = `${shebang}\n${exec} ${linkerFeatures}\n`;
+		if (!targetIsX8664Linux) {
+			script = `${shebang}\n${namesTarget} ${exec} ;; esac\n${exec} ${linkerFeatures}\n`;
+		} else if (!hostIsX8664) {
+			script = `${shebang}\n${namesTarget} ${exec} ${linkerFeatures} ;; esac\n${exec}\n`;
 		}
+		const wrapper = tg.file(script, { executable: true });
+		const linkerEnv = {
+			RUSTC_WRAPPER: wrapper,
+			...(proxy && proxyDir !== undefined
+				? { TANGRAM_CARGO_RUSTC_PROXY: tg`${proxyDir}/bin/tgrustc` }
+				: {}),
+		};
+		envs.push(linkerEnv);
 	}
 
 	if (verbose) {
@@ -842,6 +881,17 @@ directory = "${vendoredDir}"`;
 			...linkerEnv,
 			[`CFLAGS${flagSuffix}`]: tg.Mutation.suffix(compileFlags, " "),
 			[`CXXFLAGS${flagSuffix}`]: tg.Mutation.suffix(compileFlags, " "),
+		});
+	}
+
+	if (runOnHost) {
+		if (typeof targetDir === "string") {
+			env = await std.env.arg(env, { CARGO_TARGET_DIR: targetDir });
+		}
+		return tg.command({
+			args: ["-c", tg`set -euo pipefail\n${buildScript}`, "--"],
+			env,
+			executable: { path: "/bin/bash" },
 		});
 	}
 
@@ -1197,8 +1247,11 @@ export async function test() {
 	tests.push(testConfig());
 	tests.push(testNestedCargoOffline());
 	tests.push(testStandalone());
+	tests.push(testStandaloneProxy());
+	tests.push(testStandaloneHost());
 	tests.push(testStandaloneBuildScript());
 	tests.push(testStandaloneCross());
+	tests.push(testStandaloneCrossProxy());
 	tests.push(testStaticLibrary());
 	tests.push(testTestSubcommand());
 	tests.push(testUnproxiedWorkspace());
@@ -1209,10 +1262,11 @@ export async function test() {
 	return true;
 }
 
-export async function testStandalone() {
+export async function testStandalone(arg?: { proxy?: boolean }) {
 	const fixture = await tests.get("hello-file-dep").then(tg.Directory.expect);
 	const config = await fixture.get("data/config.txt").then(tg.File.expect);
 	const outputs: Record<string, tg.Directory> = {};
+	const proxy = arg?.proxy ?? false;
 	for (const key of [
 		"RUSTFLAGS",
 		"CARGO_ENCODED_RUSTFLAGS",
@@ -1236,7 +1290,9 @@ export async function testStandalone() {
 			`,
 		});
 		const arg = {
+			channel: "stable",
 			env: fromEnv ? { [key]: "--cfg=standalone_test" } : {},
+			proxy,
 			source,
 			standalone: { glibcVersion: "2.39" as const },
 		};
@@ -1252,6 +1308,128 @@ export async function testStandalone() {
 	}
 
 	return tg.directory(outputs);
+}
+
+export async function testStandaloneProxy() {
+	return testStandalone({ proxy: true });
+}
+
+/** A command that runs a Cargo subcommand for a standalone host build of a workspace, which the test runs repeatedly. */
+export async function standaloneHostCommand(subcommand = "build") {
+	const command = await build({
+		channel: "stable",
+		profile: "dev",
+		source: tests.get("standalone-host").then(tg.Directory.expect),
+		standalone: { glibcVersion: "2.39" },
+		subcommand,
+		targetDir: true,
+	});
+	return tg.Command.expect(command);
+}
+
+/** A standalone host build reuses its target directory. Cargo considers every unit fresh when nothing changed, rebuilds what a change affects, and compiles nothing new in another target directory. A test runs the current build of an executable. */
+export async function testStandaloneHost() {
+	const command = await standaloneHostCommand();
+	const args = await command.args;
+	const env = Object.fromEntries(
+		Object.entries(await command.env).map(([name, { value }]) => [
+			name,
+			typeof value === "string" ? value : tg.Template.expect(value),
+		]),
+	);
+	const script = tg.Template.expect(args[1]?.value);
+	const testArgs = await (await standaloneHostCommand("test")).args;
+	const testScript = tg.Template.expect(testArgs[1]?.value);
+	const source = tests.get("standalone-host").then(tg.Directory.expect);
+	const target = rustTriple(std.triple.host());
+	const output = await std.build`
+		cp -R ${source} work
+		chmod -R u+w work
+		cd work
+		export HOME="$PWD"
+
+		build() {
+			log="${tg.output}/$1"
+			if ! bash -c "$HOST_BUILD_SCRIPT" -- -v > "$log" 2>&1; then
+				cat "$log" >&2
+				exit 1
+			fi
+			"\${CARGO_TARGET_DIR:-target/reused directory}/${target}/debug/app" >> "$log"
+		}
+
+		run_test() {
+			log="${tg.output}/$1"
+			if ! bash -c "$HOST_TEST_SCRIPT" -- --test program -- --nocapture > "$log" 2>&1; then
+				cat "$log" >&2
+				exit 1
+			fi
+		}
+
+		mkdir -p "${tg.output}"
+		build initial
+		build unchanged
+		echo resame > shared/same.txt
+		build same
+		echo relinked > shared/linked.txt
+		build linked
+		echo reread > shared/read.txt
+		build read
+		sed -i s/original/edited/ packages/message/src/lib.rs
+		build source
+		echo reincluded > shared/included.txt
+		build included
+		sed -i s/generated/regenerated/ packages/codegen/src/lib.rs
+		build dependency
+		build unchanged-again
+		CARGO_TARGET_DIR="$PWD/target/new" build new-target
+		run_test test
+		sed -i 's/{}, {GENERATED}/{}; {GENERATED}/' packages/app/src/main.rs
+		run_test test-edited
+	`
+		.env(env, { HOST_BUILD_SCRIPT: script, HOST_TEST_SCRIPT: testScript })
+		.then(tg.Directory.expect);
+
+	const log = async (name: string) =>
+		await output
+			.get(name)
+			.then(tg.File.expect)
+			.then((file) => file.text);
+	for (const [name, message] of [
+		["initial", "original, generated read read linked, included"],
+		["same", "original, generated read resame linked, included"],
+		["linked", "original, generated read resame relinked, included"],
+		["read", "original, generated reread resame relinked, included"],
+		["source", "edited, generated reread resame relinked, included"],
+		["included", "edited, generated reread resame relinked, reincluded"],
+		["dependency", "edited, regenerated reread resame relinked, reincluded"],
+		["new-target", "edited, regenerated reread resame relinked, reincluded"],
+	] as const) {
+		const text = await log(name);
+		tg.assert(text.trim().endsWith(message), `unexpected output: ${text}`);
+	}
+	for (const name of ["unchanged", "unchanged-again"]) {
+		const text = await log(name);
+		const fresh = text.match(/^ *Fresh /gm)?.length;
+		tg.assert(
+			fresh === 3 && !/^ *(Compiling|Dirty) /m.test(text),
+			`expected every unit to be fresh: ${text}`,
+		);
+	}
+	const text = await log("new-target");
+	tg.assert(
+		text.includes("cached=true") && !text.includes("cached=false"),
+		`expected every compilation to be cached: ${text}`,
+	);
+	for (const [name, separator] of [
+		["test", ","],
+		["test-edited", ";"],
+	] as const) {
+		const message = `edited${separator} regenerated reread resame relinked, reincluded`;
+		const text = await log(name);
+		tg.assert(text.includes(message), `unexpected output: ${text}`);
+	}
+
+	return output;
 }
 
 export async function testStandaloneBuildScript() {
@@ -1286,7 +1464,7 @@ export async function testStandaloneBuildScript() {
 	return true;
 }
 
-export async function testStandaloneCross() {
+export async function testStandaloneCross(arg?: { proxy?: boolean }) {
 	// A cross build compiles C for the target in a build script, against the deployment glibc's headers on Linux, and links the build script for the build machine.
 	const host = std.sdk.canonicalTriple(std.triple.host());
 	const os = std.triple.os(host);
@@ -1294,7 +1472,9 @@ export async function testStandaloneCross() {
 	const target =
 		os === "linux" ? `${arch}-unknown-linux-gnu` : `${arch}-apple-darwin`;
 	const output = await build({
+		channel: "stable",
 		host,
+		proxy: arg?.proxy ?? false,
 		source: standaloneCrossSource(),
 		standalone: { glibcVersion: "2.35" },
 		target,
@@ -1312,7 +1492,11 @@ export async function testStandaloneCross() {
 	return output;
 }
 
-export async function testStandaloneCrossDarwin() {
+export async function testStandaloneCrossProxy() {
+	return testStandaloneCross({ proxy: true });
+}
+
+export async function testStandaloneCrossDarwin(arg?: { proxy?: boolean }) {
 	// A Linux build machine builds the standalone cross fixture for both macOS architectures with the LLVM cross toolchain.
 	const host = std.sdk.canonicalTriple(std.triple.host());
 	if (std.triple.os(host) !== "linux") {
@@ -1322,7 +1506,9 @@ export async function testStandaloneCrossDarwin() {
 	for (const arch of ["aarch64", "x86_64"] as const) {
 		const target = `${arch}-apple-darwin`;
 		const output = await build({
+			channel: "stable",
 			host,
+			proxy: arg?.proxy ?? false,
 			source: standaloneCrossSource(),
 			standalone: true,
 			target,
@@ -1341,9 +1527,16 @@ export async function testStandaloneCrossDarwin() {
 	return tg.directory(outputs);
 }
 
+export async function testStandaloneCrossDarwinProxy() {
+	return testStandaloneCrossDarwin({ proxy: true });
+}
+
 /** A crate whose build script compiles C for the target through the `CC_`, `AR_`, and `CFLAGS_` variables for the target. */
 function standaloneCrossSource() {
 	return tg.directory({
+		".cargo/config.toml": tg.file`[build]
+rustflags = ["--cfg=standalone_test"]
+`,
 		"Cargo.toml": tg.file`
 			[package]
 			name = "standalone-cross"
@@ -1377,6 +1570,8 @@ function standaloneCrossSource() {
 			}
 		`,
 		"src/main.rs": tg.file`
+			#[cfg(not(standalone_test))]
+			compile_error!("the caller's Rust flags must be preserved");
 			unsafe extern "C" {
 				fn answer() -> i32;
 			}
