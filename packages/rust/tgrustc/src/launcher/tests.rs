@@ -1,5 +1,5 @@
 use {
-	super::{SCRIPT_NAME, contents, install},
+	super::{SCRIPT_NAME, install},
 	crate::args::Args,
 	std::{os::unix::fs::PermissionsExt as _, path::Path},
 };
@@ -31,21 +31,20 @@ fn launcher_is_a_new_file_that_runs_the_build_script() {
 	assert!(metadata.modified().unwrap() > std::time::UNIX_EPOCH);
 
 	// Run the launcher without the proxy, and with a proxy whose path must be quoted.
-	assert_eq!(run(&launcher, false), "an argument\n");
+	assert_eq!(run(&launcher, None), "an argument\n");
 	let proxy = directory.path().join("the proxy's executable");
-	std::fs::rename(&script, &proxy).unwrap();
-	write_executable(&launcher, &contents(&proxy));
+	std::fs::copy(&script, &proxy).unwrap();
 	let expected = format!("runner\n{}\nan argument\n", script.display());
-	assert_eq!(run(&launcher, true), expected);
+	assert_eq!(run(&launcher, Some(&proxy)), expected);
 }
 
-fn run(launcher: &Path, proxy: bool) -> String {
+fn run(launcher: &Path, proxy: Option<&Path>) -> String {
 	let mut command = std::process::Command::new(launcher);
 	command
 		.arg("an argument")
 		.env_remove("TGRUSTC_PROXY_BUILD_SCRIPTS");
-	if proxy {
-		command.env("TGRUSTC_PROXY_BUILD_SCRIPTS", "1");
+	if let Some(proxy) = proxy {
+		command.env("TGRUSTC_PROXY_BUILD_SCRIPTS", proxy);
 	}
 	let output = command.output().unwrap();
 	String::from_utf8(output.stdout).unwrap()

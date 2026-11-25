@@ -588,7 +588,7 @@ directory = "${vendoredDir}"`;
 
 	// Compile build scripts outside the project through the proxy, which links each one to run in the runner's sandbox and leaves a launcher in its place, so that Cargo runs every such build script through the runner.
 	if (proxy) {
-		envs.push({ TGRUSTC_PROXY_BUILD_SCRIPTS: "1" });
+		envs.push({ TGRUSTC_PROXY_BUILD_SCRIPTS: tg`${proxyDir}/bin/tgrustc` });
 	}
 
 	// In a proxied host build, copy cached outputs so that the user owns them, and turn off incremental compilation, because a compilation in a sandbox cannot use the incremental directory, whose path in the target directory would vary its key.
