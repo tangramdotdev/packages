@@ -286,6 +286,8 @@ async fn build_env(
 	let mut env = tg::process::env::env()?;
 	// Remove the runner's filtered workspace, which only build scripts read, so that it does not vary every compilation.
 	env.remove("TGRUSTC_RUNNER_WORKSPACE");
+	// Remove the path of the proxy, which only a build script's launcher reads.
+	env.remove("TGRUSTC_PROXY_BUILD_SCRIPTS");
 	for (name, value) in &mut env {
 		if name == "OUT_DIR"
 			|| name.starts_with("CARGO_MANIFEST_")
