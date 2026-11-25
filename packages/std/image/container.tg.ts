@@ -15,7 +15,7 @@ export type ArgObject = {
 	/** This is the equivalent of the ENTRYPOINT field in a Dockerfile. If a binary is passed, it will be included at `/entrypoint` and used. If a string array is provided, it will be used instead. */
 	entrypoint?: std.wrap.Arg | Array<string> | null;
 
-	/** Env to include. If present, the entrypoint will be an env with these values set, and the command must be used to run a specific program. */
+	/** Env to include. Variables with literal string values are written to the image configuration, like the ENV instruction in a Dockerfile, so that `docker run --env` overrides them and `docker exec` sees them. Any other value, such as one that refers to an artifact or a mutation that extends a variable, is applied by wrapping the entrypoint, or by an env program that runs the entrypoint or the command. */
 	env?: std.env.Arg | null;
 
 	/** Ports to expose. */
@@ -47,6 +47,28 @@ export type ArgObject = {
 
 	/** The WORKDIR field in a Dockerfile. Change to this directory to do work. */
 	workdir?: string | null;
+};
+
+/** Get the value of an env variable if it is a literal string that sets the variable, with no artifacts and no other mutation. */
+const literalEnvValue = (
+	value: tg.MaybeMutation<tg.Template.Arg> | undefined,
+): string | undefined => {
+	if (value instanceof tg.Mutation) {
+		if (value.inner.kind !== "set") {
+			return undefined;
+		}
+		return literalEnvValue(value.inner.value as tg.Template.Arg);
+	}
+	if (typeof value === "string") {
+		return value;
+	}
+	if (value instanceof tg.Template) {
+		const components = value.components;
+		if (components.every((component) => typeof component === "string")) {
+			return components.join("");
+		}
+	}
+	return undefined;
 };
 
 export type UserSpec = {
@@ -192,7 +214,21 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 		volumes,
 		workdir,
 	} = arg;
-	const env = await std.env.compose(envArg ?? null);
+	const composedEnv = await std.env.compose(envArg ?? null);
+
+	// Write the variables that have literal values to the image configuration, and apply the rest with a wrapper.
+	const configEnv: Array<string> = [];
+	const env: std.env.EnvObject = {};
+	for (const name of Object.keys(composedEnv).sort()) {
+		const value = composedEnv[name];
+		const literal = literalEnvValue(value);
+		if (literal !== undefined) {
+			configEnv.push(`${name}=${literal}`);
+		} else if (value !== undefined) {
+			env[name] = value;
+		}
+	}
+	const hasWrappedEnv = Object.keys(env).length > 0;
 
 	// Fill in defaults.
 	const system = std.triple.archAndOs(system_ ?? std.triple.host());
@@ -203,7 +239,7 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 	// If we have an Array<string>, use that.
 	let entrypointArtifact: tg.File | undefined = undefined;
 	let entrypointString: Array<string> | undefined = undefined;
-	let envApplied = false;
+	let envApplied = !hasWrappedEnv;
 	if (entrypoint_ !== undefined && entrypoint_ !== null) {
 		if (Array.isArray(entrypoint_)) {
 			entrypointString = entrypoint_;
@@ -217,7 +253,7 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 		}
 	}
 
-	// // Verify that the arguments supplied are correct.
+	// Verify that the arguments supplied are correct.
 	tg.assert(
 		(layers_ ?? []).length > 0 || entrypointArtifact !== undefined,
 		"Cannot create a container image without either a root filesystem or entrypoint.",
@@ -242,6 +278,7 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 		}
 	}
 	if (!envApplied) {
+		// Run the entrypoint or the command with an env program that sets the remaining variables.
 		envApplied = true;
 		let envEntrypoint = await std.wrap(
 			await tg.build(std.buildGnuEnv).named("gnu env"),
@@ -256,9 +293,7 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 				layerCompression,
 			),
 		);
-		if (!entrypointString) {
-			entrypointString = ["/entrypoint"];
-		}
+		entrypointString = ["/entrypoint", ...(entrypointString ?? [])];
 	}
 
 	// Add user layers if users or user is specified
@@ -287,6 +322,9 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 			Cmd: cmd ?? [],
 		},
 	};
+	if (configEnv.length > 0) {
+		config.config!.Env = configEnv;
+	}
 	if (expose !== undefined && expose !== null) {
 		config.config!.ExposedPorts = Object.fromEntries(
 			expose.map((key) => [key, {}]),

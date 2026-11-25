@@ -142,6 +142,26 @@ export async function testBasicRootfsWithEnvAndEntrypoint() {
 	return imageFile;
 }
 
+export async function testArtifactEnvWithEntrypoint() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log(
+			"skipped image.tg.ts#testArtifactEnvWithEntrypoint: requires Linux",
+		);
+		return null;
+	}
+	const utils = bootstrap.sdk.prepareBootstrapUtils();
+	const greeting = tg.file`Hello, world!`;
+	const env = { GREETING: tg`${greeting}`, NAME: "Tangram" };
+	const imageFile = await image(utils, {
+		buildToolchain: await bootstrapBuildToolchain(),
+		cmd: ["-c", "cat $GREETING && echo $NAME"],
+		env,
+		entrypoint: ["/bin/sh"],
+	});
+
+	return imageFile;
+}
+
 export async function testBootstrapEnv() {
 	const utils = bootstrap.sdk.prepareBootstrapUtils();
 	const buildToolchain = await bootstrapBuildToolchain();
