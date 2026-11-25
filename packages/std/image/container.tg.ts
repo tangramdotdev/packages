@@ -15,7 +15,7 @@ export type ArgObject = {
 	/** This is the equivalent of the ENTRYPOINT field in a Dockerfile. If a binary is passed, it will be included at `/entrypoint` and used. If a string array is provided, it will be used instead. */
 	entrypoint?: std.wrap.Arg | Array<string> | null;
 
-	/** Env to include. Variables with literal string values are written to the image configuration, like the ENV instruction in a Dockerfile, so that `docker run --env` overrides them and `docker exec` sees them. Any other value, such as one that refers to an artifact or a mutation that extends a variable, is applied by wrapping the entrypoint, or by an env program that runs the entrypoint or the command. */
+	/** Env to include. Literal values become image defaults that runtime environment variables can override. Artifact references and mutations that depend on the runtime environment use an entrypoint wrapper. */
 	env?: std.env.Arg | null;
 
 	/** Ports to expose. */
@@ -50,14 +50,14 @@ export type ArgObject = {
 };
 
 /** Get the value of an env variable if it is a literal string that sets the variable, with no artifacts and no other mutation. */
-const literalEnvValue = (
+const tryLiteralEnvValue = (
 	value: tg.MaybeMutation<tg.Template.Arg> | undefined,
 ): string | undefined => {
 	if (value instanceof tg.Mutation) {
 		if (value.inner.kind !== "set") {
 			return undefined;
 		}
-		return literalEnvValue(value.inner.value as tg.Template.Arg);
+		return tryLiteralEnvValue(value.inner.value as tg.Template.Arg);
 	}
 	if (typeof value === "string") {
 		return value;
@@ -217,13 +217,13 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 	const composedEnv = await std.env.compose(envArg ?? null);
 
 	// Write the variables that have literal values to the image configuration, and apply the rest with a wrapper.
-	const configEnv: Array<string> = [];
+	const configEnv = new Map<string, string>();
 	const env: std.env.EnvObject = {};
 	for (const name of Object.keys(composedEnv).sort()) {
 		const value = composedEnv[name];
-		const literal = literalEnvValue(value);
+		const literal = tryLiteralEnvValue(value);
 		if (literal !== undefined) {
-			configEnv.push(`${name}=${literal}`);
+			configEnv.set(name, literal);
 		} else if (value !== undefined) {
 			env[name] = value;
 		}
@@ -250,6 +250,36 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 				...std.args.optional("buildToolchain", buildToolchain),
 				env,
 			});
+
+			// Let the image configuration supply literal variables instead of existing wrapper bindings.
+			if (configEnv.size > 0) {
+				const manifest = await std.wrap.Manifest.read(entrypointArtifact);
+				tg.assert(manifest !== undefined, "expected an entrypoint wrapper");
+				const references = new Map(
+					(await entrypointArtifact.dependencyObjects).map((object) => [
+						object.id,
+						object,
+					]),
+				);
+				const wrappedEnv = await std.wrap.envObjectFromManifestEnv(
+					manifest.env,
+					references,
+				);
+				for (const name of configEnv.keys()) {
+					delete wrappedEnv[name];
+				}
+				const manifestEnv = await std.wrap.manifestEnvFromEnvObject(
+					wrappedEnv,
+					references,
+				);
+				tg.assert(manifestEnv !== undefined, "expected a wrapper environment");
+				manifest.env = manifestEnv;
+				entrypointArtifact = await std.wrap.Manifest.write(
+					entrypointArtifact,
+					manifest,
+					references,
+				);
+			}
 		}
 	}
 
@@ -322,8 +352,11 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 			Cmd: cmd ?? [],
 		},
 	};
-	if (configEnv.length > 0) {
-		config.config!.Env = configEnv;
+	if (configEnv.size > 0) {
+		config.config!.Env = Array.from(
+			configEnv,
+			([name, value]) => `${name}=${value}`,
+		);
 	}
 	if (expose !== undefined && expose !== null) {
 		config.config!.ExposedPorts = Object.fromEntries(
