@@ -646,6 +646,14 @@ directory = "${vendoredDir}"`;
 	// Give the generated configuration precedence over the project configuration.
 	const configArg = '--config "$cargo_config_path"';
 
+	// Keep the intermediate outputs of a host build for each target in a build directory of their own. Cargo's fingerprint of a crate for the build machine includes the linker, which differs between the targets, so Cargo would otherwise build every crate again after the target changes. The final outputs stay in the target directory. Set the directory in the generated configuration rather than in the environment, which a nested Cargo would inherit. A Cargo that does not report a build directory does not support one.
+	const prepareBuildDir = runOnHost
+		? tg`cargo_build_dir="$(cargo metadata --format-version 1 --no-deps | sed -n 's/.*"build_directory":"\\([^"]*\\)".*/\\1/p')"
+if [ -n "$cargo_build_dir" ]; then
+	printf '\\n[build]\\nbuild-dir = "%s/standalone/%s"\\n' "$cargo_build_dir" "$RUST_TARGET" >> "$cargo_config_path"
+fi`
+		: null;
+
 	// Redirect + replay (not process substitution) to avoid tee being killed
 	// before flushing on Linux.
 	const buildCommand = captureStderr
@@ -677,6 +685,7 @@ directory = "${vendoredDir}"`;
 		prepareSource,
 		pre ?? null,
 		enterSource,
+		prepareBuildDir,
 		buildCommand,
 		// Append the stderr that Cargo captured from each build script, which holds the runner's statistics.
 		captureStderr
@@ -1249,6 +1258,7 @@ export async function test() {
 	tests.push(testStandalone());
 	tests.push(testStandaloneProxy());
 	tests.push(testStandaloneHost());
+	tests.push(testStandaloneHostTargets());
 	tests.push(testStandaloneBuildScript());
 	tests.push(testStandaloneCross());
 	tests.push(testStandaloneCrossProxy());
@@ -1315,13 +1325,17 @@ export async function testStandaloneProxy() {
 }
 
 /** A command that runs a Cargo subcommand for a standalone host build of a workspace, which the test runs repeatedly. */
-export async function standaloneHostCommand(subcommand = "build") {
+export async function standaloneHostCommand(
+	subcommand = "build",
+	target?: string,
+) {
 	const command = await build({
 		channel: "stable",
 		profile: "dev",
 		source: tests.get("standalone-host").then(tg.Directory.expect),
 		standalone: { glibcVersion: "2.39" },
 		subcommand,
+		...std.args.optional("target", target),
 		targetDir: true,
 	});
 	return tg.Command.expect(command);
@@ -1427,6 +1441,72 @@ export async function testStandaloneHost() {
 		const message = `edited${separator} regenerated reread resame relinked, reincluded`;
 		const text = await log(name);
 		tg.assert(text.includes(message), `unexpected output: ${text}`);
+	}
+
+	return output;
+}
+
+/** Standalone host builds for two targets share a target directory. Cargo considers every unit fresh when the target changes back. */
+export async function testStandaloneHostTargets() {
+	const host = std.sdk.canonicalTriple(std.triple.host());
+	const arch = std.triple.arch(host) === "x86_64" ? "aarch64" : "x86_64";
+	const crossTarget =
+		std.triple.os(host) === "linux"
+			? `${arch}-unknown-linux-gnu`
+			: `${arch}-apple-darwin`;
+
+	// Run each command's script with its own environment, as the arguments of `env`, because the sandbox has one environment.
+	const invocation = async (target?: string) => {
+		const command = await standaloneHostCommand("build", target);
+		const script = tg.Template.expect((await command.args)[1]?.value);
+		const variables = Object.entries(await command.env).map(
+			([name, { value }]) =>
+				tg`"${name}=${typeof value === "string" ? value : tg.Template.expect(value)}"`,
+		);
+		return { script, variables: tg.Template.join(" ", ...variables) };
+	};
+	const native = await invocation();
+	const cross = await invocation(crossTarget);
+	const source = tests.get("standalone-host").then(tg.Directory.expect);
+	const output = await std.build`
+		cp -R ${source} work
+		chmod -R u+w work
+		cd work
+		export HOME="$PWD"
+
+		build() {
+			log="${tg.output}/$1"
+			case "$1" in
+				native*) set -- ${native.variables} bash -c "$NATIVE_SCRIPT" ;;
+				*) set -- ${cross.variables} bash -c "$CROSS_SCRIPT" ;;
+			esac
+			if ! env "$@" -- -v > "$log" 2>&1; then
+				cat "$log" >&2
+				exit 1
+			fi
+		}
+
+		mkdir -p "${tg.output}"
+		build native
+		build cross
+		build native-again
+		build cross-again
+		for target in ${rustTriple(host)} ${rustTriple(crossTarget)}; do
+			test -x "target/reused directory/$target/debug/app"
+		done
+	`
+		.env({ CROSS_SCRIPT: cross.script, NATIVE_SCRIPT: native.script })
+		.then(tg.Directory.expect);
+	for (const name of ["native-again", "cross-again"]) {
+		const text = await output
+			.get(name)
+			.then(tg.File.expect)
+			.then((file) => file.text);
+		const fresh = text.match(/^ *Fresh /gm)?.length;
+		tg.assert(
+			fresh === 3 && !/^ *(Compiling|Dirty) /m.test(text),
+			`expected every unit to be fresh: ${text}`,
+		);
 	}
 
 	return output;
