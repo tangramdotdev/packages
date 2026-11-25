@@ -344,3 +344,18 @@ export async function testLabelsFeature() {
 	});
 	return imageFile;
 }
+
+export async function testVolumesFeature() {
+	if (std.triple.os(std.triple.host()) !== "linux") {
+		console.log("skipped image.tg.ts#testVolumesFeature: requires Linux");
+		return null;
+	}
+	const bootstrapEnv = await testBootstrapEnv();
+	const buildToolchain = await bootstrapBuildToolchain();
+	const imageFile = await image(bootstrapEnv, {
+		buildToolchain,
+		cmd: ["sh"],
+		volumes: ["/data", "/var/lib/example"],
+	});
+	return imageFile;
+}
