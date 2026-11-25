@@ -42,6 +42,9 @@ export type ArgObject = {
 	/** Create additional users in the container without setting them as the default user. Each user can be specified as "username", "username:group", "username:group:uid:gid", or a UserSpec object. */
 	users?: Array<string | UserSpec> | null;
 
+	/** Paths to declare as volumes. This is the equivalent of the VOLUME instruction in a Dockerfile. */
+	volumes?: Array<string> | null;
+
 	/** The WORKDIR field in a Dockerfile. Change to this directory to do work. */
 	workdir?: string | null;
 };
@@ -145,6 +148,9 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 				if ("users" in arg && arg.users !== undefined) {
 					object.users = arg.users;
 				}
+				if ("volumes" in arg && arg.volumes !== undefined) {
+					object.volumes = arg.volumes;
+				}
 				if ("workdir" in arg && arg.workdir !== undefined) {
 					object.workdir = arg.workdir;
 				}
@@ -165,6 +171,7 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 			system: "set",
 			user: "set",
 			users: "append",
+			volumes: "append",
 			workdir: "set",
 		},
 	});
@@ -182,6 +189,7 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 		system: system_,
 		user,
 		users,
+		volumes,
 		workdir,
 	} = arg;
 	const env = await std.env.compose(envArg ?? null);
@@ -286,6 +294,11 @@ export async function image(...args: tg.Args<Arg>): Promise<tg.File> {
 	}
 	if (user !== undefined && user !== null) {
 		config.config!.User = user;
+	}
+	if (volumes !== undefined && volumes !== null && volumes.length > 0) {
+		config.config!.Volumes = Object.fromEntries(
+			volumes.map((key) => [key, {}]),
+		);
 	}
 	if (workdir !== undefined && workdir !== null) {
 		config.config!.WorkingDir = workdir;
