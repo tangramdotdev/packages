@@ -64,10 +64,13 @@ export async function mold(...args: tg.Args<Arg>) {
 
 	const env = await std.env.compose(zstd({ build, host }), env_ ?? null);
 
+	// Bound the build's hardware threads, which bounds its concurrent C++ compilations, and reserve memory for them, so that the build fits on a machine with many threads and little memory.
 	const result = cmake.build({
 		host: build,
 		target: host,
+		cpu: 4,
 		env,
+		memory: { min: 4 * 1024 ** 3 },
 		phases: { configure },
 		...std.args.optional("sdk", sdk),
 		source: sourceDir,

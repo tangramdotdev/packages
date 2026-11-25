@@ -213,10 +213,13 @@ export async function toolchain(...args: tg.Args<LLVMArg>) {
 	const install = "ninja stage2-install-distribution";
 	const phases = { prepare, configure, build: buildPhase, install };
 
+	// Bound the build's hardware threads, which bounds the concurrent C++ compilations of both bootstrap stages, and reserve memory for them, so that the build fits on a machine with many threads and little memory.
 	let llvmArtifact = await cmake.build({
 		host: build,
 		target: host,
+		cpu: 4,
 		env: std.env.compose(...env),
+		memory: { min: 4 * 1024 ** 3 },
 		phases,
 		...(sdk !== undefined ? { sdk } : {}),
 		source: tg`${sourceDir}/llvm`,
