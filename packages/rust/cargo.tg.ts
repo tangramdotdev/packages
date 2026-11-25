@@ -1331,7 +1331,10 @@ export async function testStandaloneHost() {
 	const command = await standaloneHostCommand();
 	const args = await command.args;
 	const env = Object.fromEntries(
-		Object.entries(await command.env).map(([name, { value }]) => [name, value]),
+		Object.entries(await command.env).map(([name, { value }]) => [
+			name,
+			typeof value === "string" ? value : tg.Template.expect(value),
+		]),
 	);
 	const script = tg.Template.expect(args[1]?.value);
 	const source = tests.get("standalone-host").then(tg.Directory.expect);
