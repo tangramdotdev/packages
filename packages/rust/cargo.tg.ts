@@ -587,7 +587,7 @@ directory = "${vendoredDir}"`;
 	const proxyDir = proxy ? proxy_.proxy() : undefined;
 
 	// Compile build scripts outside the project through the proxy, which links each one to run in the runner's sandbox and leaves a launcher in its place, so that Cargo runs every such build script through the runner.
-	if (proxy) {
+	if (proxy && proxyDir !== undefined) {
 		envs.push({ TGRUSTC_PROXY_BUILD_SCRIPTS: tg`${proxyDir}/bin/tgrustc` });
 	}
 
