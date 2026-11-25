@@ -307,7 +307,7 @@ export async function testPkgconfig() {
 
 	const fixture = await tests.get("hello-c-dylib").then(tg.Directory.expect);
 
-	let externalLibDir = await $`
+	let externalLibDir = await std.build`
 		mkdir -p ${tg.output}/lib
 		mkdir -p ${tg.output}/include
 		gcc -shared -fPIC ${fixture}/src/lib.c -o ${tg.output}/lib/libexternal.${dylibExt}
