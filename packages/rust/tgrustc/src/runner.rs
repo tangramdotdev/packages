@@ -239,11 +239,13 @@ async fn build_env(
 	let toolchain_artifact = outer::checkin_env_artifact("TGRUSTC_SANDBOX_TOOLCHAIN").await?;
 	let sdk_artifact = outer::checkin_env_artifact("TGRUSTC_SANDBOX_SDK").await?;
 
+	let caller = outer::CallerEnv::read()?;
 	let mut env: tg::value::Map = std::collections::BTreeMap::new();
 	for (name, raw) in std::env::vars() {
-		if name.starts_with(tg::process::env::PREFIX) {
+		if name.starts_with(tg::process::env::PREFIX) || caller.contains(&name) {
 			continue;
 		}
+		let raw = caller.path(&name, &raw).into_owned();
 		// Driver re-sets these from sandbox-internal paths.
 		if matches!(
 			name.as_str(),

@@ -599,7 +599,7 @@ directory = "${vendoredDir}"`;
 	// Keep host builds in Cargo's chosen target directory and preserve the user's Cargo configuration.
 	const preparePathCommands = runOnHost
 		? [
-				tg`cargo_config_path="$(mktemp)"\ntrap 'rm -f "$cargo_config_path"' EXIT\necho '${cargoConfig}' > "$cargo_config_path"`,
+				tg`cargo_config_path="$(mktemp)"\ntrap 'rm -f "$cargo_config_path" "$TGRUSTC_CALLER_ENV"' EXIT\necho '${cargoConfig}' > "$cargo_config_path"`,
 			]
 		: [
 				tg`mkdir -p "$PWD/target" "${tg.output}/bin"`,
@@ -897,8 +897,21 @@ fi`
 		if (typeof targetDir === "string") {
 			env = await std.env.arg(env, { CARGO_TARGET_DIR: targetDir });
 		}
+		// Record the variables that the caller has and this build does not set, before the script sets any, so that the proxy keeps them out of the sandboxes. Their values would vary the key of every compilation with the caller's shell.
+		const names = Object.keys(env).join(" ");
+		const callerEnv = `export TGRUSTC_CALLER_ENV="$(mktemp)"
+for name in $(compgen -e); do
+	case " ${names} " in
+		*" $name "*) ;;
+		*) printf '%s=%s\\0' "$name" "\${!name}" >> "$TGRUSTC_CALLER_ENV" ;;
+	esac
+done`;
 		return tg.command({
-			args: ["-c", tg`set -euo pipefail\n${buildScript}`, "--"],
+			args: [
+				"-c",
+				tg`set -euo pipefail\n${callerEnv}\n${buildScript}`,
+				"--",
+			],
 			env,
 			executable: { path: "/bin/bash" },
 		});
@@ -1341,7 +1354,7 @@ export async function standaloneHostCommand(
 	return tg.Command.expect(command);
 }
 
-/** A standalone host build reuses its target directory. Cargo considers every unit fresh when nothing changed, rebuilds what a change affects, and compiles nothing new in another target directory. A test runs the current build of an executable. */
+/** A standalone host build reuses its target directory. Cargo considers every unit fresh when nothing changed, rebuilds what a change affects, and compiles nothing new in another target directory, whatever the caller's environment. A test runs the current build of an executable. */
 export async function testStandaloneHost() {
 	const command = await standaloneHostCommand();
 	const args = await command.args;
@@ -1395,7 +1408,7 @@ export async function testStandaloneHost() {
 		sed -i s/generated/regenerated/ packages/codegen/src/lib.rs
 		build dependency
 		build unchanged-again
-		CARGO_TARGET_DIR="$PWD/target/new" build new-target
+		CALLER_VARIABLE=changed PATH="$PATH:/changed" CARGO_TARGET_DIR="$PWD/target/new" build new-target
 		run_test test
 		sed -i 's/{}, {GENERATED}/{}; {GENERATED}/' packages/app/src/main.rs
 		run_test test-edited

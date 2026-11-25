@@ -284,6 +284,9 @@ async fn build_env(
 	env.remove("TGRUSTC_RUNNER_WORKSPACE");
 	// Remove the path of the proxy, which only a build script's launcher reads.
 	env.remove("TGRUSTC_PROXY_BUILD_SCRIPTS");
+	// Remove the variables of the caller of a host build, which a sandboxed build does not have.
+	let caller = CallerEnv::read()?;
+	env.retain(|name, _| !caller.contains(name));
 	for (name, value) in &mut env {
 		if name == "OUT_DIR"
 			|| name.starts_with("CARGO_MANIFEST_")
@@ -297,6 +300,7 @@ async fn build_env(
 			continue;
 		}
 		if let Ok(raw) = std::env::var(name) {
+			let raw = caller.path(name, &raw);
 			*value = proxy::environment_value(name, &raw, template_from_path).await?;
 		}
 	}
@@ -338,6 +342,65 @@ async fn build_env(
 	);
 
 	Ok((env, toolchain_artifact, files))
+}
+
+// The environment of the caller of a host build, which runs Cargo in the caller's environment. `TGRUSTC_CALLER_ENV` names a file that holds the variables that the caller had and the build did not set, each as `NAME=VALUE` followed by a NUL. A compilation or a build script does not get them, so that its key does not depend on the caller's shell.
+pub(crate) struct CallerEnv(Option<BTreeMap<String, String>>);
+
+impl CallerEnv {
+	pub(crate) fn read() -> tg::Result<Self> {
+		let Some(path) = std::env::var_os("TGRUSTC_CALLER_ENV") else {
+			return Ok(Self(None));
+		};
+		let contents = std::fs::read(&path).map_err(
+			|source| tg::error!(!source, path = %Path::new(&path).display(), "failed to read the caller's environment"),
+		)?;
+		Ok(Self(Some(Self::parse(&contents))))
+	}
+
+	fn parse(contents: &[u8]) -> BTreeMap<String, String> {
+		contents
+			.split(|byte| *byte == 0)
+			.filter_map(|entry| {
+				let entry = std::str::from_utf8(entry).ok()?;
+				let (name, value) = entry.split_once('=')?;
+				Some((name.to_owned(), value.to_owned()))
+			})
+			.collect()
+	}
+
+	// Whether a variable still has the value that the caller gave it. Cargo or a build script can set a variable of the same name, which the build keeps.
+	pub(crate) fn contains(&self, name: &str) -> bool {
+		let Some(variables) = &self.0 else {
+			return false;
+		};
+		variables
+			.get(name)
+			.is_some_and(|value| std::env::var(name).is_ok_and(|current| current == *value))
+	}
+
+	// Keep only the entries of `PATH` that are in the store in a host build, because the build adds its tools to the caller's `PATH`, whose other entries do not exist in the sandbox.
+	pub(crate) fn path<'a>(&self, name: &str, raw: &'a str) -> std::borrow::Cow<'a, str> {
+		if self.0.is_none() || name != "PATH" {
+			return raw.into();
+		}
+		raw.split(':')
+			.filter(|entry| is_store_path(Path::new(entry)))
+			.collect::<Vec<_>>()
+			.join(":")
+			.into()
+	}
+}
+
+// Whether a path is in an artifact of a store, which is a directory named `store` or `checkouts` that holds artifacts by their IDs.
+fn is_store_path(path: &Path) -> bool {
+	let components = path.components().collect::<Vec<_>>();
+	components.windows(2).any(|pair| {
+		let directory = pair[0].as_os_str();
+		let artifact = pair[1].as_os_str().to_str();
+		(directory == "store" || directory == "checkouts")
+			&& artifact.is_some_and(|name| name.parse::<tg::artifact::Id>().is_ok())
+	})
 }
 
 // Check in each file of the Cargo source that a variable names by its host path, such as one that Cargo's configuration sets relative to the workspace, so that the path resolves in the sandbox. Return the path of each file in the sandbox's store and its host path.

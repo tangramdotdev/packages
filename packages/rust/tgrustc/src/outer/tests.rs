@@ -1,6 +1,6 @@
 use {
 	super::{
-		DepfilePaths, SANDBOX_STORE_DIR, rewrite_depfile_contents, rewrite_depfile_paths,
+		CallerEnv, DepfilePaths, SANDBOX_STORE_DIR, rewrite_depfile_contents, rewrite_depfile_paths,
 		rewrite_dir_references,
 	},
 	std::{
@@ -178,6 +178,37 @@ fn manifest_dir_references_use_the_source_artifact() {
 		render(&env["RUSTY_V8_SRC_BINDING_PATH"]),
 		"/checked-in-out/gen/src_binding.rs",
 	);
+}
+
+#[test]
+fn caller_env_holds_only_unchanged_variables() {
+	let name = "TGRUSTC_TEST_CALLER_VARIABLE";
+	let contents = format!("{name}=caller value\0OTHER=a=b\0");
+	let caller = CallerEnv(Some(CallerEnv::parse(contents.as_bytes())));
+
+	// A variable that the caller did not have, or that has another value now, is not the caller's.
+	assert!(!caller.contains("TGRUSTC_TEST_CALLER_MISSING"));
+	assert!(!caller.contains(name));
+	// SAFETY: No other test reads or writes this variable.
+	unsafe { std::env::set_var(name, "another value") };
+	assert!(!caller.contains(name));
+	unsafe { std::env::set_var(name, "caller value") };
+	assert!(caller.contains(name));
+	unsafe { std::env::remove_var(name) };
+
+	// A sandboxed build has no caller.
+	assert!(!CallerEnv(None).contains(name));
+}
+
+#[test]
+fn caller_env_keeps_the_store_entries_of_the_path() {
+	let id = tg::Directory::with_entries(BTreeMap::new()).id();
+	let store = format!("{SANDBOX_STORE_DIR}/{id}/bin");
+	let raw = format!("/home/user/bin:{store}:/usr/bin");
+	let caller = CallerEnv(Some(BTreeMap::new()));
+	assert_eq!(caller.path("PATH", &raw), store);
+	assert_eq!(caller.path("OTHER", &raw), raw);
+	assert_eq!(CallerEnv(None).path("PATH", &raw), raw);
 }
 
 #[test]
