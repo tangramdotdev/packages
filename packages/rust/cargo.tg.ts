@@ -801,10 +801,12 @@ fi`
 		}
 	}
 
-	// Link x86_64 Linux artifacts, including build scripts, with the SDK's linker rather than the Rust toolchain's self-contained lld. Stable rustc accepts the flag that turns lld off only for x86_64 Linux, so a cross build passes it only to the invocations for that architecture, which are the ones that name the target when it is the target and the ones that do not when it is the build machine. The linker script above covers the other Linux targets.
+	// Link x86_64 GNU/Linux artifacts, including build scripts, with the SDK's linker rather than the Rust toolchain's self-contained lld. Stable rustc selects that lld, and accepts the flag that turns it off, only for x86_64 GNU/Linux, so a cross build passes the flag only to the invocations for that target, which are the ones that name the target when it is the target and the ones that do not when it is the build machine. An x86_64 musl target gets no flag, because rustc does not select lld for it and rejects the flag. The linker script above covers the other Linux architectures.
 	const hostIsX8664 = std.triple.arch(rustHost) === "x86_64";
 	const targetIsX8664Linux =
-		std.triple.arch(target) === "x86_64" && std.triple.os(target) === "linux";
+		std.triple.arch(target) === "x86_64" &&
+		std.triple.os(target) === "linux" &&
+		std.triple.environment(target) !== "musl";
 	if (os === "linux" && (hostIsX8664 || targetIsX8664Linux)) {
 		const linkerFeatures = "-C linker-features=-lld";
 		// Add the flag to each invocation rather than to `RUSTFLAGS`, so that Cargo still reads the Rust flags in its configuration. Run the script with Bash, because it passes on the variables that Cargo names after hyphenated targets, such as `CARGO_BIN_EXE_my-bin`, which the sandbox's `/bin/sh` removes from the environment.
