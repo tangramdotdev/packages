@@ -1,7 +1,11 @@
 import * as std from "./tangram.ts";
 
-/** Export native executables in bin, sbin, and libexec without wrappers or artifact dependencies. */
-export async function standalone(directory: tg.Directory, host: string) {
+/** Export native executables in bin, sbin, and libexec without wrappers or artifact dependencies. The executables may also require the libraries that the argument names. */
+export async function standalone(
+	directory: tg.Directory,
+	host: string,
+	arg?: Pick<std.sdk.StandaloneArg, "libraries">,
+) {
 	for (const name of ["bin", "libexec", "sbin"]) {
 		const binaries = await directory.tryGet(name);
 		if (!(binaries instanceof tg.Directory)) continue;
@@ -16,7 +20,7 @@ export async function standalone(directory: tg.Directory, host: string) {
 				"standalone executable directories cannot contain directory symlinks",
 			);
 			if (artifact instanceof tg.File && (await artifact.executable)) {
-				entries[path] = await std.file.standalone(artifact, host);
+				entries[path] = await std.file.standalone(artifact, host, arg);
 			}
 		}
 		directory = await tg.directory(directory, {
