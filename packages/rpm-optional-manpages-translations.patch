@@ -1,0 +1,32 @@
+Build the manual pages only when scdoc is found, and the translations only when native language support is enabled.
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -317,7 +317,7 @@
+ find_program(PODMAN podman)
+ mark_as_advanced(PODMAN)
+ 
+-find_program(SCDOC NAMES scdoc REQUIRED)
++find_program(SCDOC NAMES scdoc)
+ mark_as_advanced(SCDOC)
+ 
+ find_program(SCD2HTML NAMES scd2html)
+@@ -457,7 +457,7 @@
+ add_subdirectory(sign)
+ add_subdirectory(tools)
+ 
+-if (EXISTS ${CMAKE_SOURCE_DIR}/po/rpm.pot)
++if (ENABLE_NLS AND EXISTS ${CMAKE_SOURCE_DIR}/po/rpm.pot)
+ 	add_subdirectory(po)
+ endif()
+ 
+--- a/docs/CMakeLists.txt
++++ b/docs/CMakeLists.txt
+@@ -107,4 +107,6 @@
+ 	endif()
+ endif()
+ 
+-add_subdirectory(man)
++if (SCDOC)
++	add_subdirectory(man)
++endif()
