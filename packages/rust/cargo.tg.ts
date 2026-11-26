@@ -921,7 +921,11 @@ fi`
 			artifact instanceof tg.Symlink ? await artifact.resolve() : artifact;
 		if (resolved instanceof tg.File && (await resolved.executable)) {
 			bins[name] = standalone
-				? await std.file.standalone(resolved, target)
+				? await std.file.standalone(
+						resolved,
+						target,
+						typeof standalone === "object" ? standalone : undefined,
+					)
 				: resolved;
 		}
 	}

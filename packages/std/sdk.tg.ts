@@ -190,6 +190,9 @@ export namespace sdk {
 	export type StandaloneArg = {
 		/** The glibc version to link against on GNU/Linux. Defaults to the SDK's libc. */
 		glibcVersion?: GlibcVersion;
+
+		/** The names of shared libraries that the executable may require in addition to the system libraries, such as `libfdb_c.so`, which the caller provides where the executable runs. */
+		libraries?: Array<string>;
 	};
 
 	/** Get the target compiler and linker options for an executable that uses system libraries without a Tangram wrapper. `compileArgs` select the headers of the deployment libc, and `args` and `libraryPaths` link against it. */

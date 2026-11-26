@@ -362,7 +362,13 @@ export async function build(...args: tg.Args<BuildArg>) {
 			...(order !== undefined ? { order } : {}),
 		})
 		.then(tg.Directory.expect);
-	return standalone ? std.directory.standalone(output, target) : output;
+	return standalone
+		? std.directory.standalone(
+				output,
+				target,
+				typeof standalone === "object" ? standalone : undefined,
+			)
+		: output;
 }
 
 export async function testStandalone(

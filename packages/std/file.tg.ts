@@ -108,10 +108,11 @@ export async function executableTriples(
 	return arches.map((arch) => std.triple.create({ arch, os }));
 }
 
-/** Extract a native executable, validate its system libraries, and remove its artifact dependencies. */
+/** Extract a native executable, validate its system libraries, and remove its artifact dependencies. The executable may also require the libraries that the argument names, which the caller provides where the executable runs. */
 export async function standalone(
 	file: tg.File,
 	host: string,
+	arg?: Pick<std.sdk.StandaloneArg, "libraries">,
 ): Promise<tg.File> {
 	const manifest = await std.wrap.Manifest.read(file);
 	if (manifest !== undefined) {
@@ -166,16 +167,20 @@ export async function standalone(
 				? await executable.resolve()
 				: executable,
 		);
-		return standalone(file, host);
+		return standalone(file, host, arg);
 	}
 	const metadata = await executableMetadata(file);
+	const provided = new Set(arg?.libraries ?? []);
 	let dependencies: Array<string>;
 	if (metadata.format === "mach-o") {
 		tg.assert(std.triple.os(host) === "darwin");
 		tg.assert(metadata.arches.includes(std.triple.arch(host)));
 		dependencies = (metadata.dependencies ?? []).filter(
 			(path) =>
-				!path.startsWith("/usr/lib/") && !path.startsWith("/System/Library/"),
+				!path.startsWith("/usr/lib/") &&
+				!path.startsWith("/System/Library/") &&
+				!provided.has(path) &&
+				!provided.has(path.slice(path.lastIndexOf("/") + 1)),
 		);
 	} else if (metadata.format === "elf") {
 		tg.assert(std.triple.os(host) === "linux");
@@ -198,7 +203,7 @@ export async function standalone(
 			"libstdc++.so.6",
 		]);
 		dependencies = (metadata.needed ?? []).filter(
-			(name) => !libraries.has(name),
+			(name) => !libraries.has(name) && !provided.has(name),
 		);
 	} else {
 		throw new Error("the standalone output must be a native executable");

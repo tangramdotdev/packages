@@ -321,7 +321,13 @@ export async function build(...args: tg.Args<Arg>): Promise<tg.Directory> {
 		processName: processName ?? null,
 	});
 	const output = await result.then(tg.Directory.expect);
-	return standalone ? std.directory.standalone(output, host) : output;
+	return standalone
+		? std.directory.standalone(
+				output,
+				host,
+				typeof standalone === "object" ? standalone : undefined,
+			)
+		: output;
 }
 
 export async function testStandalone() {
