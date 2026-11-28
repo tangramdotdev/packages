@@ -184,8 +184,18 @@ export async function test() {
 			? metadata.provides.binaries
 			: metadata.provides.binaries.filter((b) => b !== "fdbdecode");
 
+	// On Linux, the client library loads zlib and xz at runtime.
+	const libraries =
+		os === "linux"
+			? metadata.provides.libraries.map((library) => ({
+					...library,
+					runtimeDeps: [zlib({ host }), xz({ host })],
+				}))
+			: metadata.provides.libraries;
+
 	const spec = {
 		...std.assert.defaultSpec(metadata),
+		libraries,
 		binaries: std.assert.binaries(binaries, {
 			fdbdecode: { exitOnErr: false },
 			fdbmonitor: { testArgs: ["--help"] },
